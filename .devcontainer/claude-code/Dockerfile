@@ -60,22 +60,22 @@ RUN groupadd -f wheel && \
     curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Copy and run library scripts
-COPY library-scripts/*.sh /tmp/library-scripts/
-RUN chmod +x /tmp/library-scripts/*.sh && \
-    /tmp/library-scripts/terraform-tools.sh \
-        "${TERRAFORM_VERSION}" \
-        "${TERRAFORM_DOCS_VERSION}" \
-        "${TFSEC_VERSION}" \
-        "${TERRASCAN_VERSION}" \
-        "${TFLINT_VERSION}" \
-        "${TFLINT_AWS_RULESET_VERSION}" \
-        "${TFLINT_AZURE_RULESET_VERSION}" \
-        "${TFLINT_GCP_RULESET_VERSION}" \
-        "${INFRACOST_VERSION}" \
-        "${CHECKOV_VERSION}" \
-        "${VAULT_RADAR_VERSION}" \
-        "${INSTALL_VAULT_RADAR}" && \
-    rm -rf /tmp/library-scripts
+# COPY library-scripts/*.sh /tmp/library-scripts/
+# RUN chmod +x /tmp/library-scripts/*.sh && \
+#     /tmp/library-scripts/terraform-tools.sh \
+#         "${TERRAFORM_VERSION}" \
+#         "${TERRAFORM_DOCS_VERSION}" \
+#         "${TFSEC_VERSION}" \
+#         "${TERRASCAN_VERSION}" \
+#         "${TFLINT_VERSION}" \
+#         "${TFLINT_AWS_RULESET_VERSION}" \
+#         "${TFLINT_AZURE_RULESET_VERSION}" \
+#         "${TFLINT_GCP_RULESET_VERSION}" \
+#         "${INFRACOST_VERSION}" \
+#         "${CHECKOV_VERSION}" \
+#         "${VAULT_RADAR_VERSION}" \
+#         "${INSTALL_VAULT_RADAR}" && \
+#     rm -rf /tmp/library-scripts
 
 # Switch to node user for remaining installations
 USER node
