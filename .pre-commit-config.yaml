@@ -1,0 +1,70 @@
+# Pre-commit hooks for Terraform code quality
+#
+# Install: pre-commit install
+# Run manually: pre-commit run --all-files
+# Update hooks: pre-commit autoupdate
+repos:
+  # Terraform formatting and validation
+  - repo: https://github.com/antonbabenko/pre-commit-terraform
+    rev: v1.103.0
+    hooks:
+      # Format Terraform files
+      - id: terraform_fmt
+        name: Terraform fmt
+        description: Rewrites Terraform files to canonical format
+
+      # Validate Terraform configuration
+      - id: terraform_validate
+        name: Terraform validate
+        description: Validates Terraform configuration files
+
+      # Generate documentation
+      - id: terraform_docs
+        name: Terraform docs
+        description: Updates README.md with terraform-docs
+        args:
+          - --hook-config=--path-to-file=README.md
+          - --hook-config=--add-to-existing-file=true
+          - --hook-config=--create-file-if-not-exist=true
+
+      # Lint with tflint
+      - id: terraform_tflint
+        name: Terraform tflint
+        description: Lints Terraform files with tflint
+        args:
+          - --args=--config=__GIT_WORKING_DIR__/.tflint.hcl
+
+      # Security scanning with trivy
+      - id: terraform_trivy
+        args:
+          - --args=--format=json
+          - --args=--skip-dirs="**/.devcontainer"
+          - --args=--tf-exclude-downloaded-modules=true
+          - --args=--severity=CRITICAL,HIGH,MEDIUM
+
+  # General file checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: end-of-file-fixer
+        name: Fix end of files
+      - id: check-yaml
+        name: Check YAML syntax
+      - id: check-added-large-files
+        name: Check for large files
+        args: ['--maxkb=500']
+      - id: check-merge-conflict
+        name: Check for merge conflicts
+      - id: detect-private-key
+        name: Detect private keys
+
+  # Vault Radar security scanning
+  - repo: local
+    hooks:
+      - id: vault-radar-scan
+        name: Vault Radar scan
+        description: Scans for secrets and sensitive data with HashiCorp Vault Radar
+        entry: bash -c 'if [ -n "$VAULT_RADAR_LICENSE" ]; then vault-radar scan git pre-commit "$@" || { exit "$?"; }; else echo "Vault Radar scan skipped (VAULT_RADAR_LICENSE not set)"; fi'
+        language: system
+        pass_filenames: false
+        always_run: true
