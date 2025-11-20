@@ -24,13 +24,13 @@ type BCMClient struct {
 }
 
 // JSONRPCRequest represents BCM JSON-RPC request body
-// NOTE: "arg" field excluded from POV scope (parameter passing deferred to post-POV)
-// This limitation is documented in the research findings and is a known constraint
-// for the initial proof-of-value implementation.
+// ENHANCEMENT: Args parameter now supported for parameterized API calls
+// This enables efficient direct lookups like getSoftwareImage(name) instead of
+// client-side filtering of getSoftwareImages() results.
 type JSONRPCRequest struct {
-	Service string `json:"service"`
-	Call    string `json:"call"`
-	// arg field intentionally omitted - POV limitation
+	Service string        `json:"service"`
+	Call    string        `json:"call"`
+	Args    []interface{} `json:"args,omitempty"` // Optional arguments array
 }
 
 // LoginRequest represents login API call request body
@@ -144,10 +144,21 @@ func NewBCMClient(ctx context.Context, endpoint, username, password string, inse
 }
 
 // CallJSONRPC executes JSON-RPC call using authenticated cookie jar
-func (c *BCMClient) CallJSONRPC(ctx context.Context, service, call string) ([]byte, error) {
+// Supports optional variadic args parameter for parameterized API calls
+// Examples:
+//
+//	CallJSONRPC(ctx, "CMPart", "getSoftwareImages") // No args
+//	CallJSONRPC(ctx, "CMPart", "getSoftwareImage", "image-name") // Single arg
+//	CallJSONRPC(ctx, "CMPart", "addSoftwareImage", entity, false) // Multiple args
+func (c *BCMClient) CallJSONRPC(ctx context.Context, service, call string, args ...interface{}) ([]byte, error) {
 	reqBody := JSONRPCRequest{
 		Service: service,
 		Call:    call,
+	}
+
+	// Only include args field if arguments provided (backward compatibility)
+	if len(args) > 0 {
+		reqBody.Args = args
 	}
 
 	jsonBody, err := json.Marshal(reqBody)
@@ -163,11 +174,16 @@ func (c *BCMClient) CallJSONRPC(ctx context.Context, service, call string) ([]by
 	req.Header.Set("Content-Type", "application/json")
 	// Cookie header with cm-login-token automatically added by cookie jar
 
-	tflog.Trace(ctx, "JSONRPC request", map[string]interface{}{
+	logFields := map[string]interface{}{
 		"service":  service,
 		"call":     call,
 		"endpoint": c.Endpoint + "/json",
-	})
+	}
+	if len(args) > 0 {
+		logFields["args_count"] = len(args)
+	}
+
+	tflog.Trace(ctx, "JSONRPC request", logFields)
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
@@ -211,14 +227,26 @@ func parseErrorResponse(statusCode int, body []byte) error {
 		return fmt.Errorf("failed to parse JSON response: %w, body: %s", err, limitString(string(body), 500))
 	}
 
-	// Layer 2: JSON object with error field
+	// Layer 2: JSON object with error field OR validation array
 	if objMap, ok := jsonData.(map[string]interface{}); ok {
+		// Check for validation error format: {"success": false, "validation": [...]}
+		if success, hasSuccess := objMap["success"].(bool); hasSuccess && !success {
+			if validationList, hasValidation := objMap["validation"]; hasValidation {
+				return formatValidationErrors(validationList)
+			}
+			// success=false but no validation array, generic error
+			return fmt.Errorf("API operation failed: %s", limitString(string(body), 500))
+		}
+
+		// Check for standard error field format: {"error": "message", "code": ...}
 		if errMsg, exists := objMap["error"]; exists {
 			errCode := objMap["code"] // May be nil
 			return fmt.Errorf("API error (code: %v): %v", errCode, errMsg)
 		}
-		// Object without error field - unexpected format
-		return fmt.Errorf("unexpected JSON object response (expected array): %s", limitString(string(body), 500))
+
+		// Object without error or success field - could be valid response object
+		// Don't error on this - let caller handle object response
+		return nil
 	}
 
 	// Layer 3: JSON array - success (may be empty)
@@ -233,6 +261,52 @@ func parseErrorResponse(statusCode int, body []byte) error {
 
 	// Unknown JSON type
 	return fmt.Errorf("unexpected JSON type in response: %s", limitString(string(body), 500))
+}
+
+// formatValidationErrors parses BCM validation error array and formats as error message
+// BCM validation format: {"success": false, "validation": [{"message": "...", "field": "..."}]}
+func formatValidationErrors(validationData interface{}) error {
+	validationArray, ok := validationData.([]interface{})
+	if !ok {
+		return fmt.Errorf("validation error (invalid format): %v", validationData)
+	}
+
+	if len(validationArray) == 0 {
+		return fmt.Errorf("validation failed (no details provided)")
+	}
+
+	// Build error message from validation array
+	var errorMessages []string
+	for _, item := range validationArray {
+		if validationMap, ok := item.(map[string]interface{}); ok {
+			message := "unknown error"
+			field := ""
+
+			if msg, hasMsg := validationMap["message"].(string); hasMsg {
+				message = msg
+			}
+			if fld, hasFld := validationMap["field"].(string); hasFld {
+				field = fld
+			}
+
+			if field != "" {
+				errorMessages = append(errorMessages, fmt.Sprintf("%s: %s", field, message))
+			} else {
+				errorMessages = append(errorMessages, message)
+			}
+		}
+	}
+
+	if len(errorMessages) == 0 {
+		return fmt.Errorf("validation failed: %v", validationArray)
+	}
+
+	if len(errorMessages) == 1 {
+		return fmt.Errorf("validation error: %s", errorMessages[0])
+	}
+
+	// Multiple validation errors
+	return fmt.Errorf("validation errors: %s", limitString(fmt.Sprintf("%v", errorMessages), 500))
 }
 
 // limitString truncates string to maxLen with ellipsis

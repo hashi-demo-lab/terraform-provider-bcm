@@ -70,7 +70,12 @@ terraform-provider-bcm/
 │   ├── bcm_client.go                  # JSON-RPC API client
 │   ├── data_source_*.go               # Data source implementations
 │   ├── data_source_*_test.go          # Acceptance tests
-│   └── helpers.go                     # Null-safe helper functions
+│   ├── resource_*.go                  # Resource implementations
+│   ├── resource_*_test.go             # Resource acceptance tests
+│   └── helpers (in data_source_cmpart_softwareimages.go):
+│       ├── getStringValue()           # Null-safe string extraction
+│       ├── getBoolValue()             # Null-safe bool extraction
+│       └── getInt64Value()            # Null-safe int64 extraction
 ├── examples/
 │   ├── provider/                      # Provider config examples
 │   ├── data-sources/                  # Data source examples
@@ -95,32 +100,53 @@ terraform-provider-bcm/
 ```go
 // All BCM API calls use this pattern:
 {
-  "service": "cmdevice",  // Service name
-  "call": "getNodes"      // Method name
-  // Note: "arg" parameter support deferred to post-POV
+  "service": "cmdevice",       // Service name
+  "call": "getNodes",          // Method name
+  "args": ["image-name"]       // Optional arguments (for parameterized calls)
 }
 ```
 
 **Key Methods:**
 - `NewBCMClient()` - Creates authenticated client
-- `CallJSONRPC(ctx, service, method)` - Makes API calls
+- `CallJSONRPC(ctx, service, method, args...)` - Makes API calls with optional arguments
 - `parseErrorResponse()` - Multi-layer error detection
+
+**Args Parameter Support:**
+The BCM API supports parameterized calls using the `args` field. This enables efficient direct lookups:
+- Data sources: Use `getSoftwareImages()` (plural) to list all, then client-side filter
+- Resources: Use `getSoftwareImage(name)` (singular) with args for efficient direct lookup
 
 ### Data Source Pattern
 
 All data sources follow this pattern:
 
 1. **Schema Definition** - Define attributes with descriptions
-2. **API Call** - Use `client.CallJSONRPC()` with hardcoded service/method
+2. **API Call** - Use `client.CallJSONRPC()` with service/method
 3. **JSON Unmarshaling** - Parse into `[]map[string]interface{}`
 4. **Data Mapping** - Use helper functions (`getStringValue`, `getBoolValue`, etc.)
 5. **Client-Side Filtering** - Filter results in Go, not API
 6. **State Management** - Set computed attributes using terraform-plugin-framework types
 
 **Helper Functions for Null-Safety:**
+Located in `internal/provider/data_source_cmpart_softwareimages.go:399-431`:
 - `getStringValue(data, key)` - Returns `types.String` with null handling
 - `getBoolValue(data, key)` - Returns `types.Bool` with null handling
-- `getInt64Value(data, key)` - Returns `types.Int64` with null handling
+- `getInt64Value(data, key)` - Returns `types.Int64` with null handling (handles float64, int64, int)
+
+### Resource Pattern
+
+Resources follow CRUD operations with these key characteristics:
+
+1. **Create** - Build API entity, call `addResource()`, handle async operations (e.g., cloning)
+2. **Read** - Use efficient direct lookup with args parameter when available
+3. **Update** - Build entity with UUID, call `updateResource()`
+4. **Delete** - Call `removeResource()` with appropriate flags
+5. **ImportState** - Implement using `resource.ImportStatePassthroughID`
+
+**Important Patterns:**
+- **Eventual Consistency**: Some operations (like image cloning) are asynchronous. Use polling with exponential backoff to wait for completion.
+- **State Preservation**: Preserve plan values for fields that BCM API resets after operations (e.g., `original_image` after cloning).
+- **Unknown Value Handling**: NEVER propagate `Unknown` values to state - always resolve to known values (null or actual value).
 
 ### Test Configuration Pattern
 
@@ -205,11 +231,15 @@ See `./AGENTS.md` for comprehensive Terraform Provider TDD patterns, parallel ex
 - **Services**: CMDevice (nodes), CMPart (software), CMNet (networks), etc.
 - **Response Format**: JSON arrays of objects with polymorphic `childType` field
 
-### Known Limitations (POV Scope)
+### Known Patterns
 
-- **No "arg" parameter support** - Only parameterless API calls (documented in `bcm_client.go:27-33`)
-- **Client-side filtering only** - All filtering happens in Go after API response
-- **Self-signed certs** - `insecure_skip_verify = true` required for local dev
+**Args Parameter Support:**
+- BCM API supports variadic args: `CallJSONRPC(ctx, service, call, args...)`
+- Resources use direct lookup: `getSoftwareImage(name)` instead of list+filter
+- Data sources use list: `getSoftwareImages()` then filter client-side
+
+**Self-signed certs:**
+- `insecure_skip_verify = true` required for local dev
 
 ### Common Development Patterns
 
@@ -223,6 +253,19 @@ See `./AGENTS.md` for comprehensive Terraform Provider TDD patterns, parallel ex
 6. Create acceptance test in `internal/provider/data_source_<name>_test.go`
 7. Add examples in `examples/data-sources/<name>/`
 8. Run `make generate` to create documentation
+
+**Adding a New Resource:**
+
+1. Create `internal/provider/resource_<name>.go`
+2. Define schema with required, optional, and computed attributes
+3. Implement CRUD methods (Create, Read, Update, Delete)
+4. Implement `ImportState` for resource import
+5. Use `buildAPIEntity()` helper to construct BCM API entities
+6. Handle async operations with polling (if needed)
+7. Register in `provider.go` `Resources()` method
+8. Create acceptance test in `internal/provider/resource_<name>_test.go`
+9. Add examples in `examples/resources/<name>/`
+10. Run `make generate` to create documentation
 
 **Test Pattern:**
 - Test configs must be functions (not const strings) to inject provider config
@@ -257,8 +300,53 @@ export GOPATH=/workspace/.go
 
 **Acceptance test authentication failures:**
 - Verify BCM credentials (check `sampleRest/*.py` for working examples)
-- Ensure BCM endpoint is reachable
+- Ensure BCM endpoint is reachable: `https://172.21.15.254:8081/json`
 - Check `cm-login-token` cookie is being set
+- Add `insecure_skip_verify = true` to provider config for self-signed certs
+
+**Testing args parameter support:**
+```bash
+# Run the test script to verify args support
+BCM_ENDPOINT="https://172.21.15.254:8081" \
+BCM_USERNAME="root" \
+BCM_PASSWORD="Hashicorp123!" \
+go run test_bcmclient_args.go
+
+# Expected: ✅ Args parameter IS supported by BCM API
+```
+
+**Read strategy confusion (data source vs resource):**
+- **Data sources**: Use `getSomethings()` (plural) to list all items, then client-side filter
+- **Resources**: Use `getSomething(identifier)` (singular) with args parameter for efficient direct lookup
+- Example: `getSoftwareImages()` (list) vs `getSoftwareImage(name)` (single lookup)
+
+**Unknown values in state:**
+- NEVER propagate `Unknown` values to state - they cause "invalid result object" errors
+- Always resolve to known values: either the actual value, or explicitly `null`
+- Common in computed fields like `original_image` after BCM operations complete
+
+**Spec/plan/tasks inconsistencies:**
+```bash
+# Before starting implementation, always run analysis
+/speckit.analyze
+
+# Common issues caught:
+# - Read strategy using list+filter instead of direct lookup
+# - Validation approach marked POST-MVP but actually needed
+# - API methods not updated after Phase 0 research
+```
+
+**Test environment setup:**
+```bash
+# Required environment variables
+export TF_ACC=1                                    # Enable acceptance tests
+export BCM_ENDPOINT="https://172.21.15.254:8081"  # BCM API endpoint
+export BCM_USERNAME="root"                         # BCM username
+export BCM_PASSWORD="Hashicorp123!"                # BCM password
+
+# Run specific acceptance test
+TF_ACC=1 go test -v -timeout 120m ./internal/provider/ -run TestAccCMDeviceNodesDataSource_Basic
+```
 
 ## Updating This File
 
