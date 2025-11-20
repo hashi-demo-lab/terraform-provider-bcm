@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
@@ -271,10 +272,12 @@ func (r *CMPartSoftwareImageResource) Create(ctx context.Context, req resource.C
 	// NOTE: Pre-flight validation skipped for creation - validateSoftwareImage requires existing UUID
 	// Validation will occur server-side during addSoftwareImage call
 
-	// Create software image via API
-	tflog.Debug(ctx, "Creating software image via BCM API", map[string]interface{}{
-		"name": plan.Name.ValueString(),
-		"path": plan.Path.ValueString(),
+	// Log the complete request entity for debugging
+	entityJSON, _ := json.MarshalIndent(entity, "", "  ")
+	tflog.Debug(ctx, "Creating software image via BCM API with entity", map[string]interface{}{
+		"name":   plan.Name.ValueString(),
+		"path":   plan.Path.ValueString(),
+		"entity": string(entityJSON),
 	})
 
 	createBody, err := r.client.CallJSONRPC(ctx, "CMPart", "addSoftwareImage", entity, false)
@@ -317,6 +320,83 @@ func (r *CMPartSoftwareImageResource) Create(ctx context.Context, req resource.C
 	// Set ID and UUID
 	plan.ID = types.StringValue(createdUUID)
 	plan.UUID = types.StringValue(createdUUID)
+
+	// STEP 2.5: Wait for clone operation to complete (eventual consistency handling)
+	// BCM's addSoftwareImage initiates clone asynchronously - kernel files aren't immediately available
+	// Poll fileOperationInProgress field until clone completes
+	if !plan.OriginalImage.IsNull() {
+		tflog.Debug(ctx, "Waiting for clone operation to complete", map[string]interface{}{
+			"uuid": createdUUID,
+		})
+
+		maxRetries := 6 // 1s + 2s + 4s + 8s + 16s = 31s total wait time
+		var lastErr error
+		cloneComplete := false
+
+		for attempt := 0; attempt < maxRetries; attempt++ {
+			if attempt > 0 {
+				// Exponential backoff: 1s, 2s, 4s, 8s, 16s
+				waitDuration := time.Duration(1<<uint(attempt-1)) * time.Second
+				tflog.Debug(ctx, "Waiting before retry", map[string]interface{}{
+					"attempt":      attempt + 1,
+					"wait_seconds": waitDuration.Seconds(),
+				})
+				time.Sleep(waitDuration)
+			}
+
+			// Check if clone is complete by reading fileOperationInProgress
+			statusBody, err := r.client.CallJSONRPC(ctx, "CMPart", "getSoftwareImages")
+			if err != nil {
+				lastErr = err
+				tflog.Warn(ctx, "Failed to check clone status", map[string]interface{}{
+					"attempt": attempt + 1,
+					"error":   err.Error(),
+				})
+				continue
+			}
+
+			var images []map[string]interface{}
+			if err := json.Unmarshal(statusBody, &images); err != nil {
+				lastErr = err
+				continue
+			}
+
+			// Find our newly created image
+			for _, img := range images {
+				if imgUUID, ok := img["uuid"].(string); ok && imgUUID == createdUUID {
+					// Check fileOperationInProgress field
+					if fileOpInProgress, ok := img["fileOperationInProgress"].(bool); ok && !fileOpInProgress {
+						tflog.Info(ctx, "Clone operation completed", map[string]interface{}{
+							"uuid":    createdUUID,
+							"attempt": attempt + 1,
+						})
+						cloneComplete = true
+						break
+					} else {
+						tflog.Debug(ctx, "Clone still in progress", map[string]interface{}{
+							"uuid":                     createdUUID,
+							"fileOperationInProgress": fileOpInProgress,
+							"attempt":                  attempt + 1,
+						})
+					}
+					break
+				}
+			}
+
+			if cloneComplete {
+				break
+			}
+		}
+
+		if !cloneComplete {
+			tflog.Warn(ctx, "Clone operation may still be in progress after max retries", map[string]interface{}{
+				"uuid":        createdUUID,
+				"maxRetries":  maxRetries,
+				"lastErr":     lastErr,
+				"proceeding":  "Will attempt to read image anyway",
+			})
+		}
+	}
 
 	// STEP 3: Read back created resource to populate computed fields
 	// Preserve original_image from plan before reading (BCM API resets it after clone)
@@ -387,10 +467,12 @@ func (r *CMPartSoftwareImageResource) Update(ctx context.Context, req resource.U
 	// NOTE: Pre-flight validation skipped - will rely on server-side validation
 	// Optional enhancement: Add validateSoftwareImage call here for better error messages
 
-	// Update software image via API
-	tflog.Debug(ctx, "Updating software image via BCM API", map[string]interface{}{
-		"name": plan.Name.ValueString(),
-		"uuid": plan.UUID.ValueString(),
+	// Log the complete update entity for debugging
+	entityJSON, _ := json.MarshalIndent(entity, "", "  ")
+	tflog.Debug(ctx, "Updating software image via BCM API with entity", map[string]interface{}{
+		"name":   plan.Name.ValueString(),
+		"uuid":   plan.UUID.ValueString(),
+		"entity": string(entityJSON),
 	})
 
 	_, err := r.client.CallJSONRPC(ctx, "CMPart", "updateSoftwareImage", entity, false)

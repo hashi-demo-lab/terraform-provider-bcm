@@ -207,8 +207,10 @@ See `./AGENTS.md` for comprehensive Terraform Provider TDD patterns, parallel ex
 
 ### Known Limitations (POV Scope)
 
-- **No "arg" parameter support** - Only parameterless API calls (documented in `bcm_client.go:27-33`)
-- **Client-side filtering only** - All filtering happens in Go after API response
+- **~~No "arg" parameter support~~** - ✅ **RESOLVED**: Args parameter IS supported by BCM API (verified 2025-11-20)
+  - BCMClient needs extension to support variadic args: `CallJSONRPC(ctx, service, call, args...)`
+  - See test script: `/workspace/test_bcmclient_args.go`
+  - Feature 003 research confirms getSoftwareImage(name) works with args parameter
 - **Self-signed certs** - `insecure_skip_verify = true` required for local dev
 
 ### Common Development Patterns
@@ -257,8 +259,59 @@ export GOPATH=/workspace/.go
 
 **Acceptance test authentication failures:**
 - Verify BCM credentials (check `sampleRest/*.py` for working examples)
-- Ensure BCM endpoint is reachable
+- Ensure BCM endpoint is reachable: `https://172.21.15.254:8081/json`
 - Check `cm-login-token` cookie is being set
+- Add `insecure_skip_verify = true` to provider config for self-signed certs
+
+**BCMClient args parameter not working:**
+```go
+// PROBLEM: CallJSONRPC doesn't support args parameter
+body, err := client.CallJSONRPC(ctx, "CMPart", "getSoftwareImage", name)
+// Error: Too many arguments
+
+// SOLUTION: Extend BCMClient to support variadic args
+// See implementation recommendation in specs/003-bcm-cmpart-softwareimage-resource/research.md
+// Or use direct HTTP POST with args in request body (temporary workaround)
+```
+
+**Testing args parameter support:**
+```bash
+# Run the test script to verify args support
+BCM_ENDPOINT="https://172.21.15.254:8081" \
+BCM_USERNAME="root" \
+BCM_PASSWORD="Hashicorp123!" \
+go run test_bcmclient_args.go
+
+# Expected: ✅ Args parameter IS supported by BCM API
+```
+
+**Read strategy confusion (data source vs resource):**
+- **Data sources**: Use `getSomethings()` (plural) to list all items, then client-side filter
+- **Resources**: Use `getSomething(identifier)` (singular) with args parameter for efficient direct lookup
+- Example: `getSoftwareImages()` (list) vs `getSoftwareImage(name)` (single lookup)
+
+**Spec/plan/tasks inconsistencies:**
+```bash
+# Before starting implementation, always run analysis
+/speckit.analyze use skill terraform-provider-design
+
+# Common issues caught:
+# - Read strategy using list+filter instead of direct lookup
+# - Validation approach marked POST-MVP but actually needed
+# - API methods not updated after Phase 0 research
+```
+
+**Test environment setup:**
+```bash
+# Required environment variables
+export TF_ACC=1                                    # Enable acceptance tests
+export BCM_ENDPOINT="https://172.21.15.254:8081"  # BCM API endpoint
+export BCM_USERNAME="root"                         # BCM username
+export BCM_PASSWORD="Hashicorp123!"                # BCM password
+
+# Run specific acceptance test
+TF_ACC=1 go test -v -timeout 120m ./internal/provider/ -run TestAccCMDeviceNodesDataSource_Basic
+```
 
 ## Updating This File
 
