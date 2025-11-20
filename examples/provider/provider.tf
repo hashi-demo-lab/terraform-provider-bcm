@@ -9,10 +9,47 @@ terraform {
   }
 }
 
+# Production-ready provider configuration using environment variables
+# Set these in your environment:
+#   export BCM_ENDPOINT="https://bcm.example.com:8081"
+#   export BCM_USERNAME="automation-user"
+#   export BCM_PASSWORD="your-secure-password"
 provider "bcm" {
-  endpoint             = "https://172.21.15.254:8081"
-  username             = "root"
-  password             = "Hashicorp123!"
-  insecure_skip_verify = true # Required for self-signed certificates
-  timeout              = 30   # Optional: API timeout in seconds (default: 30)
+  # Use environment variables for sensitive values (best practice)
+  endpoint             = var.bcm_endpoint
+  username             = var.bcm_username
+  password             = var.bcm_password
+  insecure_skip_verify = var.insecure_skip_verify
+  timeout              = var.bcm_timeout
+}
+
+# Variables for provider configuration
+variable "bcm_endpoint" {
+  description = "BCM API endpoint URL"
+  type        = string
+  default     = "https://172.21.15.254:8081"
+}
+
+variable "bcm_username" {
+  description = "BCM username for authentication"
+  type        = string
+  sensitive   = true
+}
+
+variable "bcm_password" {
+  description = "BCM password for authentication"
+  type        = string
+  sensitive   = true
+}
+
+variable "insecure_skip_verify" {
+  description = "Skip TLS certificate verification (only for self-signed certs in dev/test)"
+  type        = bool
+  default     = false
+}
+
+variable "bcm_timeout" {
+  description = "API timeout in seconds"
+  type        = number
+  default     = 30
 }
