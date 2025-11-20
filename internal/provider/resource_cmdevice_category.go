@@ -7,12 +7,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 
 	"github.com/google/uuid"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -68,16 +71,16 @@ type CMDeviceCategoryResourceModel struct {
 	AuthenticationService types.String `tfsdk:"authentication_service"` // Optional
 
 	// Network configuration
-	DefaultGateway         types.String `tfsdk:"default_gateway"`          // Optional, IP address
-	DefaultGatewayMetric   types.Int64  `tfsdk:"default_gateway_metric"`   // Optional
-	NameServers            types.List   `tfsdk:"name_servers"`             // Optional, list of strings
-	SearchDomains          types.List   `tfsdk:"search_domains"`           // Optional, list of strings
-	TimeServers            types.List   `tfsdk:"time_servers"`             // Optional, list of strings
+	DefaultGateway         types.String  `tfsdk:"default_gateway"`          // Optional, IP address
+	DefaultGatewayMetric   types.Int64   `tfsdk:"default_gateway_metric"`   // Optional
+	NameServers            types.List    `tfsdk:"name_servers"`             // Optional, list of strings
+	SearchDomains          types.List    `tfsdk:"search_domains"`           // Optional, list of strings
+	TimeServers            types.List    `tfsdk:"time_servers"`             // Optional, list of strings
 	StaticRoutes           types.Dynamic `tfsdk:"static_routes"`            // Optional, dynamic type (TODO: define proper schema)
-	AllowNetworkingRestart types.Bool   `tfsdk:"allow_networking_restart"` // Optional
+	AllowNetworkingRestart types.Bool    `tfsdk:"allow_networking_restart"` // Optional
 
 	// Filesystem configuration
-	FSMounts  types.List `tfsdk:"fsmounts"`  // Optional, list of FSMountModel
+	FSMounts  types.List    `tfsdk:"fsmounts"`  // Optional, list of FSMountModel
 	FSExports types.Dynamic `tfsdk:"fsexports"` // Optional, dynamic type (TODO: define proper schema)
 
 	// Role and service assignments
@@ -85,9 +88,9 @@ type CMDeviceCategoryResourceModel struct {
 	Services types.Dynamic `tfsdk:"services"` // Optional, dynamic type (TODO: define proper schema)
 
 	// Hardware-specific settings
-	BMCSettings types.Object `tfsdk:"bmc_settings"` // Optional, nested BMCSettingsModel
-	BiosSetup   types.Object `tfsdk:"bios_setup"`   // Optional, nested object
-	DPUSettings types.Object `tfsdk:"dpu_settings"` // Optional, nested object
+	BMCSettings types.Object  `tfsdk:"bmc_settings"` // Optional, nested BMCSettingsModel
+	BiosSetup   types.Object  `tfsdk:"bios_setup"`   // Optional, nested object
+	DPUSettings types.Object  `tfsdk:"dpu_settings"` // Optional, nested object
 	GPUSettings types.Dynamic `tfsdk:"gpu_settings"` // Optional, dynamic type (TODO: define proper schema)
 
 	// Security and access
@@ -193,7 +196,10 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 			},
 			"name": schema.StringAttribute{
 				Required:            true,
-				MarkdownDescription: "Category name (must be unique)",
+				MarkdownDescription: "Category name (must be unique, 1-255 characters)",
+				Validators: []validator.String{
+					stringvalidator.LengthBetween(1, 255),
+				},
 			},
 			"notes": schema.StringAttribute{
 				Optional:            true,
@@ -201,7 +207,13 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 			},
 			"management_network": schema.StringAttribute{
 				Required:            true,
-				MarkdownDescription: "Management network UUID reference",
+				MarkdownDescription: "Management network UUID reference (must be valid RFC 4122 UUID)",
+				Validators: []validator.String{
+					stringvalidator.RegexMatches(
+						regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`),
+						"must be a valid RFC 4122 UUID format",
+					),
+				},
 			},
 			"software_image_proxy": schema.SingleNestedAttribute{
 				Optional:            true,
@@ -225,6 +237,9 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 				Optional:            true,
 				Computed:            true,
 				MarkdownDescription: "Boot loader type (SYSLINUX, GRUB, GRUB2, PXELINUX). If not specified, BCM assigns a default.",
+				Validators: []validator.String{
+					stringvalidator.OneOf("SYSLINUX", "GRUB", "GRUB2", "PXELINUX"),
+				},
 			},
 			"boot_loader_file": schema.StringAttribute{
 				Optional:            true,
@@ -473,6 +488,9 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 			"fips": schema.StringAttribute{
 				Optional:            true,
 				MarkdownDescription: "FIPS mode (YES or NO)",
+				Validators: []validator.String{
+					stringvalidator.OneOf("YES", "NO"),
+				},
 			},
 			"initialize": schema.StringAttribute{
 				Optional:            true,
@@ -764,10 +782,35 @@ func (r *CMDeviceCategoryResource) Delete(ctx context.Context, req resource.Dele
 	// Call removeCategory API
 	_, err := r.client.CallJSONRPC(ctx, "cmdevice", "removeCategory", state.UUID.ValueString(), force)
 	if err != nil {
+		// T042: Enhanced error handling - Parse error to check if it's a "category in use" error
+		errStr := err.Error()
+		if !force && (containsAny(errStr, []string{"in use", "assigned", "nodes", "cannot be deleted"})) {
+			// Category has nodes assigned - provide clear guidance
+			resp.Diagnostics.AddError(
+				"Category Deletion Failed: Category In Use",
+				fmt.Sprintf("Category '%s' cannot be deleted because it has nodes assigned.\n\n"+
+					"To delete the category anyway (nodes will remain but lose category reference), "+
+					"set force=true in the resource configuration:\n\n"+
+					"resource \"bcm_cmdevice_category\" \"%s\" {\n"+
+					"  name  = \"%s\"\n"+
+					"  force = true\n"+
+					"  ...\n"+
+					"}\n\n"+
+					"Then run 'terraform apply' again to delete with force.\n\n"+
+					"Original error: %s",
+					state.Name.ValueString(),
+					state.Name.ValueString(),
+					state.Name.ValueString(),
+					err.Error(),
+				),
+			)
+			return
+		}
+
+		// T043: Other deletion errors (not related to nodes in use)
 		resp.Diagnostics.AddError(
 			"Category Deletion Failed",
-			fmt.Sprintf("Failed to delete category '%s' (UUID: %s): %s\n\n"+
-				"If the category has nodes assigned, you may need to set force=true to override this constraint.",
+			fmt.Sprintf("Could not delete category '%s' (UUID: %s): %s",
 				state.Name.ValueString(), state.UUID.ValueString(), err.Error()),
 		)
 		return
@@ -777,6 +820,38 @@ func (r *CMDeviceCategoryResource) Delete(ctx context.Context, req resource.Dele
 		"name": state.Name.ValueString(),
 		"uuid": state.UUID.ValueString(),
 	})
+}
+
+// containsAny checks if a string contains any of the specified substrings (case-insensitive)
+func containsAny(s string, substrings []string) bool {
+	// Import strings package functionality inline for case-insensitive check
+	lowerStr := ""
+	for _, c := range s {
+		if c >= 'A' && c <= 'Z' {
+			lowerStr += string(c + 32)
+		} else {
+			lowerStr += string(c)
+		}
+	}
+
+	for _, substring := range substrings {
+		lowerSub := ""
+		for _, c := range substring {
+			if c >= 'A' && c <= 'Z' {
+				lowerSub += string(c + 32)
+			} else {
+				lowerSub += string(c)
+			}
+		}
+
+		// Check if lowerStr contains lowerSub
+		for i := 0; i <= len(lowerStr)-len(lowerSub); i++ {
+			if lowerStr[i:i+len(lowerSub)] == lowerSub {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // ImportState implements resource.ResourceWithImportState

@@ -273,3 +273,73 @@ func TestAccCMDeviceCategoryResource_Import(t *testing.T) {
 		},
 	})
 }
+
+// T039-T041: Force parameter acceptance test
+// This test validates that the force parameter is accepted and processed correctly
+func TestAccCMDeviceCategoryResource_ForceParameter(t *testing.T) {
+	categoryName := fmt.Sprintf("test-force-param-%d", time.Now().Unix())
+
+	// Cleanup any leftover test categories
+	testAccCMDeviceCategoryPreCheck(t, categoryName)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceCategoryDestroy,
+		Steps: []resource.TestStep{
+			// Create category with force=false (default)
+			{
+				Config: testAccCMDeviceCategoryResourceConfig_Force(categoryName, false),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "name", categoryName),
+					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "force", "false"),
+					resource.TestCheckResourceAttrSet("bcm_cmdevice_category.test", "id"),
+				),
+			},
+			// Update with force=true
+			{
+				Config: testAccCMDeviceCategoryResourceConfig_Force(categoryName, true),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "name", categoryName),
+					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "force", "true"),
+				),
+			},
+			// Note: Testing actual "category in use" scenario requires manual node assignment
+			// This test validates the force parameter is accepted and processed in all operations
+			// Delete automatically occurs with force=true from final config
+		},
+	})
+}
+
+// T040: Test configuration helper with force parameter
+func testAccCMDeviceCategoryResourceConfig_Force(name string, force bool) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+# Lookup existing categories to get a management network UUID
+data "bcm_cmdevice_categories" "all" {}
+
+locals {
+  # Get management network from first existing category
+  management_network_uuid = length(data.bcm_cmdevice_categories.all.categories) > 0 ? data.bcm_cmdevice_categories.all.categories[0].management_network_id : "00000000-0000-0000-0000-000000000000"
+}
+
+resource "bcm_cmdevice_category" "test" {
+  name               = %[4]q
+  management_network = local.management_network_uuid
+  notes              = "Force parameter test category"
+  force              = %[5]t
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		name,
+		force,
+	)
+}
