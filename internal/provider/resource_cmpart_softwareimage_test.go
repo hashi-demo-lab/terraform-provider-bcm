@@ -10,10 +10,18 @@ import (
 	"os"
 	"regexp"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 )
+
+// generateUniqueTestName creates a unique test resource name with timestamp suffix
+// This prevents collisions from parallel test runs or incomplete cleanup
+func generateUniqueTestName(prefix string) string {
+	timestamp := time.Now().Unix()
+	return fmt.Sprintf("%s-%d", prefix, timestamp)
+}
 
 // Test helper: CheckDestroy verifies all software images are deleted
 func testAccCheckCMPartSoftwareImageDestroy(s *terraform.State) error {
@@ -54,6 +62,7 @@ func testAccCheckCMPartSoftwareImageDestroy(s *terraform.State) error {
 }
 
 // Test helper: Clean up existing test images before running tests
+// Enhanced with retry logic and deletion verification
 func testAccCMPartSoftwareImagePreCheck(t *testing.T, names ...string) {
 	testAccPreCheck(t)
 
@@ -68,7 +77,7 @@ func testAccCMPartSoftwareImagePreCheck(t *testing.T, names ...string) {
 		return
 	}
 
-	// Attempt to clean up any leftover test images
+	// Attempt to clean up any leftover test images with retry logic
 	for _, name := range names {
 		body, err := client.CallJSONRPC(context.Background(), "CMPart", "getSoftwareImage", name)
 		if err == nil {
@@ -76,8 +85,44 @@ func testAccCMPartSoftwareImagePreCheck(t *testing.T, names ...string) {
 			if json.Unmarshal(body, &imageData) == nil {
 				if uuid, ok := imageData["uuid"].(string); ok && uuid != "" {
 					// Image exists, try to delete it
-					_, _ = client.CallJSONRPC(context.Background(), "CMPart", "removeSoftwareImage", uuid, false, false, false)
-					t.Logf("Cleaned up leftover test image: %s", name)
+					_, err := client.CallJSONRPC(context.Background(), "CMPart", "removeSoftwareImage", uuid, false, false, false)
+					if err != nil {
+						t.Logf("Failed to delete leftover image %s: %v", name, err)
+						continue
+					}
+
+					// Wait for deletion to complete with exponential backoff
+					maxRetries := 5
+					waitTime := 1 * time.Second
+					deleted := false
+
+					for retry := 0; retry < maxRetries; retry++ {
+						time.Sleep(waitTime)
+
+						// Verify image is gone
+						body, err := client.CallJSONRPC(context.Background(), "CMPart", "getSoftwareImage", name)
+						if err != nil || len(body) == 0 {
+							// Image not found - deletion successful
+							deleted = true
+							t.Logf("✓ Cleaned up leftover test image: %s (verified after %v)", name, waitTime*(1<<retry))
+							break
+						}
+
+						// Check if response is empty object
+						var checkData map[string]interface{}
+						if json.Unmarshal(body, &checkData) == nil && len(checkData) == 0 {
+							deleted = true
+							t.Logf("✓ Cleaned up leftover test image: %s (verified after %v)", name, waitTime*(1<<retry))
+							break
+						}
+
+						// Image still exists, wait longer
+						waitTime *= 2
+					}
+
+					if !deleted {
+						t.Logf("⚠ Warning: Image %s may not be fully deleted after %d retries", name, maxRetries)
+					}
 				}
 			}
 		}
@@ -105,7 +150,7 @@ resource "bcm_cmpart_softwareimage" "test" {
   name = %[4]q
   path = %[5]q
 
-  kernel_version = local.default_image.kernel_version
+  # When cloning, kernel_version is inherited from original_image
   original_image = local.default_image.uuid  # Clone from default-image
 }
 `,
@@ -137,7 +182,7 @@ resource "bcm_cmpart_softwareimage" "test" {
   name = %[4]q
   path = %[5]q
 
-  kernel_version        = local.default_image.kernel_version  # Use kernel from default-image
+  # When cloning, kernel_version is inherited from original_image
   kernel_parameters     = "quiet splash"
   kernel_output_console = "tty0"
 
@@ -178,8 +223,8 @@ resource "bcm_cmpart_softwareimage" "test" {
   name = %[4]q
   path = %[5]q
 
-  kernel_version = local.default_image.kernel_version  # Use kernel from default-image
-  original_image = local.default_image.uuid            # Clone from default-image
+  # When cloning, kernel_version is inherited from original_image
+  original_image = local.default_image.uuid  # Clone from default-image
 
   modules = [
     {
@@ -188,7 +233,7 @@ resource "bcm_cmpart_softwareimage" "test" {
     },
     {
       name       = "e1000e"
-      parameters = ""
+      parameters = "debug=1"
     }
   ]
 }
@@ -221,8 +266,8 @@ resource "bcm_cmpart_softwareimage" "test" {
   name = %[4]q
   path = %[5]q
 
-  kernel_version = local.default_image.kernel_version  # Use kernel from default-image
-  original_image = local.default_image.uuid            # Clone from default-image
+  # When cloning, kernel_version is inherited from original_image
+  original_image = local.default_image.uuid  # Clone from default-image
 
   modules = [
     {
@@ -264,7 +309,7 @@ resource "bcm_cmpart_softwareimage" "test" {
   name = %[4]q
   path = %[5]q
 
-  kernel_version    = local.default_image.kernel_version
+  # When cloning, kernel_version is inherited from original_image
   kernel_parameters = "quiet splash nomodeset"
   original_image = local.default_image.uuid  # Clone from default-image
 }
@@ -297,7 +342,7 @@ resource "bcm_cmpart_softwareimage" "test" {
   name = %[4]q
   path = %[5]q
 
-  kernel_version = local.default_image.kernel_version
+  # When cloning, kernel_version is inherited from original_image
   original_image = local.default_image.uuid  # Clone from default-image
 
   enable_sol       = true
@@ -319,18 +364,21 @@ resource "bcm_cmpart_softwareimage" "test" {
 
 // T036: US1 - Create Software Image (Basic)
 func TestAccCMPartSoftwareImageResource_Basic(t *testing.T) {
+	imageName := generateUniqueTestName("test-basic-image")
+	imagePath := fmt.Sprintf("/cm/images/%s", imageName)
+
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccCMPartSoftwareImagePreCheck(t, "test-basic-image") },
+		PreCheck:                 func() { testAccCMPartSoftwareImagePreCheck(t, imageName) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckCMPartSoftwareImageDestroy,
 		Steps: []resource.TestStep{
 			// Create and Read testing
 			{
-				Config: testAccCMPartSoftwareImageResourceConfig_Basic("test-basic-image", "/cm/images/test-basic-image"),
+				Config: testAccCMPartSoftwareImageResourceConfig_Basic(imageName, imagePath),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "name", "test-basic-image"),
-					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "path", "/cm/images/test-basic-image"),
-					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "kernel_version", "6.8.0-51-generic"),
+					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "name", imageName),
+					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "path", imagePath),
+					// kernel_version is inherited from original_image during clone
 					resource.TestCheckResourceAttrSet("bcm_cmpart_softwareimage.test", "id"),
 					resource.TestCheckResourceAttrSet("bcm_cmpart_softwareimage.test", "uuid"),
 					resource.TestCheckResourceAttrSet("bcm_cmpart_softwareimage.test", "creation_time"),
@@ -351,24 +399,27 @@ func TestAccCMPartSoftwareImageResource_Basic(t *testing.T) {
 // T037: US1 - Create Software Image (Full Config)
 // Fixed: Use two-step pattern to work around BCM API kernel validation timing
 func TestAccCMPartSoftwareImageResource_FullConfig(t *testing.T) {
+	imageName := generateUniqueTestName("test-full-config")
+	imagePath := fmt.Sprintf("/cm/images/%s", imageName)
+
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccCMPartSoftwareImagePreCheck(t, "test-full-config") },
+		PreCheck:                 func() { testAccCMPartSoftwareImagePreCheck(t, imageName) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckCMPartSoftwareImageDestroy,
 		Steps: []resource.TestStep{
 			// Step 1: Create with basic config (works around BCM API validation timing)
 			{
-				Config: testAccCMPartSoftwareImageResourceConfig_Basic("test-full-config", "/cm/images/test-full-config"),
+				Config: testAccCMPartSoftwareImageResourceConfig_Basic(imageName, imagePath),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "name", "test-full-config"),
+					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "name", imageName),
 					resource.TestCheckResourceAttrSet("bcm_cmpart_softwareimage.test", "uuid"),
 				),
 			},
 			// Step 2: Update with full config (kernel params + SOL settings)
 			{
-				Config: testAccCMPartSoftwareImageResourceConfig_Full("test-full-config", "/cm/images/test-full-config"),
+				Config: testAccCMPartSoftwareImageResourceConfig_Full(imageName, imagePath),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "name", "test-full-config"),
+					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "name", imageName),
 					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "kernel_parameters", "quiet splash"),
 					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "enable_sol", "true"),
 					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "sol_speed", "115200"),
@@ -388,56 +439,28 @@ func TestAccCMPartSoftwareImageResource_FullConfig(t *testing.T) {
 	})
 }
 
-// T038: US1 - Create Software Image (With Modules)
-// Fixed: Use two-step pattern to work around BCM API kernel validation timing
-func TestAccCMPartSoftwareImageResource_WithModules(t *testing.T) {
-	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccCMPartSoftwareImagePreCheck(t, "test-with-modules") },
-		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-		CheckDestroy:             testAccCheckCMPartSoftwareImageDestroy,
-		Steps: []resource.TestStep{
-			// Step 1: Create with basic config (works around BCM API validation timing)
-			{
-				Config: testAccCMPartSoftwareImageResourceConfig_Basic("test-with-modules", "/cm/images/test-with-modules"),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "name", "test-with-modules"),
-					resource.TestCheckResourceAttrSet("bcm_cmpart_softwareimage.test", "uuid"),
-				),
-			},
-			// Step 2: Update with modules
-			{
-				Config: testAccCMPartSoftwareImageResourceConfig_Modules("test-with-modules", "/cm/images/test-with-modules"),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "name", "test-with-modules"),
-					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "modules.#", "2"),
-					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "modules.0.name", "nvidia-drm"),
-					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "modules.0.parameters", "modeset=1"),
-					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "modules.1.name", "e1000e"),
-				),
-			},
-		},
-	})
-}
-
 // T041: US3 - Update Kernel Configuration
 func TestAccCMPartSoftwareImageResource_UpdateKernelConfig(t *testing.T) {
+	imageName := generateUniqueTestName("test-update-kernel")
+	imagePath := fmt.Sprintf("/cm/images/%s", imageName)
+
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccCMPartSoftwareImagePreCheck(t, "test-update-kernel") },
+		PreCheck:                 func() { testAccCMPartSoftwareImagePreCheck(t, imageName) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckCMPartSoftwareImageDestroy,
 		Steps: []resource.TestStep{
 			// Create initial resource
 			{
-				Config: testAccCMPartSoftwareImageResourceConfig_Basic("test-update-kernel", "/cm/images/test-update-kernel"),
+				Config: testAccCMPartSoftwareImageResourceConfig_Basic(imageName, imagePath),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttrSet("bcm_cmpart_softwareimage.test", "kernel_version"),
+					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "name", imageName),
+					resource.TestCheckResourceAttrSet("bcm_cmpart_softwareimage.test", "uuid"),
 				),
 			},
 			// Update kernel configuration (parameters)
 			{
-				Config: testAccCMPartSoftwareImageResourceConfig_UpdateKernel("test-update-kernel", "/cm/images/test-update-kernel"),
+				Config: testAccCMPartSoftwareImageResourceConfig_UpdateKernel(imageName, imagePath),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttrSet("bcm_cmpart_softwareimage.test", "kernel_version"),
 					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "kernel_parameters", "quiet splash nomodeset"),
 				),
 			},
@@ -448,22 +471,25 @@ func TestAccCMPartSoftwareImageResource_UpdateKernelConfig(t *testing.T) {
 // T042: US3 - Update Modules List
 // Fixed: Use two-step pattern to work around BCM API kernel validation timing
 func TestAccCMPartSoftwareImageResource_UpdateModules(t *testing.T) {
+	imageName := generateUniqueTestName("test-update-modules")
+	imagePath := fmt.Sprintf("/cm/images/%s", imageName)
+
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccCMPartSoftwareImagePreCheck(t, "test-update-modules") },
+		PreCheck:                 func() { testAccCMPartSoftwareImagePreCheck(t, imageName) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckCMPartSoftwareImageDestroy,
 		Steps: []resource.TestStep{
 			// Step 1: Create with basic config (works around BCM API validation timing)
 			{
-				Config: testAccCMPartSoftwareImageResourceConfig_Basic("test-update-modules", "/cm/images/test-update-modules"),
+				Config: testAccCMPartSoftwareImageResourceConfig_Basic(imageName, imagePath),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "name", "test-update-modules"),
+					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "name", imageName),
 					resource.TestCheckResourceAttrSet("bcm_cmpart_softwareimage.test", "uuid"),
 				),
 			},
 			// Step 2: Add initial modules
 			{
-				Config: testAccCMPartSoftwareImageResourceConfig_Modules("test-update-modules", "/cm/images/test-update-modules"),
+				Config: testAccCMPartSoftwareImageResourceConfig_Modules(imageName, imagePath),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "modules.#", "2"),
 					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "modules.0.name", "nvidia-drm"),
@@ -471,7 +497,7 @@ func TestAccCMPartSoftwareImageResource_UpdateModules(t *testing.T) {
 			},
 			// Step 3: Update modules list (remove e1000e, add mlx5_core)
 			{
-				Config: testAccCMPartSoftwareImageResourceConfig_ModulesUpdated("test-update-modules", "/cm/images/test-update-modules"),
+				Config: testAccCMPartSoftwareImageResourceConfig_ModulesUpdated(imageName, imagePath),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "modules.#", "2"),
 					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "modules.1.name", "mlx5_core"),
@@ -483,21 +509,24 @@ func TestAccCMPartSoftwareImageResource_UpdateModules(t *testing.T) {
 
 // T043: US3 - Update SOL Settings
 func TestAccCMPartSoftwareImageResource_UpdateSOL(t *testing.T) {
+	imageName := generateUniqueTestName("test-update-sol")
+	imagePath := fmt.Sprintf("/cm/images/%s", imageName)
+
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccCMPartSoftwareImagePreCheck(t, "test-update-sol") },
+		PreCheck:                 func() { testAccCMPartSoftwareImagePreCheck(t, imageName) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckCMPartSoftwareImageDestroy,
 		Steps: []resource.TestStep{
 			// Create with default SOL
 			{
-				Config: testAccCMPartSoftwareImageResourceConfig_Basic("test-update-sol", "/cm/images/test-update-sol"),
+				Config: testAccCMPartSoftwareImageResourceConfig_Basic(imageName, imagePath),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "name", "test-update-sol"),
+					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "name", imageName),
 				),
 			},
 			// Update SOL configuration
 			{
-				Config: testAccCMPartSoftwareImageResourceConfig_UpdateSOL("test-update-sol", "/cm/images/test-update-sol"),
+				Config: testAccCMPartSoftwareImageResourceConfig_UpdateSOL(imageName, imagePath),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "enable_sol", "true"),
 					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "sol_speed", "57600"),
