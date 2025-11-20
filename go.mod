@@ -1,4 +1,4 @@
-module github.com/hashicorp/terraform-provider-scaffolding-framework
+module github.com/hashi-demo-lab/terraform-provider-bcm
 
 go 1.24.0
 

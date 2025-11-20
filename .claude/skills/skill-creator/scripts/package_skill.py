@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright (c) HashiCorp, Inc.
+# SPDX-License-Identifier: MPL-2.0
+
 """
 Skill Packager - Creates a distributable .skill file of a skill folder
 

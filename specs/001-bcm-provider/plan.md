@@ -1,0 +1,822 @@
+# Implementation Plan: BCM Terraform Provider POV
+
+**Branch**: `001-bcm-provider` | **Date**: 2025-11-20 | **Spec**: [/workspace/specs/001-bcm-provider/spec.md](/workspace/specs/001-bcm-provider/spec.md)
+**Input**: Feature specification from `/specs/001-bcm-provider/spec.md`
+
+**Note**: This is a POV (Proof of Value) implementation focused on validating the JSON-RPC API integration pattern with minimal scope: authentication + one data source.
+
+## Summary
+
+Create a Terraform provider for Nvidia BCM (BlueField Configuration Manager) that integrates with the BCM JSON-RPC API at `https://172.21.15.254:8081/json`. The POV scope includes HTTP Basic Authentication with self-signed certificate support and a single data source `bcm_cmpart_softwareimages` that queries software images with complete nested schema (30+ fields including modules array). This validates the JSON-RPC integration pattern using TDD methodology with acceptance-first testing.
+
+**Technical Approach**: Terraform Plugin Framework with custom JSON-RPC HTTP client, implementing TDD RED-GREEN-REFACTOR cycles for provider authentication and data source operations.
+
+## Technical Context
+
+**Language/Version**: Go 1.24.0
+**Primary Dependencies**: terraform-plugin-framework v1.16.1, terraform-plugin-testing v1.13.3, terraform-plugin-log v0.10.0
+**Storage**: N/A (read-only data source, state managed by Terraform)
+**Testing**: terraform-plugin-testing with TF_ACC=1 for acceptance tests, standard Go testing for unit tests
+**Target Platform**: Linux/macOS/Windows (Terraform provider binary)
+**Project Type**: Single Go module with Terraform provider structure
+**Performance Goals**: API response time < 30s (configurable timeout), data source read operations < 60s
+**Constraints**:
+  - Self-signed TLS certificates (requires insecure_skip_verify option)
+  - Unknown API error format (defensive error parsing required)
+  - Unknown filtering support (POV returns all images, filtering deferred)
+  - Unknown pagination support (POV assumes single response)
+**Scale/Scope**: POV scope - 1 provider configuration + 1 data source, ~1000 LOC including tests
+
+## Constitution Check
+
+*GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
+
+**Analysis**: Constitution file focuses on Terraform Provider TDD workflows. This plan aligns with constitutional principles:
+
+1. **TDD Mandatory Rule**: PASS - Plan implements RED-GREEN-REFACTOR cycles with acceptance tests first
+2. **Parallel Execution**: PASS - Plan identifies parallel opportunities for test writing and implementation
+3. **Acceptance-First Testing**: PASS - Phase 1 includes acceptance test design before implementation
+4. **Framework Compliance**: PASS - Using terraform-plugin-framework (recommended over SDKv2)
+5. **Documentation Generation**: PASS - Plan includes tfplugindocs for auto-generated docs
+
+**Violations**: NONE - POV aligns with constitutional principles for Terraform provider development
+
+**Re-evaluation Required**: After Phase 1 design completion, verify:
+- Acceptance tests comprehensively cover authentication and data source scenarios
+- Schema design follows terraform-plugin-framework best practices
+- Error handling covers all defensive parsing cases
+- Documentation includes working examples
+
+## Project Structure
+
+### Documentation (this feature)
+
+```text
+specs/001-bcm-provider/
+├── plan.md              # This file (/speckit.plan command output)
+├── research.md          # Phase 0 output - JSON-RPC patterns, error handling, schema design
+├── data-model.md        # Phase 1 output - SoftwareImage and KernelModule entities
+├── quickstart.md        # Phase 1 output - Getting started guide
+├── contracts/           # Phase 1 output - JSON-RPC request/response contracts
+│   ├── getSoftwareImages-request.json
+│   └── getSoftwareImages-response.json
+└── tasks.md             # Phase 2 output (/speckit.tasks command - NOT created by /speckit.plan)
+```
+
+### Source Code (repository root)
+
+```text
+# Terraform Provider Framework structure (existing scaffold)
+terraform-provider-bcm/
+├── internal/
+│   └── provider/
+│       ├── provider.go                            # Provider definition (MODIFY for BCM)
+│       ├── provider_test.go                       # Provider tests (MODIFY for BCM auth)
+│       ├── bcm_client.go                          # NEW - JSON-RPC API client
+│       ├── bcm_client_test.go                     # NEW - Client unit tests
+│       ├── data_source_cmpart_softwareimages.go   # NEW - SoftwareImages data source
+│       └── data_source_cmpart_softwareimages_test.go # NEW - Acceptance tests
+├── examples/
+│   ├── provider/
+│   │   └── provider.tf                            # NEW - Provider config example
+│   └── data-sources/
+│       └── bcm_cmpart_softwareimages/
+│           └── data-source.tf                     # NEW - Data source example
+├── docs/                                          # Generated by tfplugindocs
+│   ├── index.md                                   # Provider documentation
+│   └── data-sources/
+│       └── cmpart_softwareimages.md               # Data source documentation
+├── main.go                                        # Provider binary entry point (NO CHANGE)
+├── go.mod                                         # Go module dependencies (NO CHANGE)
+├── go.sum                                         # Go module checksums (UPDATE after install)
+├── GNUmakefile                                    # Build and test commands (NO CHANGE)
+└── tools/                                         # Documentation generation tools (NO CHANGE)
+```
+
+**Structure Decision**: Using standard Terraform Provider Framework structure with internal/provider package for all provider code. POV adds 4 new files (bcm_client.go, bcm_client_test.go, data_source_cmpart_softwareimages.go, data_source_cmpart_softwareimages_test.go) and modifies 2 existing files (provider.go, provider_test.go). Examples and documentation auto-generated by tfplugindocs.
+
+## Complexity Tracking
+
+> **No violations - POV aligns with Terraform provider constitutional principles**
+
+---
+
+## Phase 0: Outline & Research
+
+**Objective**: Resolve all unknowns from Technical Context and establish technical foundation for implementation.
+
+### Research Tasks
+
+Based on the Technical Context constraints and spec clarifications, the following areas require research:
+
+1. **JSON-RPC Client Design**
+   - **Unknown**: Best practices for JSON-RPC client implementation in Go
+   - **Research Focus**: HTTP client configuration, request/response patterns, error handling
+   - **Deliverable**: Client design pattern with code examples
+
+2. **Self-Signed Certificate Handling**
+   - **Unknown**: Proper implementation of insecure_skip_verify with http.Transport
+   - **Research Focus**: TLS configuration, security implications, user guidance
+   - **Deliverable**: TLS client configuration pattern with security notes
+
+3. **Defensive Error Parsing Strategy**
+   - **Unknown**: BCM JSON-RPC API error format (HTTP status? JSON error object? Both?)
+   - **Research Focus**: Multi-layer error detection (HTTP status, response body structure, error fields)
+   - **Deliverable**: Error parsing algorithm with fallback layers
+
+4. **Nested Schema Design**
+   - **Unknown**: Best practices for ListNestedAttribute with 30+ fields
+   - **Research Focus**: terraform-plugin-framework nested attribute patterns, camelCase conversion
+   - **Deliverable**: Schema design pattern for SoftwareImage with modules array
+
+5. **Acceptance Test Patterns for Data Sources**
+   - **Unknown**: Data source acceptance test structure (no ImportState, no Update)
+   - **Research Focus**: terraform-plugin-testing patterns for read-only data sources
+   - **Deliverable**: Test template for data source with multiple scenarios
+
+### Research Execution Plan
+
+Each research task will generate findings consolidated in `research.md`:
+
+**Format**:
+```markdown
+## [Research Topic]
+
+**Decision**: [What pattern/approach was chosen]
+
+**Rationale**: [Why this approach solves the problem]
+
+**Alternatives Considered**: [Other options evaluated and why rejected]
+
+**Implementation Notes**: [Key details for Phase 1 implementation]
+
+**Code Example**: [Minimal working example if applicable]
+```
+
+### Research Output: research.md
+
+**Location**: `/workspace/specs/001-bcm-provider/research.md`
+
+**Expected Sections**:
+1. JSON-RPC Client Design
+2. TLS Configuration for Self-Signed Certificates
+3. Defensive Error Parsing Strategy
+4. Nested Schema Design for terraform-plugin-framework
+5. Data Source Acceptance Test Patterns
+
+**Success Criteria**: All NEEDS CLARIFICATION items from Technical Context resolved with documented decisions.
+
+---
+
+## Phase 1: Design & Contracts
+
+**Prerequisites**: research.md complete with all technical decisions
+
+**Objective**: Generate data model, API contracts, and design artifacts for TDD implementation.
+
+### Phase 1 Deliverables
+
+#### 1. Data Model (data-model.md)
+
+**Entities**:
+
+**SoftwareImage** (Primary Entity):
+- **Source**: BCM JSON-RPC API - getSoftwareImages call
+- **Fields**: 30+ attributes (uuid, name, path, kernel configuration, SOL settings, metadata, relationships, state flags)
+- **Nested Relationship**: Has many KernelModule objects via modules array
+- **Terraform Mapping**: Data source attribute `images` (computed list)
+
+**KernelModule** (Nested Entity):
+- **Source**: Nested within SoftwareImage.modules array
+- **Fields**: uuid, name, parameters, base_type, child_type, revision, modified, to_be_removed
+- **Terraform Mapping**: ListNestedAttribute within SoftwareImage schema
+
+**Field Mapping Rules**:
+- API camelCase → Terraform snake_case (e.g., kernelVersion → kernel_version)
+- API uuid → Terraform id (for top-level entity)
+- Preserve uuid field for compatibility
+- All fields Computed: true (read-only data source)
+- Null handling: types.StringNull(), types.BoolNull(), types.Int64Null()
+
+#### 2. API Contracts (contracts/)
+
+**File**: `contracts/getSoftwareImages-request.json`
+```json
+{
+  "endpoint": "https://172.21.15.254:8081/json",
+  "method": "POST",
+  "headers": {
+    "Content-Type": "application/json",
+    "Cookie": "cm-login-token=<token-from-login-response>"
+  },
+  "body": {
+    "service": "CMPart",
+    "call": "getSoftwareImages"
+  },
+  "notes": {
+    "authentication": "Token-based cookie authentication - Cookie header automatically added by http.Client cookie jar after login",
+    "login_required": "Provider must first call login API to obtain cm-login-token cookie"
+  }
+}
+```
+
+**File**: `contracts/getSoftwareImages-response.json`
+```json
+[
+  {
+    "uuid": "550e8400-e29b-41d4-a716-446655440000",
+    "name": "ubuntu-22.04-dpu",
+    "path": "/var/bcm/images/ubuntu-22.04",
+    "kernelVersion": "5.15.0-58-generic",
+    "kernelParameters": "console=ttyS0",
+    "kernelOutputConsole": "ttyS0,115200",
+    "bootfspart": "/dev/mmcblk0p1",
+    "fspart": "/dev/mmcblk0p2",
+    "enableSOL": true,
+    "SOLPort": "ttyS0",
+    "SOLSpeed": "115200",
+    "SOLFlowControl": false,
+    "baseType": "Linux",
+    "childType": "Ubuntu",
+    "creationTime": 1699564800000,
+    "fileOperationInProgress": false,
+    "modified": false,
+    "notes": "Production DPU image",
+    "originalImage": "ubuntu-22.04-base",
+    "parentSoftwareImage": "ubuntu-22.04-parent",
+    "parent_uuid": "450e8400-e29b-41d4-a716-446655440000",
+    "revision": "1.0.0",
+    "revisionID": 1,
+    "to_be_removed": false,
+    "modules": [
+      {
+        "uuid": "650e8400-e29b-41d4-a716-446655440000",
+        "name": "nvidia-drm",
+        "parameters": "modeset=1",
+        "baseType": "kernel-module",
+        "childType": "graphics",
+        "revision": "525.60.13",
+        "modified": false,
+        "to_be_removed": false
+      }
+    ]
+  }
+]
+```
+
+**Error Response Examples** (defensive parsing):
+```json
+// Scenario 1: HTTP 401 with JSON error
+{
+  "error": "Authentication failed",
+  "code": 401
+}
+
+// Scenario 2: HTTP 500 with JSON error
+{
+  "error": "Internal server error",
+  "code": 500,
+  "details": "Service unavailable"
+}
+
+// Scenario 3: HTTP 200 with empty array (success)
+[]
+```
+
+#### 3. Quickstart Guide (quickstart.md)
+
+**Content**:
+1. Provider installation (terraform init)
+2. Provider configuration with Basic Auth and insecure_skip_verify
+3. Data source usage example
+4. Expected output structure
+5. Troubleshooting common errors (auth failure, TLS error, connection timeout)
+
+**Example**:
+```hcl
+terraform {
+  required_providers {
+    bcm = {
+      source = "hashicorp/bcm"
+      version = "~> 0.1"
+    }
+  }
+}
+
+provider "bcm" {
+  endpoint              = "https://172.21.15.254:8081"
+  username              = "root"
+  password              = "Hashicorp123!"
+  insecure_skip_verify  = true
+}
+
+data "bcm_cmpart_softwareimages" "all" {}
+
+output "software_images" {
+  value = data.bcm_cmpart_softwareimages.all.images
+}
+```
+
+#### 4. Agent Context Update
+
+**Action**: Run `.specify/scripts/bash/update-agent-context.sh copilot`
+
+**Purpose**: Update GitHub Copilot context file with:
+- BCM JSON-RPC API patterns
+- terraform-plugin-framework usage for this project
+- Defensive error parsing strategy
+- Nested schema patterns
+
+**Preserve**: Manual additions between markers in `.copilot/` files
+
+---
+
+## Phase 1: TDD Implementation Strategy
+
+**Philosophy**: RED-GREEN-REFACTOR in parallel batches following Terraform provider TDD patterns.
+
+### TDD Cycle 1: Provider Configuration & Authentication
+
+**Scope**: Provider schema, HTTP Basic Auth, TLS configuration, client initialization
+
+#### RED Phase - Failing Provider Tests
+
+**Parallel Test Writing**:
+
+1. **Test**: Provider schema validation
+   - File: `internal/provider/provider_test.go`
+   - Scenario: Provider has endpoint, username, password, insecure_skip_verify, timeout attributes
+   - Expected Failure: Attributes not yet defined in provider schema
+
+2. **Test**: Provider authentication success
+   - File: `internal/provider/provider_test.go`
+   - Scenario: Valid credentials → client configured and stored in resp.DataSourceData
+   - Expected Failure: Client not yet initialized
+
+3. **Test**: Provider authentication failure
+   - File: `internal/provider/provider_test.go` (unit test, not acceptance)
+   - Scenario: Invalid endpoint → clear error message
+   - Expected Failure: No validation implemented
+
+4. **Test**: TLS configuration
+   - File: `internal/provider/provider_test.go` (unit test)
+   - Scenario: insecure_skip_verify=true → TLS verification disabled
+   - Expected Failure: TLS config not implemented
+
+**Verification**: Run `go test ./internal/provider -v` - all tests should fail
+
+#### GREEN Phase - Minimal Provider Implementation
+
+**Parallel Implementation**:
+
+1. **Update**: Provider schema in `provider.go`
+   - Add attributes: endpoint (required), username (required), password (sensitive), insecure_skip_verify (optional, default false), timeout (optional, default 30)
+   - Update ScaffoldingProviderModel struct
+   - Change TypeName from "scaffolding" to "bcm"
+
+2. **Create**: BCM client in `bcm_client.go`
+   - Type: BCMClient struct with HTTPClient, Endpoint, Username, Password
+   - Method: NewBCMClient(endpoint, username, password, insecureSkipVerify, timeout) - returns configured client
+   - Method: CallJSONRPC(ctx, service, call string) - minimal implementation returning empty JSON array
+
+3. **Update**: Provider Configure in `provider.go`
+   - Extract config values from ScaffoldingProviderModel
+   - Validate required fields (endpoint, username, password)
+   - Initialize BCMClient with TLS transport if insecure_skip_verify
+   - Store client in resp.DataSourceData
+
+**Verification**: Run `go test ./internal/provider -v` - all tests should pass
+
+#### REFACTOR Phase - Production-Ready Provider
+
+**Parallel Improvements**:
+
+1. **Enhance**: Error handling in Configure
+   - Clear validation error messages for missing required fields
+   - TLS configuration error guidance
+   - Context cancellation handling
+
+2. **Enhance**: BCM client logging
+   - tflog.Debug for client initialization
+   - tflog.Trace for all JSONRPC calls (request/response)
+
+3. **Add**: Client timeout handling
+   - Use context.WithTimeout for JSONRPC calls
+   - Return timeout errors with troubleshooting guidance
+
+**Verification**: Run `go test ./internal/provider -v` - all tests still pass with improvements
+
+### TDD Cycle 2: JSON-RPC Client
+
+**Scope**: JSONRPC request construction, HTTP client execution, response parsing, error handling
+
+#### RED Phase - Failing Client Tests
+
+**Parallel Test Writing** (unit tests in `bcm_client_test.go`):
+
+1. **Test**: JSONRPC request construction
+   - Scenario: CallJSONRPC("CMPart", "getSoftwareImages") → correct POST body
+   - Expected Failure: Method not yet implemented
+
+2. **Test**: HTTP headers
+   - Scenario: Request includes Content-Type and Authorization headers
+   - Expected Failure: Headers not set
+
+3. **Test**: Base64 encoding
+   - Scenario: Username "user:with:colons" + password "pass:word" → correct base64
+   - Expected Failure: Encoding logic not implemented
+
+4. **Test**: Success response parsing
+   - Scenario: HTTP 200 with JSON array → parsed as success
+   - Expected Failure: Parsing not implemented
+
+5. **Test**: HTTP error detection
+   - Scenario: HTTP 401 → authentication error
+   - Expected Failure: Status code not checked
+
+6. **Test**: JSON error object detection
+   - Scenario: HTTP 200 with {"error": "..."} → treated as error
+   - Expected Failure: Defensive parsing not implemented
+
+7. **Test**: Empty array response
+   - Scenario: HTTP 200 with [] → success (not error)
+   - Expected Failure: Empty array handling not implemented
+
+**Verification**: Run `go test -run TestBCMClient ./internal/provider -v` - all tests should fail
+
+#### GREEN Phase - Minimal Client Implementation
+
+**Implementation** in `bcm_client.go`:
+
+1. **Method**: CallJSONRPC(ctx, service, call string) ([]byte, error)
+   - Construct JSON body: {"service": service, "call": call}
+   - Create POST request to endpoint + "/json"
+   - Set headers: Content-Type, Authorization (base64 encode username:password)
+   - Execute request with http.Client.Do
+   - Check HTTP status (non-2xx = error)
+   - Read response body
+   - Defensive parsing: check if body is JSON object with "error" field
+   - Return raw response bytes
+
+2. **Helper**: base64EncodeCredentials(username, password) string
+   - Return base64.StdEncoding.EncodeToString([]byte(username + ":" + password))
+
+3. **Helper**: parseErrorResponse(statusCode int, body []byte) error
+   - If statusCode != 2xx → return HTTP error
+   - If body is JSON object with "error" field → return API error
+   - Otherwise return nil (success)
+
+**Verification**: Run `go test -run TestBCMClient ./internal/provider -v` - all tests should pass
+
+#### REFACTOR Phase - Production Client
+
+**Enhancements**:
+
+1. **Error messages**: Include endpoint URL, status code, response snippet (first 500 chars)
+2. **Logging**: tflog.Trace for all requests/responses with full bodies
+3. **Timeout**: Respect context deadline from provider timeout config
+4. **Connection errors**: Detect connection refused, timeout, DNS errors with specific guidance
+
+**Verification**: Run `go test -run TestBCMClient ./internal/provider -v` - tests pass with better errors
+
+### TDD Cycle 3: Data Source - bcm_cmpart_softwareimages
+
+**Scope**: Data source schema, Read implementation, response parsing, state management
+
+#### RED Phase - Failing Acceptance Tests
+
+**File**: `internal/provider/data_source_cmpart_softwareimages_test.go`
+
+**Parallel Acceptance Test Writing**:
+
+1. **Test**: TestAccCMPartSoftwareImagesDataSource_Basic
+   - Scenario: Query data source with valid provider config
+   - Check: `images` attribute exists
+   - Check: First image has `id`, `name`, `uuid` attributes
+   - Expected Failure: Data source not yet registered in provider
+
+2. **Test**: TestAccCMPartSoftwareImagesDataSource_EmptyResponse
+   - Scenario: API returns empty array []
+   - Check: `images` is empty list (not error)
+   - Expected Failure: Empty array handling not implemented
+
+3. **Test**: TestAccCMPartSoftwareImagesDataSource_NestedModules
+   - Scenario: SoftwareImage with modules array
+   - Check: `images.0.modules` is list
+   - Check: `images.0.modules.0.name` attribute exists
+   - Expected Failure: Nested schema not implemented
+
+4. **Test**: TestAccCMPartSoftwareImagesDataSource_AllFields
+   - Scenario: Verify all 30+ fields are exposed in schema
+   - Check: All snake_case fields present (kernel_version, enable_sol, etc.)
+   - Expected Failure: Schema incomplete
+
+5. **Test**: TestAccCMPartSoftwareImagesDataSource_AuthFailure
+   - Scenario: Invalid credentials in provider config
+   - Check: Error message contains "authentication" or "401"
+   - Expected Failure: Auth error not detected
+
+**Verification**: Run `TF_ACC=1 go test -run TestAccCMPartSoftwareImages ./internal/provider -v` - all tests fail
+
+#### GREEN Phase - Minimal Data Source Implementation
+
+**File**: `internal/provider/data_source_cmpart_softwareimages.go`
+
+**Implementation Steps**:
+
+1. **Type**: CMPartSoftwareImagesDataSource struct
+   - Field: client *BCMClient
+
+2. **Type**: CMPartSoftwareImagesDataSourceModel struct
+   - Field: Images []SoftwareImageModel `tfsdk:"images"`
+   - Field: ID types.String `tfsdk:"id"` (placeholder for data source ID)
+
+3. **Type**: SoftwareImageModel struct (30+ fields)
+   - All fields types.String, types.Bool, or types.Int64
+   - Nested field: Modules []KernelModuleModel `tfsdk:"modules"`
+
+4. **Type**: KernelModuleModel struct (8 fields)
+   - All fields types.String or types.Bool
+
+5. **Method**: Schema() - define complete schema
+   - Root attribute: images (ListNestedAttribute)
+   - SoftwareImage nested schema with 30+ attributes
+   - KernelModule nested schema within modules attribute
+   - All attributes Computed: true
+
+6. **Method**: Read()
+   - Get client from req.ProviderData
+   - Call client.CallJSONRPC(ctx, "CMPart", "getSoftwareImages")
+   - Unmarshal JSON array into []map[string]interface{}
+   - Map to []SoftwareImageModel (camelCase → snake_case conversion)
+   - Handle null fields with types.StringNull(), etc.
+   - Set state with images list
+   - Set placeholder ID (types.StringValue("placeholder"))
+
+7. **Register**: Add NewCMPartSoftwareImagesDataSource to provider.DataSources()
+
+**Verification**: Run `TF_ACC=1 go test -run TestAccCMPartSoftwareImages ./internal/provider -v -timeout=120m` - all tests pass
+
+**Note**: Acceptance tests require real BCM endpoint. Use environment variables for credentials:
+```bash
+export TF_ACC=1
+export BCM_ENDPOINT="https://172.21.15.254:8081"
+export BCM_USERNAME="root"
+export BCM_PASSWORD="Hashicorp123!"
+```
+
+#### REFACTOR Phase - Production Data Source
+
+**Enhancements**:
+
+1. **Field mapping**: Extract camelCase→snake_case conversion to helper function
+2. **Null handling**: Centralize null value detection and conversion
+3. **Error messages**: Include API call details (service, call) in errors
+4. **Logging**: tflog.Debug for successful API calls with image count
+5. **Response validation**: Check response structure before unmarshaling
+
+**Verification**: Run acceptance tests again - tests pass with better code quality
+
+---
+
+## Phase 2: Documentation & Examples
+
+**Prerequisites**: All TDD cycles complete, tests passing
+
+**Objective**: Generate provider documentation and working examples for users.
+
+### Documentation Generation
+
+**Tool**: terraform-plugin-docs (tfplugindocs)
+
+**Command**: `make generate` (runs `go generate ./...` via tools/tools.go)
+
+**Generated Files**:
+- `docs/index.md` - Provider documentation
+- `docs/data-sources/cmpart_softwareimages.md` - Data source documentation
+
+### Examples Creation
+
+**Files to Create**:
+
+1. **examples/provider/provider.tf**
+```hcl
+terraform {
+  required_providers {
+    bcm = {
+      source = "hashicorp/bcm"
+      version = "~> 0.1"
+    }
+  }
+}
+
+provider "bcm" {
+  endpoint             = "https://172.21.15.254:8081"
+  username             = var.bcm_username
+  password             = var.bcm_password
+  insecure_skip_verify = true  # Required for self-signed certificates
+  timeout              = 30    # Optional: API timeout in seconds
+}
+```
+
+2. **examples/data-sources/bcm_cmpart_softwareimages/data-source.tf**
+```hcl
+data "bcm_cmpart_softwareimages" "all" {}
+
+output "all_images" {
+  value = data.bcm_cmpart_softwareimages.all.images
+}
+
+output "first_image_name" {
+  value = length(data.bcm_cmpart_softwareimages.all.images) > 0 ? data.bcm_cmpart_softwareimages.all.images[0].name : "No images found"
+}
+
+output "images_with_modules" {
+  value = [
+    for img in data.bcm_cmpart_softwareimages.all.images :
+    img if length(img.modules) > 0
+  ]
+}
+```
+
+### Quickstart Guide Updates
+
+Update `specs/001-bcm-provider/quickstart.md` with:
+- Installation instructions
+- Authentication setup
+- Common use cases
+- Troubleshooting guide
+
+---
+
+## Implementation Phases Summary
+
+### Phase 0: Research (Estimated: 2-4 hours)
+- JSON-RPC client patterns
+- TLS configuration for self-signed certs
+- Defensive error parsing strategy
+- Nested schema design
+- Data source acceptance test patterns
+- **Output**: research.md
+
+### Phase 1: Design (Estimated: 2-3 hours)
+- Data model for SoftwareImage and KernelModule
+- API contracts (request/response JSON)
+- Quickstart guide
+- Agent context update
+- **Output**: data-model.md, contracts/, quickstart.md
+
+### Phase 1: TDD Implementation (Estimated: 8-12 hours)
+
+**TDD Cycle 1: Provider (2-3 hours)**
+- RED: Provider schema and auth tests (30 min)
+- GREEN: Minimal provider implementation (1 hour)
+- REFACTOR: Error handling and logging (30-60 min)
+
+**TDD Cycle 2: Client (3-4 hours)**
+- RED: Client unit tests (1 hour)
+- GREEN: JSONRPC client implementation (1.5 hours)
+- REFACTOR: Defensive error parsing (1-1.5 hours)
+
+**TDD Cycle 3: Data Source (3-5 hours)**
+- RED: Acceptance tests (1-1.5 hours)
+- GREEN: Schema and Read implementation (1.5-2 hours)
+- REFACTOR: Field mapping and validation (1-1.5 hours)
+
+### Phase 2: Documentation (Estimated: 1-2 hours)
+- Generate docs with tfplugindocs
+- Create examples
+- Update quickstart guide
+
+**Total Estimated Effort**: 13-21 hours
+
+---
+
+## Parallel Execution Opportunities
+
+Following Terraform Provider TDD constitutional principles, these tasks can be executed in parallel:
+
+### Research Phase (Parallel)
+- JSON-RPC patterns research (Agent 1)
+- TLS configuration research (Agent 2)
+- Nested schema patterns research (Agent 3)
+- Error parsing strategy research (Agent 4)
+- Test patterns research (Agent 5)
+
+### TDD RED Phase (Parallel)
+- Provider tests (Agent 1)
+- Client tests (Agent 2)
+- Data source acceptance tests (Agent 3)
+
+### TDD GREEN Phase (Sequential within cycles, but fields can be parallel)
+- Provider implementation (must complete before client)
+- Client implementation (must complete before data source)
+- Data source schema (30+ fields can be split across agents)
+
+### TDD REFACTOR Phase (Parallel)
+- Provider error handling (Agent 1)
+- Client logging and errors (Agent 2)
+- Data source field mapping (Agent 3)
+
+### Documentation (Parallel)
+- Generate docs with tfplugindocs (Agent 1)
+- Write examples (Agent 2)
+- Update quickstart (Agent 3)
+
+---
+
+## Risk Mitigation
+
+### Unknown API Error Format
+**Risk**: BCM may return errors in unexpected formats
+**Mitigation**: Defensive error parsing with multi-layer detection (HTTP status, JSON structure, error fields)
+**Fallback**: Log full response at TRACE level for debugging
+
+### Unknown Filtering Support
+**Risk**: API may not support filtering by name/uuid
+**Mitigation**: POV returns all images, document filtering limitation
+**Future**: Test API with parameters after POV validation
+
+### Unknown Pagination
+**Risk**: Large result sets may require pagination
+**Mitigation**: POV assumes single response, monitor performance
+**Future**: Add pagination if API supports it and performance degrades
+
+### Self-Signed Certificate Security
+**Risk**: insecure_skip_verify disables TLS verification
+**Mitigation**: Clear documentation warning, recommend mTLS for production
+**Future**: Implement certificate-based auth post-POV
+
+### Field Mapping Complexity
+**Risk**: 30+ fields with camelCase→snake_case conversion error-prone
+**Mitigation**: Comprehensive acceptance tests for all fields, helper functions for mapping
+**Validation**: Table-driven unit tests for field conversion
+
+---
+
+## Success Metrics
+
+### POV Exit Criteria
+
+1. **Provider Authentication**: ✓ Basic auth working with self-signed cert support
+2. **Data Source Functional**: ✓ getSoftwareImages call successful against real BCM instance
+3. **Acceptance Tests**: ✓ 100% pass rate (5+ scenarios covered)
+4. **Nested Schema**: ✓ Modules array correctly parsed and exposed
+5. **Error Handling**: ✓ Defensive parsing covers auth, TLS, parse, connection errors
+6. **Documentation**: ✓ Working examples and schema reference complete
+7. **Decision Point**: ✓ Proceed to production expansion or iterate
+
+### Quality Gates
+
+- **Test Coverage**: >= 80% for provider and client code
+- **Acceptance Tests**: 100% pass rate against real BCM instance
+- **golangci-lint**: No errors
+- **Documentation**: tfplugindocs generates without errors
+- **Examples**: All examples validate with `terraform validate`
+
+---
+
+## Post-POV Roadmap
+
+After POV validation, consider expanding to:
+
+1. **Additional Data Sources**: getDevices, getHosts, other CMPart calls
+2. **Filtering Support**: Test and implement name/uuid filtering if API supports
+3. **Certificate Auth**: Implement mTLS for production security
+4. **Retry Logic**: Add exponential backoff for transient failures
+5. **Pagination**: Implement if API supports and performance requires
+6. **Write Operations**: Explore if BCM JSON-RPC supports state-changing calls
+7. **Terraform Registry**: Publish provider for public consumption
+
+---
+
+## File Manifest
+
+Files created/modified by this plan:
+
+### Phase 0 Output
+- `/workspace/specs/001-bcm-provider/research.md` (NEW)
+
+### Phase 1 Output
+- `/workspace/specs/001-bcm-provider/data-model.md` (NEW)
+- `/workspace/specs/001-bcm-provider/quickstart.md` (NEW)
+- `/workspace/specs/001-bcm-provider/contracts/getSoftwareImages-request.json` (NEW)
+- `/workspace/specs/001-bcm-provider/contracts/getSoftwareImages-response.json` (NEW)
+
+### Implementation Files
+- `/workspace/internal/provider/provider.go` (MODIFY - schema, configure, datasources)
+- `/workspace/internal/provider/provider_test.go` (MODIFY - add BCM tests)
+- `/workspace/internal/provider/bcm_client.go` (NEW)
+- `/workspace/internal/provider/bcm_client_test.go` (NEW)
+- `/workspace/internal/provider/data_source_cmpart_softwareimages.go` (NEW)
+- `/workspace/internal/provider/data_source_cmpart_softwareimages_test.go` (NEW)
+
+### Example Files
+- `/workspace/examples/provider/provider.tf` (NEW)
+- `/workspace/examples/data-sources/bcm_cmpart_softwareimages/data-source.tf` (NEW)
+
+### Generated Documentation
+- `/workspace/docs/index.md` (GENERATED)
+- `/workspace/docs/data-sources/cmpart_softwareimages.md` (GENERATED)
+
+**Total**: 15 files (10 new, 2 modified, 3 generated)

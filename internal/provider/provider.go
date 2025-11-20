@@ -5,7 +5,6 @@ package provider
 
 import (
 	"context"
-	"net/http"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/ephemeral"
@@ -16,42 +15,64 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
-// Ensure ScaffoldingProvider satisfies various provider interfaces.
-var _ provider.Provider = &ScaffoldingProvider{}
-var _ provider.ProviderWithFunctions = &ScaffoldingProvider{}
-var _ provider.ProviderWithEphemeralResources = &ScaffoldingProvider{}
+// Ensure BCMProvider satisfies various provider interfaces.
+var _ provider.Provider = &BCMProvider{}
+var _ provider.ProviderWithFunctions = &BCMProvider{}
+var _ provider.ProviderWithEphemeralResources = &BCMProvider{}
 
-// ScaffoldingProvider defines the provider implementation.
-type ScaffoldingProvider struct {
+// BCMProvider defines the provider implementation.
+type BCMProvider struct {
 	// version is set to the provider version on release, "dev" when the
 	// provider is built and ran locally, and "test" when running acceptance
 	// testing.
 	version string
 }
 
-// ScaffoldingProviderModel describes the provider data model.
-type ScaffoldingProviderModel struct {
-	Endpoint types.String `tfsdk:"endpoint"`
+// BCMProviderModel describes the provider data model.
+type BCMProviderModel struct {
+	Endpoint           types.String `tfsdk:"endpoint"`
+	Username           types.String `tfsdk:"username"`
+	Password           types.String `tfsdk:"password"`
+	InsecureSkipVerify types.Bool   `tfsdk:"insecure_skip_verify"`
+	Timeout            types.Int64  `tfsdk:"timeout"`
 }
 
-func (p *ScaffoldingProvider) Metadata(ctx context.Context, req provider.MetadataRequest, resp *provider.MetadataResponse) {
-	resp.TypeName = "scaffolding"
+func (p *BCMProvider) Metadata(ctx context.Context, req provider.MetadataRequest, resp *provider.MetadataResponse) {
+	resp.TypeName = "bcm"
 	resp.Version = p.version
 }
 
-func (p *ScaffoldingProvider) Schema(ctx context.Context, req provider.SchemaRequest, resp *provider.SchemaResponse) {
+func (p *BCMProvider) Schema(ctx context.Context, req provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
+		MarkdownDescription: "Terraform provider for Nvidia BCM (BlueField Configuration Manager)",
 		Attributes: map[string]schema.Attribute{
 			"endpoint": schema.StringAttribute{
-				MarkdownDescription: "Example provider attribute",
+				MarkdownDescription: "BCM JSON-RPC API endpoint (e.g., https://172.21.15.254:8081)",
+				Required:            true,
+			},
+			"username": schema.StringAttribute{
+				MarkdownDescription: "BCM username for authentication",
+				Required:            true,
+			},
+			"password": schema.StringAttribute{
+				MarkdownDescription: "BCM password for authentication",
+				Required:            true,
+				Sensitive:           true,
+			},
+			"insecure_skip_verify": schema.BoolAttribute{
+				MarkdownDescription: "Skip TLS certificate verification. WARNING: This makes connections susceptible to man-in-the-middle attacks. Only use for testing with self-signed certificates.",
+				Optional:            true,
+			},
+			"timeout": schema.Int64Attribute{
+				MarkdownDescription: "API timeout in seconds (default: 30)",
 				Optional:            true,
 			},
 		},
 	}
 }
 
-func (p *ScaffoldingProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
-	var data ScaffoldingProviderModel
+func (p *BCMProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
+	var data BCMProviderModel
 
 	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
 
@@ -59,42 +80,98 @@ func (p *ScaffoldingProvider) Configure(ctx context.Context, req provider.Config
 		return
 	}
 
-	// Configuration values are now available.
-	// if data.Endpoint.IsNull() { /* ... */ }
+	// Validate required fields
+	if data.Endpoint.IsNull() || data.Endpoint.ValueString() == "" {
+		resp.Diagnostics.AddError(
+			"Missing BCM Endpoint",
+			"The provider cannot create the BCM client as there is a missing or empty value for the BCM endpoint. "+
+				"Set the endpoint value in the provider configuration or use the BCM_ENDPOINT environment variable.",
+		)
+	}
 
-	// Example client configuration for data sources and resources
-	client := http.DefaultClient
+	if data.Username.IsNull() || data.Username.ValueString() == "" {
+		resp.Diagnostics.AddError(
+			"Missing BCM Username",
+			"The provider cannot create the BCM client as there is a missing or empty value for the BCM username. "+
+				"Set the username value in the provider configuration or use the BCM_USERNAME environment variable.",
+		)
+	}
+
+	if data.Password.IsNull() || data.Password.ValueString() == "" {
+		resp.Diagnostics.AddError(
+			"Missing BCM Password",
+			"The provider cannot create the BCM client as there is a missing or empty value for the BCM password. "+
+				"Set the password value in the provider configuration or use the BCM_PASSWORD environment variable.",
+		)
+	}
+
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Set defaults for optional fields
+	insecureSkipVerify := false
+	if !data.InsecureSkipVerify.IsNull() {
+		insecureSkipVerify = data.InsecureSkipVerify.ValueBool()
+	}
+
+	timeout := int64(30) // Default 30 seconds
+	if !data.Timeout.IsNull() {
+		timeout = data.Timeout.ValueInt64()
+	}
+
+	// Create BCM client with cookie-based authentication
+	client, err := NewBCMClient(
+		ctx,
+		data.Endpoint.ValueString(),
+		data.Username.ValueString(),
+		data.Password.ValueString(),
+		insecureSkipVerify,
+		int(timeout),
+	)
+
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Unable to Create BCM Client",
+			"An unexpected error occurred when creating the BCM client. "+
+				"If the error is not clear, please check the BCM endpoint, credentials, and network connectivity.\n\n"+
+				"BCM Client Error: "+err.Error(),
+		)
+		return
+	}
+
+	// Make client available to data sources and resources
 	resp.DataSourceData = client
 	resp.ResourceData = client
 }
 
-func (p *ScaffoldingProvider) Resources(ctx context.Context) []func() resource.Resource {
+func (p *BCMProvider) Resources(ctx context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
-		NewExampleResource,
+		// No resources in POV scope
 	}
 }
 
-func (p *ScaffoldingProvider) EphemeralResources(ctx context.Context) []func() ephemeral.EphemeralResource {
+func (p *BCMProvider) EphemeralResources(ctx context.Context) []func() ephemeral.EphemeralResource {
 	return []func() ephemeral.EphemeralResource{
-		NewExampleEphemeralResource,
+		// No ephemeral resources in POV scope
 	}
 }
 
-func (p *ScaffoldingProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
+func (p *BCMProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
-		NewExampleDataSource,
+		NewCMPartSoftwareImagesDataSource,
 	}
 }
 
-func (p *ScaffoldingProvider) Functions(ctx context.Context) []func() function.Function {
+func (p *BCMProvider) Functions(ctx context.Context) []func() function.Function {
 	return []func() function.Function{
-		NewExampleFunction,
+		// No functions in POV scope
 	}
 }
 
 func New(version string) func() provider.Provider {
 	return func() provider.Provider {
-		return &ScaffoldingProvider{
+		return &BCMProvider{
 			version: version,
 		}
 	}
