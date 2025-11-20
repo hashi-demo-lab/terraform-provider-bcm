@@ -1,0 +1,267 @@
+{
+  "contract_version": "1.0",
+  "contract_name": "CMDevice getNodes API Contract",
+  "service": "cmdevice",
+  "method": "getNodes",
+  "description": "Retrieve all cluster nodes with complete metadata including network interfaces and roles",
+
+  "request": {
+    "endpoint": "POST /json",
+    "content_type": "application/json",
+    "authentication": {
+      "type": "cookie",
+      "cookie_name": "cm-login-token",
+      "description": "Session cookie obtained via login service"
+    },
+    "body": {
+      "service": "cmdevice",
+      "call": "getNodes"
+    }
+  },
+
+  "response": {
+    "success": {
+      "http_status": 200,
+      "content_type": "application/json",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "description": "Device entity representing a cluster node",
+
+        "required_fields": {
+          "baseType": {
+            "type": "string",
+            "value": "Device",
+            "description": "Entity base type (always Device)"
+          },
+          "childType": {
+            "type": "string",
+            "enum": ["PhysicalNode", "HeadNode", "ComputeNode", "CloudNode", "StorageNode"],
+            "description": "Specific node type"
+          },
+          "uuid": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique node identifier (RFC 4122)"
+          },
+          "hostname": {
+            "type": "string",
+            "description": "Node hostname"
+          },
+          "mac": {
+            "type": "string",
+            "format": "mac-address",
+            "description": "Primary MAC address"
+          },
+          "creationTime": {
+            "type": "integer",
+            "description": "Unix timestamp (seconds since epoch)"
+          },
+          "interfaces": {
+            "type": "array",
+            "description": "Network interfaces",
+            "items": {
+              "type": "object",
+              "fields": {
+                "baseType": {"type": "string", "value": "NetworkInterface"},
+                "childType": {"type": "string", "enum": ["NetworkPhysicalInterface", "NetworkBondInterface", "NetworkBridgeInterface", "NetworkVlanInterface"]},
+                "name": {"type": "string", "description": "Interface name (e.g., ens33)"},
+                "mac": {"type": "string", "format": "mac-address"},
+                "ip": {"type": "string", "format": "ipv4", "nullable": true},
+                "ipv6Ip": {"type": "string", "format": "ipv6", "nullable": true},
+                "dhcp": {"type": "boolean"},
+                "network": {"type": "string", "format": "uuid", "nullable": true},
+                "cardtype": {"type": "string", "nullable": true},
+                "bootable": {"type": "boolean"},
+                "startIf": {"type": "string", "nullable": true}
+              }
+            }
+          },
+          "roles": {
+            "type": "array",
+            "description": "Assigned roles",
+            "items": {
+              "type": "object",
+              "fields": {
+                "baseType": {"type": "string", "value": "Role"},
+                "childType": {"type": "string", "description": "Role type (e.g., HeadNodeRole, ComputeRole)"},
+                "name": {"type": "string", "description": "Role name"},
+                "uuid": {"type": "string", "format": "uuid"},
+                "addServices": {"type": "boolean"}
+              }
+            }
+          },
+          "category": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "Category UUID"
+          },
+          "partition": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "Partition UUID"
+          },
+          "powerControl": {
+            "type": "string",
+            "enum": ["none", "ipmi", "redfish", "pdu"],
+            "nullable": true,
+            "description": "Power control method"
+          },
+          "authenticationService": {
+            "type": "string",
+            "nullable": true,
+            "description": "Authentication service type"
+          },
+          "provisioningTransport": {
+            "type": "string",
+            "nullable": true,
+            "description": "Provisioning method (e.g., RSYNCDAEMON)"
+          },
+          "modified": {
+            "type": "boolean",
+            "description": "Has unsaved changes"
+          },
+          "to_be_removed": {
+            "type": "boolean",
+            "description": "Scheduled for deletion"
+          }
+        },
+
+        "optional_fields": {
+          "cmdaemonUrl": {"type": "string", "nullable": true},
+          "biosSetup": {"type": "object", "nullable": true},
+          "bmcSettings": {"type": "object", "nullable": true},
+          "gpuSettings": {"type": "array", "nullable": true},
+          "fsexports": {"type": "array", "nullable": true},
+          "fsmounts": {"type": "array", "nullable": true},
+          "defaultGateway": {"type": "string", "nullable": true},
+          "staticRoutes": {"type": "array", "nullable": true},
+          "kernelParameters": {"type": "string", "nullable": true},
+          "kernelVersion": {"type": "string", "nullable": true}
+        }
+      }
+    },
+
+    "empty_success": {
+      "http_status": 200,
+      "body": [],
+      "description": "Empty array when no nodes exist in cluster"
+    }
+  },
+
+  "error_scenarios": [
+    {
+      "name": "Authentication Failure",
+      "condition": "Missing or expired cm-login-token cookie",
+      "http_status": 401,
+      "response": {
+        "error": "Unauthorized",
+        "message": "Authentication required"
+      },
+      "user_action": "Verify BCM provider credentials and re-authenticate"
+    },
+    {
+      "name": "Invalid Service Name",
+      "condition": "Incorrect service name in request",
+      "http_status": 400,
+      "response": {
+        "error": "Invalid service",
+        "code": 400
+      },
+      "user_action": "Check API compatibility version"
+    },
+    {
+      "name": "Network Error",
+      "condition": "Connection timeout or DNS failure",
+      "http_status": null,
+      "response": null,
+      "user_action": "Verify BCM endpoint URL and network connectivity"
+    },
+    {
+      "name": "BCM Server Error",
+      "condition": "Internal BCM API error",
+      "http_status": 500,
+      "response": {
+        "error": "Internal server error"
+      },
+      "user_action": "Check BCM server logs, contact BCM administrator"
+    }
+  ],
+
+  "example_request": {
+    "method": "POST",
+    "url": "https://172.21.15.254:8081/json",
+    "headers": {
+      "Content-Type": "application/json",
+      "Cookie": "cm-login-token=abc123..."
+    },
+    "body": {
+      "service": "cmdevice",
+      "call": "getNodes"
+    }
+  },
+
+  "example_response": {
+    "http_status": 200,
+    "body": [
+      {
+        "baseType": "Device",
+        "childType": "PhysicalNode",
+        "uuid": "2870c0b0-6fda-4026-9b8f-28be4c372fee",
+        "hostname": "node002",
+        "mac": "00:00:00:00:00:00",
+        "creationTime": 1763617980,
+        "category": "0ae6d733-3015-4479-bfab-ce2d237a2809",
+        "partition": "00000000-0000-0000-0000-000000000000",
+        "powerControl": "none",
+        "authenticationService": "CATEGORY",
+        "provisioningTransport": "RSYNCDAEMON",
+        "modified": false,
+        "to_be_removed": false,
+        "interfaces": [
+          {
+            "baseType": "NetworkInterface",
+            "childType": "NetworkPhysicalInterface",
+            "name": "ens33",
+            "mac": "00:50:56:9B:E4:6D",
+            "ip": "172.21.15.254",
+            "ipv6Ip": "::0",
+            "dhcp": false,
+            "network": "network-uuid",
+            "cardtype": "Ethernet",
+            "bootable": false,
+            "startIf": "ALWAYS"
+          }
+        ],
+        "roles": [
+          {
+            "baseType": "Role",
+            "childType": "HeadNodeRole",
+            "name": "headnode",
+            "uuid": "role-uuid",
+            "addServices": true
+          }
+        ]
+      }
+    ]
+  },
+
+  "compatibility": {
+    "bcm_version": "11.x",
+    "api_version": "JSON-RPC",
+    "tested_with": "BCM 11.0",
+    "breaking_changes": []
+  },
+
+  "notes": [
+    "Response array can be empty (valid success case)",
+    "All timestamps are Unix epoch in seconds",
+    "UUIDs follow RFC 4122 format",
+    "Field names are camelCase (JavaScript convention)",
+    "Many fields can be null or empty arrays",
+    "Interface order may be significant (primary interface often first)",
+    "No server-side filtering parameters supported"
+  ]
+}

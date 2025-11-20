@@ -160,6 +160,7 @@ func (p *BCMProvider) EphemeralResources(ctx context.Context) []func() ephemeral
 func (p *BCMProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
 		NewCMPartSoftwareImagesDataSource,
+		NewCMDeviceNodesDataSource,
 	}
 }
 
