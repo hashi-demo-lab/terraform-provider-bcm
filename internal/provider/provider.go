@@ -148,6 +148,7 @@ func (p *BCMProvider) Configure(ctx context.Context, req provider.ConfigureReque
 func (p *BCMProvider) Resources(ctx context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		NewCMPartSoftwareImageResource,
+		NewCMDeviceCategoryResource,
 	}
 }
 
