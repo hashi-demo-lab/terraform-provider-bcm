@@ -3,6 +3,8 @@
 Auto-generated from all feature plans. Last updated: 2025-11-20
 
 ## Active Technologies
+- Go 1.24.0 + terraform-plugin-framework (v1.16.1), terraform-plugin-testing (v1.13.3), terraform-plugin-log (001-cmdevice-category)
+- BCM API backend (JSON-RPC over HTTPS), cookie-based session authentication (001-cmdevice-category)
 
 - Go 1.24.0 + terraform-plugin-framework v1.16.1, terraform-plugin-testing v1.13.3, terraform-plugin-log v0.10.0 (001-bcm-provider)
 
@@ -22,6 +24,7 @@ tests/
 Go 1.24.0: Follow standard conventions
 
 ## Recent Changes
+- 001-cmdevice-category: Added Go 1.24.0 + terraform-plugin-framework (v1.16.1), terraform-plugin-testing (v1.13.3), terraform-plugin-log
 
 - 001-bcm-provider: Added Go 1.24.0 + terraform-plugin-framework v1.16.1, terraform-plugin-testing v1.13.3, terraform-plugin-log v0.10.0
 
