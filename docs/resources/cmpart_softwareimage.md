@@ -16,26 +16,53 @@ Software images define the operating system kernel, kernel parameters, modules, 
 ## Example Usage
 
 ```terraform
-resource "bcm_cmpart_softwareimage" "advanced" {
-  name = "rhel-9-gpu-node"
-  path = "/cm/images/rhel-9-gpu-node"
+# Advanced production example: GPU compute node image with full configuration
+# Use case: Create enterprise-grade images for HPC/AI workloads with GPU support
 
-  # Kernel configuration
-  kernel_version        = "5.14.0-362.8.1.el9_3.x86_64"
-  kernel_parameters     = "rd.driver.blacklist=nouveau quiet splash"
+# Query all available software images
+data "bcm_cmpart_softwareimages" "all" {}
+
+# Production pattern: Dynamic base image lookup for portability
+locals {
+  base_image_name = "default-image"
+  base_image_uuid = [
+    for img in data.bcm_cmpart_softwareimages.all.images :
+    img.id if img.name == local.base_image_name
+  ][0]
+
+  # Environment-specific configuration
+  environment  = "production"
+  cluster_name = "hpc-cluster-01"
+}
+
+# Advanced example: Full-featured GPU compute image
+resource "bcm_cmpart_softwareimage" "gpu_compute" {
+  name = "${local.environment}-rhel9-gpu-${local.cluster_name}"
+  path = "/cm/images/${local.environment}/rhel-9-gpu-compute"
+
+  # Clone from verified base image (dynamic lookup pattern)
+  original_image = local.base_image_uuid
+
+  # Production kernel configuration for GPU nodes
+  kernel_version        = "6.8.0-51-generic"
+  kernel_parameters     = "rd.driver.blacklist=nouveau quiet splash iommu=pt intel_iommu=on"
   kernel_output_console = "tty0"
 
-  # Serial Over LAN (SOL) configuration
+  # Serial Over LAN configuration for lights-out management
   enable_sol       = true
   sol_port         = "ttyS1"
   sol_speed        = "115200"
   sol_flow_control = true
 
-  # Kernel modules
+  # Production kernel modules: GPU drivers + high-speed networking
   modules = [
     {
       name       = "nvidia-drm"
       parameters = "modeset=1"
+    },
+    {
+      name       = "nvidia-uvm"
+      parameters = ""
     },
     {
       name       = "e1000e"
@@ -44,29 +71,155 @@ resource "bcm_cmpart_softwareimage" "advanced" {
     {
       name       = "mlx5_core"
       parameters = "enable_roce=1"
+    },
+    {
+      name       = "ib_core"
+      parameters = ""
     }
   ]
 
-  # Filesystem partitions (optional - reference existing partitions)
-  # fspart     = "partition-uuid-here"
-  # bootfspart = "boot-partition-uuid-here"
+  notes = <<-EOT
+    Production GPU compute image for ${local.cluster_name}
+    - RHEL 9.3 base
+    - NVIDIA GPU drivers with DRM/UVM support
+    - Mellanox ConnectX networking with RoCE
+    - InfiniBand support
+    - Cloned from: ${local.base_image_name}
+    - Environment: ${local.environment}
+  EOT
 
-  notes = "RHEL 9.3 with NVIDIA GPU drivers and Mellanox networking for compute nodes"
+  # Production lifecycle management
+  lifecycle {
+    prevent_destroy       = false # Set to true in production
+    create_before_destroy = true
+
+    # Ignore changes to original_image after initial creation
+    # This prevents recreation if the base image is updated
+    ignore_changes = [original_image]
+  }
 }
-```
 
-```terraform
-resource "bcm_cmpart_softwareimage" "example" {
-  name = "ubuntu-22.04-dpu"
-  path = "/cm/images/ubuntu-22.04-dpu"
+# Create a second image variant for CPU-only nodes
+resource "bcm_cmpart_softwareimage" "cpu_compute" {
+  name = "${local.environment}-rhel9-cpu-${local.cluster_name}"
+  path = "/cm/images/${local.environment}/rhel-9-cpu-compute"
 
-  kernel_version    = "5.15.0-58-generic"
+  original_image = local.base_image_uuid
+
+  kernel_version    = "6.8.0-51-generic"
   kernel_parameters = "quiet splash"
 
   enable_sol = true
   sol_speed  = "115200"
 
-  notes = "Ubuntu 22.04 LTS image for DPU nodes"
+  # Minimal modules for CPU-only nodes
+  modules = [
+    {
+      name       = "e1000e"
+      parameters = ""
+    }
+  ]
+
+  notes = "CPU-only compute image for ${local.cluster_name} (${local.environment})"
+
+  lifecycle {
+    prevent_destroy       = false
+    create_before_destroy = true
+  }
+}
+
+# Outputs for cluster management
+
+output "available_images_map" {
+  description = "Reference map of all available base images"
+  value       = { for img in data.bcm_cmpart_softwareimages.all.images : img.name => img.id }
+}
+
+output "gpu_image_details" {
+  description = "GPU compute image configuration details"
+  value = {
+    id             = bcm_cmpart_softwareimage.gpu_compute.id
+    name           = bcm_cmpart_softwareimage.gpu_compute.name
+    path           = bcm_cmpart_softwareimage.gpu_compute.path
+    cloned_from    = local.base_image_name
+    kernel_version = bcm_cmpart_softwareimage.gpu_compute.kernel_version
+    module_count   = length(bcm_cmpart_softwareimage.gpu_compute.modules)
+    modules        = [for mod in bcm_cmpart_softwareimage.gpu_compute.modules : mod.name]
+  }
+}
+
+output "cpu_image_details" {
+  description = "CPU compute image configuration details"
+  value = {
+    id             = bcm_cmpart_softwareimage.cpu_compute.id
+    name           = bcm_cmpart_softwareimage.cpu_compute.name
+    path           = bcm_cmpart_softwareimage.cpu_compute.path
+    kernel_version = bcm_cmpart_softwareimage.cpu_compute.kernel_version
+  }
+}
+
+# Generate image assignment map for node provisioning
+output "image_assignment_map" {
+  description = "Map of node types to image IDs for provisioning workflows"
+  value = {
+    "gpu_nodes" = bcm_cmpart_softwareimage.gpu_compute.id
+    "cpu_nodes" = bcm_cmpart_softwareimage.cpu_compute.id
+  }
+}
+```
+
+```terraform
+# Production example: Create a custom software image by cloning a base image
+# Use case: Deploy standardized OS images with custom kernel configuration
+
+# Query existing images to find the base image for cloning
+data "bcm_cmpart_softwareimages" "available" {}
+
+# Production pattern: Use data source lookup instead of hardcoded UUIDs
+# This makes configurations portable across environments
+locals {
+  base_image_name = "default-image"
+  base_image_id = [
+    for img in data.bcm_cmpart_softwareimages.available.images :
+    img.id if img.name == local.base_image_name
+  ][0]
+}
+
+# Basic example: Clone and customize an image
+resource "bcm_cmpart_softwareimage" "dpu_image" {
+  name = "ubuntu-22.04-dpu"
+  path = "/cm/images/ubuntu-22.04-dpu"
+
+  # Clone from base image using dynamic lookup (best practice)
+  original_image = local.base_image_id
+
+  # Kernel configuration for DPU nodes
+  kernel_version    = "6.8.0-51-generic"
+  kernel_parameters = "quiet splash console=ttyS0,115200"
+
+  # Enable Serial Over LAN for remote console access
+  enable_sol = true
+  sol_speed  = "115200"
+  sol_port   = "ttyS0"
+
+  notes = "Ubuntu 22.04 LTS customized for DPU nodes - Cloned from ${local.base_image_name}"
+
+  # Production pattern: Add lifecycle rules to prevent accidental destruction
+  lifecycle {
+    prevent_destroy       = false # Set to true in production
+    create_before_destroy = true
+  }
+}
+
+# Output the created image details for reference
+output "dpu_image_id" {
+  description = "UUID of the created DPU image"
+  value       = bcm_cmpart_softwareimage.dpu_image.id
+}
+
+output "dpu_image_path" {
+  description = "Path to the DPU image on the BCM server"
+  value       = bcm_cmpart_softwareimage.dpu_image.path
 }
 ```
 
@@ -80,24 +233,24 @@ resource "bcm_cmpart_softwareimage" "example" {
 
 ### Optional
 
-- `bootfspart` (String) Boot filesystem partition UUID reference (optional)
 - `enable_sol` (Boolean) Enable Serial Over LAN for remote console access. Defaults to `false`.
-- `fspart` (String) Filesystem partition UUID reference (optional)
 - `kernel_output_console` (String) Kernel output console device. Defaults to `tty0`.
 - `kernel_parameters` (String) Kernel command-line parameters (e.g., `quiet splash`)
 - `kernel_version` (String) Kernel version string (e.g., `5.15.0-58-generic`)
 - `modules` (Attributes List) List of kernel modules to load at boot (see [below for nested schema](#nestedatt--modules))
 - `notes` (String) User notes or description for the software image
+- `original_image` (String) UUID of the original image to clone from. When set, BCM will copy the filesystem from the specified image. This is only used during resource creation.
 - `sol_flow_control` (Boolean) Enable SOL hardware flow control. Defaults to `true`.
 - `sol_port` (String) SOL serial port device. Defaults to `ttyS1`.
 - `sol_speed` (String) SOL baud rate. Valid values: `115200`, `57600`, `38400`, `19200`, `9600`, `4800`, `2400`, `1200`. Defaults to `115200`.
 
 ### Read-Only
 
+- `bootfspart` (String) Boot filesystem partition UUID reference (auto-generated when cloning)
 - `creation_time` (Number) Unix timestamp of image creation (seconds since epoch)
 - `file_operation_in_progress` (Boolean) Indicates if a file operation is currently in progress for this image
+- `fspart` (String) Filesystem partition UUID reference (auto-generated when cloning)
 - `id` (String) Resource identifier (same as UUID)
-- `original_image` (String) UUID of the original image if this is a clone
 - `parent_software_image` (String) UUID of the parent image if this is a revision
 - `revision_id` (Number) Image revision number
 - `uuid` (String) Unique identifier assigned by BCM
