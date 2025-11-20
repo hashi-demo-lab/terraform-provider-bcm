@@ -1,0 +1,247 @@
+[
+  {
+    "method": "listNodes",
+    "arg": null,
+    "error": "No response"
+  },
+  {
+    "method": "listDevices",
+    "arg": null,
+    "error": "No response"
+  },
+  {
+    "method": "getAllNodes",
+    "arg": null,
+    "error": "No response"
+  },
+  {
+    "method": "getAllDevices",
+    "arg": null,
+    "error": "No response"
+  },
+  {
+    "method": "getNodeByUUID",
+    "arg": null,
+    "error": "No response"
+  },
+  {
+    "method": "getNodeByName",
+    "arg": "master",
+    "error": "No response"
+  },
+  {
+    "method": "getNodeInfo",
+    "arg": "master",
+    "error": "No response"
+  },
+  {
+    "method": "getDeviceInfo",
+    "arg": "master",
+    "error": "No response"
+  },
+  {
+    "method": "searchNodes",
+    "arg": null,
+    "error": "No response"
+  },
+  {
+    "method": "searchDevices",
+    "arg": null,
+    "error": "No response"
+  },
+  {
+    "method": "findNodes",
+    "arg": null,
+    "error": "No response"
+  },
+  {
+    "method": "findDevices",
+    "arg": null,
+    "error": "No response"
+  },
+  {
+    "method": "queryNodes",
+    "arg": null,
+    "error": "No response"
+  },
+  {
+    "method": "getNodeStatus",
+    "arg": "master",
+    "error": "No response"
+  },
+  {
+    "method": "getDeviceStatus",
+    "arg": "master",
+    "error": "No response"
+  },
+  {
+    "method": "getStatus",
+    "arg": null,
+    "error": "No response"
+  },
+  {
+    "method": "listStatus",
+    "arg": null,
+    "error": "No response"
+  },
+  {
+    "method": "listHeadNodes",
+    "arg": null,
+    "error": "No response"
+  },
+  {
+    "method": "listComputeNodes",
+    "arg": null,
+    "error": "No response"
+  },
+  {
+    "method": "listCloudNodes",
+    "arg": null,
+    "error": "No response"
+  },
+  {
+    "method": "getHeadNode",
+    "arg": null,
+    "error": "No response"
+  },
+  {
+    "method": "getNodeTypes",
+    "arg": null,
+    "error": "No response"
+  },
+  {
+    "method": "getDeviceTypes",
+    "arg": null,
+    "error": "No response"
+  },
+  {
+    "method": "listCategories",
+    "arg": null,
+    "error": "No response"
+  },
+  {
+    "method": "getHardwareInfo",
+    "arg": "master",
+    "error": "No response"
+  },
+  {
+    "method": "listInterfaces",
+    "arg": "master",
+    "error": "No response"
+  },
+  {
+    "method": "getInterfaces",
+    "arg": "master",
+    "error": "No response"
+  },
+  {
+    "method": "getNetworkInterfaces",
+    "arg": "master",
+    "error": "No response"
+  },
+  {
+    "method": "getRoles",
+    "arg": "master",
+    "error": "No response"
+  },
+  {
+    "method": "listRoles",
+    "arg": null,
+    "error": "No response"
+  },
+  {
+    "method": "getNodeRoles",
+    "arg": "master",
+    "error": "No response"
+  },
+  {
+    "method": "getConfiguration",
+    "arg": "master",
+    "error": "No response"
+  },
+  {
+    "method": "getNodeConfiguration",
+    "arg": "master",
+    "error": "No response"
+  },
+  {
+    "method": "listConfigurations",
+    "arg": null,
+    "error": "No response"
+  },
+  {
+    "method": "powerOn",
+    "arg": null,
+    "error": "No response"
+  },
+  {
+    "method": "powerOff",
+    "arg": null,
+    "error": "No response"
+  },
+  {
+    "method": "powerStatus",
+    "arg": null,
+    "error": "No response"
+  },
+  {
+    "method": "provisionNode",
+    "arg": null,
+    "error": "No response"
+  },
+  {
+    "method": "getProvisioningStatus",
+    "arg": null,
+    "error": "No response"
+  },
+  {
+    "method": "listProvisioningJobs",
+    "arg": null,
+    "error": "No response"
+  },
+  {
+    "method": "getServices",
+    "arg": "master",
+    "error": "No response"
+  },
+  {
+    "method": "listServices",
+    "arg": null,
+    "error": "No response"
+  },
+  {
+    "method": "getNodeServices",
+    "arg": "master",
+    "error": "No response"
+  },
+  {
+    "method": "help",
+    "arg": null,
+    "error": "No response"
+  },
+  {
+    "method": "getMethods",
+    "arg": null,
+    "error": "No response"
+  },
+  {
+    "method": "listMethods",
+    "arg": null,
+    "error": "No response"
+  },
+  {
+    "method": "getAPIInfo",
+    "arg": null,
+    "error": "No response"
+  },
+  {
+    "method": "describe",
+    "arg": null,
+    "error": "No response"
+  },
+  {
+    "method": "getSchema",
+    "arg": null,
+    "error": "No response"
+  }
+]

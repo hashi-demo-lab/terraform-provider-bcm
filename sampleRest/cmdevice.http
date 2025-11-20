@@ -1,0 +1,26 @@
+@user=root
+@password=Hashicorp123!
+@cookie=cm-login-token=KpPK7G0bmgNm5xeUj6VPvNuMAweSPegI
+
+### login
+POST https://172.21.15.254:8081/json
+
+{"service":"login", "username":"root", "password":"Hashicorp123!"}
+
+###
+
+## datasource_cmdevice_devices
+####
+
+
+
+###
+## datasource_cmdevice_nodes
+
+POST https://172.21.15.254:8081/json
+Cookie: {{cookie}}
+
+{
+  "service": "cmdevice",
+  "call": "getNodes"
+}

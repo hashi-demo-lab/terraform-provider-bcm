@@ -1,6 +1,6 @@
 @user=root
 @password=Hashicorp123!
-
+@cookie=cm-login-token=KpPK7G0bmgNm5xeUj6VPvNuMAweSPegI
 
 ### login
 POST https://172.21.15.254:8081/json
@@ -16,7 +16,7 @@ Set-cookie: cm-login-token=SyaFbfeiKbS4uWycyTOfZ4OgSCyJFVEk;path=/;Secure;httpon
 
 ####
 POST https://172.21.15.254:8081/json
-Cookie: cm-login-token=X4RDTc11LGCwz1MeItqJ0r0A6o7xU1VS;path=/;Secure;httponly
+Cookie: {{cookie}}
 
 {"service":"CMPart","call":"getSoftwareImages"} 
 
@@ -648,7 +648,7 @@ X-U: 11124
 ### get master node
 
 POST https://172.21.15.254:8081/json
-Cookie: cm-login-token=X4RDTc11LGCwz1MeItqJ0r0A6o7xU1VS;path=/;Secure;httponly
+Cookie: {{cookie}}
 
 {"service":"cmdevice","call":"getNode", "arg":"master"}
 
