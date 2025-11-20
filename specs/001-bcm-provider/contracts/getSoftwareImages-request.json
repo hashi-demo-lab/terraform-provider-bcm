@@ -1,0 +1,20 @@
+{
+  "endpoint": "https://172.21.15.254:8081/json",
+  "method": "POST",
+  "headers": {
+    "Content-Type": "application/json",
+    "Cookie": "cm-login-token=<token-from-login-response>"
+  },
+  "description": "BCM JSON-RPC request to fetch all software images from CMPart service",
+  "body": {
+    "service": "CMPart",
+    "call": "getSoftwareImages"
+  },
+  "notes": {
+    "authentication": "Token-based cookie authentication - Cookie header automatically added by http.Client cookie jar after login",
+    "login_required": "Provider must first call login API: POST /json with {\"service\":\"login\",\"username\":\"root\",\"password\":\"Hashicorp123!\"} to obtain cm-login-token cookie",
+    "cookie_management": "http.Client with cookiejar.New() automatically manages Cookie header - no manual setting required",
+    "tls": "Endpoint uses self-signed certificate - requires insecure_skip_verify=true",
+    "parameters": "POV implementation does not send parameters (returns all images)"
+  }
+}

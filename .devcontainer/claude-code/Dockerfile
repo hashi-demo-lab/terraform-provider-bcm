@@ -1,8 +1,12 @@
+# Copyright (c) HashiCorp, Inc.
+# SPDX-License-Identifier: MPL-2.0
+
 FROM node:22-slim
 
 # Set all build arguments at once
 ARG TZ \
     USERNAME=node \
+    GO_VERSION="1.24.0" \
     TERRAFORM_VERSION="1.13.5" \
     TERRAFORM_DOCS_VERSION="0.20.0" \
     TFSEC_VERSION="1.28.14" \
@@ -36,6 +40,11 @@ RUN apt update && apt install -y --no-install-recommends \
     wget -q "https://github.com/dandavison/delta/releases/download/0.18.2/git-delta_0.18.2_${ARCH}.deb" && \
     dpkg -i "git-delta_0.18.2_${ARCH}.deb" && \
     rm "git-delta_0.18.2_${ARCH}.deb" && \
+    # Install Go
+    GO_ARCH=$(case ${ARCH} in amd64) echo "amd64";; arm64) echo "arm64";; *) echo "amd64";; esac) && \
+    wget -q "https://go.dev/dl/go${GO_VERSION}.linux-${GO_ARCH}.tar.gz" && \
+    tar -C /usr/local -xzf "go${GO_VERSION}.linux-${GO_ARCH}.tar.gz" && \
+    rm "go${GO_VERSION}.linux-${GO_ARCH}.tar.gz" && \
     # Clean up apt cache
     rm -rf /var/lib/apt/lists/*
 
@@ -46,7 +55,9 @@ ENV TZ="$TZ" \
     LANGUAGE=en_US:en \
     DEVCONTAINER=true \
     NPM_CONFIG_PREFIX=/usr/local/share/npm-global \
-    PATH=/usr/local/share/npm-global/bin:/root/.local/bin:$PATH \
+    GOROOT=/usr/local/go \
+    GOPATH=/go \
+    PATH=/usr/local/go/bin:/go/bin:/usr/local/share/npm-global/bin:/root/.local/bin:$PATH \
     SHELL=/bin/zsh
 
 WORKDIR /workspace

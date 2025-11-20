@@ -1,0 +1,124 @@
+{
+  "description": "BCM JSON-RPC response for getSoftwareImages call - returns array of SoftwareImage objects",
+  "http_status": 200,
+  "content_type": "application/json",
+  "response_body": [
+    {
+      "uuid": "550e8400-e29b-41d4-a716-446655440000",
+      "name": "ubuntu-22.04-dpu",
+      "path": "/var/bcm/images/ubuntu-22.04",
+      "kernelVersion": "5.15.0-58-generic",
+      "kernelParameters": "console=ttyS0",
+      "kernelOutputConsole": "ttyS0,115200",
+      "bootfspart": "/dev/mmcblk0p1",
+      "fspart": "/dev/mmcblk0p2",
+      "enableSOL": true,
+      "SOLPort": "ttyS0",
+      "SOLSpeed": "115200",
+      "SOLFlowControl": false,
+      "baseType": "Linux",
+      "childType": "Ubuntu",
+      "creationTime": 1699564800000,
+      "fileOperationInProgress": false,
+      "modified": false,
+      "notes": "Production DPU image with NVIDIA drivers",
+      "originalImage": "ubuntu-22.04-base",
+      "parentSoftwareImage": "ubuntu-22.04-parent",
+      "parent_uuid": "450e8400-e29b-41d4-a716-446655440000",
+      "revision": "1.0.0",
+      "revisionID": 1,
+      "to_be_removed": false,
+      "modules": [
+        {
+          "uuid": "650e8400-e29b-41d4-a716-446655440000",
+          "name": "nvidia-drm",
+          "parameters": "modeset=1",
+          "baseType": "kernel-module",
+          "childType": "graphics",
+          "revision": "525.60.13",
+          "modified": false,
+          "to_be_removed": false
+        },
+        {
+          "uuid": "750e8400-e29b-41d4-a716-446655440001",
+          "name": "nvidia-uvm",
+          "parameters": "",
+          "baseType": "kernel-module",
+          "childType": "gpu",
+          "revision": "525.60.13",
+          "modified": false,
+          "to_be_removed": false
+        }
+      ]
+    },
+    {
+      "uuid": "850e8400-e29b-41d4-a716-446655440002",
+      "name": "centos-8-dpu",
+      "path": "/var/bcm/images/centos-8",
+      "kernelVersion": "4.18.0-372.el8.x86_64",
+      "kernelParameters": "console=ttyS1 crashkernel=auto",
+      "kernelOutputConsole": "ttyS1,115200",
+      "bootfspart": "/dev/sda1",
+      "fspart": "/dev/sda2",
+      "enableSOL": true,
+      "SOLPort": "ttyS1",
+      "SOLSpeed": "115200",
+      "SOLFlowControl": true,
+      "baseType": "Linux",
+      "childType": "CentOS",
+      "creationTime": 1699651200000,
+      "fileOperationInProgress": false,
+      "modified": true,
+      "notes": "Modified CentOS 8 for BlueField DPUs",
+      "originalImage": "centos-8-base",
+      "parentSoftwareImage": null,
+      "parent_uuid": null,
+      "revision": "2.1.3",
+      "revisionID": 5,
+      "to_be_removed": false,
+      "modules": []
+    }
+  ],
+  "notes": {
+    "array_structure": "Response is always a JSON array (even if empty)",
+    "empty_response": "Empty array [] returned when no images exist (not an error)",
+    "null_fields": "Fields may be null (e.g., parentSoftwareImage, parent_uuid, notes)",
+    "modules_array": "modules may be empty array [] or contain kernel module objects",
+    "field_types": "creationTime and revisionID are numbers, all others are strings or booleans",
+    "camelCase": "API uses camelCase field names (converted to snake_case in Terraform)"
+  },
+  "error_scenarios": [
+    {
+      "scenario": "Authentication failure",
+      "http_status": 401,
+      "response_body": {
+        "error": "Authentication failed",
+        "code": 401
+      }
+    },
+    {
+      "scenario": "Invalid service name",
+      "http_status": 200,
+      "response_body": {
+        "error": "Service not found: InvalidService",
+        "code": 404
+      },
+      "notes": "API may return HTTP 200 with error object (defensive parsing required)"
+    },
+    {
+      "scenario": "Internal server error",
+      "http_status": 500,
+      "response_body": {
+        "error": "Internal server error",
+        "code": 500,
+        "details": "Database connection failed"
+      }
+    },
+    {
+      "scenario": "Empty result set",
+      "http_status": 200,
+      "response_body": [],
+      "notes": "Empty array is success, not error"
+    }
+  ]
+}
