@@ -321,12 +321,16 @@ provider "bcm" {
   insecure_skip_verify = true
 }
 
-# Lookup existing categories to get a management network UUID
+# Lookup existing categories to get a management network UUID and software image
 data "bcm_cmdevice_categories" "all" {}
+data "bcm_cmpart_softwareimages" "all" {}
 
 locals {
   # Get management network from first existing category
   management_network_uuid = length(data.bcm_cmdevice_categories.all.categories) > 0 ? data.bcm_cmdevice_categories.all.categories[0].management_network_id : "00000000-0000-0000-0000-000000000000"
+
+  # Get software image UUID from first available image
+  software_image_uuid = length(data.bcm_cmpart_softwareimages.all.images) > 0 ? data.bcm_cmpart_softwareimages.all.images[0].uuid : "00000000-0000-0000-0000-000000000000"
 }
 
 resource "bcm_cmdevice_category" "test" {
@@ -334,6 +338,11 @@ resource "bcm_cmdevice_category" "test" {
   management_network = local.management_network_uuid
   notes              = "Force parameter test category"
   force              = %[5]t
+
+  # BCM requires parent software image
+  software_image_proxy = {
+    parent_software_image = local.software_image_uuid
+  }
 }
 `,
 		os.Getenv("BCM_ENDPOINT"),
