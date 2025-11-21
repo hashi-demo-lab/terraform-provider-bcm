@@ -267,6 +267,47 @@ Follow HashiCorp naming standards:
 
 ## Testing Requirements
 
+### TestCase Structure - The Foundation
+
+**Every acceptance test is built around `resource.TestCase`**, the Go struct that defines the complete test lifecycle.
+
+**📚 COMPLETE GUIDE: See `references/testcase_structure.md` for comprehensive TestCase documentation**
+
+#### Essential TestCase Fields
+
+```go
+func TestAccResourceName(t *testing.T) {
+    resource.Test(t, resource.TestCase{
+        // Validate prerequisites
+        PreCheck: func() { testAccPreCheck(t) },
+
+        // Check Terraform version compatibility
+        TerraformVersionChecks: []tfversion.TerraformVersionCheck{
+            tfversion.SkipBelow(tfversion.Version1_8_0),
+        },
+
+        // Provider setup (REQUIRED)
+        ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+
+        // Verify cleanup after destroy (REQUIRED for resources)
+        CheckDestroy: testAccCheckResourceDestroy,
+
+        // Test steps (REQUIRED)
+        Steps: []resource.TestStep{
+            // Create, Import, Update, etc.
+        },
+    })
+}
+```
+
+**Key TestCase Fields**:
+- ✅ **ProtoV6ProviderFactories** (Required) - Provider factory map
+- ✅ **Steps** (Required) - Array of test operations
+- ✅ **PreCheck** (Recommended) - Environment validation
+- ✅ **CheckDestroy** (Required for resources) - Cleanup verification
+- ⚙️ **TerraformVersionChecks** (Optional) - Version constraints
+- ⚙️ **ErrorCheck** (Optional) - Custom error handling
+
 ### Acceptance Test Coverage
 
 Every resource MUST test:
@@ -274,7 +315,13 @@ Every resource MUST test:
 1. ✅ Create and Read operations
 2. ✅ ImportState functionality
 3. ✅ Update and Read operations
-4. ✅ Delete operations (automatic)
+4. ✅ Delete operations with CheckDestroy
+5. ✅ Drift detection with plan checks
+6. ✅ Idempotency verification with ExpectEmptyPlan
+
+**📚 For complete TestCase structure details, see `references/testcase_structure.md`**
+
+**📚 For comprehensive plan checks guidance, see `references/plan_checks_guide.md`**
 
 ### Testing Pattern Categories
 
@@ -326,6 +373,26 @@ StateChecks: []statecheck.StateCheck{
         knownvalue.StringExact("production"),
     ),
 }
+
+// Understanding tfjson Paths
+// Paths specify exact locations within Terraform JSON data structures
+// Supporting hierarchical navigation:
+
+// Root-level attribute
+tfjsonpath.New("name")
+
+// Nested block attribute
+tfjsonpath.New("configuration").AtMapKey("setting1")
+
+// List element
+tfjsonpath.New("items").AtSliceIndex(0)
+
+// Complex nested structure
+tfjsonpath.New("network").AtMapKey("subnets").AtSliceIndex(0).AtMapKey("cidr")
+
+// Builder Methods:
+// - AtMapKey(key) - Access map values or nested attributes
+// - AtSliceIndex(index) - Access list or set elements
 ```
 
 **CompareValue - Track Attribute Changes Across Steps**:
@@ -412,6 +479,10 @@ StateChecks: []statecheck.StateCheck{
 - Leverage JSON paths for nested attribute access
 
 ### Plan Checks
+
+**Plan checks are critical for validating Terraform plan behavior.** They inspect plan files at specific phases to ensure expected operations.
+
+**📚 COMPREHENSIVE GUIDE: See `references/plan_checks_guide.md` for complete documentation**
 
 Plan checks validate Terraform plan outcomes during test execution. They ensure configuration changes produce expected planning results.
 
@@ -554,6 +625,169 @@ When fixing bugs, follow this workflow:
 
 This allows independent verification of problem reproduction before evaluating solutions
 
+### Test Helper Patterns
+
+Create reusable test helpers for common operations:
+
+**Test Helpers File** (`internal/provider/test_helpers.go`):
+
+```go
+// createTestClient - Authenticate and return API client for tests
+func createTestClient(t *testing.T) *APIClient {
+    endpoint := os.Getenv("API_ENDPOINT")
+    username := os.Getenv("API_USERNAME")
+    password := os.Getenv("API_PASSWORD")
+
+    if endpoint == "" || username == "" || password == "" {
+        t.Fatalf("API credentials not set")
+    }
+
+    client, err := NewAPIClient(context.Background(), endpoint, username, password)
+    if err != nil {
+        t.Fatalf("Failed to create client: %v", err)
+    }
+    return client
+}
+
+// getResourceIDByName - Query API to get resource ID by name
+func getResourceIDByName(t *testing.T, service, method, name string) string {
+    client := createTestClient(t)
+    body, err := client.CallAPI(context.Background(), service, method, name)
+    if err != nil {
+        t.Fatalf("Failed to get resource: %v", err)
+    }
+
+    var resource map[string]interface{}
+    json.Unmarshal(body, &resource)
+    return resource["id"].(string)
+}
+
+// verifyResourceDeleted - Poll API with exponential backoff to verify deletion
+func verifyResourceDeleted(ctx context.Context, client *APIClient,
+    service, method, id string, maxRetries int) (bool, error) {
+
+    for i := 0; i < maxRetries; i++ {
+        _, err := client.CallAPI(ctx, service, method, id)
+        if err != nil {
+            // Resource not found - successfully deleted
+            return true, nil
+        }
+        time.Sleep(time.Duration(1<<i) * time.Second) // Exponential backoff
+    }
+    return false, fmt.Errorf("resource still exists after %d retries", maxRetries)
+}
+
+// generateUniqueTestName - Create timestamped unique test names
+func generateUniqueTestName(prefix string) string {
+    return fmt.Sprintf("%s-%d", prefix, time.Now().Unix())
+}
+```
+
+### CheckDestroy Pattern
+
+Implement CheckDestroy to verify resource cleanup:
+
+```go
+func testAccCheckResourceDestroy(s *terraform.State) error {
+    client := createTestClient(&testing.T{})
+    ctx := context.Background()
+
+    for _, rs := range s.RootModule().Resources {
+        if rs.Type != "example_resource" {
+            continue
+        }
+
+        // Verify resource is deleted with exponential backoff
+        deleted, err := verifyResourceDeleted(ctx, client,
+            "ServiceName", "getMethod", rs.Primary.ID, 4)
+
+        if !deleted {
+            if err != nil {
+                return fmt.Errorf("error checking deletion: %w", err)
+            }
+            return fmt.Errorf("resource %s still exists", rs.Primary.ID)
+        }
+    }
+    return nil
+}
+
+// Add to TestCase
+resource.Test(t, resource.TestCase{
+    CheckDestroy: testAccCheckResourceDestroy,
+    // ... rest of test
+})
+```
+
+### Drift Detection Test Pattern
+
+Comprehensive drift detection using test helpers:
+
+```go
+func TestAccResource_DriftDetection(t *testing.T) {
+    name := generateUniqueTestName("test-drift")
+
+    resource.Test(t, resource.TestCase{
+        PreCheck: func() { testAccPreCheck(t) },
+        ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+        Steps: []resource.TestStep{
+            // Step 1: Create resource
+            {
+                Config: testAccResourceConfig(name, "initial-value"),
+                Check: resource.ComposeAggregateTestCheckFunc(
+                    resource.TestCheckResourceAttr("example_resource.test", "attr", "initial-value"),
+                ),
+            },
+            // Step 2: Modify externally (drift)
+            {
+                PreConfig: func() {
+                    client := createTestClient(t)
+                    ctx := context.Background()
+
+                    // Get resource ID by name
+                    id := getResourceIDByName(t, "Service", "getMethod", name)
+
+                    // Fetch full resource data
+                    body, _ := client.CallAPI(ctx, "Service", "getMethod", name)
+                    var resourceData map[string]interface{}
+                    json.Unmarshal(body, &resourceData)
+
+                    // Modify field externally (note: snake_case → camelCase mapping!)
+                    resourceData["camelCaseField"] = "modified-value"
+                    resourceData["id"] = id
+
+                    // Update via API
+                    client.CallAPI(ctx, "Service", "updateMethod", resourceData)
+
+                    // Wait for eventual consistency
+                    time.Sleep(2 * time.Second)
+                },
+                Config: testAccResourceConfig(name, "initial-value"),
+                ConfigPlanChecks: resource.ConfigPlanChecks{
+                    PreApply: []plancheck.PlanCheck{
+                        plancheck.ExpectNonEmptyPlan(),
+                    },
+                },
+            },
+            // Step 3: Terraform restores desired state
+            {
+                Config: testAccResourceConfig(name, "initial-value"),
+                Check: resource.ComposeAggregateTestCheckFunc(
+                    resource.TestCheckResourceAttr("example_resource.test", "attr", "initial-value"),
+                ),
+            },
+        },
+    })
+}
+```
+
+**Important Drift Detection Notes**:
+- **Field Name Mapping**: APIs often use camelCase while Terraform uses snake_case (e.g., `kernel_parameters` → `kernelParameters`)
+- **Document Mappings**: Create a mapping table in test_helpers.go for clarity
+- **Eventual Consistency**: Add sleep after API modifications (typically 2s)
+- **UUID Lookup**: Use test helper to get resource ID before modification
+
+**For comprehensive drift detection guidance, see `references/drift_detection_guide.md`**
+
 ### Running Tests
 
 ```bash
@@ -565,6 +799,9 @@ TF_ACC=1 go test -v -timeout 120m ./internal/provider/
 
 # Parallel execution
 TF_ACC=1 go test -v -parallel=4 -timeout 120m ./...
+
+# Run specific test patterns
+TF_ACC=1 go test -v -run "Drift" ./internal/provider/
 
 # With detailed logging
 TF_LOG=TRACE TF_ACC=1 go test -v ./internal/provider/
@@ -728,8 +965,15 @@ TF_ACC=1 go test -v -run TestAccExampleResource ./internal/provider/
 
 ### References (`references/`)
 
+**Testing Fundamentals**:
+- `testcase_structure.md` - **Complete TestCase structure, all fields, execution flow, and best practices**
+- `plan_checks_guide.md` - **Comprehensive plan checks documentation with all types and patterns**
+- `tdd_patterns.md` - TDD workflows, test helpers, CheckDestroy, and test structures
+- `drift_detection_guide.md` - External modification testing with three-step pattern
+
+**Implementation Patterns**:
+- `api_client_patterns.md` - API client architecture, authentication, retry logic, and error handling
 - `hashicorp_best_practices.md` - Official HashiCorp design principles and standards
-- `tdd_patterns.md` - Detailed TDD patterns, test structures, and anti-patterns
 - `ci_cd_patterns.md` - CI/CD workflows, automation, tooling, and release management
 
 ## Quick Reference
@@ -769,8 +1013,9 @@ resource.ComposeAggregateTestCheckFunc(
 
 ❌ Skipping ImportState tests
 ❌ Skipping Drift tests
+❌ Skipping CheckDestroy implementation
 ❌ Skipping idempotency tests with plan checks
-❌ Using hardcoded test values (use unique names per test run)
+❌ Using hardcoded test values (use `generateUniqueTestName()` instead)
 ❌ Incomplete CRUD testing
 ❌ Ignoring error cases
 ❌ Missing or outdated documentation
@@ -780,16 +1025,25 @@ resource.ComposeAggregateTestCheckFunc(
 ❌ Using TestCheckResourceAttr for computed values (use StateChecks instead)
 ❌ Not tracking attribute consistency across test steps (use CompareValue)
 ❌ Missing sensitive attribute verification (use ExpectSensitiveValue)
+❌ Not documenting field name mappings (snake_case vs camelCase)
+❌ Missing test helper functions for repeated operations
+❌ Not using exponential backoff for eventual consistency
+❌ Duplicating client setup code across tests
 
 ## Development Checklist
 
 - [ ] Schema aligns with underlying API
 - [ ] Resource supports import (ImportState tests)
 - [ ] All CRUD operations tested
+- [ ] CheckDestroy function implemented and working
+- [ ] Test helper functions created (createTestClient, verifyResourceDeleted, etc.)
+- [ ] Field name mappings documented (snake_case vs camelCase)
+- [ ] Unique test names generated with timestamps
 - [ ] State checks verify computed attributes (ExpectKnownValue)
 - [ ] Attribute consistency tracked across steps (CompareValue)
 - [ ] Idempotency verified with plan checks (ExpectEmptyPlan)
-- [ ] Drift detection tests implemented
+- [ ] Drift detection tests implemented with external modification
+- [ ] Eventual consistency handled with exponential backoff
 - [ ] Sensitive attributes verified (ExpectSensitiveValue)
 - [ ] Error cases tested (ExpectError)
 - [ ] Acceptance tests pass 100%

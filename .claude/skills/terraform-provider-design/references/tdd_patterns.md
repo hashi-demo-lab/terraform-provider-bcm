@@ -56,12 +56,21 @@ With passing tests:
 
 ### Required Test Steps
 
-Every resource MUST test:
+According to HashiCorp's official testing patterns, every resource MUST test:
 
-1. **Create and Read** - First step verifies creation and read
-2. **ImportState** - Second step tests `terraform import`
-3. **Update and Read** - Third step verifies updates
-4. **Delete** - Automatically tested when TestCase completes
+1. **Basic Attribute Verification** - Verifies resource creation, state correctness, and idempotency
+2. **Update/Modification Test** - Tests configuration changes (superset of basic test)
+3. **ImportState Test** - Validates `terraform import` functionality
+4. **Delete with CheckDestroy** - Verifies cleanup after tests complete
+
+**HashiCorp Recommendation**: "It's common for resources to just have the update test, as it is a superset of the basic test."
+
+### Additional Recommended Tests
+
+5. **Drift Detection Test** - Verifies provider detects external changes
+6. **Idempotency Test** - Confirms repeated applies produce no changes
+7. **Error Cases** - Tests expected validation failures with `ExpectError`
+8. **Regression Tests** - Documents and tests bug fixes
 
 ### Test Pattern Template
 
@@ -154,6 +163,289 @@ func (r *InstanceResource) Create(ctx context.Context, req resource.CreateReques
     resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 ```
+
+## Test Helper Patterns
+
+### Why Test Helpers?
+
+Test helpers eliminate code duplication across tests and provide reusable utilities for:
+- Creating authenticated API clients
+- Querying resources by name or ID
+- Verifying resource deletion with retry logic
+- Generating unique test names
+- Documenting field name mappings (snake_case vs camelCase)
+
+### Essential Test Helpers
+
+Create `internal/provider/test_helpers.go` with these functions:
+
+```go
+package provider
+
+import (
+    "context"
+    "encoding/json"
+    "fmt"
+    "os"
+    "testing"
+    "time"
+)
+
+// Field Name Mappings Documentation
+//
+// Document snake_case (Terraform) to camelCase (API) mappings here.
+// This is critical for drift detection tests when modifying resources via API.
+//
+// Example Mappings:
+//   Terraform Schema       API Field
+//   -----------------      ---------------
+//   kernel_parameters   → kernelParameters
+//   enable_sol          → enableSOL
+//   management_network  → managementNetwork
+
+// createTestClient creates an authenticated API client for test use
+//
+// Used by:
+// - Drift detection tests (PreConfig to modify resources externally)
+// - CheckDestroy functions (to verify resource deletion)
+// - PreCheck cleanup functions (to remove leftover test resources)
+//
+// Environment Variables (required):
+//   API_ENDPOINT - API endpoint (e.g., https://api.example.com)
+//   API_USERNAME - API username
+//   API_PASSWORD - API password
+func createTestClient(t *testing.T) *APIClient {
+    endpoint := os.Getenv("API_ENDPOINT")
+    username := os.Getenv("API_USERNAME")
+    password := os.Getenv("API_PASSWORD")
+
+    if endpoint == "" || username == "" || password == "" {
+        t.Fatalf("API credentials not set (API_ENDPOINT, API_USERNAME, API_PASSWORD)")
+    }
+
+    client, err := NewAPIClient(context.Background(), endpoint, username, password, true, 30)
+    if err != nil {
+        t.Fatalf("Failed to create API client: %v", err)
+    }
+
+    return client
+}
+
+// getResourceIDByName queries API to get resource ID by name
+//
+// This is essential for drift detection tests that need to modify resources
+// via the API after Terraform creates them.
+//
+// Parameters:
+//   t - Testing context
+//   service - API service name (e.g., "ResourceService")
+//   method - API method name (e.g., "getResource")
+//   name - Resource name to look up
+//
+// Returns: Resource ID (UUID or identifier string)
+func getResourceIDByName(t *testing.T, service, method, name string) string {
+    client := createTestClient(t)
+    body, err := client.CallAPI(context.Background(), service, method, name)
+    if err != nil {
+        t.Fatalf("Failed to get resource %s: %v", name, err)
+    }
+
+    var resource map[string]interface{}
+    if err := json.Unmarshal(body, &resource); err != nil {
+        t.Fatalf("Failed to parse resource response: %v", err)
+    }
+
+    id, ok := resource["id"].(string)
+    if !ok {
+        t.Fatalf("Resource %s has no ID field", name)
+    }
+
+    return id
+}
+
+// verifyResourceDeleted polls API with exponential backoff to verify deletion
+//
+// Handles eventual consistency by retrying resource lookups with exponentially
+// increasing wait times. Designed to complete within 30 seconds (PreCheck requirement).
+//
+// Parameters:
+//   ctx - Context for API calls (can include timeout)
+//   client - Authenticated API client
+//   service - API service name (e.g., "ResourceService")
+//   method - API method name (e.g., "getResource")
+//   identifier - Resource identifier (name or UUID)
+//   maxRetries - Maximum retry attempts (e.g., 4 for 15s total: 1+2+4+8)
+//
+// Returns:
+//   deleted - true if resource not found (successfully deleted)
+//   error - any error encountered during verification
+func verifyResourceDeleted(ctx context.Context, client *APIClient,
+    service, method, identifier string, maxRetries int) (bool, error) {
+
+    for i := 0; i < maxRetries; i++ {
+        _, err := client.CallAPI(ctx, service, method, identifier)
+        if err != nil {
+            // Resource not found - successfully deleted
+            return true, nil
+        }
+
+        // Wait before retry (exponential backoff: 1s, 2s, 4s, 8s, ...)
+        if i < maxRetries-1 {
+            backoff := time.Duration(1<<uint(i)) * time.Second
+            time.Sleep(backoff)
+        }
+    }
+
+    return false, fmt.Errorf("resource %s still exists after %d retries", identifier, maxRetries)
+}
+
+// generateUniqueTestName creates timestamped unique test names
+//
+// Prevents conflicts when running tests in parallel or when leftover resources exist.
+// Use "citest" or similar prefix for easy identification and cleanup.
+//
+// Example: generateUniqueTestName("citest-image") → "citest-image-1704912345"
+func generateUniqueTestName(prefix string) string {
+    return fmt.Sprintf("%s-%d", prefix, time.Now().Unix())
+}
+```
+
+## CheckDestroy Pattern
+
+### Purpose
+
+`CheckDestroy` verifies that Terraform properly cleaned up all resources after test completion. It's called after all test steps finish.
+
+### Implementation
+
+```go
+// testAccCheckResourceDestroy verifies resource cleanup after test completion
+func testAccCheckResourceDestroy(s *terraform.State) error {
+    client := createTestClient(&testing.T{})
+    ctx := context.Background()
+
+    for _, rs := range s.RootModule().Resources {
+        // Only check resources of this type
+        if rs.Type != "example_resource" {
+            continue
+        }
+
+        // Verify resource is deleted with exponential backoff
+        deleted, err := verifyResourceDeleted(ctx, client,
+            "ResourceService", "getResource", rs.Primary.ID, 4)
+
+        if !deleted {
+            if err != nil {
+                return fmt.Errorf("error checking deletion of %s: %w", rs.Primary.ID, err)
+            }
+            return fmt.Errorf("resource %s still exists", rs.Primary.ID)
+        }
+    }
+
+    return nil
+}
+```
+
+### Adding to TestCase
+
+```go
+resource.Test(t, resource.TestCase{
+    PreCheck:                 func() { testAccPreCheck(t) },
+    ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+    CheckDestroy:             testAccCheckResourceDestroy, // Add this line
+    Steps: []resource.TestStep{
+        // ... test steps
+    },
+})
+```
+
+### CheckDestroy Best Practices
+
+1. **Exponential Backoff**: Use `verifyResourceDeleted()` helper to handle eventual consistency
+2. **Resource Type Filtering**: Only check resources managed by the provider
+3. **Error Context**: Wrap errors with `%w` to preserve error chains
+4. **Timeout Budget**: Target completion within 15-30 seconds (typical test cleanup time)
+5. **Retry Count**: 4 retries (1s + 2s + 4s + 8s = 15s total) is usually sufficient
+
+## Drift Detection Test Pattern
+
+### Purpose
+
+Drift detection tests verify that the provider's Read operation correctly detects when resources are modified outside of Terraform.
+
+### Three-Step Test Structure
+
+```go
+func TestAccResource_Drift(t *testing.T) {
+    name := generateUniqueTestName("test-drift")
+
+    resource.Test(t, resource.TestCase{
+        PreCheck:                 func() { testAccPreCheck(t) },
+        ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+        CheckDestroy:             testAccCheckResourceDestroy,
+        Steps: []resource.TestStep{
+            // Step 1: Create resource with initial value
+            {
+                Config: testAccResourceConfig(name, "initial-value"),
+                Check: resource.ComposeAggregateTestCheckFunc(
+                    resource.TestCheckResourceAttr("example_resource.test", "attribute", "initial-value"),
+                ),
+            },
+            // Step 2: Modify resource externally via API (drift)
+            {
+                PreConfig: func() {
+                    client := createTestClient(t)
+                    ctx := context.Background()
+
+                    // Get resource ID by name
+                    id := getResourceIDByName(t, "ResourceService", "getResource", name)
+
+                    // Fetch full resource data
+                    body, _ := client.CallAPI(ctx, "ResourceService", "getResource", name)
+                    var resourceData map[string]interface{}
+                    json.Unmarshal(body, &resourceData)
+
+                    // Modify field externally
+                    // IMPORTANT: Map snake_case → camelCase (see field mappings in test_helpers.go)
+                    resourceData["camelCaseAttribute"] = "modified-value"
+                    resourceData["id"] = id
+
+                    // Update via API
+                    client.CallAPI(ctx, "ResourceService", "updateResource", resourceData)
+
+                    // Wait for eventual consistency
+                    time.Sleep(2 * time.Second)
+
+                    t.Logf("[DEBUG] Modified attribute externally to: %v", resourceData["camelCaseAttribute"])
+                },
+                Config: testAccResourceConfig(name, "initial-value"),
+                ConfigPlanChecks: resource.ConfigPlanChecks{
+                    PreApply: []plancheck.PlanCheck{
+                        plancheck.ExpectNonEmptyPlan(), // Verify drift detected
+                    },
+                },
+            },
+            // Step 3: Terraform restores desired state
+            {
+                Config: testAccResourceConfig(name, "initial-value"),
+                Check: resource.ComposeAggregateTestCheckFunc(
+                    resource.TestCheckResourceAttr("example_resource.test", "attribute", "initial-value"),
+                ),
+            },
+        },
+    })
+}
+```
+
+### Drift Detection Best Practices
+
+1. **Field Name Mapping**: Document snake_case ↔ camelCase mappings in `test_helpers.go`
+2. **API Entity Structure**: Some APIs require full entity structure (baseType, uuid, revision, etc.)
+3. **Eventual Consistency**: Add 2-second sleep after API modifications for changes to propagate
+4. **UUID Lookup**: Use `getResourceIDByName()` helper for consistent resource identification
+5. **Plan Checks**: Use `plancheck.ExpectNonEmptyPlan()` to verify drift was detected
+6. **Restore Step**: Always add a third step to verify Terraform restores desired state
+7. **Unique Names**: Use `generateUniqueTestName()` to avoid conflicts with parallel tests
 
 ## State Check Functions
 
