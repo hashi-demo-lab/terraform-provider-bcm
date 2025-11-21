@@ -12,6 +12,7 @@ This skill guides Terraform provider development using Test-Driven Development (
 ## When to Use This Skill
 
 Use this skill when:
+
 - Creating a new Terraform provider from scratch
 - Adding resources or data sources to an existing provider
 - Implementing TDD workflows for provider development
@@ -26,16 +27,19 @@ Use this skill when:
 Provider development follows strict TDD phases executed in parallel where possible:
 
 **🔴 RED Phase**: Write failing acceptance tests
+
 - Define resource/data source behavior through tests
 - Write Terraform configuration fixtures
 - Verify tests fail for the right reasons
 
 **🟢 GREEN Phase**: Write minimal CRUD code
+
 - Implement simplest code to pass tests
 - Use hardcoded values initially if needed
 - Focus on making tests pass quickly
 
 **🔄 REFACTOR Phase**: Improve implementation
+
 - Add real API integration
 - Enhance error handling
 - Optimize code quality
@@ -241,19 +245,23 @@ func (r *InstanceResource) Create(ctx context.Context, req resource.CreateReques
 Follow HashiCorp naming standards:
 
 **Resources**: Singular nouns with provider prefix
+
 - Format: `{provider}_{resource_name}`
 - Example: `aws_instance`, `postgresql_database`
 
 **Data Sources**: Nouns (plural for collections)
+
 - Format: `{provider}_{data_source_name}`
 - Example: `aws_availability_zones`, `azurerm_subnet`
 
 **Attributes**: Lowercase with underscores
+
 - Single values: Singular nouns (`instance_type`)
 - Collections: Plural nouns (`security_group_ids`)
 - Booleans: Nouns describing what's enabled (`auto_scaling_enabled`)
 
 **Functions**: Verbs without provider prefix
+
 - Format: `{verb}_{object}`
 - Example: `parse_rfc3339`, `encode_base64`
 
@@ -262,6 +270,7 @@ Follow HashiCorp naming standards:
 ### Acceptance Test Coverage
 
 Every resource MUST test:
+
 1. ✅ Create and Read operations
 2. ✅ ImportState functionality
 3. ✅ Update and Read operations
@@ -324,6 +333,7 @@ go run github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs generate
 ```
 
 Ensure `examples/` directory contains:
+
 - `provider/provider.tf` - Provider configuration
 - `resources/{resource_name}/resource.tf` - Resource examples
 - `data-sources/{data_source_name}/data-source.tf` - Data source examples
@@ -333,11 +343,13 @@ Ensure `examples/` directory contains:
 Follow Semantic Versioning (`MAJOR.MINOR.PATCH`):
 
 **MAJOR** - Breaking changes:
+
 - Removing/renaming resources or attributes
 - Changing authentication patterns
 - Incompatible type changes
 
 **MINOR** - New features:
+
 - Adding resources or attributes
 - Deprecation warnings
 - Compatible type changes
@@ -363,7 +375,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v4
         with:
-          go-version: '1.21'
+          go-version: "1.21"
       - run: go test -v -cover ./...
       - run: TF_ACC=1 go test -v -timeout 120m ./internal/provider/
 ```
@@ -371,6 +383,7 @@ jobs:
 ### Code Quality and Release
 
 See `references/ci_cd_patterns.md` for:
+
 - golangci-lint configuration
 - GoReleaser setup for provider releases
 - Pre-commit hooks
@@ -399,6 +412,7 @@ func testAccPreCheck(t *testing.T) {
 ### Test Safety
 
 **CRITICAL**: Use separate accounts/namespaces for testing:
+
 - Prevents accidental production infrastructure changes
 - Allows safe parallel test execution
 - Enables test cleanup without risk
@@ -476,6 +490,7 @@ resource.ComposeAggregateTestCheckFunc(
 ### Common Anti-Patterns to Avoid
 
 ❌ Skipping ImportState tests
+❌ Skipping Drift tests
 ❌ Using hardcoded test values
 ❌ Incomplete CRUD testing
 ❌ Ignoring error cases

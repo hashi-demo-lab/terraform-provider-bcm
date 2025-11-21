@@ -250,19 +250,20 @@ resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
   if resp.Diagnostics.HasError() {
   return
   }
-      // Make actual API call to create instance
-      instance, err := r.client.CreateInstance(ctx, data.Name.ValueString())
-      if err != nil {
-          resp.Diagnostics.AddError(
-              "Error Creating Instance",
-              "Could not create instance, unexpected error: "+err.Error(),
-          )
-          return
-      }
+  // Make actual API call to create instance
+  instance, err := r.client.CreateInstance(ctx, data.Name.ValueString())
+  if err != nil {
+  resp.Diagnostics.AddError(
+  "Error Creating Instance",
+  "Could not create instance, unexpected error: "+err.Error(),
+  )
+  return
+  }
 
       data.ID = types.StringValue(instance.ID)
       tflog.Trace(ctx, "created instance resource")
       resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+
   }
 
 func (r \*InstanceResource) Read(ctx context.Context, req resource.ReadRequest, resp \*resource.ReadResponse) {
@@ -836,3 +837,14 @@ HashiCorp Provider Design Principles - Official design guidelines
 Terraform Plugin Framework Docs - Framework API reference  
 Provider Development Program - Partnership and verification
 Terraform Registry - Publishing and distribution
+
+### Common Anti-Patterns to Avoid
+
+❌ Skipping ImportState tests
+❌ Skipping Drift tests
+❌ Using hardcoded test values
+❌ Incomplete CRUD testing
+❌ Ignoring error cases
+❌ Missing or outdated documentation
+❌ Not testing state drift
+❌ Tests dependent on external state

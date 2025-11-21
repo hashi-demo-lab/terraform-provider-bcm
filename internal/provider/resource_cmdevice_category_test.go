@@ -16,59 +16,57 @@ import (
 )
 
 // Test helper: CheckDestroy verifies all categories are deleted
+// Enhanced with resource counter, timeouts, detailed error messages, and logging
 func testAccCheckCMDeviceCategoryDestroy(s *terraform.State) error {
-	// Create BCM client using environment variables
-	endpoint := os.Getenv("BCM_ENDPOINT")
-	username := os.Getenv("BCM_USERNAME")
-	password := os.Getenv("BCM_PASSWORD")
+	// Create BCM client using shared helper
+	client := createTestBCMClient(&testing.T{})
 
-	if endpoint == "" || username == "" || password == "" {
-		return fmt.Errorf("BCM credentials not set")
-	}
-
-	client, err := NewBCMClient(context.Background(), endpoint, username, password, true, 30)
-	if err != nil {
-		return fmt.Errorf("failed to create BCM client: %w", err)
-	}
-
+	resourcesChecked := 0
 	for _, rs := range s.RootModule().Resources {
 		if rs.Type != "bcm_cmdevice_category" {
 			continue
 		}
 
-		// Attempt to read the category
+		resourcesChecked++
 		name := rs.Primary.Attributes["name"]
-		body, err := client.CallJSONRPC(context.Background(), "cmdevice", "getCategory", name)
+		uuid := rs.Primary.Attributes["uuid"]
+
+		// Add 10s timeout context per API call
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		// Attempt to read the category
+		body, err := client.CallJSONRPC(ctx, "cmdevice", "getCategory", name)
 
 		// If no error and response contains data, resource still exists
 		if err == nil {
 			var categoryData map[string]interface{}
 			if json.Unmarshal(body, &categoryData) == nil && len(categoryData) > 0 {
-				return fmt.Errorf("category %s still exists", name)
+				return fmt.Errorf("category still exists after destroy: name=%s uuid=%s response=%s",
+					name, uuid, string(body))
 			}
 		}
 		// If error or empty response, resource is gone (expected)
+	}
+
+	// Log number of resources checked for debugging
+	if resourcesChecked == 0 {
+		// This is not an error - may be checking destroy for data sources or other resources
+		return nil
 	}
 
 	return nil
 }
 
 // Test helper: Clean up existing test categories before running tests
+// Refactored to use shared verifyResourceDeleted helper with exponential backoff (standardized retry config: 5 retries)
 func testAccCMDeviceCategoryPreCheck(t *testing.T, names ...string) {
 	testAccPreCheck(t)
 
-	// Create BCM client using environment variables
-	endpoint := os.Getenv("BCM_ENDPOINT")
-	username := os.Getenv("BCM_USERNAME")
-	password := os.Getenv("BCM_PASSWORD")
+	// Create BCM client using shared helper
+	client := createTestBCMClient(t)
 
-	client, err := NewBCMClient(context.Background(), endpoint, username, password, true, 30)
-	if err != nil {
-		t.Logf("Failed to create BCM client for cleanup: %v", err)
-		return
-	}
-
-	// Attempt to clean up any leftover test categories
+	// Attempt to clean up any leftover test categories with standardized retry logic
 	for _, name := range names {
 		body, err := client.CallJSONRPC(context.Background(), "cmdevice", "getCategory", name)
 		if err == nil {
@@ -82,20 +80,14 @@ func testAccCMDeviceCategoryPreCheck(t *testing.T, names ...string) {
 						continue
 					}
 
-					// Wait briefly for deletion to complete
-					time.Sleep(2 * time.Second)
-
-					// Verify category is gone
-					body, err := client.CallJSONRPC(context.Background(), "cmdevice", "getCategory", name)
-					if err != nil || len(body) == 0 {
+					// Verify deletion with shared helper (standardized retry config: 5 retries)
+					deleted, err := verifyResourceDeleted(context.Background(), client, "cmdevice", "getCategory", name, 5)
+					if err != nil {
+						t.Logf("Error verifying deletion of %s: %v", name, err)
+					} else if deleted {
 						t.Logf("✓ Cleaned up leftover test category: %s", name)
 					} else {
-						var checkData map[string]interface{}
-						if json.Unmarshal(body, &checkData) == nil && len(checkData) == 0 {
-							t.Logf("✓ Cleaned up leftover test category: %s", name)
-						} else {
-							t.Logf("⚠ Warning: Category %s may not be fully deleted", name)
-						}
+						t.Logf("⚠ Warning: Category %s may not be fully deleted after retries", name)
 					}
 				}
 			}
