@@ -374,9 +374,9 @@ func (r *CMPartSoftwareImageResource) Create(ctx context.Context, req resource.C
 						break
 					} else {
 						tflog.Debug(ctx, "Clone still in progress", map[string]interface{}{
-							"uuid":                     createdUUID,
+							"uuid":                    createdUUID,
 							"fileOperationInProgress": fileOpInProgress,
-							"attempt":                  attempt + 1,
+							"attempt":                 attempt + 1,
 						})
 					}
 					break
@@ -390,10 +390,10 @@ func (r *CMPartSoftwareImageResource) Create(ctx context.Context, req resource.C
 
 		if !cloneComplete {
 			tflog.Warn(ctx, "Clone operation may still be in progress after max retries", map[string]interface{}{
-				"uuid":        createdUUID,
-				"maxRetries":  maxRetries,
-				"lastErr":     lastErr,
-				"proceeding":  "Will attempt to read image anyway",
+				"uuid":       createdUUID,
+				"maxRetries": maxRetries,
+				"lastErr":    lastErr,
+				"proceeding": "Will attempt to read image anyway",
 			})
 		}
 	}

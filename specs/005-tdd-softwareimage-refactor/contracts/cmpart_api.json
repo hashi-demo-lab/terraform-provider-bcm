@@ -1,0 +1,284 @@
+{
+  "service": "CMPart",
+  "description": "BCM software image management service providing CRUD operations for OS images used in DPU node provisioning",
+  "base_url": "https://<bcm-endpoint>:8081/json",
+  "authentication": "Cookie-based (cm-login-token)",
+
+  "methods": {
+    "addSoftwareImage": {
+      "description": "Create a new software image, optionally cloning from an existing image",
+      "args": [
+        {
+          "name": "entity",
+          "type": "SoftwareImageEntity",
+          "required": true,
+          "description": "Software image entity with all configuration"
+        },
+        {
+          "name": "cloneData",
+          "type": "boolean",
+          "required": true,
+          "description": "Whether to clone filesystem from originalImage (true for clones, false for new images)"
+        }
+      ],
+      "returns": {
+        "type": "string | object",
+        "description": "UUID string directly, OR object with 'updated_entity' field containing full entity",
+        "examples": [
+          "\"abc-123-def-456\"",
+          "{\"updated_entity\": {\"uuid\": \"abc-123\", ...}}"
+        ]
+      },
+      "async_behavior": {
+        "immediate_return": true,
+        "background_operation": "Filesystem cloning from originalImage",
+        "status_field": "fileOperationInProgress",
+        "polling_required": true,
+        "typical_duration": "8-15 seconds for default-image clone"
+      },
+      "error_cases": [
+        {
+          "condition": "originalImage UUID doesn't exist",
+          "response": "{\"error\": \"Software image not found: <uuid>\"}"
+        },
+        {
+          "condition": "Duplicate name",
+          "response": "{\"error\": \"Software image with name '<name>' already exists\"}"
+        },
+        {
+          "condition": "Invalid path format",
+          "response": "{\"error\": \"Invalid path format: <path>\"}"
+        }
+      ],
+      "notes": [
+        "Returns UUID immediately but clone is async (poll fileOperationInProgress)",
+        "originalImage field only valid during create (reset after clone completes)",
+        "kernel_version validation may fail if set before clone completes (use two-step pattern)"
+      ]
+    },
+
+    "getSoftwareImage": {
+      "description": "Retrieve a single software image by name (efficient direct lookup)",
+      "args": [
+        {
+          "name": "name",
+          "type": "string",
+          "required": true,
+          "description": "Exact software image name to lookup"
+        }
+      ],
+      "returns": {
+        "type": "SoftwareImageEntity | null",
+        "description": "Full software image entity if found, null if not found"
+      },
+      "performance": {
+        "lookup_type": "Direct name index",
+        "typical_latency": "<100ms",
+        "advantages": "Faster than getSoftwareImages + filter"
+      },
+      "error_cases": [
+        {
+          "condition": "Image not found",
+          "response": "null or empty object {}"
+        }
+      ],
+      "notes": [
+        "Preferred over getSoftwareImages for single image lookup",
+        "Returns null rather than error for not-found cases",
+        "originalImage field may be zero UUID or empty string after clone"
+      ]
+    },
+
+    "getSoftwareImages": {
+      "description": "List all software images in the BCM cluster",
+      "args": [],
+      "returns": {
+        "type": "SoftwareImageEntity[]",
+        "description": "Array of all software image entities"
+      },
+      "performance": {
+        "typical_count": "10-100 images",
+        "typical_latency": "200-500ms",
+        "use_cases": "Data source listing, polling for clone status"
+      },
+      "notes": [
+        "Use for list operations and data sources",
+        "Less efficient than getSoftwareImage for single lookups",
+        "Currently used in clone polling (should optimize to getSoftwareImage)"
+      ]
+    },
+
+    "updateSoftwareImage": {
+      "description": "Update an existing software image's configuration",
+      "args": [
+        {
+          "name": "entity",
+          "type": "SoftwareImageEntity",
+          "required": true,
+          "description": "Complete software image entity with UUID field included"
+        }
+      ],
+      "returns": {
+        "type": "void",
+        "description": "Success returns empty response, errors return error object"
+      },
+      "requirements": [
+        "Entity MUST include uuid field",
+        "Do NOT include originalImage field (create-only)",
+        "Include all fields (changed and unchanged) to prevent field reset"
+      ],
+      "error_cases": [
+        {
+          "condition": "UUID not found",
+          "response": "{\"error\": \"Software image not found: <uuid>\"}"
+        },
+        {
+          "condition": "Missing UUID field",
+          "response": "{\"error\": \"UUID required for update operation\"}"
+        },
+        {
+          "condition": "Invalid kernel_version",
+          "response": "{\"error\": \"Kernel version <version> not found in <path>\"}"
+        }
+      ],
+      "notes": [
+        "Must provide complete entity (partial updates not supported)",
+        "kernel_version path validation may fail during clone (use two-step pattern)",
+        "Call getSoftwareImage after update to refresh state"
+      ]
+    },
+
+    "removeSoftwareImage": {
+      "description": "Delete a software image from the BCM cluster",
+      "args": [
+        {
+          "name": "uuid",
+          "type": "string",
+          "required": true,
+          "description": "UUID of software image to delete"
+        },
+        {
+          "name": "removeData",
+          "type": "boolean",
+          "required": true,
+          "description": "Whether to remove filesystem data (false for standard delete)"
+        },
+        {
+          "name": "removeAll",
+          "type": "boolean",
+          "required": true,
+          "description": "Whether to remove all related entities (false for standard delete)"
+        },
+        {
+          "name": "force",
+          "type": "boolean",
+          "required": true,
+          "description": "Whether to force deletion ignoring dependencies (false for safe delete)"
+        }
+      ],
+      "returns": {
+        "type": "void",
+        "description": "Success returns empty response"
+      },
+      "recommended_flags": {
+        "standard_delete": {
+          "removeData": false,
+          "removeAll": false,
+          "force": false,
+          "description": "Safe deletion with dependency checks"
+        },
+        "force_delete": {
+          "removeData": true,
+          "removeAll": true,
+          "force": true,
+          "description": "Aggressive deletion (use with caution)"
+        }
+      },
+      "error_cases": [
+        {
+          "condition": "UUID not found",
+          "response": "Success (idempotent operation)"
+        },
+        {
+          "condition": "Image in use by nodes (force=false)",
+          "response": "{\"error\": \"Cannot delete image: in use by <N> nodes\"}"
+        }
+      ],
+      "notes": [
+        "Standard deletion (all flags false) is safe and recommended",
+        "Idempotent - deleting non-existent image succeeds",
+        "force=true bypasses dependency checks (dangerous in production)"
+      ]
+    }
+  },
+
+  "common_patterns": {
+    "json_rpc_request": {
+      "format": {
+        "service": "CMPart",
+        "call": "<method-name>",
+        "args": ["<arg1>", "<arg2>", ...]
+      },
+      "example": {
+        "service": "CMPart",
+        "call": "getSoftwareImage",
+        "args": ["default-image"]
+      }
+    },
+    "error_response": {
+      "format": {
+        "error": "<error-message>"
+      },
+      "detection": "Check for 'error' key in response object"
+    },
+    "null_response": {
+      "cases": [
+        "Resource not found (getSoftwareImage)",
+        "Empty result set"
+      ],
+      "handling": "Check for null or empty object before unmarshaling"
+    }
+  },
+
+  "api_quirks": {
+    "original_image_reset": {
+      "behavior": "BCM resets originalImage field to zero UUID or empty string after clone completes",
+      "impact": "Terraform must preserve plan value in state for audit trail",
+      "workaround": "Check plan for known value, use plan value if present"
+    },
+    "kernel_validation_timing": {
+      "behavior": "BCM validates kernel_version path BEFORE clone completes",
+      "impact": "Setting kernel_version during create with originalImage may fail",
+      "workaround": "Two-step pattern: create basic config, then update with kernel config"
+    },
+    "module_parameters_type": {
+      "behavior": "BCM expects parameters field to be string type, rejects null",
+      "impact": "Empty parameters must be empty string, not null",
+      "workaround": "Set parameters to '' if null or omitted"
+    },
+    "uuid_response_formats": {
+      "behavior": "addSoftwareImage may return UUID as string or nested in object",
+      "impact": "Must handle multiple response formats",
+      "workaround": "Try direct string first, then check for updated_entity.uuid"
+    }
+  },
+
+  "testing_recommendations": {
+    "clone_operation": {
+      "polling_strategy": "Exponential backoff: 1s, 2s, 4s, 8s, 16s, 16s (total 47s)",
+      "status_check": "Call getSoftwareImage (or getSoftwareImages), check fileOperationInProgress field",
+      "timeout_handling": "Soft timeout (log warning, proceed) rather than hard failure"
+    },
+    "error_scenarios": [
+      "Invalid originalImage UUID (expect error during addSoftwareImage)",
+      "Duplicate name (expect conflict error)",
+      "Delete in-use image (expect dependency error)",
+      "Update non-existent UUID (expect not-found error)"
+    ],
+    "edge_cases": [
+      "Concurrent creates with unique names (should succeed)",
+      "Clone timeout >47s (should log warning, continue)",
+      "kernel_version during create (may fail, use two-step pattern)"
+    ]
+  }
+}

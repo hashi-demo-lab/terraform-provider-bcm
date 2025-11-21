@@ -1,6 +1,14 @@
 # Production example: Create a custom software image by cloning a base image
 # Use case: Deploy standardized OS images with custom kernel configuration
 
+# Configure the BCM provider
+provider "bcm" {
+  endpoint             = "https://bcm.example.com:8081"
+  username             = "admin"
+  password             = var.bcm_password # Use variable for sensitive data
+  insecure_skip_verify = true             # Only for self-signed certificates
+}
+
 # Query existing images to find the base image for cloning
 data "bcm_cmpart_softwareimages" "available" {}
 

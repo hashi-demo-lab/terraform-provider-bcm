@@ -1,6 +1,14 @@
 # Advanced production example: GPU compute node image with full configuration
 # Use case: Create enterprise-grade images for HPC/AI workloads with GPU support
 
+# Configure the BCM provider
+provider "bcm" {
+  endpoint             = "https://bcm.example.com:8081"
+  username             = "admin"
+  password             = var.bcm_password # Use variable for sensitive data
+  insecure_skip_verify = true             # Only for self-signed certificates
+}
+
 # Query all available software images
 data "bcm_cmpart_softwareimages" "all" {}
 
