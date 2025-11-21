@@ -29,47 +29,47 @@ type CMDeviceCategoriesDataSource struct {
 
 // CMDeviceCategoriesDataSourceModel describes the data source data model.
 type CMDeviceCategoriesDataSourceModel struct {
-	ID         types.String           `tfsdk:"id"`
-	Name       types.String           `tfsdk:"name"`
-	Categories []CategoryDataModel    `tfsdk:"categories"`
+	ID         types.String        `tfsdk:"id"`
+	Name       types.String        `tfsdk:"name"`
+	Categories []CategoryDataModel `tfsdk:"categories"`
 }
 
 // CategoryDataModel describes a single category.
 type CategoryDataModel struct {
-	UUID                 types.String   `tfsdk:"uuid"`
-	Name                 types.String   `tfsdk:"name"`
-	BaseType             types.String   `tfsdk:"base_type"`
-	ChildType            types.String   `tfsdk:"child_type"`
-	SoftwareImageID      types.String   `tfsdk:"software_image_id"`
-	ManagementNetworkID  types.String   `tfsdk:"management_network_id"`
-	DiskSetup            types.String   `tfsdk:"disksetup"`
-	BootLoader           types.String   `tfsdk:"boot_loader"`
-	BootLoaderProtocol   types.String   `tfsdk:"boot_loader_protocol"`
-	InstallMode          types.String   `tfsdk:"install_mode"`
-	KernelVersion        types.String   `tfsdk:"kernel_version"`
-	KernelParameters     types.String   `tfsdk:"kernel_parameters"`
-	KernelOutputConsole  types.String   `tfsdk:"kernel_output_console"`
-	DefaultGateway       types.String   `tfsdk:"default_gateway"`
-	DefaultGatewayMetric types.Int64    `tfsdk:"default_gateway_metric"`
-	NameServers          types.List     `tfsdk:"name_servers"`
-	SearchDomains        types.List     `tfsdk:"search_domains"`
-	TimeServers          types.List     `tfsdk:"time_servers"`
-	AuthenticationService types.String  `tfsdk:"authentication_service"`
-	IOScheduler          types.String   `tfsdk:"io_scheduler"`
-	FIPS                 types.String   `tfsdk:"fips"`
-	InteractiveUser      types.String   `tfsdk:"interactive_user"`
+	UUID                   types.String `tfsdk:"uuid"`
+	Name                   types.String `tfsdk:"name"`
+	BaseType               types.String `tfsdk:"base_type"`
+	ChildType              types.String `tfsdk:"child_type"`
+	SoftwareImageID        types.String `tfsdk:"software_image_id"`
+	ManagementNetworkID    types.String `tfsdk:"management_network_id"`
+	DiskSetup              types.String `tfsdk:"disksetup"`
+	BootLoader             types.String `tfsdk:"boot_loader"`
+	BootLoaderProtocol     types.String `tfsdk:"boot_loader_protocol"`
+	InstallMode            types.String `tfsdk:"install_mode"`
+	KernelVersion          types.String `tfsdk:"kernel_version"`
+	KernelParameters       types.String `tfsdk:"kernel_parameters"`
+	KernelOutputConsole    types.String `tfsdk:"kernel_output_console"`
+	DefaultGateway         types.String `tfsdk:"default_gateway"`
+	DefaultGatewayMetric   types.Int64  `tfsdk:"default_gateway_metric"`
+	NameServers            types.List   `tfsdk:"name_servers"`
+	SearchDomains          types.List   `tfsdk:"search_domains"`
+	TimeServers            types.List   `tfsdk:"time_servers"`
+	AuthenticationService  types.String `tfsdk:"authentication_service"`
+	IOScheduler            types.String `tfsdk:"io_scheduler"`
+	FIPS                   types.String `tfsdk:"fips"`
+	InteractiveUser        types.String `tfsdk:"interactive_user"`
 	AllowNetworkingRestart types.Bool   `tfsdk:"allow_networking_restart"`
-	InstallBootRecord    types.Bool     `tfsdk:"install_boot_record"`
-	DataNode             types.Bool     `tfsdk:"data_node"`
-	VersionConfigFiles   types.Bool     `tfsdk:"version_config_files"`
-	Modified             types.Bool     `tfsdk:"modified"`
-	ToBeRemoved          types.Bool     `tfsdk:"to_be_removed"`
-	Notes                types.String   `tfsdk:"notes"`
-	ParentUUID           types.String   `tfsdk:"parent_uuid"`
-	Modules              types.List     `tfsdk:"modules"`
-	FSMounts             types.List     `tfsdk:"fsmounts"`
-	Roles                types.List     `tfsdk:"roles"`
-	Services             types.List     `tfsdk:"services"`
+	InstallBootRecord      types.Bool   `tfsdk:"install_boot_record"`
+	DataNode               types.Bool   `tfsdk:"data_node"`
+	VersionConfigFiles     types.Bool   `tfsdk:"version_config_files"`
+	Modified               types.Bool   `tfsdk:"modified"`
+	ToBeRemoved            types.Bool   `tfsdk:"to_be_removed"`
+	Notes                  types.String `tfsdk:"notes"`
+	ParentUUID             types.String `tfsdk:"parent_uuid"`
+	Modules                types.List   `tfsdk:"modules"`
+	FSMounts               types.List   `tfsdk:"fsmounts"`
+	Roles                  types.List   `tfsdk:"roles"`
+	Services               types.List   `tfsdk:"services"`
 }
 
 func (d *CMDeviceCategoriesDataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
