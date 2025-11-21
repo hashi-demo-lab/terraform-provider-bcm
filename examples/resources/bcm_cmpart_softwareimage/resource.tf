@@ -2,11 +2,12 @@
 # Use case: Deploy standardized OS images with custom kernel configuration
 
 # Configure the BCM provider
+# Authentication can be provided via environment variables:
+# export BCM_ENDPOINT="https://bcm.example.com:8081"
+# export BCM_USERNAME="admin"
+# export BCM_PASSWORD="your-password"
 provider "bcm" {
-  endpoint             = "https://bcm.example.com:8081"
-  username             = "admin"
-  password             = var.bcm_password # Use variable for sensitive data
-  insecure_skip_verify = true             # Only for self-signed certificates
+  insecure_skip_verify = true  # Only for self-signed certificates
 }
 
 # Query existing images to find the base image for cloning
