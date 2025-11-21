@@ -166,6 +166,7 @@ func (p *BCMProvider) Resources(ctx context.Context) []func() resource.Resource 
 	return []func() resource.Resource{
 		NewCMPartSoftwareImageResource,
 		NewCMDeviceCategoryResource,
+		NewCMDeviceDeviceResource,
 	}
 }
 
