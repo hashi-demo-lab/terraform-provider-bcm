@@ -635,5 +635,106 @@ resource "bcm_cmpart_softwareimage" "test" {
 	})
 }
 
-// Phase 2 RED tests complete (including negative tests)
-// All tests should fail with "resource type not found" or validation errors
+// T037: Edge Case - Unknown Value with Data Source Reference
+// Tests that Unknown values during plan phase are correctly resolved to known values in state
+func TestAccCMPartSoftwareImageResource_UnknownValue(t *testing.T) {
+	imageName1 := generateUniqueTestName("test-base-image")
+	imagePath1 := fmt.Sprintf("/cm/images/%s", imageName1)
+	imageName2 := generateUniqueTestName("test-cloned-image")
+	imagePath2 := fmt.Sprintf("/cm/images/%s", imageName2)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccCMPartSoftwareImagePreCheck(t, imageName1, imageName2)
+		},
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMPartSoftwareImageDestroy,
+		Steps: []resource.TestStep{
+			{
+				// Step 1: Create base image and clone it using resource reference
+				// This introduces Unknown value during plan phase for original_image
+				Config: fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+# Lookup default-image to use as base for first clone
+data "bcm_cmpart_softwareimages" "default" {}
+
+locals {
+  default_image = [for img in data.bcm_cmpart_softwareimages.default.images : img if img.name == "default-image"][0]
+}
+
+# Create base image by cloning default-image
+resource "bcm_cmpart_softwareimage" "base" {
+  name = %[4]q
+  path = %[5]q
+
+  # Clone from default-image (kernel_version inherited)
+  original_image = local.default_image.uuid
+}
+
+# Clone using resource reference (original_image is Unknown during plan)
+# This is the key test: bcm_cmpart_softwareimage.base.uuid is Unknown during plan
+resource "bcm_cmpart_softwareimage" "cloned" {
+  name           = %[6]q
+  path           = %[7]q
+
+  # This creates Unknown value during plan phase
+  original_image = bcm_cmpart_softwareimage.base.uuid
+}
+`,
+					os.Getenv("BCM_ENDPOINT"),
+					os.Getenv("BCM_USERNAME"),
+					os.Getenv("BCM_PASSWORD"),
+					imageName1,
+					imagePath1,
+					imageName2,
+					imagePath2,
+				),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					// Verify base image created
+					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.base", "name", imageName1),
+					resource.TestCheckResourceAttrSet("bcm_cmpart_softwareimage.base", "uuid"),
+
+					// Verify cloned image - original_image should be concrete UUID, never Unknown
+					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.cloned", "name", imageName2),
+					resource.TestCheckResourceAttrSet("bcm_cmpart_softwareimage.cloned", "uuid"),
+					resource.TestCheckResourceAttrSet("bcm_cmpart_softwareimage.cloned", "original_image"),
+
+					// Verify state doesn't contain Unknown values
+					func(s *terraform.State) error {
+						rs, ok := s.RootModule().Resources["bcm_cmpart_softwareimage.cloned"]
+						if !ok {
+							return fmt.Errorf("resource not found in state")
+						}
+
+						// Check that original_image is a concrete value, not Unknown
+						originalImage := rs.Primary.Attributes["original_image"]
+						if originalImage == "" {
+							return fmt.Errorf("original_image is empty (should be concrete UUID)")
+						}
+
+						// Verify modules is a known list (not Unknown)
+						if _, ok := rs.Primary.Attributes["modules.#"]; !ok {
+							return fmt.Errorf("modules is Unknown or missing (should be known list)")
+						}
+
+						return nil
+					},
+				),
+			},
+		},
+	})
+}
+
+// NOTE: Invalid/non-existent original_image UUID test removed
+// BCM Behavior: BCM treats original_image as optional and creates image without cloning
+// if the UUID doesn't exist or is invalid. This is permissive API behavior, not an error.
+// The UnknownValue test above covers the important scenario of Unknown resolution.
+
+// Phase 2 RED tests complete (including negative tests and edge cases)
+// All tests should fail with "resource type not found", validation errors, or API errors

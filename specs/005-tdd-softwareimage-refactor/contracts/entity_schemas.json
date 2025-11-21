@@ -1,0 +1,336 @@
+{
+  "SoftwareImageEntity": {
+    "description": "BCM software image entity for OS provisioning (combines kernel, filesystem, boot config)",
+
+    "required_fields": {
+      "baseType": {
+        "type": "string",
+        "value": "SoftwareImage",
+        "description": "BCM entity type identifier (fixed value)"
+      },
+      "childType": {
+        "type": "string",
+        "value": "",
+        "description": "BCM subtype identifier (always empty for SoftwareImage)"
+      },
+      "modified": {
+        "type": "boolean",
+        "value": true,
+        "description": "Flag indicating entity has modifications to persist"
+      },
+      "to_be_removed": {
+        "type": "boolean",
+        "value": false,
+        "description": "Flag indicating entity should be deleted (false for CRUD operations)"
+      },
+      "revision": {
+        "type": "string",
+        "value": "",
+        "description": "BCM revision tracking field (empty for new entities)"
+      },
+      "name": {
+        "type": "string",
+        "validation": "Length 1-255 characters",
+        "description": "Unique software image name (user-provided)"
+      },
+      "path": {
+        "type": "string",
+        "validation": "Regex: ^(/[-+_.a-zA-Z0-9]+)+/?(@\\d+)?$",
+        "description": "Absolute filesystem path where image is stored",
+        "examples": [
+          "/cm/images/my-image",
+          "/cm/images/my-image@123"
+        ]
+      }
+    },
+
+    "optional_fields_for_create": {
+      "originalImage": {
+        "type": "string (UUID)",
+        "description": "UUID of image to clone from (omit for non-clone creates)",
+        "usage": "Only include during create operation, not update",
+        "api_behavior": "BCM resets this field after clone completes"
+      },
+      "kernelVersion": {
+        "type": "string",
+        "description": "Kernel version identifier (e.g., 5.15.0-custom)",
+        "api_limitation": "May fail if set during create with originalImage (use two-step pattern)"
+      },
+      "kernelParameters": {
+        "type": "string",
+        "description": "Kernel boot parameters (e.g., 'quiet splash nomodeset')",
+        "default": ""
+      },
+      "kernelOutputConsole": {
+        "type": "string",
+        "description": "Kernel console output device (e.g., 'ttyS0,115200')",
+        "default": ""
+      },
+      "enableSOL": {
+        "type": "boolean",
+        "description": "Enable Serial-over-LAN for remote console access",
+        "default": false
+      },
+      "SOLPort": {
+        "type": "string",
+        "description": "SOL port number (typically '0')",
+        "default": "0"
+      },
+      "SOLSpeed": {
+        "type": "string",
+        "validation": "OneOf(115200, 57600, 38400, 19200, 9600, 4800, 2400, 1200)",
+        "description": "SOL serial speed in baud",
+        "default": "115200"
+      },
+      "SOLFlowControl": {
+        "type": "boolean",
+        "description": "Enable hardware flow control for SOL",
+        "default": true
+      },
+      "notes": {
+        "type": "string",
+        "description": "Free-form notes for documentation",
+        "default": ""
+      },
+      "modules": {
+        "type": "KernelModule[]",
+        "description": "Array of kernel modules to load at boot",
+        "default": []
+      }
+    },
+
+    "additional_field_for_update": {
+      "uuid": {
+        "type": "string (UUID)",
+        "description": "Software image UUID (required for updates, not for creates)",
+        "usage": "Must be included when calling updateSoftwareImage"
+      }
+    },
+
+    "computed_fields_in_response": {
+      "uuid": {
+        "type": "string (UUID)",
+        "description": "BCM-assigned unique identifier",
+        "assigned_by": "BCM during create",
+        "terraform_mapping": "id, uuid attributes"
+      },
+      "creationTime": {
+        "type": "int64 (Unix timestamp)",
+        "description": "Timestamp when image was created",
+        "assigned_by": "BCM during create"
+      },
+      "revisionID": {
+        "type": "int64",
+        "description": "BCM revision counter (increments on updates)",
+        "assigned_by": "BCM"
+      },
+      "fileOperationInProgress": {
+        "type": "boolean",
+        "description": "Whether filesystem clone operation is still running",
+        "polling_required": "Check this field until false after clone",
+        "typical_duration": "8-15 seconds"
+      },
+      "fspart": {
+        "type": "string (UUID)",
+        "description": "Filesystem partition UUID",
+        "assigned_by": "BCM during clone",
+        "nullable": true
+      },
+      "bootfspart": {
+        "type": "string (UUID)",
+        "description": "Boot filesystem partition UUID",
+        "assigned_by": "BCM during clone",
+        "nullable": true
+      },
+      "parentSoftwareImage": {
+        "type": "string (UUID)",
+        "description": "Parent image UUID (for cloned images)",
+        "assigned_by": "BCM during clone",
+        "nullable": true
+      }
+    },
+
+    "state_management": {
+      "original_image_preservation": {
+        "problem": "BCM resets originalImage to zero UUID after clone",
+        "solution": "Terraform preserves plan.original_image in state for audit trail",
+        "implementation": "Check plan for known value, use plan value if present"
+      },
+      "modules_list_guarantee": {
+        "problem": "Terraform requires lists to be known values (never Unknown or null)",
+        "solution": "Always set modules to known list (empty list if API returns null)",
+        "implementation": "Convert API response to Terraform list, default to []"
+      }
+    },
+
+    "validation_rules": {
+      "name": {
+        "rule": "Length between 1-255 characters",
+        "terraform_validator": "stringvalidator.LengthBetween(1, 255)"
+      },
+      "path": {
+        "rule": "Must match regex ^(/[-+_.a-zA-Z0-9]+)+/?(@\\d+)?$",
+        "terraform_validator": "stringvalidator.RegexMatches(...)",
+        "examples_valid": [
+          "/cm/images/my-image",
+          "/cm/images/nested/path/image",
+          "/cm/images/my-image@123"
+        ],
+        "examples_invalid": [
+          "relative/path",
+          "/cm/images/my image",
+          "/cm/images/my@image@123"
+        ]
+      },
+      "sol_speed": {
+        "rule": "Must be one of: 115200, 57600, 38400, 19200, 9600, 4800, 2400, 1200",
+        "terraform_validator": "stringvalidator.OneOf(...)"
+      }
+    }
+  },
+
+  "KernelModule": {
+    "description": "Nested object representing a kernel module to load at boot",
+
+    "required_fields": {
+      "baseType": {
+        "type": "string",
+        "value": "KernelModule",
+        "description": "BCM entity type identifier (fixed value)"
+      },
+      "childType": {
+        "type": "string",
+        "value": "",
+        "description": "BCM subtype identifier (always empty)"
+      },
+      "modified": {
+        "type": "boolean",
+        "value": true,
+        "description": "Flag indicating entity has modifications"
+      },
+      "to_be_removed": {
+        "type": "boolean",
+        "value": false,
+        "description": "Flag indicating entity should be deleted"
+      },
+      "revision": {
+        "type": "string",
+        "value": "",
+        "description": "BCM revision tracking field"
+      },
+      "name": {
+        "type": "string",
+        "validation": "Length at least 1 character",
+        "description": "Kernel module name (e.g., 'nvidia-drm')",
+        "examples": [
+          "nvidia-drm",
+          "nvme",
+          "ib_core"
+        ]
+      }
+    },
+
+    "optional_fields": {
+      "parameters": {
+        "type": "string",
+        "description": "Module parameters (e.g., 'modeset=1')",
+        "default": "",
+        "critical_note": "BCM expects string type, not null - use empty string '' if omitted"
+      }
+    },
+
+    "api_handling": {
+      "parameters_type_requirement": {
+        "bcm_expects": "string type (never null)",
+        "terraform_handling": "Convert null to empty string during entity construction",
+        "code_pattern": "if parameters.IsNull() { entity['parameters'] = '' }"
+      }
+    },
+
+    "validation_rules": {
+      "name": {
+        "rule": "Length at least 1 character",
+        "terraform_validator": "stringvalidator.LengthAtLeast(1)"
+      }
+    },
+
+    "examples": [
+      {
+        "description": "Module with parameters",
+        "terraform_hcl": {
+          "name": "nvidia-drm",
+          "parameters": "modeset=1"
+        },
+        "bcm_json": {
+          "baseType": "KernelModule",
+          "childType": "",
+          "modified": true,
+          "to_be_removed": false,
+          "revision": "",
+          "name": "nvidia-drm",
+          "parameters": "modeset=1"
+        }
+      },
+      {
+        "description": "Module without parameters",
+        "terraform_hcl": {
+          "name": "nvme"
+        },
+        "bcm_json": {
+          "baseType": "KernelModule",
+          "childType": "",
+          "modified": true,
+          "to_be_removed": false,
+          "revision": "",
+          "name": "nvme",
+          "parameters": ""
+        },
+        "note": "parameters set to empty string, not omitted"
+      }
+    ]
+  },
+
+  "helper_functions": {
+    "buildAPIEntity": {
+      "purpose": "Construct BCM API entity from Terraform state",
+      "location": "resource_cmpart_softwareimage.go:738-828",
+      "signature": "buildAPIEntity(ctx, model, diagnostics, isUpdate) map[string]interface{}",
+      "logic": [
+        "Always include required BCM fields (baseType, childType, modified, etc.)",
+        "Include UUID only if isUpdate=true",
+        "Include originalImage only if isUpdate=false AND value is set",
+        "Convert modules list to BCM array format",
+        "Set module parameters to '' if null",
+        "Handle null/Unknown checks for all optional fields"
+      ]
+    },
+    "readSoftwareImage": {
+      "purpose": "Map BCM API response to Terraform state",
+      "location": "resource_cmpart_softwareimage.go:639-736",
+      "signature": "readSoftwareImage(ctx, model, plan, diagnostics) error",
+      "logic": [
+        "Call getSoftwareImage API with name parameter",
+        "Map all API fields using helper functions (getStringValue, etc.)",
+        "Preserve plan.original_image if plan provided and value is Known",
+        "Set modules to known list (empty list if API returns null)",
+        "Update all computed fields from API response"
+      ]
+    },
+    "getStringValue": {
+      "purpose": "Null-safe string extraction from map[string]interface{}",
+      "location": "data_source_cmpart_softwareimages.go:399-431",
+      "returns": "types.String (null if missing/invalid)"
+    },
+    "getBoolValue": {
+      "purpose": "Null-safe bool extraction from map[string]interface{}",
+      "location": "data_source_cmpart_softwareimages.go:399-431",
+      "returns": "types.Bool (null if missing/invalid)"
+    },
+    "getInt64Value": {
+      "purpose": "Null-safe int64 extraction from map[string]interface{}",
+      "location": "data_source_cmpart_softwareimages.go:399-431",
+      "returns": "types.Int64 (null if missing/invalid)",
+      "handles": "float64, int64, int types from JSON unmarshaling"
+    }
+  }
+}
