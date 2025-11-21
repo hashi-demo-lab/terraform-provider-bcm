@@ -173,6 +173,108 @@ data "bcm_resource" "test" {
 }
 ```
 
+### Drift Detection Test Pattern
+
+Tests verifying that the provider's Read operation detects external changes follow this pattern:
+
+**Test Helpers** (`internal/provider/test_helpers.go`):
+- `createTestBCMClient(t)` - Creates authenticated BCM client for tests
+- `getResourceUUIDByName(t, service, method, name)` - Query BCM API for UUID by resource name
+- `verifyResourceDeleted(ctx, client, service, method, id, retries)` - Exponential backoff deletion verification
+- `generateUniqueTestName(prefix)` - Create timestamped unique test names
+
+**Required Imports:**
+```go
+import (
+    "github.com/hashicorp/terraform-plugin-testing/helper/resource"
+    "github.com/hashicorp/terraform-plugin-testing/plancheck"
+)
+```
+
+**Three-Step Test Structure:**
+
+```go
+Steps: []resource.TestStep{
+    // Step 1: Create resource with initial value
+    {
+        Config: testAccResourceConfig(name, "initial-value"),
+        Check: resource.ComposeAggregateTestCheckFunc(
+            resource.TestCheckResourceAttr("bcm_resource.test", "attr", "initial-value"),
+        ),
+    },
+    // Step 2: Modify resource externally via BCM API (drift)
+    {
+        PreConfig: func() {
+            client := createTestBCMClient(t)
+            ctx := context.Background()
+
+            // Get resource UUID by name
+            uuid := getResourceUUIDByName(t, "service", "getMethod", name)
+
+            // Fetch full resource data
+            body, _ := client.CallJSONRPC(ctx, "service", "getMethod", name)
+            var resourceData map[string]interface{}
+            json.Unmarshal(body, &resourceData)
+
+            // Modify field externally (snake_case → camelCase mapping!)
+            resourceData["camelCaseField"] = "modified-value"
+
+            // Wrap in BCM API entity structure
+            entity := map[string]interface{}{
+                "baseType":      "ResourceType",
+                "childType":     "",
+                "modified":      true,
+                "to_be_removed": false,
+                "revision":      "",
+                "uuid":          uuid,
+            }
+            for k, v := range resourceData {
+                if k != "uuid" {
+                    entity[k] = v
+                }
+            }
+
+            // Update via BCM API
+            client.CallJSONRPC(ctx, "service", "updateMethod", entity, false)
+
+            // Wait for eventual consistency
+            time.Sleep(2 * time.Second)
+
+            t.Logf("[DEBUG] Modified attr externally to: %v", entity["camelCaseField"])
+        },
+        Config: testAccResourceConfig(name, "initial-value"),
+        ConfigPlanChecks: resource.ConfigPlanChecks{
+            PreApply: []plancheck.PlanCheck{
+                plancheck.ExpectNonEmptyPlan(),
+            },
+        },
+    },
+    // Step 3: Terraform restores desired state
+    {
+        Config: testAccResourceConfig(name, "initial-value"),
+        Check: resource.ComposeAggregateTestCheckFunc(
+            resource.TestCheckResourceAttr("bcm_resource.test", "attr", "initial-value"),
+        ),
+    },
+}
+```
+
+**Key Implementation Details:**
+- **BCM Entity Structure**: Updates require full entity with baseType/childType/modified/to_be_removed/revision fields
+- **Field Name Mapping**: Terraform snake_case → BCM API camelCase (e.g., `kernel_parameters` → `kernelParameters`)
+- **Eventual Consistency**: 2-second sleep after BCM updates for changes to propagate
+- **UUID Lookup**: Query BCM API using getSomething(name) with args parameter
+- **ConfigPlanChecks**: Use `plancheck.ExpectNonEmptyPlan()` to verify drift detected
+
+**Example Tests:**
+- `TestAccCMPartSoftwareImage_DriftKernelParameters` (resource_cmpart_softwareimage_test.go)
+- `TestAccCMDeviceCategory_DriftNotes` (resource_cmdevice_category_test.go)
+
+**Running Drift Tests:**
+```bash
+TF_ACC=1 go test -v -timeout 120m ./internal/provider/ -run "Drift"
+```
+
 ## TDD Workflow
 
 This project follows **RED-GREEN-REFACTOR** cycles with parallel execution:

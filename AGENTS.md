@@ -471,6 +471,184 @@ username = "admin"
 \`
 `
 
+Enhanced CheckDestroy and PreCheck Patterns
+
+// Idempotent CheckDestroy implementation with exponential backoff
+idempotent_check_destroy: `
+// CheckDestroy verifies resources are deleted after test completes
+// Must be idempotent and handle eventual consistency
+func testAccCheckCMPartSoftwareImageDestroy(s *terraform.State) error {
+    client := createTestBCMClient(&testing.T{})
+    ctx := context.Background()
+
+    for _, rs := range s.RootModule().Resources {
+        if rs.Type != "bcm_cmpart_softwareimage" {
+            continue
+        }
+
+        imageName := rs.Primary.Attributes["name"]
+
+        // Use exponential backoff verification (4 retries: 1s, 2s, 4s, 8s = 15s total)
+        deleted, err := verifyResourceDeleted(ctx, client, "CMPart", "getSoftwareImage", imageName, 4)
+
+        if err != nil {
+            // API errors during verification are logged but not fatal
+            // Resource may already be deleted or API temporarily unavailable
+            fmt.Printf("[DEBUG] CheckDestroy verification error for %s: %v\n", imageName, err)
+        }
+
+        if !deleted {
+            // Resource still exists after retries - this is the ONLY error condition
+            return fmt.Errorf("Software image %s still exists after destroy", imageName)
+        }
+    }
+
+    return nil
+}
+
+// verifyResourceDeleted is a shared helper with exponential backoff
+// Located in test_helpers.go for reuse across all resource tests
+func verifyResourceDeleted(ctx context.Context, client *BCMClient, service, method, identifier string, maxRetries int) (bool, error) {
+    waitTime := 1 * time.Second
+
+    for retry := 0; retry < maxRetries; retry++ {
+        time.Sleep(waitTime)
+
+        // Attempt to read resource
+        body, err := client.CallJSONRPC(ctx, service, method, identifier)
+
+        // Error response indicates resource not found (deleted)
+        if err != nil {
+            return true, nil
+        }
+
+        // Empty response indicates resource deleted
+        if len(body) == 0 {
+            return true, nil
+        }
+
+        // Empty JSON object indicates resource deleted
+        var data map[string]interface{}
+        if json.Unmarshal(body, &data) == nil && len(data) == 0 {
+            return true, nil
+        }
+
+        // Resource still exists, exponential backoff
+        waitTime *= 2
+    }
+
+    // Resource still exists after all retries
+    return false, nil
+}
+`
+
+// PreCheck with cleanup function for leftover test resources
+precheck_with_cleanup: `
+// testAccPreCheckCMPartSoftwareImage verifies environment and cleans up leftover resources
+func testAccPreCheckCMPartSoftwareImage(t *testing.T) {
+    // Standard provider credential checks
+    testAccPreCheck(t)
+
+    // Cleanup any leftover test resources from previous failed runs
+    cleanupLeftoverSoftwareImages(t)
+}
+
+// cleanupLeftoverSoftwareImages removes test resources matching pattern
+func cleanupLeftoverSoftwareImages(t *testing.T) {
+    client := createTestBCMClient(t)
+    ctx := context.Background()
+
+    // Query all software images
+    body, err := client.CallJSONRPC(ctx, "CMPart", "getSoftwareImages")
+    if err != nil {
+        t.Logf("[WARN] Failed to query software images for cleanup: %v", err)
+        return
+    }
+
+    var images []map[string]interface{}
+    if err := json.Unmarshal(body, &images); err != nil {
+        t.Logf("[WARN] Failed to parse software images: %v", err)
+        return
+    }
+
+    // Find and remove test images (prefix "test-")
+    var testImages []string
+    for _, img := range images {
+        if name, ok := img["name"].(string); ok {
+            if strings.HasPrefix(name, "test-") {
+                testImages = append(testImages, name)
+            }
+        }
+    }
+
+    if len(testImages) > 0 {
+        t.Logf("[INFO] Cleaning up %d leftover test images", len(testImages))
+
+        // BCM API expects array of names
+        _, err := client.CallJSONRPC(ctx, "CMPart", "removeSoftwareImages", testImages, false)
+        if err != nil {
+            t.Logf("[WARN] Failed to remove test images: %v", err)
+        }
+
+        // Wait for cleanup to complete
+        time.Sleep(2 * time.Second)
+    }
+}
+`
+
+// Shared test helper functions (test_helpers.go)
+shared_test_helpers: `
+// createTestBCMClient creates authenticated BCM client for test use
+// Used by: CheckDestroy, PreCheck cleanup, drift detection PreConfig
+func createTestBCMClient(t *testing.T) *BCMClient {
+    endpoint := os.Getenv("BCM_ENDPOINT")
+    username := os.Getenv("BCM_USERNAME")
+    password := os.Getenv("BCM_PASSWORD")
+
+    if endpoint == "" || username == "" || password == "" {
+        t.Fatalf("BCM credentials not set (BCM_ENDPOINT, BCM_USERNAME, BCM_PASSWORD)")
+    }
+
+    client, err := NewBCMClient(context.Background(), endpoint, username, password, true, 30)
+    if err != nil {
+        t.Fatalf("Failed to create BCM client: %v", err)
+    }
+
+    return client
+}
+
+// getResourceUUIDByName queries BCM API for resource UUID by name
+// Used by: Drift detection tests to find UUID for external modifications
+func getResourceUUIDByName(t *testing.T, service, method, name string) string {
+    client := createTestBCMClient(t)
+    ctx := context.Background()
+
+    body, err := client.CallJSONRPC(ctx, service, method, name)
+    if err != nil {
+        t.Fatalf("Failed to query resource %s via %s.%s: %v", name, service, method, err)
+    }
+
+    var resourceData map[string]interface{}
+    if err := json.Unmarshal(body, &resourceData); err != nil {
+        t.Fatalf("Failed to parse resource response: %v", err)
+    }
+
+    uuid, ok := resourceData["uuid"].(string)
+    if !ok || uuid == "" {
+        t.Fatalf("Resource %s does not have a valid uuid field", name)
+    }
+
+    return uuid
+}
+
+// generateUniqueTestName creates unique resource names with timestamp
+// Prevents conflicts in parallel tests or after cleanup failures
+func generateUniqueTestName(prefix string) string {
+    timestamp := time.Now().Format("20060102-150405")
+    return prefix + "-" + timestamp
+}
+`
+
 🐝 TDD SWARM ORCHESTRATION
 TDD-Specialized Agent Roles for Terraform Providers
 test_designer:
@@ -850,3 +1028,13 @@ Terraform Registry - Publishing and distribution
 ❌ Tests dependent on external state
 
 Test infrastucture is available for you to automatically execute the tests.
+
+### Recommendations
+
+Testing a provider-defined function should ensure at least the following behaviors are covered:
+
+Known values return the expected results.
+For any list, map, object, and set parameters, null values for collection elements or object attributes. The AllowNullValue parameter setting does not affect Terraform sending these types of null values.
+If any parameters enable AllowNullValue, null values for those arguments.
+If any parameters enable AllowUnknownValues, unknown values for those arguments.
+Any errors, such as argument validation errors.
