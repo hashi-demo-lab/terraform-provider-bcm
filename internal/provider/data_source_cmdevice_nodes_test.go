@@ -6,9 +6,13 @@ package provider
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
+	"github.com/hashicorp/terraform-plugin-testing/statecheck"
+	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
 )
 
 func TestAccCMDeviceNodesDataSource_Basic(t *testing.T) {
@@ -22,6 +26,24 @@ func TestAccCMDeviceNodesDataSource_Basic(t *testing.T) {
 					resource.TestCheckResourceAttrSet("data.bcm_cmdevice_nodes.test", "id"),
 					resource.TestCheckResourceAttrSet("data.bcm_cmdevice_nodes.test", "nodes.#"),
 				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmdevice_nodes.test",
+						tfjsonpath.New("id"),
+						knownvalue.NotNull(),
+					),
+					// Verify first node attributes
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmdevice_nodes.test",
+						tfjsonpath.New("nodes").AtSliceIndex(0).AtMapKey("uuid"),
+						knownvalue.NotNull(),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmdevice_nodes.test",
+						tfjsonpath.New("nodes").AtSliceIndex(0).AtMapKey("hostname"),
+						knownvalue.NotNull(),
+					),
+				},
 			},
 		},
 	})
@@ -55,6 +77,19 @@ func TestAccCMDeviceNodesDataSource_FilterByType(t *testing.T) {
 					resource.TestCheckResourceAttrSet("data.bcm_cmdevice_nodes.test", "id"),
 					resource.TestCheckResourceAttrSet("data.bcm_cmdevice_nodes.test", "nodes.#"),
 				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmdevice_nodes.test",
+						tfjsonpath.New("id"),
+						knownvalue.NotNull(),
+					),
+					// Verify filtered nodes match child_type filter
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmdevice_nodes.test",
+						tfjsonpath.New("nodes").AtSliceIndex(0).AtMapKey("child_type"),
+						knownvalue.StringExact("PhysicalNode"),
+					),
+				},
 			},
 		},
 	})
@@ -71,7 +106,7 @@ provider "bcm" {
 
 data "bcm_cmdevice_nodes" "test" {
   filter {
-    node_type = "PhysicalNode"
+    child_type = "PhysicalNode"
   }
 }
 `,
@@ -92,6 +127,19 @@ func TestAccCMDeviceNodesDataSource_FilterByHostname(t *testing.T) {
 					resource.TestCheckResourceAttrSet("data.bcm_cmdevice_nodes.test", "id"),
 					resource.TestCheckResourceAttrSet("data.bcm_cmdevice_nodes.test", "nodes.#"),
 				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmdevice_nodes.test",
+						tfjsonpath.New("id"),
+						knownvalue.NotNull(),
+					),
+					// Verify filtered nodes match hostname_pattern filter
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmdevice_nodes.test",
+						tfjsonpath.New("nodes").AtSliceIndex(0).AtMapKey("hostname"),
+						knownvalue.StringRegexp(regexp.MustCompile("node")),
+					),
+				},
 			},
 		},
 	})
@@ -118,21 +166,58 @@ data "bcm_cmdevice_nodes" "test" {
 	)
 }
 
-func TestAccCMDeviceNodesDataSource_NestedAttributes(t *testing.T) {
+func TestAccCMDeviceNodesDataSource_FilterMultiple(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccCMDeviceNodesDataSourceConfig_basic(),
+				Config: testAccCMDeviceNodesDataSourceConfig_filterMultiple(),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttrSet("data.bcm_cmdevice_nodes.test", "id"),
 					resource.TestCheckResourceAttrSet("data.bcm_cmdevice_nodes.test", "nodes.#"),
-					// Verify nested attributes exist (will validate structure in REFACTOR phase)
-					resource.TestCheckResourceAttrSet("data.bcm_cmdevice_nodes.test", "nodes.0.interfaces.#"),
-					resource.TestCheckResourceAttrSet("data.bcm_cmdevice_nodes.test", "nodes.0.roles.#"),
 				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmdevice_nodes.test",
+						tfjsonpath.New("id"),
+						knownvalue.NotNull(),
+					),
+					// Verify filtered nodes match both child_type and hostname_pattern filters
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmdevice_nodes.test",
+						tfjsonpath.New("nodes").AtSliceIndex(0).AtMapKey("child_type"),
+						knownvalue.StringExact("PhysicalNode"),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmdevice_nodes.test",
+						tfjsonpath.New("nodes").AtSliceIndex(0).AtMapKey("hostname"),
+						knownvalue.StringRegexp(regexp.MustCompile("node")),
+					),
+				},
 			},
 		},
 	})
+}
+
+func testAccCMDeviceNodesDataSourceConfig_filterMultiple() string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmdevice_nodes" "test" {
+  filter {
+    child_type        = "PhysicalNode"
+    hostname_pattern = "node"
+  }
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+	)
 }

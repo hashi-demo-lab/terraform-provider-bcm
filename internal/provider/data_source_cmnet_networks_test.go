@@ -6,9 +6,13 @@ package provider
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
+	"github.com/hashicorp/terraform-plugin-testing/statecheck"
+	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
 )
 
 func TestAccCMNetNetworksDataSource_Basic(t *testing.T) {
@@ -22,10 +26,8 @@ func TestAccCMNetNetworksDataSource_Basic(t *testing.T) {
 				Check: resource.ComposeAggregateTestCheckFunc(
 					// Verify data source ID is set
 					resource.TestCheckResourceAttrSet("data.bcm_cmnet_networks.test", "id"),
-					// Verify networks list is populated
+					// Verify networks list is populated (dynamic - don't hardcode count)
 					resource.TestCheckResourceAttrSet("data.bcm_cmnet_networks.test", "networks.#"),
-					// Verify at least one network exists (based on research findings)
-					resource.TestCheckResourceAttr("data.bcm_cmnet_networks.test", "networks.#", "3"),
 					// Verify first network has required attributes
 					resource.TestCheckResourceAttrSet("data.bcm_cmnet_networks.test", "networks.0.id"),
 					resource.TestCheckResourceAttrSet("data.bcm_cmnet_networks.test", "networks.0.uuid"),
@@ -33,6 +35,25 @@ func TestAccCMNetNetworksDataSource_Basic(t *testing.T) {
 					resource.TestCheckResourceAttrSet("data.bcm_cmnet_networks.test", "networks.0.base_address"),
 					resource.TestCheckResourceAttrSet("data.bcm_cmnet_networks.test", "networks.0.base_type"),
 				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					// Modern state verification - verify network attributes are populated
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmnet_networks.test",
+						tfjsonpath.New("id"),
+						knownvalue.NotNull(),
+					),
+					// Verify first network attributes
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmnet_networks.test",
+						tfjsonpath.New("networks").AtSliceIndex(0).AtMapKey("uuid"),
+						knownvalue.NotNull(),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmnet_networks.test",
+						tfjsonpath.New("networks").AtSliceIndex(0).AtMapKey("name"),
+						knownvalue.NotNull(),
+					),
+				},
 			},
 		},
 	})
@@ -43,17 +64,28 @@ func TestAccCMNetNetworksDataSource_NameFilter(t *testing.T) {
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
-			// Filter by name pattern "management" (should match "managementnet")
+			// Filter by name pattern "management" (should match networks containing "management")
 			{
 				Config: testAccCMNetNetworksDataSourceConfig_NameFilter("management"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					// Verify data source ID is set
 					resource.TestCheckResourceAttrSet("data.bcm_cmnet_networks.filtered", "id"),
-					// Verify at least one network matches (managementnet exists)
-					resource.TestCheckResourceAttr("data.bcm_cmnet_networks.filtered", "networks.#", "1"),
-					// Verify the matched network contains "management" in name
-					resource.TestCheckResourceAttr("data.bcm_cmnet_networks.filtered", "networks.0.name", "managementnet"),
+					// Verify networks list is populated (dynamic - don't hardcode count)
+					resource.TestCheckResourceAttrSet("data.bcm_cmnet_networks.filtered", "networks.#"),
 				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmnet_networks.filtered",
+						tfjsonpath.New("id"),
+						knownvalue.NotNull(),
+					),
+					// Verify filtered networks match the name pattern
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmnet_networks.filtered",
+						tfjsonpath.New("networks").AtSliceIndex(0).AtMapKey("name"),
+						knownvalue.StringRegexp(regexp.MustCompile("management")),
+					),
+				},
 			},
 		},
 	})
@@ -70,11 +102,22 @@ func TestAccCMNetNetworksDataSource_DHCPFilter(t *testing.T) {
 				Check: resource.ComposeAggregateTestCheckFunc(
 					// Verify data source ID is set
 					resource.TestCheckResourceAttrSet("data.bcm_cmnet_networks.dhcp", "id"),
-					// Verify networks with DHCP are returned (managementnet and internalnet)
-					resource.TestCheckResourceAttr("data.bcm_cmnet_networks.dhcp", "networks.#", "2"),
-					// Verify first network has DHCP enabled
-					resource.TestCheckResourceAttr("data.bcm_cmnet_networks.dhcp", "networks.0.dhcp_enabled", "true"),
+					// Verify networks list is populated (dynamic - don't hardcode count)
+					resource.TestCheckResourceAttrSet("data.bcm_cmnet_networks.dhcp", "networks.#"),
 				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmnet_networks.dhcp",
+						tfjsonpath.New("id"),
+						knownvalue.NotNull(),
+					),
+					// Verify filtered networks have DHCP enabled matching filter value
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmnet_networks.dhcp",
+						tfjsonpath.New("networks").AtSliceIndex(0).AtMapKey("dhcp_enabled"),
+						knownvalue.Bool(true),
+					),
+				},
 			},
 		},
 	})
@@ -94,6 +137,19 @@ func TestAccCMNetNetworksDataSource_NoMatch(t *testing.T) {
 					// Verify no networks match (empty list, not an error)
 					resource.TestCheckResourceAttr("data.bcm_cmnet_networks.filtered", "networks.#", "0"),
 				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmnet_networks.filtered",
+						tfjsonpath.New("id"),
+						knownvalue.NotNull(),
+					),
+					// Verify empty result list
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmnet_networks.filtered",
+						tfjsonpath.New("networks"),
+						knownvalue.ListSizeExact(0),
+					),
+				},
 			},
 		},
 	})

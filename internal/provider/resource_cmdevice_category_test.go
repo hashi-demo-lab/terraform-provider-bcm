@@ -11,9 +11,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-testing/compare"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
 	"github.com/hashicorp/terraform-plugin-testing/plancheck"
+	"github.com/hashicorp/terraform-plugin-testing/statecheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
+	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
 )
 
 // Test helper: CheckDestroy verifies all categories are deleted
@@ -106,6 +110,9 @@ func TestAccCMDeviceCategoryResource_Basic(t *testing.T) {
 	// Clean up any leftover categories before running test
 	testAccCMDeviceCategoryPreCheck(t, categoryName)
 
+	// ID consistency tracking across all CRUD operations
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -121,6 +128,38 @@ func TestAccCMDeviceCategoryResource_Basic(t *testing.T) {
 					resource.TestCheckResourceAttrSet("bcm_cmdevice_category.test", "management_network"),
 					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "base_type", "Category"),
 				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					// Modern state verification with type-safe matchers
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(categoryName),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("uuid"),
+						knownvalue.NotNull(),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+						knownvalue.NotNull(),
+					),
+					// Track ID for consistency across operations
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+			// Idempotency check after Create
+			{
+				Config: testAccCMDeviceCategoryResourceConfig(categoryName),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
 			},
 			// ImportState testing
 			{
@@ -139,6 +178,37 @@ func TestAccCMDeviceCategoryResource_Basic(t *testing.T) {
 					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "notes", "Updated test category"),
 					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "kernel_parameters", "quiet splash console=ttyS0"),
 				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(categoryName),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("notes"),
+						knownvalue.StringExact("Updated test category"),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("kernel_parameters"),
+						knownvalue.StringExact("quiet splash console=ttyS0"),
+					),
+					// Verify ID unchanged after update
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+			// Idempotency check after Update
+			{
+				Config: testAccCMDeviceCategoryResourceConfig_Updated(categoryName),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
 			},
 			// Delete testing automatically occurs in TestCase
 		},
@@ -234,7 +304,7 @@ resource "bcm_cmdevice_category" "test" {
 
 // T031-T032: Import acceptance test with ImportState step
 func TestAccCMDeviceCategoryResource_Import(t *testing.T) {
-	categoryName := fmt.Sprintf("test-import-category-%d", time.Now().Unix())
+	categoryName := generateUniqueTestName("test-import-category")
 
 	// Cleanup any leftover test categories
 	testAccCMDeviceCategoryPreCheck(t, categoryName)
@@ -254,6 +324,33 @@ func TestAccCMDeviceCategoryResource_Import(t *testing.T) {
 					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "notes", "Test category for acceptance testing"),
 					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "kernel_parameters", "quiet splash"),
 				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(categoryName),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("notes"),
+						knownvalue.StringExact("Test category for acceptance testing"),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("kernel_parameters"),
+						knownvalue.StringExact("quiet splash"),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("uuid"),
+						knownvalue.NotNull(),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+						knownvalue.NotNull(),
+					),
+				},
 			},
 			// ImportState testing
 			{
@@ -270,7 +367,7 @@ func TestAccCMDeviceCategoryResource_Import(t *testing.T) {
 // T039-T041: Force parameter acceptance test
 // This test validates that the force parameter is accepted and processed correctly
 func TestAccCMDeviceCategoryResource_ForceParameter(t *testing.T) {
-	categoryName := fmt.Sprintf("test-force-param-%d", time.Now().Unix())
+	categoryName := generateUniqueTestName("test-force-param")
 
 	// Cleanup any leftover test categories
 	testAccCMDeviceCategoryPreCheck(t, categoryName)
@@ -288,6 +385,32 @@ func TestAccCMDeviceCategoryResource_ForceParameter(t *testing.T) {
 					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "force", "false"),
 					resource.TestCheckResourceAttrSet("bcm_cmdevice_category.test", "id"),
 				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(categoryName),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("force"),
+						knownvalue.Bool(false),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+						knownvalue.NotNull(),
+					),
+				},
+			},
+			// Idempotency check after Create
+			{
+				Config: testAccCMDeviceCategoryResourceConfig_Force(categoryName, false),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
 			},
 			// Update with force=true
 			{
@@ -296,6 +419,27 @@ func TestAccCMDeviceCategoryResource_ForceParameter(t *testing.T) {
 					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "name", categoryName),
 					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "force", "true"),
 				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(categoryName),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("force"),
+						knownvalue.Bool(true),
+					),
+				},
+			},
+			// Idempotency check after Update
+			{
+				Config: testAccCMDeviceCategoryResourceConfig_Force(categoryName, true),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
 			},
 			// Note: Testing actual "category in use" scenario requires manual node assignment
 			// This test validates the force parameter is accepted and processed in all operations
@@ -370,6 +514,23 @@ func TestAccCMDeviceCategory_DriftNotes(t *testing.T) {
 					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "notes", "Production"),
 					resource.TestCheckResourceAttrSet("bcm_cmdevice_category.test", "uuid"),
 				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(categoryName),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("notes"),
+						knownvalue.StringExact("Production"),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("uuid"),
+						knownvalue.NotNull(),
+					),
+				},
 			},
 			// Step 2: Modify notes externally via BCM API, verify drift detected
 			{
@@ -438,6 +599,13 @@ func TestAccCMDeviceCategory_DriftNotes(t *testing.T) {
 					// Verify drift was corrected and state matches config
 					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "notes", "Production"),
 				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("notes"),
+						knownvalue.StringExact("Production"),
+					),
+				},
 			},
 		},
 	})
@@ -467,6 +635,23 @@ func TestAccCMDeviceCategory_DestroyWithForce(t *testing.T) {
 					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "force", "true"),
 					resource.TestCheckResourceAttrSet("bcm_cmdevice_category.test", "uuid"),
 				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(categoryName),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("force"),
+						knownvalue.Bool(true),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("uuid"),
+						knownvalue.NotNull(),
+					),
+				},
 			},
 			// Step 2: Destroy happens automatically with force=true
 			// CheckDestroy should pass even if category has associations
@@ -495,6 +680,18 @@ func TestAccCMDeviceCategory_DestroyExternalDelete(t *testing.T) {
 					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "name", categoryName),
 					resource.TestCheckResourceAttrSet("bcm_cmdevice_category.test", "uuid"),
 				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(categoryName),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("uuid"),
+						knownvalue.NotNull(),
+					),
+				},
 			},
 			// Step 2: Delete externally via BCM API, then let Terraform destroy
 			{

@@ -29,6 +29,7 @@ type CMDeviceCategoriesDataSource struct {
 
 // CMDeviceCategoriesDataSourceModel describes the data source data model.
 type CMDeviceCategoriesDataSourceModel struct {
+	ID         types.String           `tfsdk:"id"`
 	Name       types.String           `tfsdk:"name"`
 	Categories []CategoryDataModel    `tfsdk:"categories"`
 }
@@ -80,6 +81,10 @@ func (d *CMDeviceCategoriesDataSource) Schema(ctx context.Context, req datasourc
 		MarkdownDescription: "Fetches a list of node categories from BCM CMDevice API. Categories define configuration templates for nodes including software images, disk setup, boot configuration, and network settings.",
 
 		Attributes: map[string]schema.Attribute{
+			"id": schema.StringAttribute{
+				MarkdownDescription: "Data source identifier",
+				Computed:            true,
+			},
 			"name": schema.StringAttribute{
 				MarkdownDescription: "Optional filter to return only categories matching this name exactly",
 				Optional:            true,
@@ -360,6 +365,9 @@ func (d *CMDeviceCategoriesDataSource) Read(ctx context.Context, req datasource.
 	tflog.Trace(ctx, "Mapped categories to Terraform state", map[string]interface{}{
 		"count": len(data.Categories),
 	})
+
+	// Set data source ID (use timestamp as unique identifier)
+	data.ID = types.StringValue("categories")
 
 	// Save data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
