@@ -344,3 +344,104 @@ resource "bcm_cmdevice_category" "test" {
 		force,
 	)
 }
+
+// ========================================
+// Phase 3: Drift Detection Tests
+// ========================================
+
+// TestAccCMDeviceCategory_DriftNotes tests drift detection for notes attribute
+// Phase 3 - Task T012 (RED): This test should FAIL initially (no PreConfig implementation yet)
+func TestAccCMDeviceCategory_DriftNotes(t *testing.T) {
+	categoryName := generateUniqueTestName("test-drift-notes")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccCMDeviceCategoryPreCheck(t, categoryName)
+		},
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceCategoryDestroy,
+		Steps: []resource.TestStep{
+			// Step 1: Create resource with initial notes
+			{
+				Config: testAccCMDeviceCategoryResourceConfig_DriftNotes(categoryName, "Production"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "name", categoryName),
+					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "notes", "Production"),
+					resource.TestCheckResourceAttrSet("bcm_cmdevice_category.test", "uuid"),
+				),
+			},
+			// Step 2: Modify notes externally via BCM API, verify drift detected
+			{
+				PreConfig: func() {
+					// TODO T014: Implement PreConfig to modify via BCM API
+					// This will:
+					// 1. Create BCM client with createTestBCMClient(t)
+					// 2. Query BCM API to get UUID by category name
+					// 3. Call updateCategory API to change notes to "Staging"
+					// For now, this will fail with "no PreConfig logic implemented"
+				},
+				Config: testAccCMDeviceCategoryResourceConfig_DriftNotes(categoryName, "Production"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					// After external modification, Terraform should detect drift
+					// State should reflect the BCM API value (modified value)
+					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "notes", "Staging"),
+				),
+				// CRITICAL: This tells Terraform we expect the plan to be non-empty
+				// because drift was detected
+				ExpectNonEmptyPlan: true,
+			},
+			// Step 3: Restore desired state (Terraform applies config to fix drift)
+			{
+				Config: testAccCMDeviceCategoryResourceConfig_DriftNotes(categoryName, "Production"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					// Verify drift was corrected and state matches config
+					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "notes", "Production"),
+				),
+			},
+		},
+	})
+}
+
+// Helper function for drift detection test configuration
+// Phase 3 - Task T016: Config function with parameterized notes
+func testAccCMDeviceCategoryResourceConfig_DriftNotes(name, notes string) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+# Lookup required parent software image
+data "bcm_cmpart_softwareimages" "default" {}
+
+locals {
+  software_image_uuid = [for img in data.bcm_cmpart_softwareimages.default.images : img.uuid if img.name == "default-image"][0]
+}
+
+# Lookup management network
+data "bcm_cmnet_networks" "all" {}
+
+locals {
+  management_network_uuid = data.bcm_cmnet_networks.all.networks[0].uuid
+}
+
+resource "bcm_cmdevice_category" "test" {
+  name               = %[4]q
+  management_network = local.management_network_uuid
+  notes              = %[5]q
+
+  # BCM requires parent software image
+  software_image_proxy = {
+    parent_software_image = local.software_image_uuid
+  }
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		name,
+		notes,
+	)
+}
