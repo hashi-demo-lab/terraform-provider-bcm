@@ -10,10 +10,11 @@
 # 2. Update image with kernel_version after creation
 
 # Configure the BCM provider
+# Authentication can be provided via environment variables:
+# export BCM_ENDPOINT="https://bcm.example.com:8081"
+# export BCM_USERNAME="admin"
+# export BCM_PASSWORD="your-password"
 provider "bcm" {
-  endpoint             = "https://bcm.example.com:8081"
-  username             = "admin"
-  password             = var.bcm_password
   insecure_skip_verify = true
 }
 

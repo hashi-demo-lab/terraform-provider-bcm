@@ -5,6 +5,7 @@ package provider
 
 import (
 	"context"
+	"os"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/ephemeral"
@@ -47,16 +48,16 @@ func (p *BCMProvider) Schema(ctx context.Context, req provider.SchemaRequest, re
 		MarkdownDescription: "Terraform provider for Nvidia BCM (BlueField Configuration Manager)",
 		Attributes: map[string]schema.Attribute{
 			"endpoint": schema.StringAttribute{
-				MarkdownDescription: "BCM JSON-RPC API endpoint (e.g., https://172.21.15.254:8081)",
-				Required:            true,
+				MarkdownDescription: "BCM JSON-RPC API endpoint (e.g., https://172.21.15.254:8081). Can also be set via BCM_ENDPOINT environment variable.",
+				Optional:            true,
 			},
 			"username": schema.StringAttribute{
-				MarkdownDescription: "BCM username for authentication",
-				Required:            true,
+				MarkdownDescription: "BCM username for authentication. Can also be set via BCM_USERNAME environment variable.",
+				Optional:            true,
 			},
 			"password": schema.StringAttribute{
-				MarkdownDescription: "BCM password for authentication",
-				Required:            true,
+				MarkdownDescription: "BCM password for authentication. Can also be set via BCM_PASSWORD environment variable.",
+				Optional:            true,
 				Sensitive:           true,
 			},
 			"insecure_skip_verify": schema.BoolAttribute{
@@ -80,8 +81,24 @@ func (p *BCMProvider) Configure(ctx context.Context, req provider.ConfigureReque
 		return
 	}
 
+	// Read from environment variables if not set in configuration
+	endpoint := data.Endpoint.ValueString()
+	if endpoint == "" {
+		endpoint = os.Getenv("BCM_ENDPOINT")
+	}
+
+	username := data.Username.ValueString()
+	if username == "" {
+		username = os.Getenv("BCM_USERNAME")
+	}
+
+	password := data.Password.ValueString()
+	if password == "" {
+		password = os.Getenv("BCM_PASSWORD")
+	}
+
 	// Validate required fields
-	if data.Endpoint.IsNull() || data.Endpoint.ValueString() == "" {
+	if endpoint == "" {
 		resp.Diagnostics.AddError(
 			"Missing BCM Endpoint",
 			"The provider cannot create the BCM client as there is a missing or empty value for the BCM endpoint. "+
@@ -89,7 +106,7 @@ func (p *BCMProvider) Configure(ctx context.Context, req provider.ConfigureReque
 		)
 	}
 
-	if data.Username.IsNull() || data.Username.ValueString() == "" {
+	if username == "" {
 		resp.Diagnostics.AddError(
 			"Missing BCM Username",
 			"The provider cannot create the BCM client as there is a missing or empty value for the BCM username. "+
@@ -97,7 +114,7 @@ func (p *BCMProvider) Configure(ctx context.Context, req provider.ConfigureReque
 		)
 	}
 
-	if data.Password.IsNull() || data.Password.ValueString() == "" {
+	if password == "" {
 		resp.Diagnostics.AddError(
 			"Missing BCM Password",
 			"The provider cannot create the BCM client as there is a missing or empty value for the BCM password. "+
@@ -123,9 +140,9 @@ func (p *BCMProvider) Configure(ctx context.Context, req provider.ConfigureReque
 	// Create BCM client with cookie-based authentication
 	client, err := NewBCMClient(
 		ctx,
-		data.Endpoint.ValueString(),
-		data.Username.ValueString(),
-		data.Password.ValueString(),
+		endpoint,
+		username,
+		password,
 		insecureSkipVerify,
 		int(timeout),
 	)

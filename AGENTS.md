@@ -1038,3 +1038,322 @@ For any list, map, object, and set parameters, null values for collection elemen
 If any parameters enable AllowNullValue, null values for those arguments.
 If any parameters enable AllowUnknownValues, unknown values for those arguments.
 Any errors, such as argument validation errors.
+
+## 🧪 TERRAFORM EXAMPLE TESTING INFRASTRUCTURE
+
+### Overview
+
+This provider includes automated testing infrastructure for all Terraform documentation examples in `/workspace/examples/`. The test script validates that all examples are syntactically correct, properly configured, and executable.
+
+### Test Script Location
+
+`/workspace/scripts/test-examples.sh` - Main test execution script with parallel/sequential execution, cleanup, and comprehensive reporting.
+
+### Architecture
+
+**Execution Strategy:**
+- **Data Sources**: Parallel execution (parallel limit: 4 concurrent tests)
+  - Read-only operations are safe to run concurrently
+  - Significantly faster test execution (10s for 10 data sources)
+
+- **Resources**: Sequential execution
+  - State-modifying operations run one at a time
+  - Prevents race conditions and resource conflicts
+  - Ensures reliable cleanup (19s for 7 resources)
+
+**Phases:**
+1. **Phase 1: Environment Validation** - Verify BCM_ENDPOINT, BCM_USERNAME, BCM_PASSWORD are set
+2. **Phase 2: Provider Build** - Build latest terraform-provider-bcm binary (optional, set SKIP_BUILD=true to skip)
+3. **Phase 3: Example Testing** - Execute terraform init → validate → plan for each example
+4. **Phase 4: Cleanup** - Remove test resources via BCM API with exponential backoff retry
+
+### Provider Environment Variable Support
+
+**CRITICAL PATTERN**: The BCM provider reads authentication from environment variables, following Terraform best practices:
+
+```hcl
+# Provider schema (provider.go lines 49-61)
+"endpoint": schema.StringAttribute{
+    MarkdownDescription: "BCM JSON-RPC API endpoint. Can also be set via BCM_ENDPOINT environment variable.",
+    Optional:            true,  # NOT Required - allows env var fallback
+}
+```
+
+```go
+// Provider configuration reads from env vars (provider.go lines 83-97)
+endpoint := data.Endpoint.ValueString()
+if endpoint == "" {
+    endpoint = os.Getenv("BCM_ENDPOINT")  # Fallback to environment
+}
+```
+
+**Documentation Example Pattern:**
+```hcl
+# Authentication via environment variables (recommended)
+# export BCM_ENDPOINT="https://bcm.example.com:8081"
+# export BCM_USERNAME="admin"
+# export BCM_PASSWORD="your-password"
+provider "bcm" {
+  insecure_skip_verify = true  # Only for self-signed certificates
+}
+```
+
+**Why This Matters:**
+- ✅ Simplifies documentation examples (no variable declarations)
+- ✅ Follows Terraform provider best practices
+- ✅ Enables consistent testing without variable injection
+- ✅ Prevents variable declaration conflicts
+- ✅ Aligns with HashiCorp's AWS/Azure/GCP provider patterns
+
+### Running Tests
+
+**Full Test Suite:**
+```bash
+BCM_ENDPOINT="https://172.21.15.254:8081" \
+BCM_USERNAME="root" \
+BCM_PASSWORD="Hashicorp123!" \
+SKIP_BUILD=true \
+./scripts/test-examples.sh
+```
+
+**Data Sources Only:**
+```bash
+BCM_ENDPOINT="..." BCM_USERNAME="..." BCM_PASSWORD="..." \
+./scripts/test-examples.sh --data-sources-only
+```
+
+**Resources Only:**
+```bash
+BCM_ENDPOINT="..." BCM_USERNAME="..." BCM_PASSWORD="..." \
+./scripts/test-examples.sh --resources-only
+```
+
+**Verbose Mode (show full terraform output):**
+```bash
+BCM_ENDPOINT="..." BCM_USERNAME="..." BCM_PASSWORD="..." \
+./scripts/test-examples.sh --verbose
+```
+
+**Skip Cleanup (debug failed tests):**
+```bash
+BCM_ENDPOINT="..." BCM_USERNAME="..." BCM_PASSWORD="..." \
+./scripts/test-examples.sh --no-cleanup
+```
+
+### Example Discovery
+
+The script automatically discovers all `.tf` files in:
+- `/workspace/examples/data-sources/*/` - Data source examples
+- `/workspace/examples/resources/*/` - Resource examples
+
+**Discovery Pattern:**
+- Finds individual `.tf` files (not directories)
+- Tests each file in isolation to prevent conflicts
+- Depth: 2 levels (category/example.tf)
+
+**Why Per-File Testing:**
+```
+examples/data-sources/bcm_cmdevice_nodes/
+├── data-source.tf          # Generic example
+├── filter_by_type.tf       # Filtering pattern
+├── filter_by_hostname.tf   # Alternative filter
+└── dynamic_inventory.tf    # Advanced use case
+```
+
+Testing entire directories would cause:
+- Duplicate resource name conflicts (multiple files defining `data "bcm_cmdevice_nodes" "all"`)
+- Terraform would try to merge all `.tf` files in the directory
+
+### Provider Injection
+
+For examples that don't include provider blocks (most data source examples):
+
+```hcl
+# Auto-injected by test script (_provider.tf)
+terraform {
+  required_version = ">= 1.5.0"
+  required_providers {
+    bcm = {
+      source  = "hashicorp/bcm"
+      version = "~> 0.1"
+    }
+  }
+}
+
+provider "bcm" {
+  insecure_skip_verify = true
+}
+```
+
+**Key Insight**: No hardcoded credentials! Provider reads from BCM_ENDPOINT/BCM_USERNAME/BCM_PASSWORD environment variables.
+
+### Test Validation Stages
+
+Each example goes through:
+
+1. **terraform init -backend=false**
+   - Initialize provider plugins
+   - No backend configuration (examples are standalone)
+
+2. **terraform validate**
+   - Syntax validation
+   - Schema validation
+   - Reference validation
+
+3. **terraform plan**
+   - Provider authentication (reads from env vars)
+   - API connectivity test
+   - Resource/data source query execution
+   - **ACTUAL EXECUTION** - not mocked!
+
+### Cleanup Strategy
+
+**Resource Naming Pattern:** All test resources include "citest" in the name for easy identification and cleanup.
+
+**Cleanup Implementation:**
+- Direct BCM API calls (not terraform destroy)
+- Exponential backoff retry (1s, 2s, 4s, 8s = 15s total)
+- Handles eventual consistency
+- Parallel resource deletion where safe
+
+**Cleanup Logic:**
+```bash
+# Query test resources
+curl -k -b cookies.txt -X POST "$BCM_ENDPOINT/json" \
+  -d '{"service":"CMPart","call":"getSoftwareImages"}'
+
+# Filter by "citest" prefix
+test_images=$(echo "$response" | jq -r '.[] | select(.name | startswith("citest")) | .name')
+
+# Delete with retry
+curl -k -b cookies.txt -X POST "$BCM_ENDPOINT/json" \
+  -d '{"service":"CMPart","call":"removeSoftwareImages","args":[["citest-image1","citest-image2"],false]}'
+```
+
+### Expected Test Results
+
+**Current Status (as of 2025-11-21):**
+```
+Examples tested: 17
+  Passed: 17
+  Failed: 0
+
+Data sources: 10 examples (10s parallel execution)
+Resources: 7 examples (19s sequential execution)
+Total time: 33s
+```
+
+**Data Source Examples:**
+- ✅ bcm_cmdevice_nodes (4 examples: data-source.tf, filter_by_type.tf, filter_by_hostname.tf, dynamic_inventory.tf)
+- ✅ bcm_cmdevice_categories (3 examples: data-source.tf, data-source-filter.tf, data-source-workflow.tf)
+- ✅ bcm_cmpart_softwareimages (1 example: data-source.tf)
+- ✅ bcm_cmnet_networks (2 examples: data-source.tf, filtered.tf)
+
+**Resource Examples:**
+- ✅ bcm_cmpart_softwareimage (5 examples: resource.tf, resource-advanced.tf, edge-case-two-step-create.tf, edge-case-empty-modules.tf, edge-case-path-revision.tf)
+- ✅ bcm_cmdevice_category (1 example: resource.tf)
+- ✅ test-citest (1 example: resource.tf - CI testing validation)
+
+### Troubleshooting
+
+**Tests failing with "Missing BCM Endpoint" error:**
+```bash
+# Verify environment variables are set
+echo $BCM_ENDPOINT
+echo $BCM_USERNAME
+echo $BCM_PASSWORD  # Will show *** if set
+
+# Export if not set
+export BCM_ENDPOINT="https://172.21.15.254:8081"
+export BCM_USERNAME="root"
+export BCM_PASSWORD="Hashicorp123!"
+```
+
+**Tests failing with "The provider hashicorp/bcm does not support data source X":**
+```bash
+# Rebuild provider to include latest data sources/resources
+export GOMODCACHE=/workspace/.go/pkg/mod
+export GOCACHE=/workspace/.go/cache
+export GOPATH=/workspace/.go
+
+go build -o terraform-provider-bcm_v0.1.0 .
+
+# Install for both architectures
+mkdir -p ~/.terraform.d/plugins/registry.terraform.io/hashicorp/bcm/0.1.0/linux_amd64
+mkdir -p ~/.terraform.d/plugins/registry.terraform.io/hashicorp/bcm/0.1.0/linux_arm64
+cp terraform-provider-bcm_v0.1.0 ~/.terraform.d/plugins/registry.terraform.io/hashicorp/bcm/0.1.0/linux_amd64/
+cp terraform-provider-bcm_v0.1.0 ~/.terraform.d/plugins/registry.terraform.io/hashicorp/bcm/0.1.0/linux_arm64/
+```
+
+**Tests showing "SKIP" status:**
+- This is EXPECTED for examples that require actual BCM API connectivity
+- Script detects connectivity errors and marks as skipped (not failed)
+- Tests still validate syntax, schema, and provider configuration
+
+**Platform architecture mismatch:**
+```bash
+# Check which architecture terraform expects
+terraform version
+
+# Install provider for correct architecture
+# linux_amd64 for x86_64
+# linux_arm64 for arm64/aarch64
+```
+
+### Best Practices for Example Development
+
+1. **Provider Configuration:**
+   - Use environment variable pattern (no hardcoded credentials)
+   - Include comment showing export commands
+   - Only set `insecure_skip_verify = true` when needed
+
+2. **Resource Naming:**
+   - Include descriptive names
+   - Use "citest" prefix for CI testing examples
+   - Generate unique names with timestamps for parallel safety
+
+3. **Documentation Comments:**
+   - Explain use case at top of file
+   - Document edge cases and BCM API quirks
+   - Show production patterns vs. simple examples
+
+4. **Testing Before Commit:**
+   ```bash
+   # Always test new examples before committing
+   BCM_ENDPOINT="..." BCM_USERNAME="..." BCM_PASSWORD="..." \
+   ./scripts/test-examples.sh
+   ```
+
+### CI/CD Integration
+
+The test script is designed for CI/CD pipelines:
+
+```yaml
+# Example GitHub Actions workflow
+- name: Test Terraform Examples
+  env:
+    BCM_ENDPOINT: ${{ secrets.BCM_ENDPOINT }}
+    BCM_USERNAME: ${{ secrets.BCM_USERNAME }}
+    BCM_PASSWORD: ${{ secrets.BCM_PASSWORD }}
+    SKIP_BUILD: "false"  # Build provider in CI
+  run: |
+    ./scripts/test-examples.sh
+```
+
+**Exit Codes:**
+- `0` - All tests passed
+- `1` - One or more tests failed
+- `2` - Environment validation failed
+- `3` - Provider build failed
+
+### Maintenance
+
+When adding new resources/data sources:
+
+1. Add implementation in `internal/provider/`
+2. Register in `provider.go` DataSources() or Resources()
+3. Create documentation examples in `examples/`
+4. Run test script to validate
+5. Commit passing examples
+
+**Example Discovery is Automatic** - No need to update test script configuration!

@@ -56,7 +56,8 @@
       "mcp__terraform__list_workspace_variables",
       "Bash(docker build:*)",
       "Bash(docker images:*)",
-      "Bash(.specify/scripts/bash/validate-env.sh:*)"
+      "Bash(.specify/scripts/bash/validate-env.sh:*)",
+      "SlashCommand(/speckit.specify I need to ensure all the terraform examples are working in @examples/ , once these are functional I want to ensure there is a single batch file for test execution and cleanup, datasources can be executed at the same time whilst resource tests should be executed sequentially, test should use unique names and include citest in the name, the sciprt should also handle terraform binary creation to ensure that latest binary is used in testing, once this is complete I want to update the agents.md to ensure the process for testing is documented for the agent in future, for test scripts used the @scripts/ folder)"
     ],
     "deny": [
       "Write(.gitignore)",
