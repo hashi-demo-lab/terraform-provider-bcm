@@ -1,0 +1,4 @@
+{
+  "service": "cmnet",
+  "call": "getNetworks"
+}
