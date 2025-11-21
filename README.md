@@ -1,6 +1,6 @@
 # Terraform Provider for Nvidia BCM
 
-Terraform provider for managing Nvidia BCM (Bright Cluster Manager) infrastructure.
+Terraform provider for managing Nvidia BCM (Base Comand Manager) infrastructure.
 
 ## Features
 
