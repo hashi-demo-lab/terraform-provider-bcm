@@ -36,7 +36,7 @@ locals {
 # This is the only resource type currently available in the provider
 resource "bcm_cmpart_softwareimage" "citest_minimal" {
   name = local.image_name
-  path = "/cm/images/citest-minimal"  # Use simple static path for testing
+  path = "/cm/images/citest-minimal" # Use simple static path for testing
 
   # Clone from first available image
   original_image = local.base_image

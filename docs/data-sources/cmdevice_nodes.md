@@ -64,8 +64,8 @@ output "node_inventory" {
 Optional:
 
 - `category_uuid` (String) Filter by category UUID (exact match).
+- `child_type` (String) Filter by node childType (exact match, case-sensitive). Example: 'PhysicalNode'.
 - `hostname_pattern` (String) Filter by hostname substring (case-insensitive). Example: 'compute' matches 'compute-node-01'.
-- `node_type` (String) Filter by node childType (exact match, case-sensitive). Example: 'PhysicalNode'.
 
 
 <a id="nestedatt--nodes"></a>
