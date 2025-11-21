@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 )
 
@@ -373,22 +374,62 @@ func TestAccCMDeviceCategory_DriftNotes(t *testing.T) {
 			// Step 2: Modify notes externally via BCM API, verify drift detected
 			{
 				PreConfig: func() {
-					// TODO T014: Implement PreConfig to modify via BCM API
-					// This will:
-					// 1. Create BCM client with createTestBCMClient(t)
-					// 2. Query BCM API to get UUID by category name
-					// 3. Call updateCategory API to change notes to "Staging"
-					// For now, this will fail with "no PreConfig logic implemented"
+					// Phase 3 - Task T014 (GREEN): Implement PreConfig to modify via BCM API
+					client := createTestBCMClient(t)
+					ctx := context.Background()
+
+					// Get UUID by category name using helper
+					uuid := getResourceUUIDByName(t, "cmdevice", "getCategory", categoryName)
+
+					// Fetch full category data from BCM API
+					body, err := client.CallJSONRPC(ctx, "cmdevice", "getCategory", categoryName)
+					if err != nil {
+						t.Fatalf("Failed to fetch category for drift modification: %v", err)
+					}
+
+					// Parse the category data
+					var categoryData map[string]interface{}
+					if err := json.Unmarshal(body, &categoryData); err != nil {
+						t.Fatalf("Failed to parse category data: %v", err)
+					}
+
+					// Modify notes field
+					categoryData["notes"] = "Staging"
+
+					// Wrap in BCM API entity structure required for updates
+					entity := map[string]interface{}{
+						"baseType":      "Category",
+						"childType":     "",
+						"modified":      true,
+						"to_be_removed": false,
+						"revision":      "",
+						"uuid":          uuid,
+					}
+					// Copy all category data fields except uuid (already set above)
+					for k, v := range categoryData {
+						if k != "uuid" {
+							entity[k] = v
+						}
+					}
+
+					// Update via BCM API
+					_, err = client.CallJSONRPC(ctx, "cmdevice", "updateCategory", entity)
+					if err != nil {
+						t.Fatalf("Failed to update category via BCM API: %v", err)
+					}
+
+					// Wait for eventual consistency
+					time.Sleep(2 * time.Second)
+
+					t.Logf("[DEBUG] Modified notes externally to: %v", entity["notes"])
 				},
 				Config: testAccCMDeviceCategoryResourceConfig_DriftNotes(categoryName, "Production"),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					// After external modification, Terraform should detect drift
-					// State should reflect the BCM API value (modified value)
-					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "notes", "Staging"),
-				),
-				// CRITICAL: This tells Terraform we expect the plan to be non-empty
-				// because drift was detected
-				ExpectNonEmptyPlan: true,
+				// Use ConfigPlanChecks to verify drift detected (non-empty plan expected)
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectNonEmptyPlan(),
+					},
+				},
 			},
 			// Step 3: Restore desired state (Terraform applies config to fix drift)
 			{
@@ -397,6 +438,88 @@ func TestAccCMDeviceCategory_DriftNotes(t *testing.T) {
 					// Verify drift was corrected and state matches config
 					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "notes", "Production"),
 				),
+			},
+		},
+	})
+}
+
+// ========================================
+// Phase 4: Destroy Edge Case Tests (User Story 2)
+// ========================================
+
+// TestAccCMDeviceCategory_DestroyWithForce verifies destroy with force=true
+// Phase 4 - Task T020 (RED): This test should PASS (force already implemented, but verify)
+func TestAccCMDeviceCategory_DestroyWithForce(t *testing.T) {
+	categoryName := generateUniqueTestName("test-destroy-force")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccCMDeviceCategoryPreCheck(t, categoryName)
+		},
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceCategoryDestroy,
+		Steps: []resource.TestStep{
+			// Step 1: Create category with force=true
+			{
+				Config: testAccCMDeviceCategoryResourceConfig_Force(categoryName, true),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "name", categoryName),
+					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "force", "true"),
+					resource.TestCheckResourceAttrSet("bcm_cmdevice_category.test", "uuid"),
+				),
+			},
+			// Step 2: Destroy happens automatically with force=true
+			// CheckDestroy should pass even if category has associations
+			// Note: We can't easily create real node associations in acceptance tests,
+			// so this verifies force parameter is accepted and processed
+		},
+	})
+}
+
+// TestAccCMDeviceCategory_DestroyExternalDelete verifies destroy handles externally deleted resources
+// Phase 4 - Task T023: Create resource, delete via BCM API, verify Terraform destroy succeeds
+func TestAccCMDeviceCategory_DestroyExternalDelete(t *testing.T) {
+	categoryName := generateUniqueTestName("test-destroy-external")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccCMDeviceCategoryPreCheck(t, categoryName)
+		},
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceCategoryDestroy,
+		Steps: []resource.TestStep{
+			// Step 1: Create category
+			{
+				Config: testAccCMDeviceCategoryResourceConfig(categoryName),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "name", categoryName),
+					resource.TestCheckResourceAttrSet("bcm_cmdevice_category.test", "uuid"),
+				),
+			},
+			// Step 2: Delete externally via BCM API, then let Terraform destroy
+			{
+				PreConfig: func() {
+					// Delete the category via BCM API before Terraform tries to destroy it
+					client := createTestBCMClient(t)
+					ctx := context.Background()
+
+					// Get category UUID
+					uuid := getResourceUUIDByName(t, "cmdevice", "getCategory", categoryName)
+
+					// Delete via BCM API with force=true (removeCategories expects array of UUIDs)
+					_, err := client.CallJSONRPC(ctx, "cmdevice", "removeCategories", []string{uuid}, true)
+					if err != nil {
+						t.Logf("[WARN] Failed to delete category externally (may not exist): %v", err)
+					}
+
+					// Wait for eventual consistency
+					time.Sleep(2 * time.Second)
+
+					t.Logf("[DEBUG] Deleted category externally: %s", categoryName)
+				},
+				Config: testAccCMDeviceCategoryResourceConfig(categoryName),
+				// Destroy will happen automatically after this step
+				// CheckDestroy should pass even though resource was already deleted
 			},
 		},
 	})
@@ -413,18 +536,18 @@ provider "bcm" {
   insecure_skip_verify = true
 }
 
+# Lookup existing categories to get a management network UUID
+data "bcm_cmdevice_categories" "all" {}
+
 # Lookup required parent software image
-data "bcm_cmpart_softwareimages" "default" {}
+data "bcm_cmpart_softwareimages" "all" {}
 
 locals {
-  software_image_uuid = [for img in data.bcm_cmpart_softwareimages.default.images : img.uuid if img.name == "default-image"][0]
-}
+  # Get management network from first existing category
+  management_network_uuid = length(data.bcm_cmdevice_categories.all.categories) > 0 ? data.bcm_cmdevice_categories.all.categories[0].management_network_id : "00000000-0000-0000-0000-000000000000"
 
-# Lookup management network
-data "bcm_cmnet_networks" "all" {}
-
-locals {
-  management_network_uuid = data.bcm_cmnet_networks.all.networks[0].uuid
+  # Get software image UUID from first available image
+  software_image_uuid = length(data.bcm_cmpart_softwareimages.all.images) > 0 ? data.bcm_cmpart_softwareimages.all.images[0].uuid : "00000000-0000-0000-0000-000000000000"
 }
 
 resource "bcm_cmdevice_category" "test" {

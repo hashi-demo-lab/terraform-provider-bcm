@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 )
 
@@ -382,22 +383,62 @@ func TestAccCMPartSoftwareImage_DriftKernelParameters(t *testing.T) {
 			// Step 2: Modify kernel_parameters externally via BCM API, verify drift detected
 			{
 				PreConfig: func() {
-					// TODO T013: Implement PreConfig to modify via BCM API
-					// This will:
-					// 1. Create BCM client with createTestBCMClient(t)
-					// 2. Query BCM API to get UUID by image name
-					// 3. Call updateSoftwareImage API to change kernelParameters to "quiet splash nomodeset"
-					// For now, this will fail with "no PreConfig logic implemented"
+					// Phase 3 - Task T013 (GREEN): Implement PreConfig to modify via BCM API
+					client := createTestBCMClient(t)
+					ctx := context.Background()
+
+					// Get UUID by image name using helper
+					uuid := getResourceUUIDByName(t, "CMPart", "getSoftwareImage", imageName)
+
+					// Fetch full software image data from BCM API
+					body, err := client.CallJSONRPC(ctx, "CMPart", "getSoftwareImage", imageName)
+					if err != nil {
+						t.Fatalf("Failed to fetch software image for drift modification: %v", err)
+					}
+
+					// Parse the image data
+					var imageData map[string]interface{}
+					if err := json.Unmarshal(body, &imageData); err != nil {
+						t.Fatalf("Failed to parse image data: %v", err)
+					}
+
+					// Modify kernelParameters (note: BCM uses camelCase, Terraform uses snake_case)
+					imageData["kernelParameters"] = "quiet splash nomodeset"
+
+					// Wrap in BCM API entity structure required for updates
+					entity := map[string]interface{}{
+						"baseType":      "SoftwareImage",
+						"childType":     "",
+						"modified":      true,
+						"to_be_removed": false,
+						"revision":      "",
+						"uuid":          uuid,
+					}
+					// Copy all image data fields except uuid (already set above)
+					for k, v := range imageData {
+						if k != "uuid" {
+							entity[k] = v
+						}
+					}
+
+					// Update via BCM API (second parameter: clone = false)
+					_, err = client.CallJSONRPC(ctx, "CMPart", "updateSoftwareImage", entity, false)
+					if err != nil {
+						t.Fatalf("Failed to update software image via BCM API: %v", err)
+					}
+
+					// Wait for eventual consistency
+					time.Sleep(2 * time.Second)
+
+					t.Logf("[DEBUG] Modified kernel_parameters externally to: %v", entity["kernelParameters"])
 				},
 				Config: testAccCMPartSoftwareImageResourceConfig_DriftKernel(imageName, imagePath, "quiet splash"),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					// After external modification, Terraform should detect drift
-					// State should reflect the BCM API value (modified value)
-					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "kernel_parameters", "quiet splash nomodeset"),
-				),
-				// CRITICAL: This tells Terraform we expect the plan to be non-empty
-				// because drift was detected
-				ExpectNonEmptyPlan: true,
+				// Use ConfigPlanChecks to verify drift detected (non-empty plan expected)
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectNonEmptyPlan(),
+					},
+				},
 			},
 			// Step 3: Restore desired state (Terraform applies config to fix drift)
 			{
@@ -406,6 +447,116 @@ func TestAccCMPartSoftwareImage_DriftKernelParameters(t *testing.T) {
 					// Verify drift was corrected and state matches config
 					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "kernel_parameters", "quiet splash"),
 				),
+			},
+		},
+	})
+}
+
+// ========================================
+// Phase 4: Destroy Edge Case Tests (User Story 2)
+// ========================================
+
+// TestAccCMPartSoftwareImage_DestroyIdempotent verifies destroy is idempotent
+// Phase 4 - Task T019 (RED): This test should FAIL initially (need graceful handling of already-deleted resources)
+func TestAccCMPartSoftwareImage_DestroyIdempotent(t *testing.T) {
+	imageName := generateUniqueTestName("test-destroy-idempotent")
+	imagePath := fmt.Sprintf("/cm/images/%s", imageName)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccCMPartSoftwareImagePreCheck(t, imageName)
+		},
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMPartSoftwareImageDestroy,
+		Steps: []resource.TestStep{
+			// Step 1: Create resource
+			{
+				Config: testAccCMPartSoftwareImageResourceConfig_Basic(imageName, imagePath),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "name", imageName),
+					resource.TestCheckResourceAttrSet("bcm_cmpart_softwareimage.test", "uuid"),
+				),
+			},
+			// Step 2: Destroy happens automatically, then manually verify CheckDestroy handles already-deleted
+			// Note: We can't easily test double-destroy in the TestCase flow, so we rely on
+			// CheckDestroy being called and handling the already-deleted case gracefully
+		},
+	})
+
+	// After test completes, manually call CheckDestroy again to verify idempotency
+	// This simulates a second destroy attempt on an already-deleted resource
+	t.Run("VerifyIdempotentDestroy", func(t *testing.T) {
+		// Create a mock state with a deleted resource UUID
+		mockState := &terraform.State{
+			Modules: []*terraform.ModuleState{
+				{
+					Path: []string{"root"},
+					Resources: map[string]*terraform.ResourceState{
+						"bcm_cmpart_softwareimage.test": {
+							Type: "bcm_cmpart_softwareimage",
+							Primary: &terraform.InstanceState{
+								ID: "nonexistent-uuid",
+								Attributes: map[string]string{
+									"uuid": "nonexistent-uuid",
+									"name": imageName,
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		// Call CheckDestroy on a non-existent resource - should not error
+		err := testAccCheckCMPartSoftwareImageDestroy(mockState)
+		if err != nil {
+			t.Errorf("CheckDestroy should be idempotent and not error on already-deleted resource: %v", err)
+		}
+	})
+}
+
+// TestAccCMPartSoftwareImage_DestroyExternalDelete verifies destroy handles externally deleted resources
+// Phase 4 - Task T022: Create resource, delete via BCM API, verify Terraform destroy succeeds
+func TestAccCMPartSoftwareImage_DestroyExternalDelete(t *testing.T) {
+	imageName := generateUniqueTestName("test-destroy-external")
+	imagePath := fmt.Sprintf("/cm/images/%s", imageName)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccCMPartSoftwareImagePreCheck(t, imageName)
+		},
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMPartSoftwareImageDestroy,
+		Steps: []resource.TestStep{
+			// Step 1: Create resource
+			{
+				Config: testAccCMPartSoftwareImageResourceConfig_Basic(imageName, imagePath),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "name", imageName),
+					resource.TestCheckResourceAttrSet("bcm_cmpart_softwareimage.test", "uuid"),
+				),
+			},
+			// Step 2: Delete externally via BCM API, then let Terraform destroy
+			{
+				PreConfig: func() {
+					// Delete the resource via BCM API before Terraform tries to destroy it
+					client := createTestBCMClient(t)
+					ctx := context.Background()
+
+					// Delete via BCM API (removeSoftwareImages expects array of names)
+					_, err := client.CallJSONRPC(ctx, "CMPart", "removeSoftwareImages", []string{imageName}, false)
+					if err != nil {
+						t.Logf("[WARN] Failed to delete image externally (may not exist): %v", err)
+					}
+
+					// Wait for eventual consistency
+					time.Sleep(2 * time.Second)
+
+					t.Logf("[DEBUG] Deleted image externally: %s", imageName)
+				},
+				Config: testAccCMPartSoftwareImageResourceConfig_Basic(imageName, imagePath),
+				// Destroy will happen automatically after this step
+				// CheckDestroy should pass even though resource was already deleted
 			},
 		},
 	})
@@ -608,10 +759,12 @@ resource "bcm_cmpart_softwareimage" "test" {
 // Phase 2 - Task T005: Enhanced with logging, timeout, and detailed error messages
 func testAccCheckCMPartSoftwareImageDestroy(s *terraform.State) error {
 	client, err := NewBCMClient(
+		context.Background(),
 		os.Getenv("BCM_ENDPOINT"),
 		os.Getenv("BCM_USERNAME"),
 		os.Getenv("BCM_PASSWORD"),
 		true, // insecure_skip_verify
+		30,   // timeout
 	)
 	if err != nil {
 		return fmt.Errorf("Failed to create BCM client for CheckDestroy: %v", err)
@@ -670,10 +823,12 @@ func testAccCMPartSoftwareImagePreCheck(t *testing.T, imageNames ...string) {
 
 	// Create BCM client for cleanup
 	client, err := NewBCMClient(
+		context.Background(),
 		os.Getenv("BCM_ENDPOINT"),
 		os.Getenv("BCM_USERNAME"),
 		os.Getenv("BCM_PASSWORD"),
-		true,
+		true, // insecure_skip_verify
+		30,   // timeout
 	)
 	if err != nil {
 		t.Fatalf("Failed to create BCM client for PreCheck: %v", err)

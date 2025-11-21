@@ -151,3 +151,67 @@ func verifyResourceDeleted(ctx context.Context, client *BCMClient, service, meth
 	// Resource still exists after all retries
 	return false, nil
 }
+
+// getResourceUUIDByName queries BCM API to get a resource's UUID by name
+//
+// This helper function extracts the common pattern used in drift detection tests
+// where we need to find a resource's UUID before modifying it externally via the BCM API.
+//
+// Parameters:
+//   t - Testing instance
+//   service - BCM service name (e.g., "CMPart", "cmdevice")
+//   method - BCM method to get resource by name (e.g., "getSoftwareImage", "getCategory")
+//   name - Resource name to look up
+//
+// Returns:
+//   UUID string of the resource
+//
+// Error Handling:
+//   Calls t.Fatalf if API call fails or UUID cannot be extracted
+//
+// Example Usage:
+//   uuid := getResourceUUIDByName(t, "CMPart", "getSoftwareImage", "test-image")
+//   // Use uuid for BCM API update call
+func getResourceUUIDByName(t *testing.T, service, method, name string) string {
+	client := createTestBCMClient(t)
+	ctx := context.Background()
+
+	// Query BCM API with resource name
+	body, err := client.CallJSONRPC(ctx, service, method, name)
+	if err != nil {
+		t.Fatalf("Failed to query resource %s via %s.%s: %v", name, service, method, err)
+	}
+
+	// Parse response to extract UUID
+	var resourceData map[string]interface{}
+	if err := json.Unmarshal(body, &resourceData); err != nil {
+		t.Fatalf("Failed to parse resource response: %v", err)
+	}
+
+	// Extract UUID field
+	uuid, ok := resourceData["uuid"].(string)
+	if !ok || uuid == "" {
+		t.Fatalf("Resource %s does not have a valid uuid field", name)
+	}
+
+	return uuid
+}
+
+// generateUniqueTestName creates a unique test resource name with timestamp suffix
+//
+// This function ensures test resources have unique names to avoid conflicts when running
+// tests in parallel or when previous test cleanup failed.
+//
+// Parameters:
+//   prefix - Resource name prefix (e.g., "test-image", "test-category")
+//
+// Returns:
+//   Unique resource name with format: prefix-YYYYMMDD-HHMMSS
+//
+// Example Usage:
+//   name := generateUniqueTestName("test-image")
+//   // Returns: "test-image-20250121-143052"
+func generateUniqueTestName(prefix string) string {
+	timestamp := time.Now().Format("20060102-150405")
+	return prefix + "-" + timestamp
+}
