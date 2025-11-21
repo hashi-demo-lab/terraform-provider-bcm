@@ -10,6 +10,9 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
+	"github.com/hashicorp/terraform-plugin-testing/statecheck"
+	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
 )
 
 func TestAccCMPartSoftwareImagesDataSource_Basic(t *testing.T) {
@@ -25,6 +28,16 @@ func TestAccCMPartSoftwareImagesDataSource_Basic(t *testing.T) {
 					// Verify images attribute exists (may be empty list)
 					resource.TestCheckResourceAttrSet("data.bcm_cmpart_softwareimages.test", "images.#"),
 				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					// Modern state verification - verify id computed field
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmpart_softwareimages.test",
+						tfjsonpath.New("id"),
+						knownvalue.NotNull(),
+					),
+					// Note: Cannot verify specific image attributes without knowing cluster state
+					// Dynamic assertion used to check images list size > 0 or = 0
+				},
 			},
 		},
 	})
@@ -72,11 +85,19 @@ func TestAccCMPartSoftwareImagesDataSource_AllFields(t *testing.T) {
 				Check: resource.ComposeAggregateTestCheckFunc(
 					// Verify data source exists
 					resource.TestCheckResourceAttrSet("data.bcm_cmpart_softwareimages.test", "id"),
-					// Note: We can't check specific image fields without knowing
-					// what images exist in the test BCM instance. In a real
-					// scenario, you might seed test data or check for specific
-					// known test images.
+					// Environment-portable: no hardcoded image counts or names
+					resource.TestCheckResourceAttrSet("data.bcm_cmpart_softwareimages.test", "images.#"),
 				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					// Modern state checks for computed fields
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmpart_softwareimages.test",
+						tfjsonpath.New("id"),
+						knownvalue.NotNull(),
+					),
+					// Note: Cannot verify specific nested attributes (images.0.name, etc.)
+					// without knowing BCM cluster state. Tests remain environment-portable.
+				},
 			},
 		},
 	})

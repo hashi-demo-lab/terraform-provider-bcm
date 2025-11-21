@@ -689,6 +689,22 @@ func (r *CMDeviceCategoryResource) Read(ctx context.Context, req resource.ReadRe
 	// Fetch current state from BCM API
 	r.readCategory(ctx, &state, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
+		// Check if resource was externally deleted
+		for _, diagnostic := range resp.Diagnostics.Errors() {
+			summary := diagnostic.Summary()
+			detail := diagnostic.Detail()
+			// Check for various "not found" error patterns
+			if summary == "Category Not Found" ||
+			   (summary == "Category Read Failed" && (containsAny(detail, []string{"not found", "unexpected JSON type in response: null"}))) {
+				// Resource no longer exists - remove from state
+				tflog.Info(ctx, "Category not found during refresh - removing from state", map[string]interface{}{
+					"name": state.Name.ValueString(),
+				})
+				resp.State.RemoveResource(ctx)
+				resp.Diagnostics = nil // Clear the diagnostics
+				return
+			}
+		}
 		return
 	}
 
@@ -784,6 +800,16 @@ func (r *CMDeviceCategoryResource) Delete(ctx context.Context, req resource.Dele
 	if err != nil {
 		// T042: Enhanced error handling - Parse error to check if it's a "category in use" error
 		errStr := err.Error()
+
+		// Check if category was already deleted externally (idempotent delete)
+		if containsAny(errStr, []string{"No such category", "not found", "does not exist"}) {
+			tflog.Info(ctx, "Category already deleted (idempotent)", map[string]interface{}{
+				"name": state.Name.ValueString(),
+				"uuid": state.UUID.ValueString(),
+			})
+			return
+		}
+
 		if !force && (containsAny(errStr, []string{"in use", "assigned", "nodes", "cannot be deleted"})) {
 			// Category has nodes assigned - provide clear guidance
 			resp.Diagnostics.AddError(
@@ -1083,17 +1109,26 @@ func (r *CMDeviceCategoryResource) readCategory(ctx context.Context, model *CMDe
 		return
 	}
 
-	// Parse response as single category entity
-	var categoryData map[string]interface{}
-	if err := json.Unmarshal(body, &categoryData); err != nil {
+	// Check for null response (resource was externally deleted)
+	if string(body) == "null" {
 		diags.AddError(
-			"Response Parse Error",
-			fmt.Sprintf("Failed to parse category response: %s", err.Error()),
+			"Category Not Found",
+			fmt.Sprintf("Category '%s' not found in BCM (may have been deleted externally)", lookupName),
 		)
 		return
 	}
 
-	// Check if category not found (null or empty response)
+	// Parse response as single category entity
+	var categoryData map[string]interface{}
+	if err := json.Unmarshal(body, &categoryData); err != nil {
+		diags.AddError(
+			"Category Read Failed",
+			fmt.Sprintf("Failed to read category '%s': unexpected JSON type in response: %s", lookupName, err.Error()),
+		)
+		return
+	}
+
+	// Check if category not found (empty response)
 	if categoryData == nil || len(categoryData) == 0 {
 		diags.AddError(
 			"Category Not Found",

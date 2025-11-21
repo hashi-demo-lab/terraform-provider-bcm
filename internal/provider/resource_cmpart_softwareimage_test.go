@@ -11,14 +11,21 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-testing/compare"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
 	"github.com/hashicorp/terraform-plugin-testing/plancheck"
+	"github.com/hashicorp/terraform-plugin-testing/statecheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
+	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
 )
 
 func TestAccCMPartSoftwareImageResource_Basic(t *testing.T) {
 	imageName := generateUniqueTestName("test-image")
 	imagePath := fmt.Sprintf("/cm/images/%s", imageName)
+
+	// ID consistency tracking across all CRUD operations
+	compareID := statecheck.CompareValue(compare.ValuesSame())
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -36,6 +43,43 @@ func TestAccCMPartSoftwareImageResource_Basic(t *testing.T) {
 					resource.TestCheckResourceAttrSet("bcm_cmpart_softwareimage.test", "uuid"),
 					resource.TestCheckResourceAttrSet("bcm_cmpart_softwareimage.test", "creation_time"),
 				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					// Modern state verification with type-safe matchers
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(imageName),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("path"),
+						knownvalue.StringExact(imagePath),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("uuid"),
+						knownvalue.NotNull(),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("id"),
+						knownvalue.NotNull(),
+					),
+					// Track ID for consistency across operations
+					compareID.AddStateValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+			// Idempotency check after Create
+			{
+				Config: testAccCMPartSoftwareImageResourceConfig_Basic(imageName, imagePath),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
 			},
 			// ImportState testing
 			{
@@ -52,6 +96,32 @@ func TestAccCMPartSoftwareImageResource_Basic(t *testing.T) {
 					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "name", imageName),
 					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "notes", "Updated notes"),
 				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(imageName),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("notes"),
+						knownvalue.StringExact("Updated notes"),
+					),
+					// Verify ID unchanged after update
+					compareID.AddStateValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+			// Idempotency check after Update
+			{
+				Config: testAccCMPartSoftwareImageResourceConfig_Updated(imageName, imagePath),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
 			},
 			// Delete testing automatically occurs in TestCase
 		},
@@ -80,6 +150,52 @@ func TestAccCMPartSoftwareImageResource_FullConfig(t *testing.T) {
 					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "sol_speed", "115200"),
 					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "modules.#", "2"),
 				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(imageName),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("path"),
+						knownvalue.StringExact(imagePath),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("kernel_parameters"),
+						knownvalue.StringExact("quiet splash"),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("notes"),
+						knownvalue.StringExact("Test image with full configuration"),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("enable_sol"),
+						knownvalue.Bool(true),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("sol_speed"),
+						knownvalue.StringExact("115200"),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("modules"),
+						knownvalue.ListSizeExact(2),
+					),
+				},
+			},
+			// Idempotency check
+			{
+				Config: testAccCMPartSoftwareImageResourceConfig_Full(imageName, imagePath),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
 			},
 		},
 	})
@@ -101,12 +217,35 @@ func TestAccCMPartSoftwareImageResource_UpdateKernelConfig(t *testing.T) {
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "kernel_parameters", "quiet"),
 				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("kernel_parameters"),
+						knownvalue.StringExact("quiet"),
+					),
+				},
 			},
 			{
 				Config: testAccCMPartSoftwareImageResourceConfig_KernelParams(imageName, imagePath, "quiet splash"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "kernel_parameters", "quiet splash"),
 				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("kernel_parameters"),
+						knownvalue.StringExact("quiet splash"),
+					),
+				},
+			},
+			// Idempotency check after update
+			{
+				Config: testAccCMPartSoftwareImageResourceConfig_KernelParams(imageName, imagePath, "quiet splash"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
 			},
 		},
 	})
@@ -128,12 +267,35 @@ func TestAccCMPartSoftwareImageResource_UpdateModules(t *testing.T) {
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "modules.#", "1"),
 				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("modules"),
+						knownvalue.ListSizeExact(1),
+					),
+				},
 			},
 			{
 				Config: testAccCMPartSoftwareImageResourceConfig_Modules(imageName, imagePath, 2),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "modules.#", "2"),
 				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("modules"),
+						knownvalue.ListSizeExact(2),
+					),
+				},
+			},
+			// Idempotency check after update
+			{
+				Config: testAccCMPartSoftwareImageResourceConfig_Modules(imageName, imagePath, 2),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
 			},
 		},
 	})
@@ -156,6 +318,18 @@ func TestAccCMPartSoftwareImageResource_UpdateSOL(t *testing.T) {
 					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "enable_sol", "false"),
 					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "sol_speed", "9600"),
 				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("enable_sol"),
+						knownvalue.Bool(false),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("sol_speed"),
+						knownvalue.StringExact("9600"),
+					),
+				},
 			},
 			{
 				Config: testAccCMPartSoftwareImageResourceConfig_SOL(imageName, imagePath, true, "115200"),
@@ -163,6 +337,27 @@ func TestAccCMPartSoftwareImageResource_UpdateSOL(t *testing.T) {
 					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "enable_sol", "true"),
 					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "sol_speed", "115200"),
 				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("enable_sol"),
+						knownvalue.Bool(true),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("sol_speed"),
+						knownvalue.StringExact("115200"),
+					),
+				},
+			},
+			// Idempotency check after update
+			{
+				Config: testAccCMPartSoftwareImageResourceConfig_SOL(imageName, imagePath, true, "115200"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
 			},
 		},
 	})
@@ -253,7 +448,7 @@ resource "bcm_cmpart_softwareimage" "test" {
 					os.Getenv("BCM_PASSWORD"),
 					imageName,
 				),
-				ExpectError: regexp.MustCompile(`Attribute path.*must start with /`),
+				ExpectError: regexp.MustCompile(`path must match format: \/cm\/images\/name`),
 			},
 		},
 	})
@@ -379,6 +574,23 @@ func TestAccCMPartSoftwareImage_DriftKernelParameters(t *testing.T) {
 					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "kernel_parameters", "quiet splash"),
 					resource.TestCheckResourceAttrSet("bcm_cmpart_softwareimage.test", "uuid"),
 				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(imageName),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("kernel_parameters"),
+						knownvalue.StringExact("quiet splash"),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("uuid"),
+						knownvalue.NotNull(),
+					),
+				},
 			},
 			// Step 2: Modify kernel_parameters externally via BCM API, verify drift detected
 			{
@@ -447,6 +659,13 @@ func TestAccCMPartSoftwareImage_DriftKernelParameters(t *testing.T) {
 					// Verify drift was corrected and state matches config
 					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "kernel_parameters", "quiet splash"),
 				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("kernel_parameters"),
+						knownvalue.StringExact("quiet splash"),
+					),
+				},
 			},
 		},
 	})

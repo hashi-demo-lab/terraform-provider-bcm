@@ -301,6 +301,412 @@ For new features, use the Speckit workflow commands:
 - `tasks.md` - Task breakdown
 - `quickstart.md` - Developer quick start guide
 
+## Modern Testing Patterns (terraform-plugin-testing v1.13.3+)
+
+### Overview
+
+Modern Terraform provider tests use type-safe state verification, plan checks, and environment-portable assertions from the `terraform-plugin-testing` package (v1.13.3+). These patterns replace legacy string-based assertions and provide better error messages and type safety.
+
+### Required Imports
+
+All test files using modern patterns need these imports:
+
+```go
+import (
+    "github.com/hashicorp/terraform-plugin-testing/helper/resource"
+    "github.com/hashicorp/terraform-plugin-testing/plancheck"
+    "github.com/hashicorp/terraform-plugin-testing/statecheck"
+    "github.com/hashicorp/terraform-plugin-testing/knownvalue"
+    "github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
+    "github.com/hashicorp/terraform-plugin-testing/compare"
+)
+```
+
+### State Check Pattern (statecheck.ExpectKnownValue)
+
+Replace legacy `resource.TestCheckResourceAttr` with type-safe state checks:
+
+**BCM Attribute Type Mappings:**
+
+| BCM Attribute Type | Terraform Type | knownvalue Matcher | Example |
+|-------------------|----------------|-------------------|---------|
+| String (name, path, notes, kernel_parameters) | types.String | knownvalue.StringExact() | `statecheck.ExpectKnownValue("bcm_resource.test", tfjsonpath.New("name"), knownvalue.StringExact("test-value"))` |
+| Boolean (enable_sol, dhcp_enabled, install_boot_record) | types.Bool | knownvalue.Bool() | `statecheck.ExpectKnownValue("bcm_resource.test", tfjsonpath.New("enable_sol"), knownvalue.Bool(true))` |
+| Numeric (sol_speed, port) | types.Int64 | knownvalue.Int64Exact() | `statecheck.ExpectKnownValue("bcm_resource.test", tfjsonpath.New("sol_speed"), knownvalue.Int64Exact(115200))` |
+| Computed (uuid, id, creation_time) | types.String | knownvalue.NotNull() | `statecheck.ExpectKnownValue("bcm_resource.test", tfjsonpath.New("uuid"), knownvalue.NotNull())` |
+| List (modules, networks, nodes) | types.List | knownvalue.ListSizeExact() | `statecheck.ExpectKnownValue("bcm_resource.test", tfjsonpath.New("modules"), knownvalue.ListSizeExact(2))` |
+
+**Example - Resource State Checks:**
+
+```go
+ConfigStateChecks: []statecheck.StateCheck{
+    // String attribute
+    statecheck.ExpectKnownValue(
+        "bcm_cmpart_softwareimage.test",
+        tfjsonpath.New("name"),
+        knownvalue.StringExact(imageName),
+    ),
+    // Boolean attribute
+    statecheck.ExpectKnownValue(
+        "bcm_cmpart_softwareimage.test",
+        tfjsonpath.New("enable_sol"),
+        knownvalue.Bool(true),
+    ),
+    // Numeric attribute
+    statecheck.ExpectKnownValue(
+        "bcm_cmpart_softwareimage.test",
+        tfjsonpath.New("sol_speed"),
+        knownvalue.Int64Exact(115200),
+    ),
+    // Computed field (must be present)
+    statecheck.ExpectKnownValue(
+        "bcm_cmpart_softwareimage.test",
+        tfjsonpath.New("uuid"),
+        knownvalue.NotNull(),
+    ),
+    // List size
+    statecheck.ExpectKnownValue(
+        "bcm_cmpart_softwareimage.test",
+        tfjsonpath.New("modules"),
+        knownvalue.ListSizeExact(2),
+    ),
+}
+```
+
+### Idempotency Verification Pattern (plancheck.ExpectEmptyPlan)
+
+Verify resources are idempotent by checking no plan changes after Create/Update:
+
+```go
+// After Create - verify idempotency
+{
+    Config: testAccResourceConfig(name, "initial-value"),
+    ConfigPlanChecks: resource.ConfigPlanChecks{
+        PreApply: []plancheck.PlanCheck{
+            plancheck.ExpectEmptyPlan(),
+        },
+    },
+},
+// After Update - verify idempotency
+{
+    Config: testAccResourceConfig(name, "updated-value"),
+    ConfigPlanChecks: resource.ConfigPlanChecks{
+        PreApply: []plancheck.PlanCheck{
+            plancheck.ExpectEmptyPlan(),
+        },
+    },
+},
+```
+
+### ID Consistency Tracking Pattern (statecheck.CompareValue)
+
+Track ID stability across Create, Import, and Update operations:
+
+```go
+// Initialize ID consistency tracker at test start
+compareID := statecheck.CompareValue(compare.ValuesSame())
+
+Steps: []resource.TestStep{
+    // Create step
+    {
+        Config: testAccResourceConfig(name),
+        ConfigStateChecks: []statecheck.StateCheck{
+            // Capture ID after create
+            compareID.AddStateValue(
+                "bcm_resource.test",
+                tfjsonpath.New("id"),
+            ),
+        },
+    },
+    // Import step
+    {
+        ResourceName:      "bcm_resource.test",
+        ImportState:       true,
+        ImportStateVerify: true,
+        ConfigStateChecks: []statecheck.StateCheck{
+            // Verify ID unchanged after import
+            compareID.AddStateValue(
+                "bcm_resource.test",
+                tfjsonpath.New("id"),
+            ),
+        },
+    },
+    // Update step
+    {
+        Config: testAccResourceConfig(name),
+        ConfigStateChecks: []statecheck.StateCheck{
+            // Verify ID unchanged after update
+            compareID.AddStateValue(
+                "bcm_resource.test",
+                tfjsonpath.New("id"),
+            ),
+        },
+    },
+}
+```
+
+### Filter Verification Pattern (Data Sources)
+
+Verify data source filters work correctly with type-safe checks:
+
+**String Filter (name_pattern, hostname_pattern):**
+
+```go
+// Filter by name pattern
+{
+    Config: testAccDataSourceConfigFilterByName("test-*"),
+    ConfigStateChecks: []statecheck.StateCheck{
+        // Verify filtered results match pattern
+        // Note: Cannot use StringRegexp on list elements without knowing count
+        // Use dynamic assertions or verify count > 0
+        statecheck.ExpectKnownValue(
+            "data.bcm_cmdevice_nodes.test",
+            tfjsonpath.New("id"),
+            knownvalue.NotNull(),
+        ),
+    },
+}
+```
+
+**Boolean Filter (dhcp_enabled):**
+
+```go
+// Filter by boolean attribute
+{
+    Config: testAccDataSourceConfigFilterByDHCP(true),
+    ConfigStateChecks: []statecheck.StateCheck{
+        // Verify all filtered networks have dhcp_enabled = true
+        // Note: Verification limited without knowing result count
+        statecheck.ExpectKnownValue(
+            "data.bcm_cmnet_networks.test",
+            tfjsonpath.New("id"),
+            knownvalue.NotNull(),
+        ),
+    },
+}
+```
+
+**Category Filter:**
+
+```go
+// Filter by category
+{
+    Config: testAccDataSourceConfigFilterByCategory("default"),
+    ConfigStateChecks: []statecheck.StateCheck{
+        // Verify filtered images match category
+        statecheck.ExpectKnownValue(
+            "data.bcm_cmpart_softwareimages.test",
+            tfjsonpath.New("id"),
+            knownvalue.NotNull(),
+        ),
+    },
+}
+```
+
+### Environment Portability Patterns
+
+Tests must work on any BCM cluster configuration without hardcoded assumptions:
+
+**Anti-Patterns to Avoid:**
+- Hardcoded resource counts: `resource.TestCheckResourceAttr("data.bcm_networks.test", "networks.#", "3")`
+- Hardcoded resource names: `resource.TestCheckResourceAttr("data.bcm_categories.test", "categories.0.name", "default")`
+- Specific UUIDs or IDs that may not exist
+
+**Correct Patterns:**
+- Dynamic counts: `resource.TestCheckResourceAttrSet("data.bcm_networks.test", "networks.#")`
+- Generated unique names: `categoryName := generateUniqueTestName("test-category")`
+- Resource references: Create test resources in the test itself, don't assume existing resources
+
+**Example - Environment Portable Test:**
+
+```go
+func TestAccDataSource_Portable(t *testing.T) {
+    // Generate unique test resource name
+    resourceName := generateUniqueTestName("test-resource")
+
+    resource.Test(t, resource.TestCase{
+        Steps: []resource.TestStep{
+            // Step 1: Create test resource
+            {
+                Config: testAccResourceConfig(resourceName),
+                Check: resource.ComposeAggregateTestCheckFunc(
+                    resource.TestCheckResourceAttr("bcm_resource.test", "name", resourceName),
+                ),
+            },
+            // Step 2: Use data source to find created resource
+            {
+                Config: testAccDataSourceConfigWithResource(resourceName),
+                ConfigStateChecks: []statecheck.StateCheck{
+                    // Verify data source works without hardcoded assumptions
+                    statecheck.ExpectKnownValue(
+                        "data.bcm_resources.test",
+                        tfjsonpath.New("id"),
+                        knownvalue.NotNull(),
+                    ),
+                },
+            },
+        },
+    })
+}
+```
+
+### CheckDestroy Enhancement Pattern
+
+Enhanced CheckDestroy functions provide detailed error messages for debugging:
+
+```go
+func testAccCheckResourceDestroy(s *terraform.State) error {
+    client := createTestBCMClient(&testing.T{})
+
+    var errors []string
+    resourceCount := 0
+
+    for _, rs := range s.RootModule().Resources {
+        if rs.Type != "bcm_resource" {
+            continue
+        }
+
+        resourceCount++
+        id := rs.Primary.ID
+
+        // Verify resource deleted with exponential backoff
+        deleted, err := verifyResourceDeleted(
+            context.Background(),
+            client,
+            "Service",
+            "removeMethod",
+            id,
+            4, // retry count
+        )
+
+        if err != nil {
+            errors = append(errors, fmt.Sprintf(
+                "Resource type: %s, ID: %s, Error: %v",
+                rs.Type,
+                id,
+                err,
+            ))
+        }
+
+        if !deleted {
+            errors = append(errors, fmt.Sprintf(
+                "Resource still exists after destroy. Type: %s, ID: %s, Retries: 4",
+                rs.Type,
+                id,
+            ))
+        }
+    }
+
+    if len(errors) > 0 {
+        return fmt.Errorf("CheckDestroy failures:\n  - %s", strings.Join(errors, "\n  - "))
+    }
+
+    t.Logf("[DEBUG] CheckDestroy verified %d resources were deleted", resourceCount)
+    return nil
+}
+```
+
+### Validation Testing Pattern
+
+Test schema validators with ExpectError:
+
+```go
+func TestAccResource_ValidationInvalidProxy(t *testing.T) {
+    resource.Test(t, resource.TestCase{
+        ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+        Steps: []resource.TestStep{
+            {
+                Config: testAccResourceConfigInvalidProxy("invalid-url"),
+                ExpectError: regexp.MustCompile(`Attribute.*software_image_proxy.*must be a valid URL`),
+            },
+        },
+    })
+}
+```
+
+### Complete Test Example
+
+Putting it all together - a complete modern test:
+
+```go
+func TestAccResource_Complete(t *testing.T) {
+    resourceName := generateUniqueTestName("test-resource")
+
+    // ID consistency tracking
+    compareID := statecheck.CompareValue(compare.ValuesSame())
+
+    resource.Test(t, resource.TestCase{
+        PreCheck: func() { testAccPreCheck(t) },
+        ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+        CheckDestroy: testAccCheckResourceDestroy,
+        Steps: []resource.TestStep{
+            // Create with state checks
+            {
+                Config: testAccResourceConfig(resourceName, "value1"),
+                Check: resource.ComposeAggregateTestCheckFunc(
+                    resource.TestCheckResourceAttr("bcm_resource.test", "name", resourceName),
+                ),
+                ConfigStateChecks: []statecheck.StateCheck{
+                    statecheck.ExpectKnownValue(
+                        "bcm_resource.test",
+                        tfjsonpath.New("name"),
+                        knownvalue.StringExact(resourceName),
+                    ),
+                    statecheck.ExpectKnownValue(
+                        "bcm_resource.test",
+                        tfjsonpath.New("uuid"),
+                        knownvalue.NotNull(),
+                    ),
+                    compareID.AddStateValue("bcm_resource.test", tfjsonpath.New("id")),
+                },
+            },
+            // Idempotency after Create
+            {
+                Config: testAccResourceConfig(resourceName, "value1"),
+                ConfigPlanChecks: resource.ConfigPlanChecks{
+                    PreApply: []plancheck.PlanCheck{
+                        plancheck.ExpectEmptyPlan(),
+                    },
+                },
+            },
+            // Import with ID tracking
+            {
+                ResourceName:      "bcm_resource.test",
+                ImportState:       true,
+                ImportStateVerify: true,
+                ConfigStateChecks: []statecheck.StateCheck{
+                    compareID.AddStateValue("bcm_resource.test", tfjsonpath.New("id")),
+                },
+            },
+            // Update with state checks
+            {
+                Config: testAccResourceConfig(resourceName, "value2"),
+                Check: resource.ComposeAggregateTestCheckFunc(
+                    resource.TestCheckResourceAttr("bcm_resource.test", "attr", "value2"),
+                ),
+                ConfigStateChecks: []statecheck.StateCheck{
+                    statecheck.ExpectKnownValue(
+                        "bcm_resource.test",
+                        tfjsonpath.New("attr"),
+                        knownvalue.StringExact("value2"),
+                    ),
+                    compareID.AddStateValue("bcm_resource.test", tfjsonpath.New("id")),
+                },
+            },
+            // Idempotency after Update
+            {
+                Config: testAccResourceConfig(resourceName, "value2"),
+                ConfigPlanChecks: resource.ConfigPlanChecks{
+                    PreApply: []plancheck.PlanCheck{
+                        plancheck.ExpectEmptyPlan(),
+                    },
+                },
+            },
+        },
+    })
+}
+```
+
 ## Key Dependencies
 
 - **Framework**: `terraform-plugin-framework` (v1.16.1)

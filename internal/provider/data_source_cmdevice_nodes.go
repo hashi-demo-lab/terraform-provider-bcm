@@ -40,7 +40,7 @@ type CMDeviceNodesDataSourceModel struct {
 
 // FilterModel represents client-side filtering configuration
 type FilterModel struct {
-	NodeType        types.String `tfsdk:"node_type"`
+	ChildType        types.String `tfsdk:"child_type"`
 	CategoryUUID    types.String `tfsdk:"category_uuid"`
 	HostnamePattern types.String `tfsdk:"hostname_pattern"`
 }
@@ -265,7 +265,7 @@ func (d *CMDeviceNodesDataSource) Schema(_ context.Context, _ datasource.SchemaR
 			"filter": schema.SingleNestedBlock{
 				MarkdownDescription: "Optional filter criteria to limit returned nodes. Multiple filters are AND-ed together.",
 				Attributes: map[string]schema.Attribute{
-					"node_type": schema.StringAttribute{
+					"child_type": schema.StringAttribute{
 						Optional:            true,
 						MarkdownDescription: "Filter by node childType (exact match, case-sensitive). Example: 'PhysicalNode'.",
 					},
@@ -457,9 +457,9 @@ func matchesFilter(node NodeModel, filter *FilterModel) bool {
 		return true
 	}
 
-	// Filter by node_type (exact match)
-	if !filter.NodeType.IsNull() && !filter.NodeType.IsUnknown() {
-		if node.ChildType.ValueString() != filter.NodeType.ValueString() {
+	// Filter by child_type (exact match)
+	if !filter.ChildType.IsNull() && !filter.ChildType.IsUnknown() {
+		if node.ChildType.ValueString() != filter.ChildType.ValueString() {
 			return false
 		}
 	}
