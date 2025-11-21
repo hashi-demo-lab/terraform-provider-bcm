@@ -848,3 +848,5 @@ Terraform Registry - Publishing and distribution
 ❌ Missing or outdated documentation
 ❌ Not testing state drift
 ❌ Tests dependent on external state
+
+Test infrastucture is available for you to automatically execute the tests.
