@@ -256,11 +256,16 @@ func TestAccCMDeviceDeviceResource_Basic(t *testing.T) {
 				ImportState:       true,
 				ImportStateVerify: true,
 				ImportStateVerifyIgnore: []string{
-					"force",                // Write-only field
-					"management_network",   // BCM resets to nil UUID
-					"boot_loader",          // BCM returns "CATEGORY" when inheriting from category
-					"boot_loader_protocol", // BCM returns "CATEGORY" when inheriting from category
-					"partition",            // BCM may populate from category default
+					"force",                    // Write-only field
+					"management_network",       // BCM resets to nil UUID
+					"boot_loader",              // BCM returns "CATEGORY" when inheriting from category
+					"boot_loader_protocol",     // BCM returns "CATEGORY" when inheriting from category
+					"partition",                // BCM may populate from category default
+					"power_control",            // BCM returns default "none" when not set
+					"default_gateway",          // BCM returns default "0.0.0.0" when not set
+					"default_gateway_metric",   // BCM returns default 0 when not set
+					"serial_number",            // BCM may populate from hardware discovery
+					"part_number",              // BCM may populate from hardware discovery
 				},
 			},
 			// Verify ID consistency after Import

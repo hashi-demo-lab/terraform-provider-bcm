@@ -1,4 +1,7 @@
 #!/bin/bash
+# Copyright (c) HashiCorp, Inc.
+# SPDX-License-Identifier: MPL-2.0
+
 #
 # Test Suite Modernization Script
 # Applies modern testing patterns to all test files systematically

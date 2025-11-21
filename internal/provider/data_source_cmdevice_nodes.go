@@ -40,7 +40,7 @@ type CMDeviceNodesDataSourceModel struct {
 
 // FilterModel represents client-side filtering configuration
 type FilterModel struct {
-	ChildType        types.String `tfsdk:"child_type"`
+	ChildType       types.String `tfsdk:"child_type"`
 	CategoryUUID    types.String `tfsdk:"category_uuid"`
 	HostnamePattern types.String `tfsdk:"hostname_pattern"`
 }

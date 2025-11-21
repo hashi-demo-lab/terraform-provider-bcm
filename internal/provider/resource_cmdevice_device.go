@@ -51,6 +51,17 @@ type CMDeviceDeviceResourceModel struct {
 	BootLoaderProtocol types.String `tfsdk:"boot_loader_protocol"` // Optional
 	Force              types.Bool   `tfsdk:"force"`                // Optional, default: false
 
+	// Power control configuration
+	PowerControl types.String `tfsdk:"power_control"` // Optional, e.g., "none", "ipmi", "ipdu"
+
+	// Network gateway configuration
+	DefaultGateway       types.String `tfsdk:"default_gateway"`        // Optional, IP address
+	DefaultGatewayMetric types.Int64  `tfsdk:"default_gateway_metric"` // Optional+Computed, gateway metric/priority
+
+	// Hardware identifiers
+	SerialNumber types.String `tfsdk:"serial_number"` // Optional+Computed, hardware serial number
+	PartNumber   types.String `tfsdk:"part_number"`   // Optional+Computed, hardware part number
+
 	// Computed fields
 	CreationTime types.Int64  `tfsdk:"creation_time"` // Computed
 	BaseType     types.String `tfsdk:"base_type"`     // Computed, always "Device"
@@ -156,6 +167,35 @@ func (r *CMDeviceDeviceResource) Schema(ctx context.Context, req resource.Schema
 			"force": schema.BoolAttribute{
 				Optional:            true,
 				MarkdownDescription: "Force operation (override BCM validation warnings)",
+			},
+			"power_control": schema.StringAttribute{
+				Optional:            true,
+				MarkdownDescription: "Power control method (e.g., 'none', 'ipmi', 'ipdu', 'redfish')",
+			},
+			"default_gateway": schema.StringAttribute{
+				Optional:            true,
+				MarkdownDescription: "Default gateway IP address for the device",
+				Validators: []validator.String{
+					stringvalidator.RegexMatches(
+						regexp.MustCompile(`^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$`),
+						"must be a valid IPv4 address",
+					),
+				},
+			},
+			"default_gateway_metric": schema.Int64Attribute{
+				Optional:            true,
+				Computed:            true,
+				MarkdownDescription: "Default gateway metric/priority (lower is preferred)",
+			},
+			"serial_number": schema.StringAttribute{
+				Optional:            true,
+				Computed:            true,
+				MarkdownDescription: "Hardware serial number",
+			},
+			"part_number": schema.StringAttribute{
+				Optional:            true,
+				Computed:            true,
+				MarkdownDescription: "Hardware part number",
 			},
 			"creation_time": schema.Int64Attribute{
 				Computed:            true,
@@ -343,6 +383,28 @@ func (r *CMDeviceDeviceResource) Create(ctx context.Context, req resource.Create
 		}
 	}
 
+	// BCM returns default values for Optional+Computed fields when not explicitly set
+	// Preserve null from plan to avoid drift
+	if plan.PowerControl.IsNull() && !state.PowerControl.IsNull() {
+		state.PowerControl = types.StringNull()
+	}
+
+	if plan.DefaultGateway.IsNull() && !state.DefaultGateway.IsNull() {
+		state.DefaultGateway = types.StringNull()
+	}
+
+	if plan.DefaultGatewayMetric.IsNull() && !state.DefaultGatewayMetric.IsNull() {
+		state.DefaultGatewayMetric = types.Int64Null()
+	}
+
+	if plan.SerialNumber.IsNull() && !state.SerialNumber.IsNull() {
+		state.SerialNumber = types.StringNull()
+	}
+
+	if plan.PartNumber.IsNull() && !state.PartNumber.IsNull() {
+		state.PartNumber = types.StringNull()
+	}
+
 	// Set state - use what BCM returns for all other fields
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
@@ -411,6 +473,28 @@ func (r *CMDeviceDeviceResource) Read(ctx context.Context, req resource.ReadRequ
 	// BCM may add partition if not explicitly set - preserve null from plan to avoid drift
 	if state.Partition.IsNull() && !newState.Partition.IsNull() {
 		newState.Partition = types.StringNull()
+	}
+
+	// BCM returns default values for Optional+Computed fields when not explicitly set
+	// Preserve null from plan to avoid drift
+	if state.PowerControl.IsNull() && !newState.PowerControl.IsNull() {
+		newState.PowerControl = types.StringNull()
+	}
+
+	if state.DefaultGateway.IsNull() && !newState.DefaultGateway.IsNull() {
+		newState.DefaultGateway = types.StringNull()
+	}
+
+	if state.DefaultGatewayMetric.IsNull() && !newState.DefaultGatewayMetric.IsNull() {
+		newState.DefaultGatewayMetric = types.Int64Null()
+	}
+
+	if state.SerialNumber.IsNull() && !newState.SerialNumber.IsNull() {
+		newState.SerialNumber = types.StringNull()
+	}
+
+	if state.PartNumber.IsNull() && !newState.PartNumber.IsNull() {
+		newState.PartNumber = types.StringNull()
 	}
 
 	// Set state - use what BCM returns (with preserved fields)
@@ -525,6 +609,28 @@ func (r *CMDeviceDeviceResource) Update(ctx context.Context, req resource.Update
 		newState.BootLoaderProtocol = types.StringNull() // Keep null if not explicitly set
 	}
 
+	// BCM returns default values for Optional+Computed fields when not explicitly set
+	// Preserve null from plan to avoid drift
+	if plan.PowerControl.IsNull() && !newState.PowerControl.IsNull() {
+		newState.PowerControl = types.StringNull()
+	}
+
+	if plan.DefaultGateway.IsNull() && !newState.DefaultGateway.IsNull() {
+		newState.DefaultGateway = types.StringNull()
+	}
+
+	if plan.DefaultGatewayMetric.IsNull() && !newState.DefaultGatewayMetric.IsNull() {
+		newState.DefaultGatewayMetric = types.Int64Null()
+	}
+
+	if plan.SerialNumber.IsNull() && !newState.SerialNumber.IsNull() {
+		newState.SerialNumber = types.StringNull()
+	}
+
+	if plan.PartNumber.IsNull() && !newState.PartNumber.IsNull() {
+		newState.PartNumber = types.StringNull()
+	}
+
 	// Set state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &newState)...)
 }
@@ -637,6 +743,29 @@ func (r *CMDeviceDeviceResource) buildDeviceAPIEntity(plan CMDeviceDeviceResourc
 		entity["bootLoaderProtocol"] = plan.BootLoaderProtocol.ValueString()
 	}
 
+	// Power control configuration
+	if !plan.PowerControl.IsNull() && !plan.PowerControl.IsUnknown() {
+		entity["powerControl"] = plan.PowerControl.ValueString()
+	}
+
+	// Network gateway configuration
+	if !plan.DefaultGateway.IsNull() && !plan.DefaultGateway.IsUnknown() {
+		entity["defaultGateway"] = plan.DefaultGateway.ValueString()
+	}
+
+	if !plan.DefaultGatewayMetric.IsNull() && !plan.DefaultGatewayMetric.IsUnknown() {
+		entity["defaultGatewayMetric"] = plan.DefaultGatewayMetric.ValueInt64()
+	}
+
+	// Hardware identifiers
+	if !plan.SerialNumber.IsNull() && !plan.SerialNumber.IsUnknown() {
+		entity["serialNumber"] = plan.SerialNumber.ValueString()
+	}
+
+	if !plan.PartNumber.IsNull() && !plan.PartNumber.IsUnknown() {
+		entity["partNumber"] = plan.PartNumber.ValueString()
+	}
+
 	return entity
 }
 
@@ -714,6 +843,41 @@ func (r *CMDeviceDeviceResource) parseDeviceFromAPI(data map[string]interface{})
 		model.ChildType = types.StringValue(childType)
 	} else {
 		model.ChildType = types.StringNull()
+	}
+
+	// Power control configuration
+	if powerControl, ok := data["powerControl"].(string); ok && powerControl != "" {
+		model.PowerControl = types.StringValue(powerControl)
+	} else {
+		model.PowerControl = types.StringNull()
+	}
+
+	// Network gateway configuration
+	if defaultGateway, ok := data["defaultGateway"].(string); ok && defaultGateway != "" {
+		model.DefaultGateway = types.StringValue(defaultGateway)
+	} else {
+		model.DefaultGateway = types.StringNull()
+	}
+
+	if defaultGatewayMetric, ok := data["defaultGatewayMetric"].(float64); ok {
+		model.DefaultGatewayMetric = types.Int64Value(int64(defaultGatewayMetric))
+	} else if defaultGatewayMetricInt, ok := data["defaultGatewayMetric"].(int64); ok {
+		model.DefaultGatewayMetric = types.Int64Value(defaultGatewayMetricInt)
+	} else {
+		model.DefaultGatewayMetric = types.Int64Null()
+	}
+
+	// Hardware identifiers
+	if serialNumber, ok := data["serialNumber"].(string); ok && serialNumber != "" {
+		model.SerialNumber = types.StringValue(serialNumber)
+	} else {
+		model.SerialNumber = types.StringNull()
+	}
+
+	if partNumber, ok := data["partNumber"].(string); ok && partNumber != "" {
+		model.PartNumber = types.StringValue(partNumber)
+	} else {
+		model.PartNumber = types.StringNull()
 	}
 
 	// Force is not persisted by BCM, will be preserved from plan/state

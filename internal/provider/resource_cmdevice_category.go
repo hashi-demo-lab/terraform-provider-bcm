@@ -695,7 +695,7 @@ func (r *CMDeviceCategoryResource) Read(ctx context.Context, req resource.ReadRe
 			detail := diagnostic.Detail()
 			// Check for various "not found" error patterns
 			if summary == "Category Not Found" ||
-			   (summary == "Category Read Failed" && (containsAny(detail, []string{"not found", "unexpected JSON type in response: null"}))) {
+				(summary == "Category Read Failed" && (containsAny(detail, []string{"not found", "unexpected JSON type in response: null"}))) {
 				// Resource no longer exists - remove from state
 				tflog.Info(ctx, "Category not found during refresh - removing from state", map[string]interface{}{
 					"name": state.Name.ValueString(),

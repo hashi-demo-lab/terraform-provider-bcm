@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 // cleanup_test_images.go - Manual cleanup tool for BCM test artifacts
 // Usage: BCM_ENDPOINT="https://..." BCM_USERNAME="root" BCM_PASSWORD="..." go run cleanup_test_images.go
 

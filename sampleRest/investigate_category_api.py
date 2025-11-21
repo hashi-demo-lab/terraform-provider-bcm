@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright (c) HashiCorp, Inc.
+# SPDX-License-Identifier: MPL-2.0
+
 """
 Category API Investigation Script
 Explores the CMDevice Category API to document full schema and methods.

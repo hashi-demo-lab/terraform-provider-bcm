@@ -58,16 +58,19 @@ import (
 // - PreCheck cleanup functions (to remove leftover test resources)
 //
 // Environment Variables (required):
-//   BCM_ENDPOINT - BCM API endpoint (e.g., https://172.21.15.254:8081)
-//   BCM_USERNAME - BCM username (e.g., root)
-//   BCM_PASSWORD - BCM password
+//
+//	BCM_ENDPOINT - BCM API endpoint (e.g., https://172.21.15.254:8081)
+//	BCM_USERNAME - BCM username (e.g., root)
+//	BCM_PASSWORD - BCM password
 //
 // Error Handling:
-//   Calls t.Fatalf if credentials are missing or authentication fails
+//
+//	Calls t.Fatalf if credentials are missing or authentication fails
 //
 // Example Usage:
-//   client := createTestBCMClient(t)
-//   _, err := client.CallJSONRPC(ctx, "CMPart", "getSoftwareImage", imageName)
+//
+//	client := createTestBCMClient(t)
+//	_, err := client.CallJSONRPC(ctx, "CMPart", "getSoftwareImage", imageName)
 func createTestBCMClient(t *testing.T) *BCMClient {
 	endpoint := os.Getenv("BCM_ENDPOINT")
 	username := os.Getenv("BCM_USERNAME")
@@ -92,33 +95,37 @@ func createTestBCMClient(t *testing.T) *BCMClient {
 // PreCheck requirement specified in FR-016.
 //
 // Parameters:
-//   ctx - Context for API calls (can include timeout)
-//   client - Authenticated BCM client
-//   service - BCM service name (e.g., "CMPart", "cmdevice")
-//   method - BCM method name (e.g., "getSoftwareImage", "getCategory")
-//   identifier - Resource identifier (name or UUID)
-//   maxRetries - Maximum retry attempts (e.g., 4 for 15s total: 1+2+4+8)
+//
+//	ctx - Context for API calls (can include timeout)
+//	client - Authenticated BCM client
+//	service - BCM service name (e.g., "CMPart", "cmdevice")
+//	method - BCM method name (e.g., "getSoftwareImage", "getCategory")
+//	identifier - Resource identifier (name or UUID)
+//	maxRetries - Maximum retry attempts (e.g., 4 for 15s total: 1+2+4+8)
 //
 // Returns:
-//   (true, nil) - Resource is deleted (not found or empty response)
-//   (false, error) - API error occurred during verification
+//
+//	(true, nil) - Resource is deleted (not found or empty response)
+//	(false, error) - API error occurred during verification
 //
 // Retry Schedule (maxRetries=4):
-//   Retry 0: Wait 1s, check (total: 1s)
-//   Retry 1: Wait 2s, check (total: 3s)
-//   Retry 2: Wait 4s, check (total: 7s)
-//   Retry 3: Wait 8s, check (total: 15s)
-//   Total: 15 seconds (within 30s requirement)
+//
+//	Retry 0: Wait 1s, check (total: 1s)
+//	Retry 1: Wait 2s, check (total: 3s)
+//	Retry 2: Wait 4s, check (total: 7s)
+//	Retry 3: Wait 8s, check (total: 15s)
+//	Total: 15 seconds (within 30s requirement)
 //
 // Example Usage:
-//   deleted, err := verifyResourceDeleted(ctx, client, "CMPart", "getSoftwareImage", imageName, 4)
-//   if err != nil {
-//       t.Logf("Error verifying deletion: %v", err)
-//   } else if deleted {
-//       t.Logf("✓ Resource deleted successfully")
-//   } else {
-//       t.Logf("⚠ Warning: Resource may still exist after retries")
-//   }
+//
+//	deleted, err := verifyResourceDeleted(ctx, client, "CMPart", "getSoftwareImage", imageName, 4)
+//	if err != nil {
+//	    t.Logf("Error verifying deletion: %v", err)
+//	} else if deleted {
+//	    t.Logf("✓ Resource deleted successfully")
+//	} else {
+//	    t.Logf("⚠ Warning: Resource may still exist after retries")
+//	}
 func verifyResourceDeleted(ctx context.Context, client *BCMClient, service, method, identifier string, maxRetries int) (bool, error) {
 	waitTime := 1 * time.Second
 
@@ -158,20 +165,24 @@ func verifyResourceDeleted(ctx context.Context, client *BCMClient, service, meth
 // where we need to find a resource's UUID before modifying it externally via the BCM API.
 //
 // Parameters:
-//   t - Testing instance
-//   service - BCM service name (e.g., "CMPart", "cmdevice")
-//   method - BCM method to get resource by name (e.g., "getSoftwareImage", "getCategory")
-//   name - Resource name to look up
+//
+//	t - Testing instance
+//	service - BCM service name (e.g., "CMPart", "cmdevice")
+//	method - BCM method to get resource by name (e.g., "getSoftwareImage", "getCategory")
+//	name - Resource name to look up
 //
 // Returns:
-//   UUID string of the resource
+//
+//	UUID string of the resource
 //
 // Error Handling:
-//   Calls t.Fatalf if API call fails or UUID cannot be extracted
+//
+//	Calls t.Fatalf if API call fails or UUID cannot be extracted
 //
 // Example Usage:
-//   uuid := getResourceUUIDByName(t, "CMPart", "getSoftwareImage", "test-image")
-//   // Use uuid for BCM API update call
+//
+//	uuid := getResourceUUIDByName(t, "CMPart", "getSoftwareImage", "test-image")
+//	// Use uuid for BCM API update call
 func getResourceUUIDByName(t *testing.T, service, method, name string) string {
 	client := createTestBCMClient(t)
 	ctx := context.Background()
@@ -203,14 +214,17 @@ func getResourceUUIDByName(t *testing.T, service, method, name string) string {
 // tests in parallel or when previous test cleanup failed.
 //
 // Parameters:
-//   prefix - Resource name prefix (e.g., "test-image", "test-category")
+//
+//	prefix - Resource name prefix (e.g., "test-image", "test-category")
 //
 // Returns:
-//   Unique resource name with format: prefix-YYYYMMDD-HHMMSS
+//
+//	Unique resource name with format: prefix-YYYYMMDD-HHMMSS
 //
 // Example Usage:
-//   name := generateUniqueTestName("test-image")
-//   // Returns: "test-image-20250121-143052"
+//
+//	name := generateUniqueTestName("test-image")
+//	// Returns: "test-image-20250121-143052"
 func generateUniqueTestName(prefix string) string {
 	timestamp := time.Now().Format("20060102-150405")
 	return prefix + "-" + timestamp

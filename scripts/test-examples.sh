@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (c) HashiCorp, Inc.
+# SPDX-License-Identifier: MPL-2.0
+
 
 # Terraform Example Test Suite (Minimal GREEN Phase Implementation)
 # Purpose: Validate all Terraform examples with automated testing
