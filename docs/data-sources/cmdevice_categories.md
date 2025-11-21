@@ -171,6 +171,7 @@ output "boot_configuration" {
 ### Read-Only
 
 - `categories` (Attributes List) List of categories matching the filter criteria (see [below for nested schema](#nestedatt--categories))
+- `id` (String) Data source identifier
 
 <a id="nestedatt--categories"></a>
 ### Nested Schema for `categories`
