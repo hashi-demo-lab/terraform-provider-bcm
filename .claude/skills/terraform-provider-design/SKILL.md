@@ -276,6 +276,284 @@ Every resource MUST test:
 3. ✅ Update and Read operations
 4. ✅ Delete operations (automatic)
 
+### Testing Pattern Categories
+
+HashiCorp recommends four core testing patterns (see [Testing Patterns](https://developer.hashicorp.com/terraform/plugin/testing/testing-patterns)):
+
+1. **Basic Attribute Verification** - Configuration applies, attributes persist with correct values
+2. **Update Tests** - Resources correctly apply updates while maintaining state consistency
+3. **Import Mode Testing** - Verify import behavior with `ImportState: true`
+4. **Error and Plan Expectations** - Validate expected failures and plan outcomes
+
+### State Checks
+
+State checks validate resource attributes in Terraform state after `terraform apply`. They execute during Lifecycle (config) mode and provide comprehensive attribute verification.
+
+**Key Characteristics**:
+
+- Multiple state checks can run with aggregated error reporting
+- Cleanup executes even when checks fail
+- Primarily for validating computed attributes
+
+**ExpectKnownValue - Verify Attribute Type and Value**:
+
+```go
+import (
+    "github.com/hashicorp/terraform-plugin-testing/statecheck"
+    "github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
+    "github.com/hashicorp/terraform-plugin-testing/knownvalue"
+)
+
+// Basic attribute verification
+StateChecks: []statecheck.StateCheck{
+    statecheck.ExpectKnownValue(
+        "example_instance.test",
+        tfjsonpath.New("name"),
+        knownvalue.StringExact("test-instance"),
+    ),
+    statecheck.ExpectKnownValue(
+        "example_instance.test",
+        tfjsonpath.New("enabled"),
+        knownvalue.Bool(true),
+    ),
+}
+
+// Nested attribute with map key access
+StateChecks: []statecheck.StateCheck{
+    statecheck.ExpectKnownValue(
+        "example_instance.test",
+        tfjsonpath.New("tags").AtMapKey("environment"),
+        knownvalue.StringExact("production"),
+    ),
+}
+```
+
+**CompareValue - Track Attribute Changes Across Steps**:
+
+```go
+// Compare computed values across test steps
+compareValuesSame := statecheck.CompareValue(compare.ValuesSame())
+
+// First test step - capture initial value
+{
+    Config: testAccInstanceResourceConfig("test"),
+    ConfigStateChecks: []statecheck.StateCheck{
+        compareValuesSame.AddStateValue(
+            "example_instance.test",
+            tfjsonpath.New("computed_id"),
+        ),
+    },
+}
+
+// Second test step - verify value hasn't changed
+{
+    Config: testAccInstanceResourceConfig("test-updated"),
+    ConfigStateChecks: []statecheck.StateCheck{
+        compareValuesSame.AddStateValue(
+            "example_instance.test",
+            tfjsonpath.New("computed_id"),
+        ),
+    },
+}
+```
+
+**Known Value Types**:
+
+```go
+// Boolean values
+knownvalue.Bool(true)
+
+// String values
+knownvalue.StringExact("exact-match")
+
+// Numeric values
+knownvalue.Int64Exact(42)
+knownvalue.Float64Exact(3.14)
+
+// Null and existence checks
+knownvalue.Null()
+knownvalue.NotNull()
+
+// Collections
+knownvalue.ListExact([]knownvalue.Check{
+    knownvalue.StringExact("item1"),
+    knownvalue.StringExact("item2"),
+})
+
+knownvalue.MapExact(map[string]knownvalue.Check{
+    "key1": knownvalue.StringExact("value1"),
+    "key2": knownvalue.Int64Exact(100),
+})
+
+knownvalue.SetExact([]knownvalue.Check{
+    knownvalue.StringExact("elem1"),
+    knownvalue.StringExact("elem2"),
+})
+```
+
+**Sensitive Value Verification (Terraform 1.4.6+)**:
+
+```go
+// Verify attribute is marked sensitive
+StateChecks: []statecheck.StateCheck{
+    statecheck.ExpectSensitiveValue(
+        "example_instance.test",
+        tfjsonpath.New("api_key"),
+    ),
+}
+```
+
+**State Check Best Practices**:
+
+- Validate computed attributes, not user-provided configuration
+- Use `ExpectKnownValue` for exact value matching
+- Use `CompareValue` to track consistency across test steps
+- Use `ExpectSensitiveValue` for sensitive attributes
+- Leverage JSON paths for nested attribute access
+
+### Plan Checks
+
+Plan checks validate Terraform plan outcomes during test execution. They ensure configuration changes produce expected planning results.
+
+**Key Characteristics**:
+
+- Multiple checks per phase with aggregated error reporting
+- Cleanup executes even when checks fail
+- Available in Lifecycle (config) and Refresh test modes
+
+**Built-in Plan Check Functions**:
+
+```go
+import "github.com/hashicorp/terraform-plugin-testing/plancheck"
+
+// ExpectEmptyPlan - Asserts no operations for apply
+// Use when: Verifying idempotency or that updates produce no changes
+ConfigPlanChecks: resource.ConfigPlanChecks{
+    PreApply: []plancheck.PlanCheck{
+        plancheck.ExpectEmptyPlan(),
+    },
+}
+
+// ExpectNonEmptyPlan - Asserts at least one operation for apply
+// Use when: Confirming configuration changes trigger updates
+ConfigPlanChecks: resource.ConfigPlanChecks{
+    PreApply: []plancheck.PlanCheck{
+        plancheck.ExpectNonEmptyPlan(),
+    },
+}
+```
+
+**Plan Check Example**:
+
+```go
+func TestAccInstanceResource_Idempotent(t *testing.T) {
+    resource.Test(t, resource.TestCase{
+        PreCheck:                 func() { testAccPreCheck(t) },
+        ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+        Steps: []resource.TestStep{
+            // Create
+            {
+                Config: testAccInstanceResourceConfig("test"),
+                Check: resource.ComposeAggregateTestCheckFunc(
+                    resource.TestCheckResourceAttr("example_instance.test", "name", "test"),
+                ),
+            },
+            // Verify idempotency - no plan changes
+            {
+                Config: testAccInstanceResourceConfig("test"),
+                ConfigPlanChecks: resource.ConfigPlanChecks{
+                    PreApply: []plancheck.PlanCheck{
+                        plancheck.ExpectEmptyPlan(),
+                    },
+                },
+            },
+        },
+    })
+}
+```
+
+**Plan Check Best Practices**:
+
+- Use `ExpectEmptyPlan()` to verify idempotency after resource creation
+- Use `ExpectNonEmptyPlan()` to confirm updates actually trigger changes
+- Combine with drift detection tests to verify Read operations
+- Available check types: General, Resource, Output, and Custom plan checks
+
+### Comprehensive Testing Example
+
+Combining state checks, plan checks, and traditional checks:
+
+```go
+func TestAccInstanceResource_Complete(t *testing.T) {
+    compareID := statecheck.CompareValue(compare.ValuesSame())
+
+    resource.Test(t, resource.TestCase{
+        PreCheck:                 func() { testAccPreCheck(t) },
+        ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+        Steps: []resource.TestStep{
+            // Create and verify
+            {
+                Config: testAccInstanceResourceConfig("test"),
+                Check: resource.ComposeAggregateTestCheckFunc(
+                    resource.TestCheckResourceAttr("example_instance.test", "name", "test"),
+                    resource.TestCheckResourceAttrSet("example_instance.test", "id"),
+                ),
+                ConfigStateChecks: []statecheck.StateCheck{
+                    statecheck.ExpectKnownValue(
+                        "example_instance.test",
+                        tfjsonpath.New("name"),
+                        knownvalue.StringExact("test"),
+                    ),
+                    compareID.AddStateValue(
+                        "example_instance.test",
+                        tfjsonpath.New("id"),
+                    ),
+                },
+            },
+            // Verify idempotency
+            {
+                Config: testAccInstanceResourceConfig("test"),
+                ConfigPlanChecks: resource.ConfigPlanChecks{
+                    PreApply: []plancheck.PlanCheck{
+                        plancheck.ExpectEmptyPlan(),
+                    },
+                },
+            },
+            // Update and verify ID remains same
+            {
+                Config: testAccInstanceResourceConfig("test-updated"),
+                Check: resource.ComposeAggregateTestCheckFunc(
+                    resource.TestCheckResourceAttr("example_instance.test", "name", "test-updated"),
+                ),
+                ConfigStateChecks: []statecheck.StateCheck{
+                    statecheck.ExpectKnownValue(
+                        "example_instance.test",
+                        tfjsonpath.New("name"),
+                        knownvalue.StringExact("test-updated"),
+                    ),
+                    // Verify ID hasn't changed
+                    compareID.AddStateValue(
+                        "example_instance.test",
+                        tfjsonpath.New("id"),
+                    ),
+                },
+            },
+        },
+    })
+}
+```
+
+### Regression Testing Pattern
+
+When fixing bugs, follow this workflow:
+
+1. **Create regression test** - Write failing test that reproduces the bug
+2. **Commit test first** - Commit shows problem independently verified
+3. **Implement fix** - Subsequent commits fix the issue
+4. **Verify test passes** - Confirms fix resolves the problem
+
+This allows independent verification of problem reproduction before evaluating solutions
+
 ### Running Tests
 
 ```bash
@@ -491,18 +769,29 @@ resource.ComposeAggregateTestCheckFunc(
 
 ❌ Skipping ImportState tests
 ❌ Skipping Drift tests
-❌ Using hardcoded test values
+❌ Skipping idempotency tests with plan checks
+❌ Using hardcoded test values (use unique names per test run)
 ❌ Incomplete CRUD testing
 ❌ Ignoring error cases
 ❌ Missing or outdated documentation
 ❌ Not testing state drift
 ❌ Tests dependent on external state
+❌ Not verifying plan outcomes with ExpectEmptyPlan/ExpectNonEmptyPlan
+❌ Using TestCheckResourceAttr for computed values (use StateChecks instead)
+❌ Not tracking attribute consistency across test steps (use CompareValue)
+❌ Missing sensitive attribute verification (use ExpectSensitiveValue)
 
 ## Development Checklist
 
 - [ ] Schema aligns with underlying API
-- [ ] Resource supports import
+- [ ] Resource supports import (ImportState tests)
 - [ ] All CRUD operations tested
+- [ ] State checks verify computed attributes (ExpectKnownValue)
+- [ ] Attribute consistency tracked across steps (CompareValue)
+- [ ] Idempotency verified with plan checks (ExpectEmptyPlan)
+- [ ] Drift detection tests implemented
+- [ ] Sensitive attributes verified (ExpectSensitiveValue)
+- [ ] Error cases tested (ExpectError)
 - [ ] Acceptance tests pass 100%
 - [ ] Documentation generated
 - [ ] CHANGELOG updated
