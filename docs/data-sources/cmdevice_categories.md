@@ -190,6 +190,7 @@ Read-Only:
 - `disksetup` (String) Disk partitioning configuration (XML format)
 - `fips` (String) FIPS mode setting
 - `fsmounts` (List of String) Filesystem mounts
+- `id` (String) Category identifier (same as UUID)
 - `install_boot_record` (Boolean) Install boot record
 - `install_mode` (String) Installation mode (AUTO, FULL, etc.)
 - `interactive_user` (String) Interactive user mode

@@ -5,7 +5,11 @@ data "bcm_cmdevice_nodes" "all" {}
 locals {
   node_ips = {
     for node in data.bcm_cmdevice_nodes.all.nodes :
-    node.hostname => length(node.interfaces) > 0 ? node.interfaces[0].ip : null
+    node.hostname => (
+      length(node.interfaces) > 0 && node.interfaces[0].ip != null
+      ? node.interfaces[0].ip
+      : null
+    )
   }
 }
 
@@ -25,11 +29,18 @@ locals {
   ansible_inventory = {
     for node in data.bcm_cmdevice_nodes.all.nodes :
     node.hostname => {
-      ansible_host = length(node.interfaces) > 0 ? node.interfaces[0].ip : null
-      node_type    = node.child_type
-      node_uuid    = node.uuid
-      node_mac     = node.mac
-      roles        = [for role in node.roles : role.name]
+      ansible_host = (
+        length(node.interfaces) > 0 && node.interfaces[0].ip != null
+        ? node.interfaces[0].ip
+        : null
+      )
+      node_type = node.child_type
+      node_uuid = node.uuid
+      node_mac  = node.mac
+      roles = [
+        for role in node.roles :
+        role.name if role.name != null
+      ]
       interfaces = [
         for iface in node.interfaces : {
           name = iface.name
@@ -60,13 +71,16 @@ output "ansible_inventory" {
 # Filter head nodes and extract management IPs
 data "bcm_cmdevice_nodes" "head_nodes" {
   filter {
-    node_type = "HeadNode"
+    child_type = "HeadNode"
   }
 }
 
 output "head_node_management_ips" {
+  description = "Management IP addresses of head nodes"
   value = [
     for node in data.bcm_cmdevice_nodes.head_nodes.nodes :
-    length(node.interfaces) > 0 ? node.interfaces[0].ip : "no-ip"
+    length(node.interfaces) > 0 && node.interfaces[0].ip != null
+    ? node.interfaces[0].ip
+    : null
   ]
 }

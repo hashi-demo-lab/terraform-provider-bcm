@@ -40,7 +40,10 @@ output "node_inventory" {
       type       = node.child_type
       mac        = node.mac
       interfaces = length(node.interfaces)
-      roles      = [for role in node.roles : role.name]
+      roles = [
+        for role in node.roles :
+        role.name if role.name != null
+      ]
     }
   }
 }

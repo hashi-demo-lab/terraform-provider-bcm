@@ -37,12 +37,6 @@ func TestAccCMPartSoftwareImageResource_Basic(t *testing.T) {
 			// Create and Read testing
 			{
 				Config: testAccCMPartSoftwareImageResourceConfig_Basic(imageName, imagePath),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "name", imageName),
-					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "path", imagePath),
-					resource.TestCheckResourceAttrSet("bcm_cmpart_softwareimage.test", "uuid"),
-					resource.TestCheckResourceAttrSet("bcm_cmpart_softwareimage.test", "creation_time"),
-				),
 				ConfigStateChecks: []statecheck.StateCheck{
 					// Modern state verification with type-safe matchers
 					statecheck.ExpectKnownValue(
@@ -63,6 +57,11 @@ func TestAccCMPartSoftwareImageResource_Basic(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"bcm_cmpart_softwareimage.test",
 						tfjsonpath.New("id"),
+						knownvalue.NotNull(),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("creation_time"),
 						knownvalue.NotNull(),
 					),
 					// Track ID for consistency across operations
@@ -92,10 +91,6 @@ func TestAccCMPartSoftwareImageResource_Basic(t *testing.T) {
 			// Update and Read testing
 			{
 				Config: testAccCMPartSoftwareImageResourceConfig_Updated(imageName, imagePath),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "name", imageName),
-					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "notes", "Updated notes"),
-				),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmpart_softwareimage.test",
@@ -141,15 +136,6 @@ func TestAccCMPartSoftwareImageResource_FullConfig(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: testAccCMPartSoftwareImageResourceConfig_Full(imageName, imagePath),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "name", imageName),
-					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "path", imagePath),
-					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "kernel_parameters", "quiet splash"),
-					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "notes", "Test image with full configuration"),
-					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "enable_sol", "true"),
-					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "sol_speed", "115200"),
-					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "modules.#", "2"),
-				),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmpart_softwareimage.test",
@@ -214,9 +200,6 @@ func TestAccCMPartSoftwareImageResource_UpdateKernelConfig(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: testAccCMPartSoftwareImageResourceConfig_KernelParams(imageName, imagePath, "quiet"),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "kernel_parameters", "quiet"),
-				),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmpart_softwareimage.test",
@@ -227,9 +210,6 @@ func TestAccCMPartSoftwareImageResource_UpdateKernelConfig(t *testing.T) {
 			},
 			{
 				Config: testAccCMPartSoftwareImageResourceConfig_KernelParams(imageName, imagePath, "quiet splash"),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "kernel_parameters", "quiet splash"),
-				),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmpart_softwareimage.test",
@@ -264,9 +244,6 @@ func TestAccCMPartSoftwareImageResource_UpdateModules(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: testAccCMPartSoftwareImageResourceConfig_Modules(imageName, imagePath, 1),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "modules.#", "1"),
-				),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmpart_softwareimage.test",
@@ -277,9 +254,6 @@ func TestAccCMPartSoftwareImageResource_UpdateModules(t *testing.T) {
 			},
 			{
 				Config: testAccCMPartSoftwareImageResourceConfig_Modules(imageName, imagePath, 2),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "modules.#", "2"),
-				),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmpart_softwareimage.test",
@@ -314,10 +288,6 @@ func TestAccCMPartSoftwareImageResource_UpdateSOL(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: testAccCMPartSoftwareImageResourceConfig_SOL(imageName, imagePath, false, "9600"),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "enable_sol", "false"),
-					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "sol_speed", "9600"),
-				),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmpart_softwareimage.test",
@@ -333,10 +303,6 @@ func TestAccCMPartSoftwareImageResource_UpdateSOL(t *testing.T) {
 			},
 			{
 				Config: testAccCMPartSoftwareImageResourceConfig_SOL(imageName, imagePath, true, "115200"),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "enable_sol", "true"),
-					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "sol_speed", "115200"),
-				),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmpart_softwareimage.test",
@@ -512,30 +478,30 @@ resource "bcm_cmpart_softwareimage" "cloned" {
 					imageName2,
 					imagePath2,
 				),
-				Check: resource.ComposeAggregateTestCheckFunc(
+				ConfigStateChecks: []statecheck.StateCheck{
 					// Verify base image was created
-					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.base", "name", imageName1),
-					resource.TestCheckResourceAttrSet("bcm_cmpart_softwareimage.base", "uuid"),
-
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.base",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(imageName1),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.base",
+						tfjsonpath.New("uuid"),
+						knownvalue.NotNull(),
+					),
 					// Verify cloned image was created with Unknown value resolution
-					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.cloned", "name", imageName2),
-					resource.TestCheckResourceAttrSet("bcm_cmpart_softwareimage.cloned", "uuid"),
-
-					// Most importantly: verify that the cloned image has a UUID
-					// This proves Unknown value was resolved during apply
-					func(s *terraform.State) error {
-						rs, ok := s.RootModule().Resources["bcm_cmpart_softwareimage.cloned"]
-						if !ok {
-							return fmt.Errorf("Resource not found: bcm_cmpart_softwareimage.cloned")
-						}
-
-						if rs.Primary.Attributes["uuid"] == "" {
-							return fmt.Errorf("UUID should be set after Unknown value resolution")
-						}
-
-						return nil
-					},
-				),
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.cloned",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(imageName2),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.cloned",
+						tfjsonpath.New("uuid"),
+						knownvalue.NotNull(),
+					),
+				},
 			},
 		},
 	})
@@ -569,11 +535,6 @@ func TestAccCMPartSoftwareImage_DriftKernelParameters(t *testing.T) {
 			// Step 1: Create resource with initial kernel_parameters
 			{
 				Config: testAccCMPartSoftwareImageResourceConfig_DriftKernel(imageName, imagePath, "quiet splash"),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "name", imageName),
-					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "kernel_parameters", "quiet splash"),
-					resource.TestCheckResourceAttrSet("bcm_cmpart_softwareimage.test", "uuid"),
-				),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmpart_softwareimage.test",
@@ -655,15 +616,120 @@ func TestAccCMPartSoftwareImage_DriftKernelParameters(t *testing.T) {
 			// Step 3: Restore desired state (Terraform applies config to fix drift)
 			{
 				Config: testAccCMPartSoftwareImageResourceConfig_DriftKernel(imageName, imagePath, "quiet splash"),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					// Verify drift was corrected and state matches config
-					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "kernel_parameters", "quiet splash"),
-				),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmpart_softwareimage.test",
 						tfjsonpath.New("kernel_parameters"),
 						knownvalue.StringExact("quiet splash"),
+					),
+				},
+			},
+		},
+	})
+}
+
+// TestAccCMPartSoftwareImage_Drift tests drift detection for notes attribute
+// This test verifies that Terraform can detect and correct configuration drift
+// when the notes field is modified externally via the BCM API
+func TestAccCMPartSoftwareImage_Drift(t *testing.T) {
+	imageName := generateUniqueTestName("test-drift-notes")
+	imagePath := fmt.Sprintf("/cm/images/%s", imageName)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccCMPartSoftwareImagePreCheck(t, imageName)
+		},
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMPartSoftwareImageDestroy,
+		Steps: []resource.TestStep{
+			// Step 1: Create resource with initial notes value
+			{
+				Config: testAccCMPartSoftwareImageResourceConfig_Drift(imageName, imagePath, "Production environment"),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(imageName),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("notes"),
+						knownvalue.StringExact("Production environment"),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("uuid"),
+						knownvalue.NotNull(),
+					),
+				},
+			},
+			// Step 2: Modify notes externally via BCM API, verify drift detected
+			{
+				PreConfig: func() {
+					client := createTestBCMClient(t)
+					ctx := context.Background()
+
+					// Get UUID by image name using helper
+					uuid := getResourceUUIDByName(t, "CMPart", "getSoftwareImage", imageName)
+
+					// Fetch full software image data from BCM API
+					body, err := client.CallJSONRPC(ctx, "CMPart", "getSoftwareImage", imageName)
+					if err != nil {
+						t.Fatalf("Failed to fetch software image for drift modification: %v", err)
+					}
+
+					// Parse the image data
+					var imageData map[string]interface{}
+					if err := json.Unmarshal(body, &imageData); err != nil {
+						t.Fatalf("Failed to parse image data: %v", err)
+					}
+
+					// Modify notes field (BCM uses same field name as Terraform)
+					imageData["notes"] = "Staging environment"
+
+					// Wrap in BCM API entity structure required for updates
+					entity := map[string]interface{}{
+						"baseType":      "SoftwareImage",
+						"childType":     "",
+						"modified":      true,
+						"to_be_removed": false,
+						"revision":      "",
+						"uuid":          uuid,
+					}
+					// Copy all image data fields except uuid (already set above)
+					for k, v := range imageData {
+						if k != "uuid" {
+							entity[k] = v
+						}
+					}
+
+					// Update via BCM API (second parameter: clone = false)
+					_, err = client.CallJSONRPC(ctx, "CMPart", "updateSoftwareImage", entity, false)
+					if err != nil {
+						t.Fatalf("Failed to update software image via BCM API: %v", err)
+					}
+
+					// Wait for eventual consistency
+					time.Sleep(2 * time.Second)
+
+					t.Logf("[DEBUG] Modified notes externally to: %v", entity["notes"])
+				},
+				Config: testAccCMPartSoftwareImageResourceConfig_Drift(imageName, imagePath, "Production environment"),
+				// Use ConfigPlanChecks to verify drift detected (non-empty plan expected)
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectNonEmptyPlan(),
+					},
+				},
+			},
+			// Step 3: Restore desired state (Terraform applies config to fix drift)
+			{
+				Config: testAccCMPartSoftwareImageResourceConfig_Drift(imageName, imagePath, "Production environment"),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("notes"),
+						knownvalue.StringExact("Production environment"),
 					),
 				},
 			},
@@ -691,10 +757,18 @@ func TestAccCMPartSoftwareImage_DestroyIdempotent(t *testing.T) {
 			// Step 1: Create resource
 			{
 				Config: testAccCMPartSoftwareImageResourceConfig_Basic(imageName, imagePath),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "name", imageName),
-					resource.TestCheckResourceAttrSet("bcm_cmpart_softwareimage.test", "uuid"),
-				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(imageName),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("uuid"),
+						knownvalue.NotNull(),
+					),
+				},
 			},
 			// Step 2: Destroy happens automatically, then manually verify CheckDestroy handles already-deleted
 			// Note: We can't easily test double-destroy in the TestCase flow, so we rely on
@@ -750,10 +824,18 @@ func TestAccCMPartSoftwareImage_DestroyExternalDelete(t *testing.T) {
 			// Step 1: Create resource
 			{
 				Config: testAccCMPartSoftwareImageResourceConfig_Basic(imageName, imagePath),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmpart_softwareimage.test", "name", imageName),
-					resource.TestCheckResourceAttrSet("bcm_cmpart_softwareimage.test", "uuid"),
-				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(imageName),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("uuid"),
+						knownvalue.NotNull(),
+					),
+				},
 			},
 			// Step 2: Delete externally via BCM API, then let Terraform destroy
 			{
@@ -804,6 +886,32 @@ resource "bcm_cmpart_softwareimage" "test" {
 		name,
 		path,
 		kernelParams,
+	)
+}
+
+// Helper function for drift detection test configuration (notes field)
+// Config function with parameterized notes
+func testAccCMPartSoftwareImageResourceConfig_Drift(name, path, notes string) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+resource "bcm_cmpart_softwareimage" "test" {
+  name  = %[4]q
+  path  = %[5]q
+  notes = %[6]q
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		name,
+		path,
+		notes,
 	)
 }
 

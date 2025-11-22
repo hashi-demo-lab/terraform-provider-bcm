@@ -1,24 +1,12 @@
 
 
-provider "bcm" {
-  # Configuration provided via environment variables:
-  # export BCM_ENDPOINT="https://172.21.15.254:8081"
-  # export BCM_USERNAME="root"
-  # export BCM_PASSWORD="your-password"
-  insecure_skip_verify = true
-}
-
-# Lookup management network for category creation
-data "bcm_cmnet_networks" "management" {
-  filter {
-    name_pattern = "DefaultEthernet"
-  }
-}
+# Lookup all networks (use first available as management network)
+data "bcm_cmnet_networks" "all" {}
 
 # Create a category for compute nodes
 resource "bcm_cmdevice_category" "compute" {
   name               = "citest-compute-nodes"
-  management_network = data.bcm_cmnet_networks.management.networks[0].id
+  management_network = data.bcm_cmnet_networks.all.networks[0].id
   notes              = "Category for compute cluster nodes"
 }
 
@@ -36,7 +24,7 @@ resource "bcm_cmdevice_device" "compute_basic" {
   hostname           = "citest-compute-node-01"
   mac                = "00:11:22:33:44:55"
   category           = bcm_cmdevice_category.compute.id
-  management_network = data.bcm_cmnet_networks.management.networks[0].id
+  management_network = data.bcm_cmnet_networks.all.networks[0].id
 
   notes = "Basic compute node managed by Terraform"
 }
@@ -46,7 +34,7 @@ resource "bcm_cmdevice_device" "compute_custom" {
   hostname           = "citest-compute-node-02"
   mac                = "00:11:22:33:44:56"
   category           = bcm_cmdevice_category.compute.id
-  management_network = data.bcm_cmnet_networks.management.networks[0].id
+  management_network = data.bcm_cmnet_networks.all.networks[0].id
 
   # Boot configuration
   boot_loader       = "pxelinux"
@@ -60,7 +48,7 @@ resource "bcm_cmdevice_device" "compute_ipmi" {
   hostname           = "citest-compute-node-03"
   mac                = "00:11:22:33:44:57"
   category           = bcm_cmdevice_category.compute.id
-  management_network = data.bcm_cmnet_networks.management.networks[0].id
+  management_network = data.bcm_cmnet_networks.all.networks[0].id
 
   # Power control via IPMI
   power_control = "ipmi"
@@ -85,7 +73,7 @@ resource "bcm_cmdevice_device" "gpu_node" {
   hostname           = "citest-gpu-node-01"
   mac                = "00:11:22:33:44:58"
   category           = bcm_cmdevice_category.compute.id
-  management_network = data.bcm_cmnet_networks.management.networks[0].id
+  management_network = data.bcm_cmnet_networks.all.networks[0].id
 
   # Power control
   power_control = "ipmi"
@@ -110,7 +98,7 @@ resource "bcm_cmdevice_device" "storage_node" {
   hostname           = "citest-storage-node-01"
   mac                = "00:11:22:33:44:59"
   category           = bcm_cmdevice_category.compute.id
-  management_network = data.bcm_cmnet_networks.management.networks[0].id
+  management_network = data.bcm_cmnet_networks.all.networks[0].id
 
   # Power control
   power_control = "ipmi"

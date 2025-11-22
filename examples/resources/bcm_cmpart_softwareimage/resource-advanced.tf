@@ -6,9 +6,7 @@
 # export BCM_ENDPOINT="https://bcm.example.com:8081"
 # export BCM_USERNAME="admin"
 # export BCM_PASSWORD="your-password"
-provider "bcm" {
-  insecure_skip_verify = true # Only for self-signed certificates
-}
+
 
 # Query all available software images
 data "bcm_cmpart_softwareimages" "all" {}

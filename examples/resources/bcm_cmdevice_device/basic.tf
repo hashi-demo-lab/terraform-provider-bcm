@@ -1,14 +1,4 @@
-terraform {
-  required_providers {
-    bcm = {
-      source = "hashicorp/bcm"
-    }
-  }
-}
 
-provider "bcm" {
-  insecure_skip_verify = true
-}
 
 # Generate unique suffix for this test run
 locals {

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"regexp"
 	"testing"
 	"time"
 
@@ -763,5 +764,228 @@ resource "bcm_cmdevice_category" "test" {
 		os.Getenv("BCM_PASSWORD"),
 		name,
 		notes,
+	)
+}
+
+// ========================================
+// Validation Tests
+// ========================================
+
+// TestAccCMDeviceCategory_ValidationInvalidName tests name length validation
+func TestAccCMDeviceCategory_ValidationInvalidName(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			// Test empty name (below minimum length)
+			{
+				Config:      testAccCMDeviceCategoryResourceConfig_InvalidName(""),
+				ExpectError: regexp.MustCompile(`Attribute name string length must be between 1 and 255`),
+			},
+		},
+	})
+}
+
+// TestAccCMDeviceCategory_ValidationInvalidManagementNetwork tests UUID format validation
+func TestAccCMDeviceCategory_ValidationInvalidManagementNetwork(t *testing.T) {
+	categoryName := generateUniqueTestName("test-invalid-uuid")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			// Test invalid UUID format
+			{
+				Config:      testAccCMDeviceCategoryResourceConfig_InvalidUUID(categoryName, "not-a-uuid"),
+				ExpectError: regexp.MustCompile(`Attribute management_network must be a valid RFC 4122 UUID format`),
+			},
+			// Test malformed UUID with invalid characters
+			{
+				Config:      testAccCMDeviceCategoryResourceConfig_InvalidUUID(categoryName, "12345678-1234-1234-1234-12345678901G"),
+				ExpectError: regexp.MustCompile(`Attribute management_network must be a valid RFC 4122 UUID format`),
+			},
+		},
+	})
+}
+
+// TestAccCMDeviceCategory_ValidationInvalidBootLoader tests boot_loader enum validation
+func TestAccCMDeviceCategory_ValidationInvalidBootLoader(t *testing.T) {
+	categoryName := generateUniqueTestName("test-invalid-bootloader")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			// Test invalid boot_loader value
+			{
+				Config:      testAccCMDeviceCategoryResourceConfig_InvalidBootLoader(categoryName, "INVALID_BOOTLOADER"),
+				ExpectError: regexp.MustCompile(`Attribute boot_loader value must be one of`),
+			},
+		},
+	})
+}
+
+// TestAccCMDeviceCategory_ValidationInvalidFIPS tests fips enum validation
+func TestAccCMDeviceCategory_ValidationInvalidFIPS(t *testing.T) {
+	categoryName := generateUniqueTestName("test-invalid-fips")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			// Test invalid fips value (not "YES" or "NO")
+			{
+				Config:      testAccCMDeviceCategoryResourceConfig_InvalidFIPS(categoryName, "MAYBE"),
+				ExpectError: regexp.MustCompile(`Attribute fips value must be one of.*YES.*NO`),
+			},
+			// Test lowercase value (case-sensitive validation)
+			{
+				Config:      testAccCMDeviceCategoryResourceConfig_InvalidFIPS(categoryName, "yes"),
+				ExpectError: regexp.MustCompile(`Attribute fips value must be one of.*YES.*NO`),
+			},
+		},
+	})
+}
+
+// ========================================
+// Validation Test Config Helpers
+// ========================================
+
+// testAccCMDeviceCategoryResourceConfig_InvalidName creates config with invalid name
+func testAccCMDeviceCategoryResourceConfig_InvalidName(name string) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmdevice_categories" "all" {}
+data "bcm_cmpart_softwareimages" "all" {}
+
+locals {
+  management_network_uuid = length(data.bcm_cmdevice_categories.all.categories) > 0 ? data.bcm_cmdevice_categories.all.categories[0].management_network_id : "00000000-0000-0000-0000-000000000000"
+  software_image_uuid = length(data.bcm_cmpart_softwareimages.all.images) > 0 ? data.bcm_cmpart_softwareimages.all.images[0].uuid : "00000000-0000-0000-0000-000000000000"
+}
+
+resource "bcm_cmdevice_category" "test" {
+  name               = %[4]q
+  management_network = local.management_network_uuid
+
+  software_image_proxy = {
+    parent_software_image = local.software_image_uuid
+  }
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		name,
+	)
+}
+
+// testAccCMDeviceCategoryResourceConfig_InvalidUUID creates config with invalid management_network UUID
+func testAccCMDeviceCategoryResourceConfig_InvalidUUID(name, uuid string) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmpart_softwareimages" "all" {}
+
+locals {
+  software_image_uuid = length(data.bcm_cmpart_softwareimages.all.images) > 0 ? data.bcm_cmpart_softwareimages.all.images[0].uuid : "00000000-0000-0000-0000-000000000000"
+}
+
+resource "bcm_cmdevice_category" "test" {
+  name               = %[4]q
+  management_network = %[5]q
+
+  software_image_proxy = {
+    parent_software_image = local.software_image_uuid
+  }
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		name,
+		uuid,
+	)
+}
+
+// testAccCMDeviceCategoryResourceConfig_InvalidBootLoader creates config with invalid boot_loader
+func testAccCMDeviceCategoryResourceConfig_InvalidBootLoader(name, bootLoader string) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmdevice_categories" "all" {}
+data "bcm_cmpart_softwareimages" "all" {}
+
+locals {
+  management_network_uuid = length(data.bcm_cmdevice_categories.all.categories) > 0 ? data.bcm_cmdevice_categories.all.categories[0].management_network_id : "00000000-0000-0000-0000-000000000000"
+  software_image_uuid = length(data.bcm_cmpart_softwareimages.all.images) > 0 ? data.bcm_cmpart_softwareimages.all.images[0].uuid : "00000000-0000-0000-0000-000000000000"
+}
+
+resource "bcm_cmdevice_category" "test" {
+  name               = %[4]q
+  management_network = local.management_network_uuid
+  boot_loader        = %[5]q
+
+  software_image_proxy = {
+    parent_software_image = local.software_image_uuid
+  }
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		name,
+		bootLoader,
+	)
+}
+
+// testAccCMDeviceCategoryResourceConfig_InvalidFIPS creates config with invalid fips value
+func testAccCMDeviceCategoryResourceConfig_InvalidFIPS(name, fips string) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmdevice_categories" "all" {}
+data "bcm_cmpart_softwareimages" "all" {}
+
+locals {
+  management_network_uuid = length(data.bcm_cmdevice_categories.all.categories) > 0 ? data.bcm_cmdevice_categories.all.categories[0].management_network_id : "00000000-0000-0000-0000-000000000000"
+  software_image_uuid = length(data.bcm_cmpart_softwareimages.all.images) > 0 ? data.bcm_cmpart_softwareimages.all.images[0].uuid : "00000000-0000-0000-0000-000000000000"
+}
+
+resource "bcm_cmdevice_category" "test" {
+  name               = %[4]q
+  management_network = local.management_network_uuid
+  fips               = %[5]q
+
+  software_image_proxy = {
+    parent_software_image = local.software_image_uuid
+  }
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		name,
+		fips,
 	)
 }
