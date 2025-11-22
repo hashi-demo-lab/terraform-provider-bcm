@@ -1,47 +1,161 @@
-terraform {
-  required_providers {
-    bcm = {
-      source = "hashicorp/bcm"
-    }
-  }
-}
+
 
 provider "bcm" {
-  endpoint             = "https://172.21.15.254:8081"
-  username             = "root"
-  password             = "Hashicorp123!"
+  # Configuration provided via environment variables:
+  # export BCM_ENDPOINT="https://172.21.15.254:8081"
+  # export BCM_USERNAME="root"
+  # export BCM_PASSWORD="your-password"
   insecure_skip_verify = true
 }
 
-# Example: Create a basic compute device
-resource "bcm_cmdevice_device" "compute_node" {
-  hostname           = "compute-node-01"
-  mac                = "00:11:22:33:44:55"
-  category           = "your-category-uuid-here"
-  management_network = "your-network-uuid-here"
-
-  notes             = "Compute node managed by Terraform"
-  kernel_parameters = "console=ttyS0,115200"
-  boot_loader       = "pxelinux"
+# Lookup management network for category creation
+data "bcm_cmnet_networks" "management" {
+  filter {
+    name_pattern = "DefaultEthernet"
+  }
 }
 
-# Example: Create a device with power control and network configuration
-resource "bcm_cmdevice_device" "ipmi_node" {
-  hostname           = "ipmi-node-01"
-  mac                = "00:11:22:33:44:66"
-  category           = "your-category-uuid-here"
-  management_network = "your-network-uuid-here"
+# Create a category for compute nodes
+resource "bcm_cmdevice_category" "compute" {
+  name               = "citest-compute-nodes"
+  management_network = data.bcm_cmnet_networks.management.networks[0].id
+  notes              = "Category for compute cluster nodes"
+}
 
-  # Power control configuration
+# Create a software image for compute nodes
+resource "bcm_cmpart_softwareimage" "ubuntu_compute" {
+  name              = "citest-ubuntu-22.04-compute"
+  path              = "/cm/images/ubuntu-22.04-server-amd64.iso"
+  kernel_parameters = "console=ttyS0,115200 net.ifnames=0"
+  enable_sol        = true
+  sol_speed         = "115200"
+}
+
+# Example 1: Basic compute device with minimal configuration
+resource "bcm_cmdevice_device" "compute_basic" {
+  hostname           = "citest-compute-node-01"
+  mac                = "00:11:22:33:44:55"
+  category           = bcm_cmdevice_category.compute.id
+  management_network = data.bcm_cmnet_networks.management.networks[0].id
+
+  notes = "Basic compute node managed by Terraform"
+}
+
+# Example 2: Compute device with custom kernel parameters and boot configuration
+resource "bcm_cmdevice_device" "compute_custom" {
+  hostname           = "citest-compute-node-02"
+  mac                = "00:11:22:33:44:56"
+  category           = bcm_cmdevice_category.compute.id
+  management_network = data.bcm_cmnet_networks.management.networks[0].id
+
+  # Boot configuration
+  boot_loader       = "pxelinux"
+  kernel_parameters = "console=ttyS0,115200 net.ifnames=0 biosdevname=0"
+
+  notes = "Compute node with custom kernel parameters"
+}
+
+# Example 3: IPMI-enabled device with power control and network configuration
+resource "bcm_cmdevice_device" "compute_ipmi" {
+  hostname           = "citest-compute-node-03"
+  mac                = "00:11:22:33:44:57"
+  category           = bcm_cmdevice_category.compute.id
+  management_network = data.bcm_cmnet_networks.management.networks[0].id
+
+  # Power control via IPMI
   power_control = "ipmi"
 
   # Network gateway configuration
   default_gateway        = "192.168.1.1"
   default_gateway_metric = 100
 
-  # Hardware identifiers (optional, may be auto-discovered)
-  serial_number = "SN123456789"
-  part_number   = "PN-ABC-123"
+  # Boot configuration
+  boot_loader       = "pxelinux"
+  kernel_parameters = "console=ttyS0,115200 ipmi_si.type=kcs"
 
-  notes = "IPMI-enabled node with custom network configuration"
+  # Hardware identifiers (typically auto-discovered from BMC)
+  serial_number = "SN123456789"
+  part_number   = "PN-COMPUTE-001"
+
+  notes = "IPMI-enabled compute node with power management"
+}
+
+# Example 4: GPU compute node with multiple network interfaces
+resource "bcm_cmdevice_device" "gpu_node" {
+  hostname           = "citest-gpu-node-01"
+  mac                = "00:11:22:33:44:58"
+  category           = bcm_cmdevice_category.compute.id
+  management_network = data.bcm_cmnet_networks.management.networks[0].id
+
+  # Power control
+  power_control = "ipmi"
+
+  # Network configuration for high-performance networking
+  default_gateway        = "192.168.1.1"
+  default_gateway_metric = 50 # Lower metric for preferred route
+
+  # Boot configuration with GPU-specific parameters
+  boot_loader       = "pxelinux"
+  kernel_parameters = "console=ttyS0,115200 nouveau.modeset=0 nvidia-drm.modeset=1"
+
+  # Hardware identifiers
+  serial_number = "SN-GPU-001"
+  part_number   = "PN-GPU-NODE-001"
+
+  notes = "GPU compute node with NVIDIA drivers and RDMA networking"
+}
+
+# Example 5: Storage node with custom partition configuration
+resource "bcm_cmdevice_device" "storage_node" {
+  hostname           = "citest-storage-node-01"
+  mac                = "00:11:22:33:44:59"
+  category           = bcm_cmdevice_category.compute.id
+  management_network = data.bcm_cmnet_networks.management.networks[0].id
+
+  # Power control
+  power_control = "ipmi"
+
+  # Network configuration
+  default_gateway        = "192.168.1.1"
+  default_gateway_metric = 100
+
+  # Boot and partition configuration
+  boot_loader       = "pxelinux"
+  kernel_parameters = "console=ttyS0,115200"
+
+  # Hardware identifiers
+  serial_number = "SN-STORAGE-001"
+  part_number   = "PN-STORAGE-NODE-001"
+
+  notes = "Storage node for Ceph cluster"
+}
+
+# Output device information for reference
+output "compute_basic_id" {
+  description = "ID of the basic compute device"
+  value       = bcm_cmdevice_device.compute_basic.id
+}
+
+output "ipmi_devices" {
+  description = "IPMI-enabled devices with their serial numbers"
+  value = {
+    compute_ipmi = {
+      id            = bcm_cmdevice_device.compute_ipmi.id
+      hostname      = bcm_cmdevice_device.compute_ipmi.hostname
+      serial_number = bcm_cmdevice_device.compute_ipmi.serial_number
+      power_control = bcm_cmdevice_device.compute_ipmi.power_control
+    }
+    gpu_node = {
+      id            = bcm_cmdevice_device.gpu_node.id
+      hostname      = bcm_cmdevice_device.gpu_node.hostname
+      serial_number = bcm_cmdevice_device.gpu_node.serial_number
+      power_control = bcm_cmdevice_device.gpu_node.power_control
+    }
+    storage_node = {
+      id            = bcm_cmdevice_device.storage_node.id
+      hostname      = bcm_cmdevice_device.storage_node.hostname
+      serial_number = bcm_cmdevice_device.storage_node.serial_number
+      power_control = bcm_cmdevice_device.storage_node.power_control
+    }
+  }
 }

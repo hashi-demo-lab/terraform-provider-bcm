@@ -36,6 +36,7 @@ type CMDeviceCategoriesDataSourceModel struct {
 
 // CategoryDataModel describes a single category.
 type CategoryDataModel struct {
+	ID                     types.String `tfsdk:"id"`
 	UUID                   types.String `tfsdk:"uuid"`
 	Name                   types.String `tfsdk:"name"`
 	BaseType               types.String `tfsdk:"base_type"`
@@ -94,6 +95,10 @@ func (d *CMDeviceCategoriesDataSource) Schema(ctx context.Context, req datasourc
 				Computed:            true,
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
+						"id": schema.StringAttribute{
+							MarkdownDescription: "Category identifier (same as UUID)",
+							Computed:            true,
+						},
 						"uuid": schema.StringAttribute{
 							MarkdownDescription: "Unique identifier for the category",
 							Computed:            true,
@@ -313,8 +318,10 @@ func (d *CMDeviceCategoriesDataSource) Read(ctx context.Context, req datasource.
 	// Map categories to Terraform state
 	data.Categories = make([]CategoryDataModel, 0, len(filteredCategories))
 	for _, catData := range filteredCategories {
+		uuid := getStringValue(catData, "uuid")
 		category := CategoryDataModel{
-			UUID:                   getStringValue(catData, "uuid"),
+			ID:                     uuid, // ID is same as UUID for consistency
+			UUID:                   uuid,
 			Name:                   getStringValue(catData, "name"),
 			BaseType:               getStringValue(catData, "baseType"),
 			ChildType:              getStringValue(catData, "childType"),
