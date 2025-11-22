@@ -23,12 +23,13 @@ data "bcm_cmpart_partitions" "base_partitions" {
   }
 }
 
-# Use partition UUID in software image resource
-resource "bcm_cmpart_softwareimage" "example" {
-  name       = "my-custom-image"
-  bootfspart = data.bcm_cmpart_partitions.base_partitions.partitions[0].uuid
-  # ... other configuration
-}
+# Example: Use partition UUID in software image resource
+# resource "bcm_cmpart_softwareimage" "example" {
+#   name       = "my-custom-image"
+#   path       = "/cm/images/my-custom-image"
+#   bootfspart = data.bcm_cmpart_partitions.base_partitions.partitions[0].uuid
+#   # ... other configuration
+# }
 
 # Output partition information
 output "all_partition_names" {
