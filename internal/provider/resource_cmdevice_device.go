@@ -653,6 +653,8 @@ func (r *CMDeviceDeviceResource) Update(ctx context.Context, req resource.Update
 
 	// Resolve partition UUID (either from plan or from category's default)
 	partitionUUID := ""
+	usesProxy := false
+
 	if !plan.Partition.IsNull() && !plan.Partition.IsUnknown() {
 		partitionUUID = plan.Partition.ValueString()
 	} else {
@@ -675,17 +677,68 @@ func (r *CMDeviceDeviceResource) Update(ctx context.Context, req resource.Update
 			return
 		}
 
+		// Try direct partition field first
 		if partition, ok := categoryData["partition"].(string); ok && partition != "" {
 			partitionUUID = partition
-			tflog.Debug(ctx, "Using category's default partition", map[string]interface{}{
+			tflog.Debug(ctx, "Using category's direct partition", map[string]interface{}{
 				"partition": partitionUUID,
 			})
+		} else if proxyData, ok := categoryData["softwareImageProxy"].(map[string]interface{}); ok && proxyData != nil {
+			// Check if category uses softwareImageProxy instead
+			if parentImage, ok := proxyData["parentSoftwareImage"].(string); ok && parentImage != "" {
+				usesProxy = true
+				tflog.Debug(ctx, "Category uses softwareImageProxy - will use cluster's base partition", map[string]interface{}{
+					"parent_software_image": parentImage,
+				})
+
+				// Query for the base partition
+				partitionsBody, err := r.client.CallJSONRPC(ctx, "CMPart", "getPartitions")
+				if err != nil {
+					resp.Diagnostics.AddError(
+						"Error Querying Partitions",
+						fmt.Sprintf("Could not query partitions: %s", err.Error()),
+					)
+					return
+				}
+
+				var partitions []map[string]interface{}
+				if err := json.Unmarshal(partitionsBody, &partitions); err != nil {
+					resp.Diagnostics.AddError(
+						"Error Parsing Partitions",
+						fmt.Sprintf("Could not parse partitions response: %s", err.Error()),
+					)
+					return
+				}
+
+				// Find the base partition
+				basePartitionFound := false
+				for _, part := range partitions {
+					if name, ok := part["name"].(string); ok && name == "base" {
+						if uuid, ok := part["uuid"].(string); ok && uuid != "" {
+							partitionUUID = uuid
+							basePartitionFound = true
+							tflog.Debug(ctx, "Found base partition for softwareImageProxy", map[string]interface{}{
+								"partition_uuid": partitionUUID,
+							})
+							break
+						}
+					}
+				}
+
+				if !basePartitionFound {
+					resp.Diagnostics.AddError(
+						"Missing Base Partition",
+						"Category uses softwareImageProxy but no 'base' partition found in cluster",
+					)
+					return
+				}
+			}
 		}
 	}
 
 	// Build device entity for BCM API (include UUID for update)
-	// For updates, always include partition field (not using proxy mode)
-	deviceEntity := r.buildDeviceAPIEntity(plan, state.UUID.ValueString(), partitionUUID, false)
+	// Pass usesProxy to control whether partition field is included
+	deviceEntity := r.buildDeviceAPIEntity(plan, state.UUID.ValueString(), partitionUUID, usesProxy)
 
 	// Get force parameter value
 	forceValue := false
@@ -734,7 +787,15 @@ func (r *CMDeviceDeviceResource) Update(ctx context.Context, req resource.Update
 	// Preserve plan values for fields not persisted by BCM or modified during updates
 	newState.Force = plan.Force
 	newState.ManagementNetwork = plan.ManagementNetwork // BCM sets to nil UUID, preserve plan value
-	newState.Partition = plan.Partition                 // BCM doesn't return partition, preserve plan value
+
+	// Set partition to the resolved value (either from plan or resolved from category)
+	if partitionUUID != "" {
+		newState.Partition = types.StringValue(partitionUUID)
+	} else if !plan.Partition.IsNull() {
+		newState.Partition = plan.Partition
+	} else {
+		newState.Partition = types.StringNull()
+	}
 
 	// Preserve null values for optional fields that BCM populates from category
 	if plan.BootLoader.IsNull() {
