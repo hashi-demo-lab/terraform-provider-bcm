@@ -4,12 +4,9 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
-	"sort"
-	"strings"
 )
 
 // Import the BCM client from the provider
