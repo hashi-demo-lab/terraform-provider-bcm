@@ -9,7 +9,10 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
 	"github.com/hashicorp/terraform-plugin-testing/plancheck"
+	"github.com/hashicorp/terraform-plugin-testing/statecheck"
+	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
 )
 
 func TestAccCMDeviceDevice_Idempotency(t *testing.T) {
@@ -26,13 +29,33 @@ func TestAccCMDeviceDevice_Idempotency(t *testing.T) {
 			// Step 1: Create device
 			{
 				Config: testAccCMDeviceDeviceConfigIdempotency(deviceName, categoryName, imageName, imagePath),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmdevice_device.test", "hostname", deviceName),
-					resource.TestCheckResourceAttr("bcm_cmdevice_device.test", "mac", "00:11:22:33:44:BB"),
-					resource.TestCheckResourceAttrSet("bcm_cmdevice_device.test", "id"),
-					resource.TestCheckResourceAttrSet("bcm_cmdevice_device.test", "uuid"),
-					resource.TestCheckResourceAttrSet("bcm_cmdevice_device.test", "category"),
-				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("hostname"),
+						knownvalue.StringExact(deviceName),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("mac"),
+						knownvalue.StringExact("00:11:22:33:44:BB"),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+						knownvalue.NotNull(),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("uuid"),
+						knownvalue.NotNull(),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("category"),
+						knownvalue.NotNull(),
+					),
+				},
 			},
 			// Step 2: Verify idempotency - no changes expected
 			{
@@ -70,12 +93,28 @@ func TestAccCMDeviceDevice_IdempotencyWithOptionalFields(t *testing.T) {
 			// Step 1: Create device with optional fields
 			{
 				Config: testAccCMDeviceDeviceConfigIdempotencyOptional(deviceName, categoryName, imageName, imagePath),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmdevice_device.test", "hostname", deviceName),
-					resource.TestCheckResourceAttr("bcm_cmdevice_device.test", "notes", "Idempotency test device"),
-					resource.TestCheckResourceAttr("bcm_cmdevice_device.test", "kernel_parameters", "console=ttyS0"),
-					resource.TestCheckResourceAttrSet("bcm_cmdevice_device.test", "id"),
-				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("hostname"),
+						knownvalue.StringExact(deviceName),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("notes"),
+						knownvalue.StringExact("Idempotency test device"),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("kernel_parameters"),
+						knownvalue.StringExact("console=ttyS0"),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+						knownvalue.NotNull(),
+					),
+				},
 			},
 			// Step 2: Verify idempotency with optional fields
 			{
@@ -104,9 +143,13 @@ func TestAccCMDeviceDevice_IdempotencyAfterUpdate(t *testing.T) {
 			// Step 1: Create device with initial notes
 			{
 				Config: testAccCMDeviceDeviceConfigIdempotencyUpdate(deviceName, categoryName, imageName, imagePath, "Initial notes"),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmdevice_device.test", "notes", "Initial notes"),
-				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("notes"),
+						knownvalue.StringExact("Initial notes"),
+					),
+				},
 			},
 			// Step 2: Verify idempotency after creation
 			{
@@ -120,9 +163,13 @@ func TestAccCMDeviceDevice_IdempotencyAfterUpdate(t *testing.T) {
 			// Step 3: Update device notes
 			{
 				Config: testAccCMDeviceDeviceConfigIdempotencyUpdate(deviceName, categoryName, imageName, imagePath, "Updated notes"),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmdevice_device.test", "notes", "Updated notes"),
-				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("notes"),
+						knownvalue.StringExact("Updated notes"),
+					),
+				},
 			},
 			// Step 4: Verify idempotency after update
 			{

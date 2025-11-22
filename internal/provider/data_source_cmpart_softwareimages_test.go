@@ -22,12 +22,6 @@ func TestAccCMPartSoftwareImagesDataSource_Basic(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: testAccCMPartSoftwareImagesDataSourceConfig(),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					// Verify data source exists
-					resource.TestCheckResourceAttrSet("data.bcm_cmpart_softwareimages.test", "id"),
-					// Verify images attribute exists (may be empty list)
-					resource.TestCheckResourceAttrSet("data.bcm_cmpart_softwareimages.test", "images.#"),
-				),
 				ConfigStateChecks: []statecheck.StateCheck{
 					// Modern state verification - verify id computed field
 					statecheck.ExpectKnownValue(
@@ -50,10 +44,14 @@ func TestAccCMPartSoftwareImagesDataSource_EmptyResponse(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: testAccCMPartSoftwareImagesDataSourceConfig(),
-				Check: resource.ComposeAggregateTestCheckFunc(
+				ConfigStateChecks: []statecheck.StateCheck{
 					// Verify empty array returns empty list, not error
-					resource.TestCheckResourceAttr("data.bcm_cmpart_softwareimages.test", "id", "placeholder"),
-				),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmpart_softwareimages.test",
+						tfjsonpath.New("id"),
+						knownvalue.StringExact("placeholder"),
+					),
+				},
 			},
 		},
 	})
@@ -66,10 +64,14 @@ func TestAccCMPartSoftwareImagesDataSource_NestedModules(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: testAccCMPartSoftwareImagesDataSourceConfig(),
-				Check: resource.ComposeAggregateTestCheckFunc(
+				ConfigStateChecks: []statecheck.StateCheck{
 					// Check if there are any images returned
-					resource.TestCheckResourceAttrSet("data.bcm_cmpart_softwareimages.test", "images.#"),
-				),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmpart_softwareimages.test",
+						tfjsonpath.New("id"),
+						knownvalue.NotNull(),
+					),
+				},
 			},
 		},
 	})
@@ -82,12 +84,6 @@ func TestAccCMPartSoftwareImagesDataSource_AllFields(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: testAccCMPartSoftwareImagesDataSourceConfig(),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					// Verify data source exists
-					resource.TestCheckResourceAttrSet("data.bcm_cmpart_softwareimages.test", "id"),
-					// Environment-portable: no hardcoded image counts or names
-					resource.TestCheckResourceAttrSet("data.bcm_cmpart_softwareimages.test", "images.#"),
-				),
 				ConfigStateChecks: []statecheck.StateCheck{
 					// Modern state checks for computed fields
 					statecheck.ExpectKnownValue(
@@ -131,12 +127,6 @@ func TestAccCMPartSoftwareImagesDataSource_FilterByCategory(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: testAccCMPartSoftwareImagesDataSourceConfigFilterByCategory("Ubuntu"),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					// Verify data source exists
-					resource.TestCheckResourceAttrSet("data.bcm_cmpart_softwareimages.test", "id"),
-					// Environment-portable: verify filter returned results
-					resource.TestCheckResourceAttrSet("data.bcm_cmpart_softwareimages.test", "images.#"),
-				),
 				ConfigStateChecks: []statecheck.StateCheck{
 					// Modern state verification
 					statecheck.ExpectKnownValue(
@@ -159,12 +149,6 @@ func TestAccCMPartSoftwareImagesDataSource_FilterByName(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: testAccCMPartSoftwareImagesDataSourceConfigFilterByName("image"),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					// Verify data source exists
-					resource.TestCheckResourceAttrSet("data.bcm_cmpart_softwareimages.test", "id"),
-					// Environment-portable: verify filter returned results
-					resource.TestCheckResourceAttrSet("data.bcm_cmpart_softwareimages.test", "images.#"),
-				),
 				ConfigStateChecks: []statecheck.StateCheck{
 					// Modern state verification
 					statecheck.ExpectKnownValue(

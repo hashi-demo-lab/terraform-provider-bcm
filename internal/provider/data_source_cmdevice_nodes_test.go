@@ -22,10 +22,6 @@ func TestAccCMDeviceNodesDataSource_Basic(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: testAccCMDeviceNodesDataSourceConfig_basic(),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttrSet("data.bcm_cmdevice_nodes.test", "id"),
-					resource.TestCheckResourceAttrSet("data.bcm_cmdevice_nodes.test", "nodes.#"),
-				),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmdevice_nodes.test",
@@ -73,10 +69,6 @@ func TestAccCMDeviceNodesDataSource_FilterByType(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: testAccCMDeviceNodesDataSourceConfig_filterType(),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttrSet("data.bcm_cmdevice_nodes.test", "id"),
-					resource.TestCheckResourceAttrSet("data.bcm_cmdevice_nodes.test", "nodes.#"),
-				),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmdevice_nodes.test",
@@ -123,10 +115,6 @@ func TestAccCMDeviceNodesDataSource_FilterByHostname(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: testAccCMDeviceNodesDataSourceConfig_filterHostname(),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttrSet("data.bcm_cmdevice_nodes.test", "id"),
-					resource.TestCheckResourceAttrSet("data.bcm_cmdevice_nodes.test", "nodes.#"),
-				),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmdevice_nodes.test",
@@ -173,10 +161,6 @@ func TestAccCMDeviceNodesDataSource_FilterMultiple(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: testAccCMDeviceNodesDataSourceConfig_filterMultiple(),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttrSet("data.bcm_cmdevice_nodes.test", "id"),
-					resource.TestCheckResourceAttrSet("data.bcm_cmdevice_nodes.test", "nodes.#"),
-				),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmdevice_nodes.test",

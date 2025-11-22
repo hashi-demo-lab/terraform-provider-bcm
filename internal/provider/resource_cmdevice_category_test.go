@@ -120,13 +120,6 @@ func TestAccCMDeviceCategoryResource_Basic(t *testing.T) {
 			// Create and Read testing
 			{
 				Config: testAccCMDeviceCategoryResourceConfig(categoryName),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "name", categoryName),
-					resource.TestCheckResourceAttrSet("bcm_cmdevice_category.test", "id"),
-					resource.TestCheckResourceAttrSet("bcm_cmdevice_category.test", "uuid"),
-					resource.TestCheckResourceAttrSet("bcm_cmdevice_category.test", "management_network"),
-					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "base_type", "Category"),
-				),
 				ConfigStateChecks: []statecheck.StateCheck{
 					// Modern state verification with type-safe matchers
 					statecheck.ExpectKnownValue(
@@ -143,6 +136,16 @@ func TestAccCMDeviceCategoryResource_Basic(t *testing.T) {
 						"bcm_cmdevice_category.test",
 						tfjsonpath.New("id"),
 						knownvalue.NotNull(),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("management_network"),
+						knownvalue.NotNull(),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("base_type"),
+						knownvalue.StringExact("Category"),
 					),
 					// Track ID for consistency across operations
 					compareID.AddStateValue(
@@ -171,17 +174,16 @@ func TestAccCMDeviceCategoryResource_Basic(t *testing.T) {
 			// Update and Read testing (keeping same name, updating other attributes)
 			{
 				Config: testAccCMDeviceCategoryResourceConfig_Updated(categoryName),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "name", categoryName),
-					resource.TestCheckResourceAttrSet("bcm_cmdevice_category.test", "uuid"),
-					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "notes", "Updated test category"),
-					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "kernel_parameters", "quiet splash console=ttyS0"),
-				),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_category.test",
 						tfjsonpath.New("name"),
 						knownvalue.StringExact(categoryName),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("uuid"),
+						knownvalue.NotNull(),
 					),
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_category.test",
@@ -316,13 +318,6 @@ func TestAccCMDeviceCategoryResource_Import(t *testing.T) {
 			// Create and Read testing
 			{
 				Config: testAccCMDeviceCategoryResourceConfig(categoryName),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "name", categoryName),
-					resource.TestCheckResourceAttrSet("bcm_cmdevice_category.test", "id"),
-					resource.TestCheckResourceAttrSet("bcm_cmdevice_category.test", "uuid"),
-					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "notes", "Test category for acceptance testing"),
-					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "kernel_parameters", "quiet splash"),
-				),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_category.test",
@@ -379,11 +374,6 @@ func TestAccCMDeviceCategoryResource_ForceParameter(t *testing.T) {
 			// Create category with force=false (default)
 			{
 				Config: testAccCMDeviceCategoryResourceConfig_Force(categoryName, false),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "name", categoryName),
-					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "force", "false"),
-					resource.TestCheckResourceAttrSet("bcm_cmdevice_category.test", "id"),
-				),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_category.test",
@@ -414,10 +404,6 @@ func TestAccCMDeviceCategoryResource_ForceParameter(t *testing.T) {
 			// Update with force=true
 			{
 				Config: testAccCMDeviceCategoryResourceConfig_Force(categoryName, true),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "name", categoryName),
-					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "force", "true"),
-				),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_category.test",
@@ -508,11 +494,6 @@ func TestAccCMDeviceCategory_DriftNotes(t *testing.T) {
 			// Step 1: Create resource with initial notes
 			{
 				Config: testAccCMDeviceCategoryResourceConfig_DriftNotes(categoryName, "Production"),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "name", categoryName),
-					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "notes", "Production"),
-					resource.TestCheckResourceAttrSet("bcm_cmdevice_category.test", "uuid"),
-				),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_category.test",
@@ -594,11 +575,8 @@ func TestAccCMDeviceCategory_DriftNotes(t *testing.T) {
 			// Step 3: Restore desired state (Terraform applies config to fix drift)
 			{
 				Config: testAccCMDeviceCategoryResourceConfig_DriftNotes(categoryName, "Production"),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					// Verify drift was corrected and state matches config
-					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "notes", "Production"),
-				),
 				ConfigStateChecks: []statecheck.StateCheck{
+					// Verify drift was corrected and state matches config
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_category.test",
 						tfjsonpath.New("notes"),
@@ -629,11 +607,6 @@ func TestAccCMDeviceCategory_DestroyWithForce(t *testing.T) {
 			// Step 1: Create category with force=true
 			{
 				Config: testAccCMDeviceCategoryResourceConfig_Force(categoryName, true),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "name", categoryName),
-					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "force", "true"),
-					resource.TestCheckResourceAttrSet("bcm_cmdevice_category.test", "uuid"),
-				),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_category.test",
@@ -675,10 +648,6 @@ func TestAccCMDeviceCategory_DestroyExternalDelete(t *testing.T) {
 			// Step 1: Create category
 			{
 				Config: testAccCMDeviceCategoryResourceConfig(categoryName),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "name", categoryName),
-					resource.TestCheckResourceAttrSet("bcm_cmdevice_category.test", "uuid"),
-				),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_category.test",

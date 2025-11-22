@@ -229,12 +229,6 @@ func TestAccCMDeviceDeviceResource_Basic(t *testing.T) {
 			// Create and Read testing
 			{
 				Config: testAccCMDeviceDeviceResourceConfig_Basic(deviceName, categoryName, imageName, imagePath),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmdevice_device.test", "hostname", deviceName),
-					resource.TestCheckResourceAttrSet("bcm_cmdevice_device.test", "uuid"),
-					resource.TestCheckResourceAttrSet("bcm_cmdevice_device.test", "id"),
-					resource.TestCheckResourceAttr("bcm_cmdevice_device.test", "mac", "00:11:22:33:44:55"),
-				),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_device.test",
@@ -244,6 +238,11 @@ func TestAccCMDeviceDeviceResource_Basic(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_device.test",
 						tfjsonpath.New("uuid"),
+						knownvalue.NotNull(),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
 						knownvalue.NotNull(),
 					),
 					statecheck.ExpectKnownValue(
@@ -297,12 +296,12 @@ func TestAccCMDeviceDeviceResource_Basic(t *testing.T) {
 			// Update and Read testing
 			{
 				Config: testAccCMDeviceDeviceResourceConfig_Updated(deviceName, categoryName, imageName, imagePath),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmdevice_device.test", "hostname", deviceName),
-					resource.TestCheckResourceAttr("bcm_cmdevice_device.test", "notes", "Updated device notes"),
-					resource.TestCheckResourceAttr("bcm_cmdevice_device.test", "kernel_parameters", "quiet splash"),
-				),
 				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("hostname"),
+						knownvalue.StringExact(deviceName),
+					),
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_device.test",
 						tfjsonpath.New("notes"),
@@ -402,9 +401,13 @@ func TestAccCMDeviceDevice_DriftNotes(t *testing.T) {
 			// Create with initial value
 			{
 				Config: testAccCMDeviceDeviceResourceConfig_Drift(deviceName, categoryName, imageName, imagePath),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmdevice_device.test", "notes", "initial-notes"),
-				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("notes"),
+						knownvalue.StringExact("initial-notes"),
+					),
+				},
 			},
 			// Modify externally via BCM API
 			{
@@ -463,9 +466,13 @@ func TestAccCMDeviceDevice_DriftNotes(t *testing.T) {
 			// Terraform restores desired state
 			{
 				Config: testAccCMDeviceDeviceResourceConfig_Drift(deviceName, categoryName, imageName, imagePath),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmdevice_device.test", "notes", "initial-notes"),
-				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("notes"),
+						knownvalue.StringExact("initial-notes"),
+					),
+				},
 			},
 		},
 	})
@@ -580,11 +587,6 @@ func TestAccCMDeviceDevice_Drift(t *testing.T) {
 			// Step 1: Create device with initial hostname
 			{
 				Config: testAccCMDeviceDeviceResourceConfig_Drift(initialHostname, categoryName, imageName, imagePath),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmdevice_device.test", "hostname", initialHostname),
-					resource.TestCheckResourceAttr("bcm_cmdevice_device.test", "notes", "initial-notes"),
-					resource.TestCheckResourceAttrSet("bcm_cmdevice_device.test", "uuid"),
-				),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_device.test",
@@ -665,12 +667,8 @@ func TestAccCMDeviceDevice_Drift(t *testing.T) {
 			// Step 3: Restore desired state (Terraform applies config to fix drift)
 			{
 				Config: testAccCMDeviceDeviceResourceConfig_Drift(initialHostname, categoryName, imageName, imagePath),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					// Verify drift was corrected and state matches config
-					resource.TestCheckResourceAttr("bcm_cmdevice_device.test", "hostname", initialHostname),
-					resource.TestCheckResourceAttr("bcm_cmdevice_device.test", "notes", "initial-notes"),
-				),
 				ConfigStateChecks: []statecheck.StateCheck{
+					// Verify drift was corrected and state matches config
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_device.test",
 						tfjsonpath.New("hostname"),
