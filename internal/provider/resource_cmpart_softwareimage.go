@@ -26,18 +26,18 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
-// Ensure provider defined types fully satisfy framework interfaces
+// Ensure provider defined types fully satisfy framework interfaces.
 var (
 	_ resource.Resource                = &CMPartSoftwareImageResource{}
 	_ resource.ResourceWithImportState = &CMPartSoftwareImageResource{}
 )
 
-// CMPartSoftwareImageResource defines the resource implementation
+// CMPartSoftwareImageResource defines the resource implementation.
 type CMPartSoftwareImageResource struct {
 	client *BCMClient
 }
 
-// CMPartSoftwareImageResourceModel describes the resource data model
+// CMPartSoftwareImageResourceModel describes the resource data model.
 type CMPartSoftwareImageResourceModel struct {
 	// Identity fields
 	ID   types.String `tfsdk:"id"`
@@ -72,23 +72,23 @@ type CMPartSoftwareImageResourceModel struct {
 	ParentSoftwareImage     types.String `tfsdk:"parent_software_image"`
 }
 
-// KernelModuleResourceModel describes a kernel module nested object
+// KernelModuleResourceModel describes a kernel module nested object.
 type KernelModuleResourceModel struct {
 	Name       types.String `tfsdk:"name"`
 	Parameters types.String `tfsdk:"parameters"`
 }
 
-// NewCMPartSoftwareImageResource creates a new resource instance
+// NewCMPartSoftwareImageResource creates a new resource instance.
 func NewCMPartSoftwareImageResource() resource.Resource {
 	return &CMPartSoftwareImageResource{}
 }
 
-// Metadata returns the resource type name
+// Metadata returns the resource type name.
 func (r *CMPartSoftwareImageResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_cmpart_softwareimage"
 }
 
-// Schema defines the resource schema
+// Schema defines the resource schema.
 func (r *CMPartSoftwareImageResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		MarkdownDescription: "Manages a BCM software image (OS image for DPU node provisioning).\n\n" +
@@ -234,7 +234,7 @@ func (r *CMPartSoftwareImageResource) Schema(ctx context.Context, req resource.S
 	}
 }
 
-// Configure stores the BCM client in the resource instance
+// Configure stores the BCM client in the resource instance.
 func (r *CMPartSoftwareImageResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	if req.ProviderData == nil {
 		return
@@ -252,7 +252,7 @@ func (r *CMPartSoftwareImageResource) Configure(ctx context.Context, req resourc
 	r.client = client
 }
 
-// Create implements the resource Create operation (REFACTOR phase - API integration)
+// Create implements the resource Create operation (REFACTOR phase - API integration).
 func (r *CMPartSoftwareImageResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan CMPartSoftwareImageResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -422,7 +422,7 @@ func (r *CMPartSoftwareImageResource) Create(ctx context.Context, req resource.C
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
-// Read implements the resource Read operation (REFACTOR phase - API integration)
+// Read implements the resource Read operation (REFACTOR phase - API integration).
 func (r *CMPartSoftwareImageResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var state CMPartSoftwareImageResourceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -450,7 +450,7 @@ func (r *CMPartSoftwareImageResource) Read(ctx context.Context, req resource.Rea
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
-// Update implements the resource Update operation (REFACTOR phase - API integration)
+// Update implements the resource Update operation (REFACTOR phase - API integration).
 func (r *CMPartSoftwareImageResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan CMPartSoftwareImageResourceModel
 	var state CMPartSoftwareImageResourceModel
@@ -512,7 +512,7 @@ func (r *CMPartSoftwareImageResource) Update(ctx context.Context, req resource.U
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
-// Delete implements the resource Delete operation (REFACTOR phase - API integration)
+// Delete implements the resource Delete operation (REFACTOR phase - API integration).
 func (r *CMPartSoftwareImageResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var state CMPartSoftwareImageResourceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -542,14 +542,14 @@ func (r *CMPartSoftwareImageResource) Delete(ctx context.Context, req resource.D
 	})
 }
 
-// ImportState implements resource import using UUID
+// ImportState implements resource import using UUID.
 func (r *CMPartSoftwareImageResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
 
 // Helper Methods
 
-// readSoftwareImage fetches software image from API and populates model
+// readSoftwareImage fetches software image from API and populates model.
 func (r *CMPartSoftwareImageResource) readSoftwareImage(ctx context.Context, model *CMPartSoftwareImageResourceModel, diags *diag.Diagnostics) {
 	// Determine which identifier to use for lookup
 	// During import, name may be empty but ID is set (to UUID)
@@ -629,7 +629,7 @@ func (r *CMPartSoftwareImageResource) readSoftwareImage(ctx context.Context, mod
 	}
 
 	// Check if image not found (null or empty response)
-	if imageData == nil || len(imageData) == 0 {
+	if len(imageData) == 0 {
 		diags.AddError(
 			"Software Image Not Found",
 			fmt.Sprintf("Software image '%s' not found in BCM", model.Name.ValueString()),
@@ -735,7 +735,7 @@ func (r *CMPartSoftwareImageResource) readSoftwareImage(ctx context.Context, mod
 }
 
 // buildAPIEntity constructs BCM API entity from Terraform model
-// If uuid is provided, this is an update operation, otherwise it's a create
+// If uuid is provided, this is an update operation, otherwise it's a create.
 func (r *CMPartSoftwareImageResource) buildAPIEntity(model *CMPartSoftwareImageResourceModel, uuid string) map[string]interface{} {
 	isUpdate := uuid != ""
 	entity := map[string]interface{}{

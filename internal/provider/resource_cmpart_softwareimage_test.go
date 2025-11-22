@@ -1166,10 +1166,7 @@ func testAccCMPartSoftwareImagePreCheck(t *testing.T, imageNames ...string) {
 	// Delete each test image by name if it exists
 	for _, imageName := range imageNames {
 		// Use shared helper with 5 retries (standardized)
-		deleted, err := verifyResourceDeleted(ctx, client, "CMPart", "removeSoftwareImages", imageName, 5)
-		if err != nil {
-			t.Logf("[WARN] PreCheck cleanup error for image %s: %v", imageName, err)
-		}
+		deleted := verifyResourceDeleted(ctx, client, "CMPart", "removeSoftwareImages", imageName, 5)
 		if deleted {
 			t.Logf("[DEBUG] PreCheck cleaned up existing image: %s", imageName)
 		}

@@ -181,7 +181,7 @@ func TestAccCMPartSoftwareImagesDataSource_FilterByName(t *testing.T) {
 }
 
 // testAccCMPartSoftwareImagesDataSourceConfig returns a basic test configuration
-// for the bcm_cmpart_softwareimages data source
+// for the bcm_cmpart_softwareimages data source.
 func testAccCMPartSoftwareImagesDataSourceConfig() string {
 	return fmt.Sprintf(`
 provider "bcm" {
@@ -199,7 +199,7 @@ data "bcm_cmpart_softwareimages" "test" {}
 	)
 }
 
-// testAccCMPartSoftwareImagesDataSourceConfigFilterByCategory returns a configuration with category filter
+// testAccCMPartSoftwareImagesDataSourceConfigFilterByCategory returns a configuration with category filter.
 func testAccCMPartSoftwareImagesDataSourceConfigFilterByCategory(category string) string {
 	return fmt.Sprintf(`
 provider "bcm" {
@@ -222,7 +222,7 @@ data "bcm_cmpart_softwareimages" "test" {
 	)
 }
 
-// testAccCMPartSoftwareImagesDataSourceConfigFilterByName returns a configuration with name pattern filter
+// testAccCMPartSoftwareImagesDataSourceConfigFilterByName returns a configuration with name pattern filter.
 func testAccCMPartSoftwareImagesDataSourceConfigFilterByName(namePattern string) string {
 	return fmt.Sprintf(`
 provider "bcm" {

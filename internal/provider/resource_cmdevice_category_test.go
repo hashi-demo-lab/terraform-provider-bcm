@@ -22,7 +22,7 @@ import (
 )
 
 // Test helper: CheckDestroy verifies all categories are deleted
-// Enhanced with resource counter, timeouts, detailed error messages, and logging
+// Enhanced with resource counter, timeouts, detailed error messages, and logging.
 func testAccCheckCMDeviceCategoryDestroy(s *terraform.State) error {
 	// Create BCM client using shared helper
 	client := createTestBCMClient(&testing.T{})
@@ -65,7 +65,7 @@ func testAccCheckCMDeviceCategoryDestroy(s *terraform.State) error {
 }
 
 // Test helper: Clean up existing test categories before running tests
-// Refactored to use shared verifyResourceDeleted helper with exponential backoff (standardized retry config: 5 retries)
+// Refactored to use shared verifyResourceDeleted helper with exponential backoff (standardized retry config: 5 retries).
 func testAccCMDeviceCategoryPreCheck(t *testing.T, names ...string) {
 	testAccPreCheck(t)
 
@@ -87,10 +87,8 @@ func testAccCMDeviceCategoryPreCheck(t *testing.T, names ...string) {
 					}
 
 					// Verify deletion with shared helper (standardized retry config: 5 retries)
-					deleted, err := verifyResourceDeleted(context.Background(), client, "cmdevice", "getCategory", name, 5)
-					if err != nil {
-						t.Logf("Error verifying deletion of %s: %v", name, err)
-					} else if deleted {
+					deleted := verifyResourceDeleted(context.Background(), client, "cmdevice", "getCategory", name, 5)
+					if deleted {
 						t.Logf("✓ Cleaned up leftover test category: %s", name)
 					} else {
 						t.Logf("⚠ Warning: Category %s may not be fully deleted after retries", name)
@@ -102,7 +100,7 @@ func testAccCMDeviceCategoryPreCheck(t *testing.T, names ...string) {
 }
 
 // TestAccCMDeviceCategoryResource_Basic tests basic CRUD operations
-// This is the primary test for User Story 1 (MVP)
+// This is the primary test for User Story 1 (MVP).
 func TestAccCMDeviceCategoryResource_Basic(t *testing.T) {
 	// Generate unique test name to avoid conflicts
 	// Note: We use the SAME name for create and update to avoid BCM category name immutability issues
@@ -216,7 +214,7 @@ func TestAccCMDeviceCategoryResource_Basic(t *testing.T) {
 	})
 }
 
-// Test configuration helper for basic category
+// Test configuration helper for basic category.
 func testAccCMDeviceCategoryResourceConfig(name string) string {
 	return fmt.Sprintf(`
 provider "bcm" {
@@ -259,7 +257,7 @@ resource "bcm_cmdevice_category" "test" {
 	)
 }
 
-// Test configuration helper for updated category
+// Test configuration helper for updated category.
 func testAccCMDeviceCategoryResourceConfig_Updated(name string) string {
 	return fmt.Sprintf(`
 provider "bcm" {
@@ -303,7 +301,7 @@ resource "bcm_cmdevice_category" "test" {
 	)
 }
 
-// T031-T032: Import acceptance test with ImportState step
+// T031-T032: Import acceptance test with ImportState step.
 func TestAccCMDeviceCategoryResource_Import(t *testing.T) {
 	categoryName := generateUniqueTestName("test-import-category")
 
@@ -366,7 +364,7 @@ func TestAccCMDeviceCategoryResource_Import(t *testing.T) {
 }
 
 // T039-T041: Force parameter acceptance test
-// This test validates that the force parameter is accepted and processed correctly
+// This test validates that the force parameter is accepted and processed correctly.
 func TestAccCMDeviceCategoryResource_ForceParameter(t *testing.T) {
 	categoryName := generateUniqueTestName("test-force-param")
 
@@ -449,7 +447,7 @@ func TestAccCMDeviceCategoryResource_ForceParameter(t *testing.T) {
 	})
 }
 
-// T040: Test configuration helper with force parameter
+// T040: Test configuration helper with force parameter.
 func testAccCMDeviceCategoryResourceConfig_Force(name string, force bool) string {
 	return fmt.Sprintf(`
 provider "bcm" {
@@ -496,7 +494,7 @@ resource "bcm_cmdevice_category" "test" {
 // ========================================
 
 // TestAccCMDeviceCategory_DriftNotes tests drift detection for notes attribute
-// Phase 3 - Task T012 (RED): This test should FAIL initially (no PreConfig implementation yet)
+// Phase 3 - Task T012 (RED): This test should FAIL initially (no PreConfig implementation yet).
 func TestAccCMDeviceCategory_DriftNotes(t *testing.T) {
 	categoryName := generateUniqueTestName("test-drift-notes")
 
@@ -617,7 +615,7 @@ func TestAccCMDeviceCategory_DriftNotes(t *testing.T) {
 // ========================================
 
 // TestAccCMDeviceCategory_DestroyWithForce verifies destroy with force=true
-// Phase 4 - Task T020 (RED): This test should PASS (force already implemented, but verify)
+// Phase 4 - Task T020 (RED): This test should PASS (force already implemented, but verify).
 func TestAccCMDeviceCategory_DestroyWithForce(t *testing.T) {
 	categoryName := generateUniqueTestName("test-destroy-force")
 
@@ -663,7 +661,7 @@ func TestAccCMDeviceCategory_DestroyWithForce(t *testing.T) {
 }
 
 // TestAccCMDeviceCategory_DestroyExternalDelete verifies destroy handles externally deleted resources
-// Phase 4 - Task T023: Create resource, delete via BCM API, verify Terraform destroy succeeds
+// Phase 4 - Task T023: Create resource, delete via BCM API, verify Terraform destroy succeeds.
 func TestAccCMDeviceCategory_DestroyExternalDelete(t *testing.T) {
 	categoryName := generateUniqueTestName("test-destroy-external")
 
@@ -724,7 +722,7 @@ func TestAccCMDeviceCategory_DestroyExternalDelete(t *testing.T) {
 }
 
 // Helper function for drift detection test configuration
-// Phase 3 - Task T016: Config function with parameterized notes
+// Phase 3 - Task T016: Config function with parameterized notes.
 func testAccCMDeviceCategoryResourceConfig_DriftNotes(name, notes string) string {
 	return fmt.Sprintf(`
 provider "bcm" {
@@ -771,7 +769,7 @@ resource "bcm_cmdevice_category" "test" {
 // Validation Tests
 // ========================================
 
-// TestAccCMDeviceCategory_ValidationInvalidName tests name length validation
+// TestAccCMDeviceCategory_ValidationInvalidName tests name length validation.
 func TestAccCMDeviceCategory_ValidationInvalidName(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -786,7 +784,7 @@ func TestAccCMDeviceCategory_ValidationInvalidName(t *testing.T) {
 	})
 }
 
-// TestAccCMDeviceCategory_ValidationInvalidManagementNetwork tests UUID format validation
+// TestAccCMDeviceCategory_ValidationInvalidManagementNetwork tests UUID format validation.
 func TestAccCMDeviceCategory_ValidationInvalidManagementNetwork(t *testing.T) {
 	categoryName := generateUniqueTestName("test-invalid-uuid")
 
@@ -808,7 +806,7 @@ func TestAccCMDeviceCategory_ValidationInvalidManagementNetwork(t *testing.T) {
 	})
 }
 
-// TestAccCMDeviceCategory_ValidationInvalidBootLoader tests boot_loader enum validation
+// TestAccCMDeviceCategory_ValidationInvalidBootLoader tests boot_loader enum validation.
 func TestAccCMDeviceCategory_ValidationInvalidBootLoader(t *testing.T) {
 	categoryName := generateUniqueTestName("test-invalid-bootloader")
 
@@ -825,7 +823,7 @@ func TestAccCMDeviceCategory_ValidationInvalidBootLoader(t *testing.T) {
 	})
 }
 
-// TestAccCMDeviceCategory_ValidationInvalidFIPS tests fips enum validation
+// TestAccCMDeviceCategory_ValidationInvalidFIPS tests fips enum validation.
 func TestAccCMDeviceCategory_ValidationInvalidFIPS(t *testing.T) {
 	categoryName := generateUniqueTestName("test-invalid-fips")
 
@@ -851,7 +849,7 @@ func TestAccCMDeviceCategory_ValidationInvalidFIPS(t *testing.T) {
 // Validation Test Config Helpers
 // ========================================
 
-// testAccCMDeviceCategoryResourceConfig_InvalidName creates config with invalid name
+// testAccCMDeviceCategoryResourceConfig_InvalidName creates config with invalid name.
 func testAccCMDeviceCategoryResourceConfig_InvalidName(name string) string {
 	return fmt.Sprintf(`
 provider "bcm" {
@@ -885,7 +883,7 @@ resource "bcm_cmdevice_category" "test" {
 	)
 }
 
-// testAccCMDeviceCategoryResourceConfig_InvalidUUID creates config with invalid management_network UUID
+// testAccCMDeviceCategoryResourceConfig_InvalidUUID creates config with invalid management_network UUID.
 func testAccCMDeviceCategoryResourceConfig_InvalidUUID(name, uuid string) string {
 	return fmt.Sprintf(`
 provider "bcm" {
@@ -918,7 +916,7 @@ resource "bcm_cmdevice_category" "test" {
 	)
 }
 
-// testAccCMDeviceCategoryResourceConfig_InvalidBootLoader creates config with invalid boot_loader
+// testAccCMDeviceCategoryResourceConfig_InvalidBootLoader creates config with invalid boot_loader.
 func testAccCMDeviceCategoryResourceConfig_InvalidBootLoader(name, bootLoader string) string {
 	return fmt.Sprintf(`
 provider "bcm" {
@@ -954,7 +952,7 @@ resource "bcm_cmdevice_category" "test" {
 	)
 }
 
-// testAccCMDeviceCategoryResourceConfig_InvalidFIPS creates config with invalid fips value
+// testAccCMDeviceCategoryResourceConfig_InvalidFIPS creates config with invalid fips value.
 func testAccCMDeviceCategoryResourceConfig_InvalidFIPS(name, fips string) string {
 	return fmt.Sprintf(`
 provider "bcm" {

@@ -135,7 +135,7 @@ func TestAccCMDeviceCategoriesDataSource_DiskSetup(t *testing.T) {
 	})
 }
 
-// testAccCMDeviceCategoriesDataSourceConfig returns a basic configuration
+// testAccCMDeviceCategoriesDataSourceConfig returns a basic configuration.
 func testAccCMDeviceCategoriesDataSourceConfig() string {
 	return fmt.Sprintf(`
 provider "bcm" {
@@ -153,28 +153,7 @@ data "bcm_cmdevice_categories" "test" {}
 	)
 }
 
-// testAccCMDeviceCategoriesDataSourceConfigFilterByName returns a configuration with name filter
-func testAccCMDeviceCategoriesDataSourceConfigFilterByName(name string) string {
-	return fmt.Sprintf(`
-provider "bcm" {
-  endpoint             = %[1]q
-  username             = %[2]q
-  password             = %[3]q
-  insecure_skip_verify = true
-}
-
-data "bcm_cmdevice_categories" "test" {
-  name = %[4]q
-}
-`,
-		os.Getenv("BCM_ENDPOINT"),
-		os.Getenv("BCM_USERNAME"),
-		os.Getenv("BCM_PASSWORD"),
-		name,
-	)
-}
-
-// testAccCMDeviceCategoriesDataSourceConfigWithTestCategory creates a test category resource
+// testAccCMDeviceCategoriesDataSourceConfigWithTestCategory creates a test category resource.
 func testAccCMDeviceCategoriesDataSourceConfigWithTestCategory(name string) string {
 	return fmt.Sprintf(`
 provider "bcm" {
@@ -214,7 +193,7 @@ resource "bcm_cmdevice_category" "test" {
 	)
 }
 
-// testAccCMDeviceCategoriesDataSourceConfigFilterByNameAndResource creates category and filters
+// testAccCMDeviceCategoriesDataSourceConfigFilterByNameAndResource creates category and filters.
 func testAccCMDeviceCategoriesDataSourceConfigFilterByNameAndResource(name string) string {
 	return fmt.Sprintf(`
 provider "bcm" {

@@ -22,7 +22,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
 )
 
-// testAccCMDeviceDevicePreCheck performs pre-test cleanup of leftover test devices
+// testAccCMDeviceDevicePreCheck performs pre-test cleanup of leftover test devices.
 func testAccCMDeviceDevicePreCheck(t *testing.T, deviceNames ...string) {
 	client := createTestBCMClient(t)
 	ctx := context.Background()
@@ -55,14 +55,14 @@ func testAccCMDeviceDevicePreCheck(t *testing.T, deviceNames ...string) {
 		}
 
 		// Verify deletion with retries
-		deleted, _ := verifyResourceDeleted(ctx, client, "cmdevice", "getDevice", uuid, 5)
+		deleted := verifyResourceDeleted(ctx, client, "cmdevice", "getDevice", uuid, 5)
 		if !deleted {
 			t.Logf("Warning: Device %s (UUID: %s) still exists after cleanup attempt", name, uuid)
 		}
 	}
 }
 
-// testAccCheckCMDeviceDeviceDestroy verifies all devices are deleted after test
+// testAccCheckCMDeviceDeviceDestroy verifies all devices are deleted after test.
 func testAccCheckCMDeviceDeviceDestroy(s *terraform.State) error {
 	client := createTestBCMClient(&testing.T{})
 	ctx := context.Background()
@@ -79,7 +79,7 @@ func testAccCheckCMDeviceDeviceDestroy(s *terraform.State) error {
 		id := rs.Primary.ID
 
 		// Verify device deleted with exponential backoff
-		deleted, err := verifyResourceDeleted(
+		deleted := verifyResourceDeleted(
 			ctx,
 			client,
 			"cmdevice",
@@ -87,15 +87,6 @@ func testAccCheckCMDeviceDeviceDestroy(s *terraform.State) error {
 			id,
 			4, // retry count
 		)
-
-		if err != nil {
-			errors = append(errors, fmt.Sprintf(
-				"Resource type: %s, ID: %s, Error: %v",
-				rs.Type,
-				id,
-				err,
-			))
-		}
 
 		if !deleted {
 			errors = append(errors, fmt.Sprintf(
@@ -113,11 +104,8 @@ func testAccCheckCMDeviceDeviceDestroy(s *terraform.State) error {
 	return nil
 }
 
-// testAccCMDeviceDeviceResourceConfig_Basic returns basic device configuration
-func testAccCMDeviceDeviceResourceConfig_Basic(hostname string) string {
-	categoryName := generateUniqueTestName("citest-category-basic")
-	imageName := generateUniqueTestName("citest-image-basic")
-
+// testAccCMDeviceDeviceResourceConfig_Basic returns basic device configuration.
+func testAccCMDeviceDeviceResourceConfig_Basic(hostname string, categoryName string, imageName string, imagePath string) string {
 	return fmt.Sprintf(`
 provider "bcm" {
   endpoint             = %[1]q
@@ -133,8 +121,8 @@ data "bcm_cmnet_networks" "management" {
 }
 
 resource "bcm_cmpart_softwareimage" "test" {
-  name = %[5]q
-  path = "/cm/images/ubuntu-22.04-server-amd64.iso"
+  name = %[4]q
+  path = %[5]q
 }
 
 resource "bcm_cmdevice_category" "test" {
@@ -149,7 +137,7 @@ resource "bcm_cmdevice_category" "test" {
 }
 
 resource "bcm_cmdevice_device" "test" {
-  hostname           = %[4]q
+  hostname           = %[7]q
   mac                = "00:11:22:33:44:55"
   category           = bcm_cmdevice_category.test.id
   management_network = data.bcm_cmnet_networks.management.networks[0].id
@@ -160,17 +148,15 @@ resource "bcm_cmdevice_device" "test" {
 		os.Getenv("BCM_ENDPOINT"),
 		os.Getenv("BCM_USERNAME"),
 		os.Getenv("BCM_PASSWORD"),
-		hostname,
 		imageName,
+		imagePath,
 		categoryName,
+		hostname,
 	)
 }
 
-// testAccCMDeviceDeviceResourceConfig_Updated returns updated device configuration
-func testAccCMDeviceDeviceResourceConfig_Updated(hostname string) string {
-	categoryName := generateUniqueTestName("citest-category-basic")
-	imageName := generateUniqueTestName("citest-image-basic")
-
+// testAccCMDeviceDeviceResourceConfig_Updated returns updated device configuration.
+func testAccCMDeviceDeviceResourceConfig_Updated(hostname string, categoryName string, imageName string, imagePath string) string {
 	return fmt.Sprintf(`
 provider "bcm" {
   endpoint             = %[1]q
@@ -186,8 +172,8 @@ data "bcm_cmnet_networks" "management" {
 }
 
 resource "bcm_cmpart_softwareimage" "test" {
-  name = %[5]q
-  path = "/cm/images/ubuntu-22.04-server-amd64.iso"
+  name = %[4]q
+  path = %[5]q
 }
 
 resource "bcm_cmdevice_category" "test" {
@@ -202,7 +188,7 @@ resource "bcm_cmdevice_category" "test" {
 }
 
 resource "bcm_cmdevice_device" "test" {
-  hostname           = %[4]q
+  hostname           = %[7]q
   mac                = "00:11:22:33:44:55"
   category           = bcm_cmdevice_category.test.id
   management_network = data.bcm_cmnet_networks.management.networks[0].id
@@ -215,15 +201,19 @@ resource "bcm_cmdevice_device" "test" {
 		os.Getenv("BCM_ENDPOINT"),
 		os.Getenv("BCM_USERNAME"),
 		os.Getenv("BCM_PASSWORD"),
-		hostname,
 		imageName,
+		imagePath,
 		categoryName,
+		hostname,
 	)
 }
 
-// TestAccCMDeviceDeviceResource_Basic tests full CRUD lifecycle
+// TestAccCMDeviceDeviceResource_Basic tests full CRUD lifecycle.
 func TestAccCMDeviceDeviceResource_Basic(t *testing.T) {
 	deviceName := generateUniqueTestName("test-device")
+	categoryName := generateUniqueTestName("citest-category-basic")
+	imageName := generateUniqueTestName("citest-image-basic")
+	imagePath := "/cm/images/ubuntu-22.04-server-amd64-basic.iso"
 
 	// ID consistency tracking across all CRUD operations
 	compareID := statecheck.CompareValue(compare.ValuesSame())
@@ -238,7 +228,7 @@ func TestAccCMDeviceDeviceResource_Basic(t *testing.T) {
 		Steps: []resource.TestStep{
 			// Create and Read testing
 			{
-				Config: testAccCMDeviceDeviceResourceConfig_Basic(deviceName),
+				Config: testAccCMDeviceDeviceResourceConfig_Basic(deviceName, categoryName, imageName, imagePath),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("bcm_cmdevice_device.test", "hostname", deviceName),
 					resource.TestCheckResourceAttrSet("bcm_cmdevice_device.test", "uuid"),
@@ -269,7 +259,7 @@ func TestAccCMDeviceDeviceResource_Basic(t *testing.T) {
 			},
 			// Idempotency check after Create
 			{
-				Config: testAccCMDeviceDeviceResourceConfig_Basic(deviceName),
+				Config: testAccCMDeviceDeviceResourceConfig_Basic(deviceName, categoryName, imageName, imagePath),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
@@ -282,21 +272,21 @@ func TestAccCMDeviceDeviceResource_Basic(t *testing.T) {
 				ImportState:       true,
 				ImportStateVerify: true,
 				ImportStateVerifyIgnore: []string{
-					"force",                    // Write-only field
-					"management_network",       // BCM resets to nil UUID
-					"boot_loader",              // BCM returns "CATEGORY" when inheriting from category
-					"boot_loader_protocol",     // BCM returns "CATEGORY" when inheriting from category
-					"partition",                // BCM may populate from category default
-					"power_control",            // BCM returns default "none" when not set
-					"default_gateway",          // BCM returns default "0.0.0.0" when not set
-					"default_gateway_metric",   // BCM returns default 0 when not set
-					"serial_number",            // BCM may populate from hardware discovery
-					"part_number",              // BCM may populate from hardware discovery
+					"force",                  // Write-only field
+					"management_network",     // BCM resets to nil UUID
+					"boot_loader",            // BCM returns "CATEGORY" when inheriting from category
+					"boot_loader_protocol",   // BCM returns "CATEGORY" when inheriting from category
+					"partition",              // BCM may populate from category default
+					"power_control",          // BCM returns default "none" when not set
+					"default_gateway",        // BCM returns default "0.0.0.0" when not set
+					"default_gateway_metric", // BCM returns default 0 when not set
+					"serial_number",          // BCM may populate from hardware discovery
+					"part_number",            // BCM may populate from hardware discovery
 				},
 			},
 			// Verify ID consistency after Import
 			{
-				Config: testAccCMDeviceDeviceResourceConfig_Basic(deviceName),
+				Config: testAccCMDeviceDeviceResourceConfig_Basic(deviceName, categoryName, imageName, imagePath),
 				ConfigStateChecks: []statecheck.StateCheck{
 					compareID.AddStateValue(
 						"bcm_cmdevice_device.test",
@@ -306,7 +296,7 @@ func TestAccCMDeviceDeviceResource_Basic(t *testing.T) {
 			},
 			// Update and Read testing
 			{
-				Config: testAccCMDeviceDeviceResourceConfig_Updated(deviceName),
+				Config: testAccCMDeviceDeviceResourceConfig_Updated(deviceName, categoryName, imageName, imagePath),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("bcm_cmdevice_device.test", "hostname", deviceName),
 					resource.TestCheckResourceAttr("bcm_cmdevice_device.test", "notes", "Updated device notes"),
@@ -331,7 +321,7 @@ func TestAccCMDeviceDeviceResource_Basic(t *testing.T) {
 			},
 			// Idempotency check after Update
 			{
-				Config: testAccCMDeviceDeviceResourceConfig_Updated(deviceName),
+				Config: testAccCMDeviceDeviceResourceConfig_Updated(deviceName, categoryName, imageName, imagePath),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
@@ -342,11 +332,8 @@ func TestAccCMDeviceDeviceResource_Basic(t *testing.T) {
 	})
 }
 
-// testAccCMDeviceDeviceResourceConfig_Drift returns config for drift detection tests
-func testAccCMDeviceDeviceResourceConfig_Drift(hostname, notesValue string) string {
-	categoryName := generateUniqueTestName("citest-category-drift")
-	imageName := generateUniqueTestName("citest-image-drift")
-
+// testAccCMDeviceDeviceResourceConfig_Drift returns config for drift detection tests.
+func testAccCMDeviceDeviceResourceConfig_Drift(hostname string, categoryName string, imageName string, imagePath string) string {
 	return fmt.Sprintf(`
 provider "bcm" {
   endpoint             = %[1]q
@@ -362,12 +349,12 @@ data "bcm_cmnet_networks" "management" {
 }
 
 resource "bcm_cmpart_softwareimage" "test" {
-  name = %[6]q
-  path = "/cm/images/ubuntu-22.04-server-amd64.iso"
+  name = %[4]q
+  path = %[5]q
 }
 
 resource "bcm_cmdevice_category" "test" {
-  name               = %[7]q
+  name               = %[6]q
   management_network = data.bcm_cmnet_networks.management.networks[0].id
 
   software_image_proxy = {
@@ -378,11 +365,11 @@ resource "bcm_cmdevice_category" "test" {
 }
 
 resource "bcm_cmdevice_device" "test" {
-  hostname           = %[4]q
+  hostname           = %[7]q
   mac                = "00:11:22:33:44:66"
   category           = bcm_cmdevice_category.test.id
   management_network = data.bcm_cmnet_networks.management.networks[0].id
-  notes              = %[5]q
+  notes              = "initial-notes"
 
   depends_on = [bcm_cmdevice_category.test]
 }
@@ -390,16 +377,19 @@ resource "bcm_cmdevice_device" "test" {
 		os.Getenv("BCM_ENDPOINT"),
 		os.Getenv("BCM_USERNAME"),
 		os.Getenv("BCM_PASSWORD"),
-		hostname,
-		notesValue,
 		imageName,
+		imagePath,
 		categoryName,
+		hostname,
 	)
 }
 
-// TestAccCMDeviceDevice_DriftNotes tests drift detection for notes field
+// TestAccCMDeviceDevice_DriftNotes tests drift detection for notes field.
 func TestAccCMDeviceDevice_DriftNotes(t *testing.T) {
 	deviceName := generateUniqueTestName("test-device-drift")
+	categoryName := generateUniqueTestName("citest-category-drift")
+	imageName := generateUniqueTestName("citest-image-drift")
+	imagePath := "/cm/images/ubuntu-22.04-server-amd64-drift-notes.iso"
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -411,7 +401,7 @@ func TestAccCMDeviceDevice_DriftNotes(t *testing.T) {
 		Steps: []resource.TestStep{
 			// Create with initial value
 			{
-				Config: testAccCMDeviceDeviceResourceConfig_Drift(deviceName, "initial-notes"),
+				Config: testAccCMDeviceDeviceResourceConfig_Drift(deviceName, categoryName, imageName, imagePath),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("bcm_cmdevice_device.test", "notes", "initial-notes"),
 				),
@@ -463,7 +453,7 @@ func TestAccCMDeviceDevice_DriftNotes(t *testing.T) {
 
 					t.Logf("[DEBUG] Modified notes externally to: externally-modified")
 				},
-				Config: testAccCMDeviceDeviceResourceConfig_Drift(deviceName, "initial-notes"),
+				Config: testAccCMDeviceDeviceResourceConfig_Drift(deviceName, categoryName, imageName, imagePath),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectNonEmptyPlan(),
@@ -472,7 +462,7 @@ func TestAccCMDeviceDevice_DriftNotes(t *testing.T) {
 			},
 			// Terraform restores desired state
 			{
-				Config: testAccCMDeviceDeviceResourceConfig_Drift(deviceName, "initial-notes"),
+				Config: testAccCMDeviceDeviceResourceConfig_Drift(deviceName, categoryName, imageName, imagePath),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("bcm_cmdevice_device.test", "notes", "initial-notes"),
 				),
@@ -481,29 +471,33 @@ func TestAccCMDeviceDevice_DriftNotes(t *testing.T) {
 	})
 }
 
-// TestAccCMDeviceDevice_ValidationInvalidHostname tests hostname validation
+// TestAccCMDeviceDevice_ValidationInvalidHostname tests hostname validation.
 func TestAccCMDeviceDevice_ValidationInvalidHostname(t *testing.T) {
+	categoryName := generateUniqueTestName("citest-category-validation")
+	imageName := generateUniqueTestName("citest-image-validation")
+	imagePath := "/cm/images/ubuntu-22.04-server-amd64-validation.iso"
+
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config:      testAccCMDeviceDeviceResourceConfig_Basic("UPPERCASE"),
+				Config:      testAccCMDeviceDeviceResourceConfig_Basic("UPPERCASE", categoryName, imageName, imagePath),
 				ExpectError: regexp.MustCompile(`hostname must be RFC 1123 DNS label`),
 			},
 			{
-				Config:      testAccCMDeviceDeviceResourceConfig_Basic("-leadinghyphen"),
+				Config:      testAccCMDeviceDeviceResourceConfig_Basic("-leadinghyphen", categoryName, imageName, imagePath),
 				ExpectError: regexp.MustCompile(`hostname must be RFC 1123 DNS label`),
 			},
 			{
-				Config:      testAccCMDeviceDeviceResourceConfig_Basic("trailing-hyphen-"),
+				Config:      testAccCMDeviceDeviceResourceConfig_Basic("trailing-hyphen-", categoryName, imageName, imagePath),
 				ExpectError: regexp.MustCompile(`hostname must be RFC 1123 DNS label`),
 			},
 		},
 	})
 }
 
-// testAccCMDeviceDeviceResourceConfig_InvalidMAC returns config with invalid MAC address
+// testAccCMDeviceDeviceResourceConfig_InvalidMAC returns config with invalid MAC address.
 func testAccCMDeviceDeviceResourceConfig_InvalidMAC(hostname, mac string) string {
 	return fmt.Sprintf(`
 provider "bcm" {
@@ -538,7 +532,7 @@ resource "bcm_cmdevice_device" "test" {
 	)
 }
 
-// TestAccCMDeviceDevice_ValidationInvalidMAC tests MAC address validation
+// TestAccCMDeviceDevice_ValidationInvalidMAC tests MAC address validation.
 func TestAccCMDeviceDevice_ValidationInvalidMAC(t *testing.T) {
 	deviceName := generateUniqueTestName("test-device")
 
@@ -567,10 +561,13 @@ func TestAccCMDeviceDevice_ValidationInvalidMAC(t *testing.T) {
 // ========================================
 
 // TestAccCMDeviceDevice_Drift tests drift detection for hostname attribute
-// This test verifies the provider correctly detects when a device's hostname is modified externally via BCM API
+// This test verifies the provider correctly detects when a device's hostname is modified externally via BCM API.
 func TestAccCMDeviceDevice_Drift(t *testing.T) {
 	initialHostname := generateUniqueTestName("test-device-drift")
 	driftedHostname := generateUniqueTestName("drifted-device")
+	categoryName := generateUniqueTestName("citest-category-drift-hostname")
+	imageName := generateUniqueTestName("citest-image-drift-hostname")
+	imagePath := "/cm/images/ubuntu-22.04-server-amd64-drift-hostname.iso"
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -582,7 +579,7 @@ func TestAccCMDeviceDevice_Drift(t *testing.T) {
 		Steps: []resource.TestStep{
 			// Step 1: Create device with initial hostname
 			{
-				Config: testAccCMDeviceDeviceResourceConfig_Drift(initialHostname, "initial-notes"),
+				Config: testAccCMDeviceDeviceResourceConfig_Drift(initialHostname, categoryName, imageName, imagePath),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("bcm_cmdevice_device.test", "hostname", initialHostname),
 					resource.TestCheckResourceAttr("bcm_cmdevice_device.test", "notes", "initial-notes"),
@@ -657,7 +654,7 @@ func TestAccCMDeviceDevice_Drift(t *testing.T) {
 
 					t.Logf("[DEBUG] Modified hostname externally to: %v", entity["hostname"])
 				},
-				Config: testAccCMDeviceDeviceResourceConfig_Drift(initialHostname, "initial-notes"),
+				Config: testAccCMDeviceDeviceResourceConfig_Drift(initialHostname, categoryName, imageName, imagePath),
 				// Use ConfigPlanChecks to verify drift detected (non-empty plan expected)
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{
@@ -667,7 +664,7 @@ func TestAccCMDeviceDevice_Drift(t *testing.T) {
 			},
 			// Step 3: Restore desired state (Terraform applies config to fix drift)
 			{
-				Config: testAccCMDeviceDeviceResourceConfig_Drift(initialHostname, "initial-notes"),
+				Config: testAccCMDeviceDeviceResourceConfig_Drift(initialHostname, categoryName, imageName, imagePath),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					// Verify drift was corrected and state matches config
 					resource.TestCheckResourceAttr("bcm_cmdevice_device.test", "hostname", initialHostname),

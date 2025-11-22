@@ -17,7 +17,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
-// BCMClient handles JSON-RPC API calls to BCM with cookie-based authentication
+// BCMClient handles JSON-RPC API calls to BCM with cookie-based authentication.
 type BCMClient struct {
 	HTTPClient *http.Client // Includes cookie jar for automatic cm-login-token management
 	Endpoint   string       // Base URL (e.g., https://172.21.15.254:8081)
@@ -33,14 +33,14 @@ type JSONRPCRequest struct {
 	Args    []interface{} `json:"args,omitempty"` // Optional arguments array
 }
 
-// LoginRequest represents login API call request body
+// LoginRequest represents login API call request body.
 type LoginRequest struct {
 	Service  string `json:"service"` // Always "login"
 	Username string `json:"username"`
 	Password string `json:"password"`
 }
 
-// NewBCMClient creates authenticated client with cookie jar and performs login
+// NewBCMClient creates authenticated client with cookie jar and performs login.
 func NewBCMClient(ctx context.Context, endpoint, username, password string, insecureSkipVerify bool, timeout int) (*BCMClient, error) {
 	// Create cookie jar for automatic cookie management
 	jar, err := cookiejar.New(nil)
@@ -213,7 +213,7 @@ func (c *BCMClient) CallJSONRPC(ctx context.Context, service, call string, args 
 // Layer 1: HTTP status code
 // Layer 2: JSON object with error field
 // Layer 3: Empty array success
-// Layer 4: Parse errors
+// Layer 4: Parse errors.
 func parseErrorResponse(statusCode int, body []byte) error {
 	// Layer 1: HTTP status
 	if statusCode < 200 || statusCode >= 300 {
@@ -264,7 +264,7 @@ func parseErrorResponse(statusCode int, body []byte) error {
 }
 
 // formatValidationErrors parses BCM validation error array and formats as error message
-// BCM validation format: {"success": false, "validation": [{"message": "...", "field": "..."}]}
+// BCM validation format: {"success": false, "validation": [{"message": "...", "field": "..."}]}.
 func formatValidationErrors(validationData interface{}) error {
 	validationArray, ok := validationData.([]interface{})
 	if !ok {
@@ -309,7 +309,7 @@ func formatValidationErrors(validationData interface{}) error {
 	return fmt.Errorf("validation errors: %s", limitString(fmt.Sprintf("%v", errorMessages), 500))
 }
 
-// limitString truncates string to maxLen with ellipsis
+// limitString truncates string to maxLen with ellipsis.
 func limitString(s string, maxLen int) string {
 	if len(s) <= maxLen {
 		return s

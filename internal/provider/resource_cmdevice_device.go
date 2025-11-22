@@ -20,18 +20,18 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
-// Ensure provider defined types fully satisfy framework interfaces
+// Ensure provider defined types fully satisfy framework interfaces.
 var (
 	_ resource.Resource                = &CMDeviceDeviceResource{}
 	_ resource.ResourceWithImportState = &CMDeviceDeviceResource{}
 )
 
-// CMDeviceDeviceResource defines the resource implementation
+// CMDeviceDeviceResource defines the resource implementation.
 type CMDeviceDeviceResource struct {
 	client *BCMClient
 }
 
-// CMDeviceDeviceResourceModel describes the resource data model
+// CMDeviceDeviceResourceModel describes the resource data model.
 type CMDeviceDeviceResourceModel struct {
 	// Identity fields (required/computed)
 	ID       types.String `tfsdk:"id"`       // Computed, same as UUID
@@ -68,17 +68,17 @@ type CMDeviceDeviceResourceModel struct {
 	ChildType    types.String `tfsdk:"child_type"`    // Computed, BCM-determined
 }
 
-// NewCMDeviceDeviceResource creates a new resource instance
+// NewCMDeviceDeviceResource creates a new resource instance.
 func NewCMDeviceDeviceResource() resource.Resource {
 	return &CMDeviceDeviceResource{}
 }
 
-// Metadata returns the resource type name
+// Metadata returns the resource type name.
 func (r *CMDeviceDeviceResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_cmdevice_device"
 }
 
-// Schema defines the resource schema
+// Schema defines the resource schema.
 func (r *CMDeviceDeviceResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		MarkdownDescription: "Manages a BCM device (compute node) in the cluster.\n\n" +
@@ -213,7 +213,7 @@ func (r *CMDeviceDeviceResource) Schema(ctx context.Context, req resource.Schema
 	}
 }
 
-// Configure adds the provider configured client to the resource
+// Configure adds the provider configured client to the resource.
 func (r *CMDeviceDeviceResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	if req.ProviderData == nil {
 		return
@@ -231,7 +231,7 @@ func (r *CMDeviceDeviceResource) Configure(ctx context.Context, req resource.Con
 	r.client = client
 }
 
-// Create creates the device resource
+// Create creates the device resource.
 func (r *CMDeviceDeviceResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan CMDeviceDeviceResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -380,8 +380,8 @@ func (r *CMDeviceDeviceResource) Create(ctx context.Context, req resource.Create
 	}
 
 	// Build device entity for BCM API (with generated UUID and resolved partition)
-	// When usesProxy is true, partition field will be omitted (derived from category's softwareImageProxy)
-	deviceEntity := r.buildDeviceAPIEntity(plan, newUUID, partitionUUID, usesProxy)
+	// Partition field is always included as BCM requires it
+	deviceEntity := r.buildDeviceAPIEntity(plan, newUUID, partitionUUID)
 
 	// Get force parameter value
 	forceValue := false
@@ -505,7 +505,7 @@ func (r *CMDeviceDeviceResource) Create(ctx context.Context, req resource.Create
 
 // waitForPartitionCommit polls BCM to verify a software image partition is committed and available
 // This is necessary because BCM software image creation is asynchronous - the API returns success
-// before the image is fully committed and ready to be used as a device partition
+// before the image is fully committed and ready to be used as a device partition.
 func (r *CMDeviceDeviceResource) waitForPartitionCommit(ctx context.Context, client *BCMClient, partitionUUID string) error {
 	// Increased from 10 to 20 retries to handle BCM's async partition commit timing
 	// BCM can take 60-120 seconds for partition commits in some environments
@@ -517,19 +517,19 @@ func (r *CMDeviceDeviceResource) waitForPartitionCommit(ctx context.Context, cli
 
 	for i := 0; i < maxRetries; i++ {
 		tflog.Debug(ctx, "Checking partition commit status", map[string]interface{}{
-			"partition_uuid":   partitionUUID,
-			"attempt":          i + 1,
-			"max_retries":      maxRetries,
-			"total_wait_secs":  totalWait.Seconds(),
+			"partition_uuid":  partitionUUID,
+			"attempt":         i + 1,
+			"max_retries":     maxRetries,
+			"total_wait_secs": totalWait.Seconds(),
 		})
 
 		// Try to query the partition - if it's committed, this will succeed
 		_, err := client.CallJSONRPC(ctx, "CMPart", "getSoftwareImage", partitionUUID)
 		if err == nil {
 			tflog.Info(ctx, "Partition is committed and available", map[string]interface{}{
-				"partition_uuid":   partitionUUID,
-				"attempts":         i + 1,
-				"total_wait_secs":  totalWait.Seconds(),
+				"partition_uuid":  partitionUUID,
+				"attempts":        i + 1,
+				"total_wait_secs": totalWait.Seconds(),
 			})
 			return nil // Partition is accessible
 		}
@@ -544,11 +544,11 @@ func (r *CMDeviceDeviceResource) waitForPartitionCommit(ctx context.Context, cli
 			totalWait += delay
 
 			tflog.Debug(ctx, "Partition not ready, waiting before retry", map[string]interface{}{
-				"partition_uuid":   partitionUUID,
-				"delay_seconds":    delay.Seconds(),
-				"attempt":          i + 1,
-				"total_wait_secs":  totalWait.Seconds(),
-				"error":            err.Error(),
+				"partition_uuid":  partitionUUID,
+				"delay_seconds":   delay.Seconds(),
+				"attempt":         i + 1,
+				"total_wait_secs": totalWait.Seconds(),
+				"error":           err.Error(),
 			})
 			time.Sleep(delay)
 		}
@@ -558,7 +558,7 @@ func (r *CMDeviceDeviceResource) waitForPartitionCommit(ctx context.Context, cli
 		maxRetries, totalWait.Seconds())
 }
 
-// Read reads the device resource
+// Read reads the device resource.
 func (r *CMDeviceDeviceResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var state CMDeviceDeviceResourceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -650,7 +650,7 @@ func (r *CMDeviceDeviceResource) Read(ctx context.Context, req resource.ReadRequ
 	resp.Diagnostics.Append(resp.State.Set(ctx, &newState)...)
 }
 
-// Update updates the device resource
+// Update updates the device resource.
 func (r *CMDeviceDeviceResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan CMDeviceDeviceResourceModel
 	var state CMDeviceDeviceResourceModel
@@ -668,7 +668,6 @@ func (r *CMDeviceDeviceResource) Update(ctx context.Context, req resource.Update
 
 	// Resolve partition UUID (either from plan or from category's default)
 	partitionUUID := ""
-	usesProxy := false
 
 	if !plan.Partition.IsNull() && !plan.Partition.IsUnknown() {
 		partitionUUID = plan.Partition.ValueString()
@@ -701,7 +700,6 @@ func (r *CMDeviceDeviceResource) Update(ctx context.Context, req resource.Update
 		} else if proxyData, ok := categoryData["softwareImageProxy"].(map[string]interface{}); ok && proxyData != nil {
 			// Check if category uses softwareImageProxy instead
 			if parentImage, ok := proxyData["parentSoftwareImage"].(string); ok && parentImage != "" {
-				usesProxy = true
 				tflog.Debug(ctx, "Category uses softwareImageProxy - will use cluster's base partition", map[string]interface{}{
 					"parent_software_image": parentImage,
 				})
@@ -752,8 +750,8 @@ func (r *CMDeviceDeviceResource) Update(ctx context.Context, req resource.Update
 	}
 
 	// Build device entity for BCM API (include UUID for update)
-	// Pass usesProxy to control whether partition field is included
-	deviceEntity := r.buildDeviceAPIEntity(plan, state.UUID.ValueString(), partitionUUID, usesProxy)
+	// Partition field is always included as BCM requires it
+	deviceEntity := r.buildDeviceAPIEntity(plan, state.UUID.ValueString(), partitionUUID)
 
 	// Get force parameter value
 	forceValue := false
@@ -846,7 +844,7 @@ func (r *CMDeviceDeviceResource) Update(ctx context.Context, req resource.Update
 	resp.Diagnostics.Append(resp.State.Set(ctx, &newState)...)
 }
 
-// Delete deletes the device resource
+// Delete deletes the device resource.
 func (r *CMDeviceDeviceResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var state CMDeviceDeviceResourceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -882,7 +880,7 @@ func (r *CMDeviceDeviceResource) Delete(ctx context.Context, req resource.Delete
 	})
 }
 
-// ImportState imports an existing device by UUID
+// ImportState imports an existing device by UUID.
 func (r *CMDeviceDeviceResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 
@@ -891,8 +889,8 @@ func (r *CMDeviceDeviceResource) ImportState(ctx context.Context, req resource.I
 	})
 }
 
-// buildDeviceAPIEntity constructs BCM API entity from Terraform model
-func (r *CMDeviceDeviceResource) buildDeviceAPIEntity(plan CMDeviceDeviceResourceModel, uuid string, partitionUUID string, usesProxy bool) map[string]interface{} {
+// buildDeviceAPIEntity constructs BCM API entity from Terraform model.
+func (r *CMDeviceDeviceResource) buildDeviceAPIEntity(plan CMDeviceDeviceResourceModel, uuid string, partitionUUID string) map[string]interface{} {
 	// Create a basic network interface for the device
 	interfaceUUID := "00000000-0000-0000-0000-000000000001" // Generate a temporary UUID for the interface
 
@@ -984,7 +982,7 @@ func (r *CMDeviceDeviceResource) buildDeviceAPIEntity(plan CMDeviceDeviceResourc
 	return entity
 }
 
-// parseDeviceFromAPI parses BCM API response into Terraform model
+// parseDeviceFromAPI parses BCM API response into Terraform model.
 func (r *CMDeviceDeviceResource) parseDeviceFromAPI(data map[string]interface{}) CMDeviceDeviceResourceModel {
 	model := CMDeviceDeviceResourceModel{}
 

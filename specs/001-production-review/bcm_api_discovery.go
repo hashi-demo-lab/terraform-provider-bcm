@@ -12,7 +12,7 @@ import (
 // Import the BCM client from the provider
 // This script will be run from the repo root
 
-// Known BCM services based on codebase analysis
+// Known BCM services based on codebase analysis.
 var knownServices = []string{
 	"cmdevice",
 	"cmpart",
@@ -25,111 +25,6 @@ var knownServices = []string{
 	"cmuser",
 	"cmsw",
 	"cmdaemon",
-}
-
-// Known method patterns - we'll try these for each service
-var methodPatterns = []string{
-	// List/Get patterns
-	"getNodes",
-	"getCategories",
-	"getCategory",
-	"getDevices",
-	"getDevice",
-	"getDeviceDetails",
-	"getSoftwareImages",
-	"getSoftwareImage",
-	"getModules",
-	"getModule",
-	"getNetworks",
-	"getNetwork",
-	"getRoles",
-	"getRole",
-	"getPartitions",
-	"getPartition",
-	"getJobs",
-	"getJob",
-	"getProvisioningStatus",
-	"getServices",
-	"getService",
-	"getMetrics",
-	"getMonitoringData",
-	"getUsers",
-	"getUser",
-	"getGroups",
-	"getGroup",
-	"getSettings",
-	"getSetting",
-	"getConfiguration",
-	"getHealthStatus",
-
-	// Add/Create patterns
-	"addCategory",
-	"addDevice",
-	"addSoftwareImage",
-	"addModule",
-	"addNetwork",
-	"addRole",
-	"addPartition",
-	"addJob",
-	"addUser",
-	"addGroup",
-	"addService",
-
-	// Update patterns
-	"updateCategory",
-	"updateDevice",
-	"updateSoftwareImage",
-	"updateModule",
-	"updateNetwork",
-	"updateRole",
-	"updatePartition",
-	"updateJob",
-	"updateUser",
-	"updateGroup",
-	"updateService",
-	"updateSettings",
-
-	// Remove/Delete patterns
-	"removeCategories",
-	"removeCategory",
-	"removeDevices",
-	"removeDevice",
-	"removeSoftwareImages",
-	"removeSoftwareImage",
-	"removeModules",
-	"removeModule",
-	"removeNetworks",
-	"removeNetwork",
-	"removeRoles",
-	"removeRole",
-	"removePartitions",
-	"removePartition",
-	"removeJobs",
-	"removeJob",
-	"removeUsers",
-	"removeUser",
-	"removeGroups",
-	"removeGroup",
-
-	// Action patterns
-	"startProvisioning",
-	"stopProvisioning",
-	"cancelProvisioning",
-	"powerOn",
-	"powerOff",
-	"reboot",
-	"reset",
-	"clone",
-	"cloneImage",
-	"assignRole",
-	"unassignRole",
-	"startService",
-	"stopService",
-	"restartService",
-	"runJob",
-	"cancelJob",
-	"pauseJob",
-	"resumeJob",
 }
 
 func main() {

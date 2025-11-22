@@ -33,9 +33,9 @@ type CMPartSoftwareImagesDataSource struct {
 
 // CMPartSoftwareImagesDataSourceModel describes the data source data model.
 type CMPartSoftwareImagesDataSourceModel struct {
-	ID     types.String                 `tfsdk:"id"`
-	Filter *SoftwareImageFilterModel    `tfsdk:"filter"`
-	Images []SoftwareImageModel         `tfsdk:"images"`
+	ID     types.String              `tfsdk:"id"`
+	Filter *SoftwareImageFilterModel `tfsdk:"filter"`
+	Images []SoftwareImageModel      `tfsdk:"images"`
 }
 
 // SoftwareImageFilterModel describes the filter block for client-side filtering.
@@ -45,7 +45,7 @@ type SoftwareImageFilterModel struct {
 	Category    types.String `tfsdk:"category"`     // Exact match for child_type (category)
 }
 
-// SoftwareImageModel represents a BCM software image with all fields
+// SoftwareImageModel represents a BCM software image with all fields.
 type SoftwareImageModel struct {
 	// Identity fields
 	ID   types.String `tfsdk:"id"`
@@ -92,7 +92,7 @@ type SoftwareImageModel struct {
 	Modules []KernelModuleModel `tfsdk:"modules"`
 }
 
-// KernelModuleModel represents a kernel module configured for a software image
+// KernelModuleModel represents a kernel module configured for a software image.
 type KernelModuleModel struct {
 	UUID        types.String `tfsdk:"uuid"`
 	Name        types.String `tfsdk:"name"`
@@ -388,7 +388,7 @@ func (d *CMPartSoftwareImagesDataSource) Read(ctx context.Context, req datasourc
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
-// mapAPIResponseToModel converts API JSON to SoftwareImageModel with null-safe field extraction
+// mapAPIResponseToModel converts API JSON to SoftwareImageModel with null-safe field extraction.
 func mapAPIResponseToModel(apiData map[string]interface{}) SoftwareImageModel {
 	model := SoftwareImageModel{}
 

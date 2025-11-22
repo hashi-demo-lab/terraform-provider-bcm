@@ -6,6 +6,7 @@ package provider
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -105,8 +106,8 @@ func createTestBCMClient(t *testing.T) *BCMClient {
 //
 // Returns:
 //
-//	(true, nil) - Resource is deleted (not found or empty response)
-//	(false, error) - API error occurred during verification
+//	true - Resource is deleted (not found or empty response)
+//	false - Resource still exists after all retries
 //
 // Retry Schedule (maxRetries=4):
 //
@@ -118,15 +119,13 @@ func createTestBCMClient(t *testing.T) *BCMClient {
 //
 // Example Usage:
 //
-//	deleted, err := verifyResourceDeleted(ctx, client, "CMPart", "getSoftwareImage", imageName, 4)
-//	if err != nil {
-//	    t.Logf("Error verifying deletion: %v", err)
-//	} else if deleted {
+//	deleted := verifyResourceDeleted(ctx, client, "CMPart", "getSoftwareImage", imageName, 4)
+//	if deleted {
 //	    t.Logf("✓ Resource deleted successfully")
 //	} else {
 //	    t.Logf("⚠ Warning: Resource may still exist after retries")
 //	}
-func verifyResourceDeleted(ctx context.Context, client *BCMClient, service, method, identifier string, maxRetries int) (bool, error) {
+func verifyResourceDeleted(ctx context.Context, client *BCMClient, service, method, identifier string, maxRetries int) bool {
 	waitTime := 1 * time.Second
 
 	for retry := 0; retry < maxRetries; retry++ {
@@ -137,18 +136,18 @@ func verifyResourceDeleted(ctx context.Context, client *BCMClient, service, meth
 
 		// Check if resource is gone (error response indicates not found)
 		if err != nil {
-			return true, nil // Deleted - API returned error (likely 404 or resource not found)
+			return true // Deleted - API returned error (likely 404 or resource not found)
 		}
 
 		// Check if response is empty
 		if len(body) == 0 {
-			return true, nil // Deleted - empty response
+			return true // Deleted - empty response
 		}
 
 		// Parse response to check if data is empty object
 		var data map[string]interface{}
 		if json.Unmarshal(body, &data) == nil && len(data) == 0 {
-			return true, nil // Deleted - empty JSON object
+			return true // Deleted - empty JSON object
 		}
 
 		// Resource still exists, wait longer for next retry
@@ -156,7 +155,7 @@ func verifyResourceDeleted(ctx context.Context, client *BCMClient, service, meth
 	}
 
 	// Resource still exists after all retries
-	return false, nil
+	return false
 }
 
 // getResourceUUIDByName queries BCM API to get a resource's UUID by name
@@ -208,10 +207,11 @@ func getResourceUUIDByName(t *testing.T, service, method, name string) string {
 	return uuid
 }
 
-// generateUniqueTestName creates a unique test resource name with timestamp suffix
+// generateUniqueTestName creates a unique test resource name with timestamp and nanosecond suffix
 //
 // This function ensures test resources have unique names to avoid conflicts when running
-// tests in parallel or when previous test cleanup failed.
+// tests in parallel or when previous test cleanup failed. It combines timestamp with
+// nanoseconds to guarantee uniqueness even when multiple tests start in rapid succession.
 //
 // Parameters:
 //
@@ -219,13 +219,14 @@ func getResourceUUIDByName(t *testing.T, service, method, name string) string {
 //
 // Returns:
 //
-//	Unique resource name with format: prefix-YYYYMMDD-HHMMSS
+//	Unique resource name with format: prefix-YYYYMMDD-HHMMSS-nanoseconds
 //
 // Example Usage:
 //
 //	name := generateUniqueTestName("test-image")
-//	// Returns: "test-image-20250121-143052"
+//	// Returns: "test-image-20250121-143052-123456789"
 func generateUniqueTestName(prefix string) string {
 	timestamp := time.Now().Format("20060102-150405")
-	return prefix + "-" + timestamp
+	nanos := time.Now().Nanosecond()
+	return fmt.Sprintf("%s-%s-%d", prefix, timestamp, nanos)
 }

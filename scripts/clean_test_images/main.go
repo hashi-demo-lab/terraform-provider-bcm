@@ -41,9 +41,16 @@ func main() {
 
 	fmt.Printf("Found %d software images\n", len(images))
 	for _, img := range images {
-		name := img["name"].(string)
+		name, ok := img["name"].(string)
+		if !ok {
+			continue
+		}
 		if strings.HasPrefix(name, "test-") {
-			uuid := img["uuid"].(string)
+			uuid, ok := img["uuid"].(string)
+			if !ok {
+				fmt.Printf("Skipping %s: invalid UUID\n", name)
+				continue
+			}
 			fmt.Printf("Deleting test image: %s (UUID: %s)\n", name, uuid)
 			_, err := client.CallJSONRPC(context.Background(), "CMPart", "removeSoftwareImage", uuid, false, false, false)
 			if err != nil {

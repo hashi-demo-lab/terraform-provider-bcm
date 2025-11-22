@@ -21,18 +21,18 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
-// Ensure provider defined types fully satisfy framework interfaces
+// Ensure provider defined types fully satisfy framework interfaces.
 var (
 	_ resource.Resource                = &CMDeviceCategoryResource{}
 	_ resource.ResourceWithImportState = &CMDeviceCategoryResource{}
 )
 
-// CMDeviceCategoryResource defines the resource implementation
+// CMDeviceCategoryResource defines the resource implementation.
 type CMDeviceCategoryResource struct {
 	client *BCMClient
 }
 
-// CMDeviceCategoryResourceModel describes the resource data model
+// CMDeviceCategoryResourceModel describes the resource data model.
 type CMDeviceCategoryResourceModel struct {
 	// Identity fields
 	ID   types.String `tfsdk:"id"`   // Computed, same as UUID
@@ -130,14 +130,14 @@ type CMDeviceCategoryResourceModel struct {
 	ChildType   types.String `tfsdk:"child_type"`    // Computed, empty for base type
 }
 
-// SoftwareImageProxyModel describes a software image proxy nested object
+// SoftwareImageProxyModel describes a software image proxy nested object.
 type SoftwareImageProxyModel struct {
 	UUID                types.String `tfsdk:"uuid"`                  // Computed
 	ParentSoftwareImage types.String `tfsdk:"parent_software_image"` // Required, UUID reference
 	RevisionID          types.Int64  `tfsdk:"revision_id"`           // Computed
 }
 
-// BMCSettingsModel describes BMC configuration nested object
+// BMCSettingsModel describes BMC configuration nested object.
 type BMCSettingsModel struct {
 	UUID               types.String  `tfsdk:"uuid"`                 // Computed
 	UserName           types.String  `tfsdk:"user_name"`            // Optional
@@ -150,7 +150,7 @@ type BMCSettingsModel struct {
 	PowerResetDelay    types.Int64   `tfsdk:"power_reset_delay"`    // Optional, seconds
 }
 
-// FSMountModel describes a filesystem mount nested object
+// FSMountModel describes a filesystem mount nested object.
 type FSMountModel struct {
 	UUID         types.String `tfsdk:"uuid"`         // Computed
 	Device       types.String `tfsdk:"device"`       // Required
@@ -162,23 +162,23 @@ type FSMountModel struct {
 	RDMA         types.Bool   `tfsdk:"rdma"`         // Optional
 }
 
-// KernelModuleCategoryModel describes a kernel module nested object
+// KernelModuleCategoryModel describes a kernel module nested object.
 type KernelModuleCategoryModel struct {
 	Name       types.String `tfsdk:"name"`       // Required
 	Parameters types.String `tfsdk:"parameters"` // Optional
 }
 
-// NewCMDeviceCategoryResource creates a new resource instance
+// NewCMDeviceCategoryResource creates a new resource instance.
 func NewCMDeviceCategoryResource() resource.Resource {
 	return &CMDeviceCategoryResource{}
 }
 
-// Metadata returns the resource type name
+// Metadata returns the resource type name.
 func (r *CMDeviceCategoryResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_cmdevice_category"
 }
 
-// Schema defines the resource schema
+// Schema defines the resource schema.
 func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		MarkdownDescription: "Manages a BCM device category.\n\n" +
@@ -568,7 +568,7 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 	}
 }
 
-// Configure stores the provider client for later use
+// Configure stores the provider client for later use.
 func (r *CMDeviceCategoryResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	// Prevent panic if the provider has not been configured
 	if req.ProviderData == nil {
@@ -587,7 +587,7 @@ func (r *CMDeviceCategoryResource) Configure(ctx context.Context, req resource.C
 	r.client = client
 }
 
-// Create implements resource.Resource (REFACTOR phase - Real API integration)
+// Create implements resource.Resource (REFACTOR phase - Real API integration).
 func (r *CMDeviceCategoryResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan CMDeviceCategoryResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -653,7 +653,14 @@ func (r *CMDeviceCategoryResource) Create(ctx context.Context, req resource.Crea
 	}
 
 	// When validation succeeds, BCM returns the UUID in the entity we provided
-	createdUUID := entity["uuid"].(string)
+	createdUUID, ok := entity["uuid"].(string)
+	if !ok {
+		resp.Diagnostics.AddError(
+			"Failed to extract UUID from created category",
+			"The UUID returned from BCM API was not a string",
+		)
+		return
+	}
 
 	tflog.Debug(ctx, "Category created successfully", map[string]interface{}{
 		"name": plan.Name.ValueString(),
@@ -678,7 +685,7 @@ func (r *CMDeviceCategoryResource) Create(ctx context.Context, req resource.Crea
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
-// Read implements resource.Resource (REFACTOR phase - Real API integration)
+// Read implements resource.Resource (REFACTOR phase - Real API integration).
 func (r *CMDeviceCategoryResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var state CMDeviceCategoryResourceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -711,7 +718,7 @@ func (r *CMDeviceCategoryResource) Read(ctx context.Context, req resource.ReadRe
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
-// Update implements resource.Resource (REFACTOR phase - Real API integration)
+// Update implements resource.Resource (REFACTOR phase - Real API integration).
 func (r *CMDeviceCategoryResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan CMDeviceCategoryResourceModel
 	var state CMDeviceCategoryResourceModel
@@ -775,7 +782,7 @@ func (r *CMDeviceCategoryResource) Update(ctx context.Context, req resource.Upda
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
-// Delete implements resource.Resource (REFACTOR phase - Real API integration)
+// Delete implements resource.Resource (REFACTOR phase - Real API integration).
 func (r *CMDeviceCategoryResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var state CMDeviceCategoryResourceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -848,7 +855,7 @@ func (r *CMDeviceCategoryResource) Delete(ctx context.Context, req resource.Dele
 	})
 }
 
-// containsAny checks if a string contains any of the specified substrings (case-insensitive)
+// containsAny checks if a string contains any of the specified substrings (case-insensitive).
 func containsAny(s string, substrings []string) bool {
 	// Import strings package functionality inline for case-insensitive check
 	lowerStr := ""
@@ -880,7 +887,7 @@ func containsAny(s string, substrings []string) bool {
 	return false
 }
 
-// ImportState implements resource.ResourceWithImportState
+// ImportState implements resource.ResourceWithImportState.
 func (r *CMDeviceCategoryResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	// T034-T035: Two-phase import implementation
 	// Phase 1: Call getCategories to list all categories and find the one with matching UUID
@@ -963,7 +970,7 @@ func (r *CMDeviceCategoryResource) ImportState(ctx context.Context, req resource
 // REFACTOR PHASE: Helper Functions
 // ========================================
 
-// buildAPIEntity constructs a BCM API Category entity from Terraform model
+// buildAPIEntity constructs a BCM API Category entity from Terraform model.
 func (r *CMDeviceCategoryResource) buildAPIEntity(ctx context.Context, model *CMDeviceCategoryResourceModel, uuid string) map[string]interface{} {
 	entity := map[string]interface{}{
 		"baseType":      "Category",
@@ -1079,7 +1086,7 @@ func (r *CMDeviceCategoryResource) buildAPIEntity(ctx context.Context, model *CM
 	return entity
 }
 
-// readCategory fetches category data from BCM API using efficient getCategory(name)
+// readCategory fetches category data from BCM API using efficient getCategory(name).
 func (r *CMDeviceCategoryResource) readCategory(ctx context.Context, model *CMDeviceCategoryResourceModel, diags *diag.Diagnostics) {
 
 	// Determine which identifier to use for lookup
@@ -1129,7 +1136,7 @@ func (r *CMDeviceCategoryResource) readCategory(ctx context.Context, model *CMDe
 	}
 
 	// Check if category not found (empty response)
-	if categoryData == nil || len(categoryData) == 0 {
+	if len(categoryData) == 0 {
 		diags.AddError(
 			"Category Not Found",
 			fmt.Sprintf("Category '%s' not found in BCM", lookupName),
@@ -1275,7 +1282,7 @@ func (r *CMDeviceCategoryResource) readCategory(ctx context.Context, model *CMDe
 	// - bmc_settings (nested BMCSettings)
 }
 
-// generateUUID creates a new UUID v4 string
+// generateUUID creates a new UUID v4 string.
 func generateUUID() string {
 	return uuid.New().String()
 }
