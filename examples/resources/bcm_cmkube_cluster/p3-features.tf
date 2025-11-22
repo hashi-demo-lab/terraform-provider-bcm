@@ -27,7 +27,7 @@ resource "bcm_cmkube_cluster" "production_advanced" {
   # Network configuration
   management_network = "<management-network-uuid>"
   overlay_network    = "<overlay-network-uuid>" # Pod network overlay
-  dns_servers        = ["8.8.8.8", "8.8.4.4"]    # Custom DNS servers
+  dns_servers        = ["8.8.8.8", "8.8.4.4"]   # Custom DNS servers
 
   # Load balancer configuration
   load_balancer_mode = "metallb"
@@ -35,8 +35,8 @@ resource "bcm_cmkube_cluster" "production_advanced" {
   # Storage classes (JSON-encoded array)
   storage_classes = jsonencode([
     {
-      name             = "fast-ssd"
-      provisioner      = "kubernetes.io/csi-driver"
+      name              = "fast-ssd"
+      provisioner       = "kubernetes.io/csi-driver"
       volumeBindingMode = "Immediate"
       parameters = {
         type = "ssd"
@@ -44,8 +44,8 @@ resource "bcm_cmkube_cluster" "production_advanced" {
       }
     },
     {
-      name             = "standard"
-      provisioner      = "kubernetes.io/csi-driver"
+      name              = "standard"
+      provisioner       = "kubernetes.io/csi-driver"
       volumeBindingMode = "WaitForFirstConsumer"
       parameters = {
         type = "standard"
