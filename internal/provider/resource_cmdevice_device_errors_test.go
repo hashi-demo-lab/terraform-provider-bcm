@@ -22,35 +22,35 @@ import (
 type mockBCMServerScenario string
 
 const (
-	// Category query errors (line 259)
+	// Category query errors (line 259).
 	scenarioCategoryNotFound     mockBCMServerScenario = "category_not_found"
 	scenarioCategoryInvalidJSON  mockBCMServerScenario = "category_invalid_json"
 	scenarioCategoryNoPartition  mockBCMServerScenario = "category_no_partition"
 	scenarioCategoryProxyMissing mockBCMServerScenario = "category_proxy_missing_parent"
 
-	// Partition query errors (line 293-309)
+	// Partition query errors (line 293-309).
 	scenarioPartitionsQueryError  mockBCMServerScenario = "partitions_query_error"
 	scenarioPartitionsInvalidJSON mockBCMServerScenario = "partitions_invalid_json"
 	scenarioPartitionsNoBase      mockBCMServerScenario = "partitions_no_base"
 
-	// Partition commit timeout (line 527)
+	// Partition commit timeout (line 527).
 	scenarioPartitionNotCommitted mockBCMServerScenario = "partition_not_committed"
 
-	// Device creation errors (line 393)
+	// Device creation errors (line 393).
 	scenarioDeviceCreateError       mockBCMServerScenario = "device_create_error"
 	scenarioDeviceCreateInvalidJSON mockBCMServerScenario = "device_create_invalid_json"
 	scenarioDeviceValidationFailure mockBCMServerScenario = "device_validation_failure"
 
-	// Device read errors (line 443, 580)
+	// Device read errors (line 443, 580).
 	scenarioDeviceReadError       mockBCMServerScenario = "device_read_error"
 	scenarioDeviceReadInvalidJSON mockBCMServerScenario = "device_read_invalid_json"
 
-	// Device update errors (line 676, 763)
+	// Device update errors (line 676, 763).
 	scenarioDeviceUpdateCategoryError mockBCMServerScenario = "device_update_category_error"
 	scenarioDeviceUpdateError         mockBCMServerScenario = "device_update_error"
 	scenarioDeviceUpdateReadError     mockBCMServerScenario = "device_update_read_error"
 
-	// Device delete errors (line 867)
+	// Device delete errors (line 867).
 	scenarioDeviceDeleteError mockBCMServerScenario = "device_delete_error"
 )
 
@@ -74,7 +74,7 @@ func createMockBCMServerForDeviceErrors(scenario mockBCMServerScenario) *httptes
 		if req.Service == "login" {
 			w.Header().Set("Set-Cookie", "cm-login-token=test-token; Path=/")
 			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
 			return
 		}
 
@@ -101,19 +101,19 @@ func createMockBCMServerForDeviceErrors(scenario mockBCMServerScenario) *httptes
 		case scenarioDeviceCreateInvalidJSON:
 			handleDeviceCreateInvalidJSON(w, req)
 		case scenarioDeviceValidationFailure:
-			handleDeviceValidationFailure(t, w, req)
+			handleDeviceValidationFailure(w, req)
 		case scenarioDeviceReadError:
-			handleDeviceReadError(t, w, req)
+			handleDeviceReadError(w, req)
 		case scenarioDeviceReadInvalidJSON:
-			handleDeviceReadInvalidJSON(t, w, req)
+			handleDeviceReadInvalidJSON(w, req)
 		case scenarioDeviceUpdateCategoryError:
-			handleDeviceUpdateCategoryError(t, w, req)
+			handleDeviceUpdateCategoryError(w, req)
 		case scenarioDeviceUpdateError:
-			handleDeviceUpdateError(t, w, req)
+			handleDeviceUpdateError(w, req)
 		case scenarioDeviceUpdateReadError:
-			handleDeviceUpdateReadError(t, w, req)
+			handleDeviceUpdateReadError(w, req)
 		case scenarioDeviceDeleteError:
-			handleDeviceDeleteError(t, w, req)
+			handleDeviceDeleteError(w, req)
 		default:
 			http.Error(w, "Unknown scenario", http.StatusInternalServerError)
 		}
@@ -125,7 +125,7 @@ func createMockBCMServerForDeviceErrors(scenario mockBCMServerScenario) *httptes
 // ========================================
 
 // handleCategoryNotFound simulates category query returning an error (line 259).
-func handleCategoryNotFound(t *testing.T, w http.ResponseWriter, req struct {
+func handleCategoryNotFound(w http.ResponseWriter, req struct {
 	Service string        `json:"service"`
 	Call    string        `json:"call"`
 	Args    []interface{} `json:"args,omitempty"`
@@ -140,7 +140,7 @@ func handleCategoryNotFound(t *testing.T, w http.ResponseWriter, req struct {
 	if req.Service == "cmnet" && req.Call == "getNetworks" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode([]map[string]interface{}{
+		_ = json.NewEncoder(w).Encode([]map[string]interface{}{
 			{
 				"uuid": "12345678-1234-1234-1234-123456789012",
 				"name": "managementnet",
@@ -152,11 +152,11 @@ func handleCategoryNotFound(t *testing.T, w http.ResponseWriter, req struct {
 	// Default success response for unknown calls
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
 }
 
 // handleCategoryInvalidJSON simulates category query returning invalid JSON (line 269).
-func handleCategoryInvalidJSON(t *testing.T, w http.ResponseWriter, req struct {
+func handleCategoryInvalidJSON(w http.ResponseWriter, req struct {
 	Service string        `json:"service"`
 	Call    string        `json:"call"`
 	Args    []interface{} `json:"args,omitempty"`
@@ -164,7 +164,7 @@ func handleCategoryInvalidJSON(t *testing.T, w http.ResponseWriter, req struct {
 	// Return invalid JSON only for getCategory calls
 	if req.Service == "cmdevice" && req.Call == "getCategory" {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("invalid json {"))
+		_, _ = w.Write([]byte("invalid json {"))
 		return
 	}
 
@@ -172,7 +172,7 @@ func handleCategoryInvalidJSON(t *testing.T, w http.ResponseWriter, req struct {
 	if req.Service == "cmnet" && req.Call == "getNetworks" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode([]map[string]interface{}{
+		_ = json.NewEncoder(w).Encode([]map[string]interface{}{
 			{
 				"uuid": "12345678-1234-1234-1234-123456789012",
 				"name": "managementnet",
@@ -184,11 +184,11 @@ func handleCategoryInvalidJSON(t *testing.T, w http.ResponseWriter, req struct {
 	// Default success response
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
 }
 
 // handleCategoryNoPartition simulates category with no partition field (line 278-349).
-func handleCategoryNoPartition(t *testing.T, w http.ResponseWriter, req struct {
+func handleCategoryNoPartition(w http.ResponseWriter, req struct {
 	Service string        `json:"service"`
 	Call    string        `json:"call"`
 	Args    []interface{} `json:"args,omitempty"`
@@ -196,7 +196,7 @@ func handleCategoryNoPartition(t *testing.T, w http.ResponseWriter, req struct {
 	if req.Service == "cmdevice" && req.Call == "getCategory" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"uuid": "12345678-1234-1234-1234-123456789012",
 			"name": "test-category",
 			// Missing both "partition" and "softwareImageProxy" fields
@@ -205,11 +205,11 @@ func handleCategoryNoPartition(t *testing.T, w http.ResponseWriter, req struct {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
 }
 
 // handleCategoryProxyMissing simulates category with softwareImageProxy but no parentSoftwareImage (line 338-344).
-func handleCategoryProxyMissing(t *testing.T, w http.ResponseWriter, req struct {
+func handleCategoryProxyMissing(w http.ResponseWriter, req struct {
 	Service string        `json:"service"`
 	Call    string        `json:"call"`
 	Args    []interface{} `json:"args,omitempty"`
@@ -217,7 +217,7 @@ func handleCategoryProxyMissing(t *testing.T, w http.ResponseWriter, req struct 
 	if req.Service == "cmdevice" && req.Call == "getCategory" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"uuid":               "12345678-1234-1234-1234-123456789012",
 			"name":               "test-category",
 			"softwareImageProxy": map[string]interface{}{
@@ -228,11 +228,11 @@ func handleCategoryProxyMissing(t *testing.T, w http.ResponseWriter, req struct 
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
 }
 
 // handlePartitionsQueryError simulates partitions query error (line 293).
-func handlePartitionsQueryError(t *testing.T, w http.ResponseWriter, req struct {
+func handlePartitionsQueryError(w http.ResponseWriter, req struct {
 	Service string        `json:"service"`
 	Call    string        `json:"call"`
 	Args    []interface{} `json:"args,omitempty"`
@@ -245,7 +245,7 @@ func handlePartitionsQueryError(t *testing.T, w http.ResponseWriter, req struct 
 	if req.Service == "cmdevice" && req.Call == "getCategory" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"uuid": "12345678-1234-1234-1234-123456789012",
 			"name": "test-category",
 			"softwareImageProxy": map[string]interface{}{
@@ -255,25 +255,25 @@ func handlePartitionsQueryError(t *testing.T, w http.ResponseWriter, req struct 
 		return
 	}
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
 }
 
 // handlePartitionsInvalidJSON simulates partitions query returning invalid JSON (line 303).
-func handlePartitionsInvalidJSON(t *testing.T, w http.ResponseWriter, req struct {
+func handlePartitionsInvalidJSON(w http.ResponseWriter, req struct {
 	Service string        `json:"service"`
 	Call    string        `json:"call"`
 	Args    []interface{} `json:"args,omitempty"`
 }) {
 	if req.Service == "CMPart" && req.Call == "getPartitions" {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("not valid json ["))
+		_, _ = w.Write([]byte("not valid json ["))
 		return
 	}
 	// Return valid category with softwareImageProxy
 	if req.Service == "cmdevice" && req.Call == "getCategory" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"uuid": "12345678-1234-1234-1234-123456789012",
 			"name": "test-category",
 			"softwareImageProxy": map[string]interface{}{
@@ -283,11 +283,11 @@ func handlePartitionsInvalidJSON(t *testing.T, w http.ResponseWriter, req struct
 		return
 	}
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
 }
 
 // handlePartitionsNoBase simulates partitions query with no "base" partition (line 326-332).
-func handlePartitionsNoBase(t *testing.T, w http.ResponseWriter, req struct {
+func handlePartitionsNoBase(w http.ResponseWriter, req struct {
 	Service string        `json:"service"`
 	Call    string        `json:"call"`
 	Args    []interface{} `json:"args,omitempty"`
@@ -295,7 +295,7 @@ func handlePartitionsNoBase(t *testing.T, w http.ResponseWriter, req struct {
 	if req.Service == "CMPart" && req.Call == "getPartitions" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode([]map[string]interface{}{
+		_ = json.NewEncoder(w).Encode([]map[string]interface{}{
 			{
 				"uuid": "87654321-4321-4321-4321-210987654321",
 				"name": "other-partition",
@@ -308,7 +308,7 @@ func handlePartitionsNoBase(t *testing.T, w http.ResponseWriter, req struct {
 	if req.Service == "cmdevice" && req.Call == "getCategory" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"uuid": "12345678-1234-1234-1234-123456789012",
 			"name": "test-category",
 			"softwareImageProxy": map[string]interface{}{
@@ -318,11 +318,11 @@ func handlePartitionsNoBase(t *testing.T, w http.ResponseWriter, req struct {
 		return
 	}
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
 }
 
 // handlePartitionNotCommitted simulates partition not becoming committed (line 527).
-func handlePartitionNotCommitted(t *testing.T, w http.ResponseWriter, req struct {
+func handlePartitionNotCommitted(w http.ResponseWriter, req struct {
 	Service string        `json:"service"`
 	Call    string        `json:"call"`
 	Args    []interface{} `json:"args,omitempty"`
@@ -331,7 +331,7 @@ func handlePartitionNotCommitted(t *testing.T, w http.ResponseWriter, req struct
 	if req.Service == "cmdevice" && req.Call == "getCategory" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"uuid":      "12345678-1234-1234-1234-123456789012",
 			"name":      "test-category",
 			"partition": "11111111-1111-1111-1111-111111111111",
@@ -344,11 +344,11 @@ func handlePartitionNotCommitted(t *testing.T, w http.ResponseWriter, req struct
 		return
 	}
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
 }
 
 // handleDeviceCreateError simulates device creation API error (line 393).
-func handleDeviceCreateError(t *testing.T, w http.ResponseWriter, req struct {
+func handleDeviceCreateError(w http.ResponseWriter, req struct {
 	Service string        `json:"service"`
 	Call    string        `json:"call"`
 	Args    []interface{} `json:"args,omitempty"`
@@ -357,7 +357,7 @@ func handleDeviceCreateError(t *testing.T, w http.ResponseWriter, req struct {
 	if req.Service == "cmdevice" && req.Call == "getCategory" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"uuid":      "12345678-1234-1234-1234-123456789012",
 			"name":      "test-category",
 			"partition": "11111111-1111-1111-1111-111111111111",
@@ -367,7 +367,7 @@ func handleDeviceCreateError(t *testing.T, w http.ResponseWriter, req struct {
 	if req.Service == "CMPart" && req.Call == "getSoftwareImage" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]interface{}{"uuid": "11111111-1111-1111-1111-111111111111"})
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"uuid": "11111111-1111-1111-1111-111111111111"})
 		return
 	}
 	// Fail on addDevice
@@ -376,11 +376,11 @@ func handleDeviceCreateError(t *testing.T, w http.ResponseWriter, req struct {
 		return
 	}
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
 }
 
 // handleDeviceCreateInvalidJSON simulates device creation returning invalid JSON (line 408).
-func handleDeviceCreateInvalidJSON(t *testing.T, w http.ResponseWriter, req struct {
+func handleDeviceCreateInvalidJSON(w http.ResponseWriter, req struct {
 	Service string        `json:"service"`
 	Call    string        `json:"call"`
 	Args    []interface{} `json:"args,omitempty"`
@@ -388,7 +388,7 @@ func handleDeviceCreateInvalidJSON(t *testing.T, w http.ResponseWriter, req stru
 	if req.Service == "cmdevice" && req.Call == "getCategory" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"uuid":      "12345678-1234-1234-1234-123456789012",
 			"name":      "test-category",
 			"partition": "11111111-1111-1111-1111-111111111111",
@@ -398,20 +398,20 @@ func handleDeviceCreateInvalidJSON(t *testing.T, w http.ResponseWriter, req stru
 	if req.Service == "CMPart" && req.Call == "getSoftwareImage" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]interface{}{"uuid": "11111111-1111-1111-1111-111111111111"})
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"uuid": "11111111-1111-1111-1111-111111111111"})
 		return
 	}
 	if req.Service == "cmdevice" && req.Call == "addDevice" {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("invalid response {"))
+		_, _ = w.Write([]byte("invalid response {"))
 		return
 	}
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
 }
 
 // handleDeviceValidationFailure simulates device creation validation failure (line 417-432).
-func handleDeviceValidationFailure(t *testing.T, w http.ResponseWriter, req struct {
+func handleDeviceValidationFailure(w http.ResponseWriter, req struct {
 	Service string        `json:"service"`
 	Call    string        `json:"call"`
 	Args    []interface{} `json:"args,omitempty"`
@@ -419,7 +419,7 @@ func handleDeviceValidationFailure(t *testing.T, w http.ResponseWriter, req stru
 	if req.Service == "cmdevice" && req.Call == "getCategory" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"uuid":      "12345678-1234-1234-1234-123456789012",
 			"name":      "test-category",
 			"partition": "11111111-1111-1111-1111-111111111111",
@@ -429,13 +429,13 @@ func handleDeviceValidationFailure(t *testing.T, w http.ResponseWriter, req stru
 	if req.Service == "CMPart" && req.Call == "getSoftwareImage" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]interface{}{"uuid": "11111111-1111-1111-1111-111111111111"})
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"uuid": "11111111-1111-1111-1111-111111111111"})
 		return
 	}
 	if req.Service == "cmdevice" && req.Call == "addDevice" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": false,
 			"validation": []map[string]interface{}{
 				{
@@ -451,11 +451,11 @@ func handleDeviceValidationFailure(t *testing.T, w http.ResponseWriter, req stru
 		return
 	}
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
 }
 
 // handleDeviceReadError simulates device read API error (line 443, 580).
-func handleDeviceReadError(t *testing.T, w http.ResponseWriter, req struct {
+func handleDeviceReadError(w http.ResponseWriter, req struct {
 	Service string        `json:"service"`
 	Call    string        `json:"call"`
 	Args    []interface{} `json:"args,omitempty"`
@@ -465,26 +465,26 @@ func handleDeviceReadError(t *testing.T, w http.ResponseWriter, req struct {
 		return
 	}
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
 }
 
 // handleDeviceReadInvalidJSON simulates device read returning invalid JSON (line 454).
-func handleDeviceReadInvalidJSON(t *testing.T, w http.ResponseWriter, req struct {
+func handleDeviceReadInvalidJSON(w http.ResponseWriter, req struct {
 	Service string        `json:"service"`
 	Call    string        `json:"call"`
 	Args    []interface{} `json:"args,omitempty"`
 }) {
 	if req.Service == "cmdevice" && req.Call == "getDevice" {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("not json {"))
+		_, _ = w.Write([]byte("not json {"))
 		return
 	}
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
 }
 
 // handleDeviceUpdateCategoryError simulates category query error during update (line 676).
-func handleDeviceUpdateCategoryError(t *testing.T, w http.ResponseWriter, req struct {
+func handleDeviceUpdateCategoryError(w http.ResponseWriter, req struct {
 	Service string        `json:"service"`
 	Call    string        `json:"call"`
 	Args    []interface{} `json:"args,omitempty"`
@@ -494,11 +494,11 @@ func handleDeviceUpdateCategoryError(t *testing.T, w http.ResponseWriter, req st
 		return
 	}
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
 }
 
 // handleDeviceUpdateError simulates device update API error (line 763).
-func handleDeviceUpdateError(t *testing.T, w http.ResponseWriter, req struct {
+func handleDeviceUpdateError(w http.ResponseWriter, req struct {
 	Service string        `json:"service"`
 	Call    string        `json:"call"`
 	Args    []interface{} `json:"args,omitempty"`
@@ -508,11 +508,11 @@ func handleDeviceUpdateError(t *testing.T, w http.ResponseWriter, req struct {
 		return
 	}
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
 }
 
 // handleDeviceUpdateReadError simulates device read error after update (line 778).
-func handleDeviceUpdateReadError(t *testing.T, w http.ResponseWriter, req struct {
+func handleDeviceUpdateReadError(w http.ResponseWriter, req struct {
 	Service string        `json:"service"`
 	Call    string        `json:"call"`
 	Args    []interface{} `json:"args,omitempty"`
@@ -520,7 +520,7 @@ func handleDeviceUpdateReadError(t *testing.T, w http.ResponseWriter, req struct
 	// Return success for update
 	if req.Service == "cmdevice" && req.Call == "updateDevice" {
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
 		return
 	}
 	// Fail on subsequent read
@@ -529,11 +529,11 @@ func handleDeviceUpdateReadError(t *testing.T, w http.ResponseWriter, req struct
 		return
 	}
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
 }
 
 // handleDeviceDeleteError simulates device delete API error (line 867).
-func handleDeviceDeleteError(t *testing.T, w http.ResponseWriter, req struct {
+func handleDeviceDeleteError(w http.ResponseWriter, req struct {
 	Service string        `json:"service"`
 	Call    string        `json:"call"`
 	Args    []interface{} `json:"args,omitempty"`
@@ -543,7 +543,7 @@ func handleDeviceDeleteError(t *testing.T, w http.ResponseWriter, req struct {
 		return
 	}
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
 }
 
 // ========================================

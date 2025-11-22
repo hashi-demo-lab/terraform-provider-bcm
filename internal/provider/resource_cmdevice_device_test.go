@@ -539,7 +539,7 @@ func TestAccCMDeviceDevice_ValidationInvalidHostname(t *testing.T) {
 //
 // Reference Implementation:
 // - Similar to clone timeout patterns in resource_cmpart_softwareimage_test.go
-// - Follows eventual consistency test patterns from drift detection tests
+// - Follows eventual consistency test patterns from drift detection tests.
 func TestAccCMDeviceDevice_PartitionCommitTimeout(t *testing.T) {
 	t.Skip("SKIP: This test takes ~2 minutes to complete due to exponential backoff - run manually to verify timeout logic")
 
@@ -979,7 +979,7 @@ func TestAccCMDeviceDevice_Drift(t *testing.T) {
 // these errors would occur when:
 // - BCM API is unavailable or returns errors
 // - Cluster has no partitions configured
-// - Cluster partitions exist but none have the required "base" name
+// - Cluster partitions exist but none have the required "base" name.
 func TestAccCMDeviceDevice_PartitionErrorHandling(t *testing.T) {
 	t.Skip("Skipping partition error handling tests - requires specific BCM cluster configurations or mock server")
 
