@@ -115,6 +115,9 @@ func testAccCheckCMDeviceDeviceDestroy(s *terraform.State) error {
 
 // testAccCMDeviceDeviceResourceConfig_Basic returns basic device configuration
 func testAccCMDeviceDeviceResourceConfig_Basic(hostname string) string {
+	categoryName := generateUniqueTestName("citest-category-basic")
+	imageName := generateUniqueTestName("citest-image-basic")
+
 	return fmt.Sprintf(`
 provider "bcm" {
   endpoint             = %[1]q
@@ -123,39 +126,51 @@ provider "bcm" {
   insecure_skip_verify = true
 }
 
-# Get default category
-data "bcm_cmdevice_categories" "all" {}
-
-# Use first available category
-locals {
-  category_uuid = length(data.bcm_cmdevice_categories.all.categories) > 0 ? data.bcm_cmdevice_categories.all.categories[0].uuid : ""
+data "bcm_cmnet_networks" "management" {
+  filter {
+    name_pattern = "managementnet"
+  }
 }
 
-# Get management network
-data "bcm_cmnet_networks" "all" {}
+resource "bcm_cmpart_softwareimage" "test" {
+  name = %[5]q
+  path = "/cm/images/ubuntu-22.04-server-amd64.iso"
+}
 
-# Use first available network
-locals {
-  network_uuid = length(data.bcm_cmnet_networks.all.networks) > 0 ? data.bcm_cmnet_networks.all.networks[0].uuid : ""
+resource "bcm_cmdevice_category" "test" {
+  name               = %[6]q
+  management_network = data.bcm_cmnet_networks.management.networks[0].id
+
+  software_image_proxy = {
+    parent_software_image = bcm_cmpart_softwareimage.test.id
+  }
+
+  depends_on = [bcm_cmpart_softwareimage.test]
 }
 
 resource "bcm_cmdevice_device" "test" {
   hostname           = %[4]q
   mac                = "00:11:22:33:44:55"
-  category           = local.category_uuid
-  management_network = local.network_uuid
-  partition          = "ddd19eb5-f04a-48dc-9cc6-f160b704a7dd"
+  category           = bcm_cmdevice_category.test.id
+  management_network = data.bcm_cmnet_networks.management.networks[0].id
+
+  depends_on = [bcm_cmdevice_category.test]
 }
 `,
 		os.Getenv("BCM_ENDPOINT"),
 		os.Getenv("BCM_USERNAME"),
 		os.Getenv("BCM_PASSWORD"),
 		hostname,
+		imageName,
+		categoryName,
 	)
 }
 
 // testAccCMDeviceDeviceResourceConfig_Updated returns updated device configuration
 func testAccCMDeviceDeviceResourceConfig_Updated(hostname string) string {
+	categoryName := generateUniqueTestName("citest-category-basic")
+	imageName := generateUniqueTestName("citest-image-basic")
+
 	return fmt.Sprintf(`
 provider "bcm" {
   endpoint             = %[1]q
@@ -164,34 +179,45 @@ provider "bcm" {
   insecure_skip_verify = true
 }
 
-# Get default category
-data "bcm_cmdevice_categories" "all" {}
-
-locals {
-  category_uuid = length(data.bcm_cmdevice_categories.all.categories) > 0 ? data.bcm_cmdevice_categories.all.categories[0].uuid : ""
+data "bcm_cmnet_networks" "management" {
+  filter {
+    name_pattern = "managementnet"
+  }
 }
 
-# Get management network
-data "bcm_cmnet_networks" "all" {}
+resource "bcm_cmpart_softwareimage" "test" {
+  name = %[5]q
+  path = "/cm/images/ubuntu-22.04-server-amd64.iso"
+}
 
-locals {
-  network_uuid = length(data.bcm_cmnet_networks.all.networks) > 0 ? data.bcm_cmnet_networks.all.networks[0].uuid : ""
+resource "bcm_cmdevice_category" "test" {
+  name               = %[6]q
+  management_network = data.bcm_cmnet_networks.management.networks[0].id
+
+  software_image_proxy = {
+    parent_software_image = bcm_cmpart_softwareimage.test.id
+  }
+
+  depends_on = [bcm_cmpart_softwareimage.test]
 }
 
 resource "bcm_cmdevice_device" "test" {
   hostname           = %[4]q
   mac                = "00:11:22:33:44:55"
-  category           = local.category_uuid
-  management_network = local.network_uuid
-  partition          = "ddd19eb5-f04a-48dc-9cc6-f160b704a7dd"
+  category           = bcm_cmdevice_category.test.id
+  management_network = data.bcm_cmnet_networks.management.networks[0].id
   notes              = "Updated device notes"
   kernel_parameters  = "quiet splash"
+
+  depends_on = [bcm_cmdevice_category.test]
 }
 `,
 		os.Getenv("BCM_ENDPOINT"),
 		os.Getenv("BCM_USERNAME"),
 		os.Getenv("BCM_PASSWORD"),
 		hostname,
+		imageName,
+		categoryName,
 	)
 }
 
@@ -318,6 +344,9 @@ func TestAccCMDeviceDeviceResource_Basic(t *testing.T) {
 
 // testAccCMDeviceDeviceResourceConfig_Drift returns config for drift detection tests
 func testAccCMDeviceDeviceResourceConfig_Drift(hostname, notesValue string) string {
+	categoryName := generateUniqueTestName("citest-category-drift")
+	imageName := generateUniqueTestName("citest-image-drift")
+
 	return fmt.Sprintf(`
 provider "bcm" {
   endpoint             = %[1]q
@@ -326,25 +355,36 @@ provider "bcm" {
   insecure_skip_verify = true
 }
 
-data "bcm_cmdevice_categories" "all" {}
-
-locals {
-  category_uuid = length(data.bcm_cmdevice_categories.all.categories) > 0 ? data.bcm_cmdevice_categories.all.categories[0].uuid : ""
+data "bcm_cmnet_networks" "management" {
+  filter {
+    name_pattern = "managementnet"
+  }
 }
 
-data "bcm_cmnet_networks" "all" {}
+resource "bcm_cmpart_softwareimage" "test" {
+  name = %[6]q
+  path = "/cm/images/ubuntu-22.04-server-amd64.iso"
+}
 
-locals {
-  network_uuid = length(data.bcm_cmnet_networks.all.networks) > 0 ? data.bcm_cmnet_networks.all.networks[0].uuid : ""
+resource "bcm_cmdevice_category" "test" {
+  name               = %[7]q
+  management_network = data.bcm_cmnet_networks.management.networks[0].id
+
+  software_image_proxy = {
+    parent_software_image = bcm_cmpart_softwareimage.test.id
+  }
+
+  depends_on = [bcm_cmpart_softwareimage.test]
 }
 
 resource "bcm_cmdevice_device" "test" {
   hostname           = %[4]q
   mac                = "00:11:22:33:44:66"
-  category           = local.category_uuid
-  management_network = local.network_uuid
-  partition          = "ddd19eb5-f04a-48dc-9cc6-f160b704a7dd"
+  category           = bcm_cmdevice_category.test.id
+  management_network = data.bcm_cmnet_networks.management.networks[0].id
   notes              = %[5]q
+
+  depends_on = [bcm_cmdevice_category.test]
 }
 `,
 		os.Getenv("BCM_ENDPOINT"),
@@ -352,6 +392,8 @@ resource "bcm_cmdevice_device" "test" {
 		os.Getenv("BCM_PASSWORD"),
 		hostname,
 		notesValue,
+		imageName,
+		categoryName,
 	)
 }
 

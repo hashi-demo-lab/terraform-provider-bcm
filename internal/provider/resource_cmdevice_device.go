@@ -507,40 +507,55 @@ func (r *CMDeviceDeviceResource) Create(ctx context.Context, req resource.Create
 // This is necessary because BCM software image creation is asynchronous - the API returns success
 // before the image is fully committed and ready to be used as a device partition
 func (r *CMDeviceDeviceResource) waitForPartitionCommit(ctx context.Context, client *BCMClient, partitionUUID string) error {
-	maxRetries := 10
-	baseDelay := 1 * time.Second
+	// Increased from 10 to 20 retries to handle BCM's async partition commit timing
+	// BCM can take 60-120 seconds for partition commits in some environments
+	maxRetries := 20
+	baseDelay := 2 * time.Second
+	maxDelay := 10 * time.Second
+
+	totalWait := 0 * time.Second
 
 	for i := 0; i < maxRetries; i++ {
 		tflog.Debug(ctx, "Checking partition commit status", map[string]interface{}{
-			"partition_uuid": partitionUUID,
-			"attempt":        i + 1,
-			"max_retries":    maxRetries,
+			"partition_uuid":   partitionUUID,
+			"attempt":          i + 1,
+			"max_retries":      maxRetries,
+			"total_wait_secs":  totalWait.Seconds(),
 		})
 
 		// Try to query the partition - if it's committed, this will succeed
 		_, err := client.CallJSONRPC(ctx, "CMPart", "getSoftwareImage", partitionUUID)
 		if err == nil {
-			tflog.Debug(ctx, "Partition is committed and available", map[string]interface{}{
-				"partition_uuid": partitionUUID,
-				"attempts":       i + 1,
+			tflog.Info(ctx, "Partition is committed and available", map[string]interface{}{
+				"partition_uuid":   partitionUUID,
+				"attempts":         i + 1,
+				"total_wait_secs":  totalWait.Seconds(),
 			})
 			return nil // Partition is accessible
 		}
 
-		// If not the last retry, wait with exponential backoff
+		// If not the last retry, wait with exponential backoff (capped at maxDelay)
 		if i < maxRetries-1 {
+			// Exponential backoff: 2s, 4s, 6s, 8s, 10s, 10s, ...
 			delay := baseDelay * time.Duration(i+1)
+			if delay > maxDelay {
+				delay = maxDelay
+			}
+			totalWait += delay
+
 			tflog.Debug(ctx, "Partition not ready, waiting before retry", map[string]interface{}{
-				"partition_uuid": partitionUUID,
-				"delay_seconds":  delay.Seconds(),
-				"attempt":        i + 1,
+				"partition_uuid":   partitionUUID,
+				"delay_seconds":    delay.Seconds(),
+				"attempt":          i + 1,
+				"total_wait_secs":  totalWait.Seconds(),
+				"error":            err.Error(),
 			})
 			time.Sleep(delay)
 		}
 	}
 
-	return fmt.Errorf("partition not committed after %d retries (waited up to %d seconds)",
-		maxRetries, maxRetries*(maxRetries+1)/2)
+	return fmt.Errorf("partition not committed after %d retries (waited up to %.0f seconds)",
+		maxRetries, totalWait.Seconds())
 }
 
 // Read reads the device resource
