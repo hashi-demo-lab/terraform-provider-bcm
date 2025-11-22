@@ -250,6 +250,8 @@ func (r *CMDeviceDeviceResource) Create(ctx context.Context, req resource.Create
 
 	// If partition not specified, query category to get default partition
 	partitionUUID := ""
+	usesProxy := false // Track if partition comes from softwareImageProxy
+
 	if !plan.Partition.IsNull() && !plan.Partition.IsUnknown() {
 		partitionUUID = plan.Partition.ValueString()
 	} else {
@@ -272,22 +274,114 @@ func (r *CMDeviceDeviceResource) Create(ctx context.Context, req resource.Create
 			return
 		}
 
+		// Try direct partition field first
 		if partition, ok := categoryData["partition"].(string); ok && partition != "" {
 			partitionUUID = partition
-			tflog.Debug(ctx, "Using category's default partition", map[string]interface{}{
+			tflog.Debug(ctx, "Using category's direct partition", map[string]interface{}{
 				"partition": partitionUUID,
 			})
+		} else if proxyData, ok := categoryData["softwareImageProxy"].(map[string]interface{}); ok && proxyData != nil {
+			// Check if category uses softwareImageProxy instead
+			if parentImage, ok := proxyData["parentSoftwareImage"].(string); ok && parentImage != "" {
+				usesProxy = true // Mark that this category uses softwareImageProxy
+				tflog.Debug(ctx, "Category uses softwareImageProxy - will use cluster's base partition", map[string]interface{}{
+					"parent_software_image": parentImage,
+				})
+
+				// When softwareImageProxy is used, devices must reference the cluster's default partition
+				// Query for the base partition
+				partitionsBody, err := r.client.CallJSONRPC(ctx, "CMPart", "getPartitions")
+				if err != nil {
+					resp.Diagnostics.AddError(
+						"Error Querying Partitions",
+						fmt.Sprintf("Could not query partitions: %s", err.Error()),
+					)
+					return
+				}
+
+				var partitions []map[string]interface{}
+				if err := json.Unmarshal(partitionsBody, &partitions); err != nil {
+					resp.Diagnostics.AddError(
+						"Error Parsing Partitions",
+						fmt.Sprintf("Could not parse partitions response: %s", err.Error()),
+					)
+					return
+				}
+
+				// Find the base partition (or first available partition)
+				basePartitionFound := false
+				for _, part := range partitions {
+					if name, ok := part["name"].(string); ok && name == "base" {
+						if uuid, ok := part["uuid"].(string); ok && uuid != "" {
+							partitionUUID = uuid
+							basePartitionFound = true
+							tflog.Debug(ctx, "Found base partition for softwareImageProxy", map[string]interface{}{
+								"partition_uuid": partitionUUID,
+							})
+							break
+						}
+					}
+				}
+
+				if !basePartitionFound {
+					resp.Diagnostics.AddError(
+						"Missing Base Partition",
+						"Category uses softwareImageProxy but no 'base' partition found in cluster",
+					)
+					return
+				}
+
+				// Add delay for BCM to process the proxy configuration (eventual consistency)
+				// BCM needs time to propagate the software image proxy configuration
+				tflog.Debug(ctx, "Waiting for category proxy to stabilize", nil)
+				time.Sleep(5 * time.Second)
+			} else {
+				resp.Diagnostics.AddError(
+					"Missing Partition",
+					"Category has softwareImageProxy but no parentSoftwareImage. Please specify partition explicitly.",
+				)
+				return
+			}
 		} else {
 			resp.Diagnostics.AddError(
 				"Missing Partition",
-				"Category does not have a default partition. Please specify partition explicitly.",
+				"Category does not have a default partition or software image proxy. Please specify partition explicitly.",
 			)
 			return
 		}
 	}
 
+	// Only wait for partition commit if NOT using softwareImageProxy
+	// When softwareImageProxy is used, the partition is derived from category's proxy configuration
+	// and we only need to ensure the software image is committed (not the partition)
+	if !usesProxy {
+		tflog.Debug(ctx, "Waiting for partition to be committed", map[string]interface{}{
+			"partition_uuid": partitionUUID,
+			"uses_proxy":     usesProxy,
+		})
+		if err := r.waitForPartitionCommit(ctx, r.client, partitionUUID); err != nil {
+			resp.Diagnostics.AddError(
+				"Partition Not Ready",
+				fmt.Sprintf("Partition %s is not committed/available after waiting: %s\n\n"+
+					"This typically happens when a newly created software image hasn't finished "+
+					"its async commit process. The provider will automatically retry, but if this "+
+					"persists, the software image may need to be created separately and given time "+
+					"to commit before creating devices.", partitionUUID, err.Error()),
+			)
+			return
+		}
+	} else {
+		// When using softwareImageProxy, no need to wait for partition
+		// The partition is the cluster's existing base partition, not a newly created one
+		tflog.Debug(ctx, "Category uses softwareImageProxy with base partition", map[string]interface{}{
+			"partition_uuid": partitionUUID,
+			"uses_proxy":     usesProxy,
+		})
+	}
+
 	// Build device entity for BCM API (with generated UUID and resolved partition)
-	deviceEntity := r.buildDeviceAPIEntity(plan, newUUID, partitionUUID)
+	// When usesProxy is true, partition field will be omitted (derived from category's softwareImageProxy)
+	deviceEntity := r.buildDeviceAPIEntity(plan, newUUID, partitionUUID, usesProxy)
 
 	// Get force parameter value
 	forceValue := false
@@ -407,6 +501,46 @@ func (r *CMDeviceDeviceResource) Create(ctx context.Context, req resource.Create
 
 	// Set state - use what BCM returns for all other fields
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
+}
+
+// waitForPartitionCommit polls BCM to verify a software image partition is committed and available
+// This is necessary because BCM software image creation is asynchronous - the API returns success
+// before the image is fully committed and ready to be used as a device partition
+func (r *CMDeviceDeviceResource) waitForPartitionCommit(ctx context.Context, client *BCMClient, partitionUUID string) error {
+	maxRetries := 10
+	baseDelay := 1 * time.Second
+
+	for i := 0; i < maxRetries; i++ {
+		tflog.Debug(ctx, "Checking partition commit status", map[string]interface{}{
+			"partition_uuid": partitionUUID,
+			"attempt":        i + 1,
+			"max_retries":    maxRetries,
+		})
+
+		// Try to query the partition - if it's committed, this will succeed
+		_, err := client.CallJSONRPC(ctx, "CMPart", "getSoftwareImage", partitionUUID)
+		if err == nil {
+			tflog.Debug(ctx, "Partition is committed and available", map[string]interface{}{
+				"partition_uuid": partitionUUID,
+				"attempts":       i + 1,
+			})
+			return nil // Partition is accessible
+		}
+
+		// If not the last retry, wait with exponential backoff
+		if i < maxRetries-1 {
+			delay := baseDelay * time.Duration(i+1)
+			tflog.Debug(ctx, "Partition not ready, waiting before retry", map[string]interface{}{
+				"partition_uuid": partitionUUID,
+				"delay_seconds":  delay.Seconds(),
+				"attempt":        i + 1,
+			})
+			time.Sleep(delay)
+		}
+	}
+
+	return fmt.Errorf("partition not committed after %d retries (waited up to %d seconds)",
+		maxRetries, maxRetries*(maxRetries+1)/2)
 }
 
 // Read reads the device resource
@@ -550,7 +684,8 @@ func (r *CMDeviceDeviceResource) Update(ctx context.Context, req resource.Update
 	}
 
 	// Build device entity for BCM API (include UUID for update)
-	deviceEntity := r.buildDeviceAPIEntity(plan, state.UUID.ValueString(), partitionUUID)
+	// For updates, always include partition field (not using proxy mode)
+	deviceEntity := r.buildDeviceAPIEntity(plan, state.UUID.ValueString(), partitionUUID, false)
 
 	// Get force parameter value
 	forceValue := false
@@ -681,7 +816,7 @@ func (r *CMDeviceDeviceResource) ImportState(ctx context.Context, req resource.I
 }
 
 // buildDeviceAPIEntity constructs BCM API entity from Terraform model
-func (r *CMDeviceDeviceResource) buildDeviceAPIEntity(plan CMDeviceDeviceResourceModel, uuid string, partitionUUID string) map[string]interface{} {
+func (r *CMDeviceDeviceResource) buildDeviceAPIEntity(plan CMDeviceDeviceResourceModel, uuid string, partitionUUID string, usesProxy bool) map[string]interface{} {
 	// Create a basic network interface for the device
 	interfaceUUID := "00000000-0000-0000-0000-000000000001" // Generate a temporary UUID for the interface
 
@@ -717,7 +852,6 @@ func (r *CMDeviceDeviceResource) buildDeviceAPIEntity(plan CMDeviceDeviceResourc
 		"mac":                   plan.MAC.ValueString(),
 		"category":              plan.Category.ValueString(),
 		"managementNetwork":     "00000000-0000-0000-0000-000000000000", // Nil UUID as BCM will assign
-		"partition":             partitionUUID,                           // Required field, resolved from category if not specified
 		"modified":              true,
 		"to_be_removed":         false,
 		"revision":              "",
@@ -725,6 +859,11 @@ func (r *CMDeviceDeviceResource) buildDeviceAPIEntity(plan CMDeviceDeviceResourc
 		"provisioningInterface": interfaceUUID,
 		"interfaces":            []interface{}{networkInterface}, // Include the interface in the device
 	}
+
+	// Always include partition field as BCM requires it
+	// When usesProxy is true, partitionUUID contains the software image UUID from parentSoftwareImage
+	// BCM will use this in combination with the category's softwareImageProxy configuration
+	entity["partition"] = partitionUUID
 
 	// Add optional fields if present
 	if !plan.Notes.IsNull() && !plan.Notes.IsUnknown() {

@@ -1,68 +1,66 @@
-terraform {
-  required_providers {
-    bcm = {
-      source = "hashicorp/bcm"
-    }
-  }
-}
+
 
 provider "bcm" {
-  endpoint             = "https://172.21.15.254:8081"
-  username             = "root"
-  password             = "Hashicorp123!"
+  # Configuration provided via environment variables:
+  # export BCM_ENDPOINT="https://172.21.15.254:8081"
+  # export BCM_USERNAME="root"
+  # export BCM_PASSWORD="your-password"
   insecure_skip_verify = true
+}
+
+# Lookup management network for category creation
+data "bcm_cmnet_networks" "management" {
+  filter {
+    name_pattern = "DefaultEthernet"
+  }
 }
 
 # Create a category for compute nodes
 resource "bcm_cmdevice_category" "compute" {
-  name  = "compute-nodes"
-  notes = "Category for compute cluster nodes"
+  name               = "citest-compute-nodes"
+  management_network = data.bcm_cmnet_networks.management.networks[0].id
+  notes              = "Category for compute cluster nodes"
 }
 
 # Create a software image for compute nodes
 resource "bcm_cmpart_softwareimage" "ubuntu_compute" {
-  name               = "ubuntu-22.04-compute"
-  path               = "/cm/images/ubuntu-22.04-server-amd64.iso"
-  kernel_parameters  = "console=ttyS0,115200 net.ifnames=0"
-  enable_sol         = true
-  sol_speed          = 115200
-  category           = bcm_cmdevice_category.compute.id
-  boot_loader        = "pxelinux"
-  install_boot_record = true
+  name              = "citest-ubuntu-22.04-compute"
+  path              = "/cm/images/ubuntu-22.04-server-amd64.iso"
+  kernel_parameters = "console=ttyS0,115200 net.ifnames=0"
+  enable_sol        = true
+  sol_speed         = "115200"
 }
 
 # Example 1: Basic compute device with minimal configuration
 resource "bcm_cmdevice_device" "compute_basic" {
-  hostname           = "compute-node-01"
+  hostname           = "citest-compute-node-01"
   mac                = "00:11:22:33:44:55"
   category           = bcm_cmdevice_category.compute.id
-  management_network = "your-network-uuid-here"
+  management_network = data.bcm_cmnet_networks.management.networks[0].id
 
   notes = "Basic compute node managed by Terraform"
 }
 
 # Example 2: Compute device with custom kernel parameters and boot configuration
 resource "bcm_cmdevice_device" "compute_custom" {
-  hostname           = "compute-node-02"
+  hostname           = "citest-compute-node-02"
   mac                = "00:11:22:33:44:56"
   category           = bcm_cmdevice_category.compute.id
-  management_network = "your-network-uuid-here"
+  management_network = data.bcm_cmnet_networks.management.networks[0].id
 
   # Boot configuration
-  boot_loader          = "pxelinux"
-  kernel_parameters    = "console=ttyS0,115200 net.ifnames=0 biosdevname=0"
-  software_image       = bcm_cmpart_softwareimage.ubuntu_compute.id
-  install_boot_record  = true
+  boot_loader       = "pxelinux"
+  kernel_parameters = "console=ttyS0,115200 net.ifnames=0 biosdevname=0"
 
   notes = "Compute node with custom kernel parameters"
 }
 
 # Example 3: IPMI-enabled device with power control and network configuration
 resource "bcm_cmdevice_device" "compute_ipmi" {
-  hostname           = "compute-node-03"
+  hostname           = "citest-compute-node-03"
   mac                = "00:11:22:33:44:57"
   category           = bcm_cmdevice_category.compute.id
-  management_network = "your-network-uuid-here"
+  management_network = data.bcm_cmnet_networks.management.networks[0].id
 
   # Power control via IPMI
   power_control = "ipmi"
@@ -73,7 +71,6 @@ resource "bcm_cmdevice_device" "compute_ipmi" {
 
   # Boot configuration
   boot_loader       = "pxelinux"
-  software_image    = bcm_cmpart_softwareimage.ubuntu_compute.id
   kernel_parameters = "console=ttyS0,115200 ipmi_si.type=kcs"
 
   # Hardware identifiers (typically auto-discovered from BMC)
@@ -85,10 +82,10 @@ resource "bcm_cmdevice_device" "compute_ipmi" {
 
 # Example 4: GPU compute node with multiple network interfaces
 resource "bcm_cmdevice_device" "gpu_node" {
-  hostname           = "gpu-node-01"
+  hostname           = "citest-gpu-node-01"
   mac                = "00:11:22:33:44:58"
   category           = bcm_cmdevice_category.compute.id
-  management_network = "your-network-uuid-here"
+  management_network = data.bcm_cmnet_networks.management.networks[0].id
 
   # Power control
   power_control = "ipmi"
@@ -99,7 +96,6 @@ resource "bcm_cmdevice_device" "gpu_node" {
 
   # Boot configuration with GPU-specific parameters
   boot_loader       = "pxelinux"
-  software_image    = bcm_cmpart_softwareimage.ubuntu_compute.id
   kernel_parameters = "console=ttyS0,115200 nouveau.modeset=0 nvidia-drm.modeset=1"
 
   # Hardware identifiers
@@ -111,10 +107,10 @@ resource "bcm_cmdevice_device" "gpu_node" {
 
 # Example 5: Storage node with custom partition configuration
 resource "bcm_cmdevice_device" "storage_node" {
-  hostname           = "storage-node-01"
+  hostname           = "citest-storage-node-01"
   mac                = "00:11:22:33:44:59"
   category           = bcm_cmdevice_category.compute.id
-  management_network = "your-network-uuid-here"
+  management_network = data.bcm_cmnet_networks.management.networks[0].id
 
   # Power control
   power_control = "ipmi"
@@ -124,17 +120,14 @@ resource "bcm_cmdevice_device" "storage_node" {
   default_gateway_metric = 100
 
   # Boot and partition configuration
-  boot_loader          = "pxelinux"
-  software_image       = bcm_cmpart_softwareimage.ubuntu_compute.id
-  partition            = "your-partition-uuid-here"
-  install_boot_record  = true
-  kernel_parameters    = "console=ttyS0,115200"
+  boot_loader       = "pxelinux"
+  kernel_parameters = "console=ttyS0,115200"
 
   # Hardware identifiers
   serial_number = "SN-STORAGE-001"
   part_number   = "PN-STORAGE-NODE-001"
 
-  notes = "Storage node with custom partition layout for Ceph cluster"
+  notes = "Storage node for Ceph cluster"
 }
 
 # Output device information for reference
