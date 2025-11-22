@@ -374,7 +374,6 @@ func (r *CMKubeClusterResource) Read(ctx context.Context, req resource.ReadReque
 	stateManagementNetwork := state.ManagementNetwork
 	stateOverlayNetwork := state.OverlayNetwork
 	stateDNSServers := state.DNSServers
-	stateVersion := state.Version
 	stateCNIPlugin := state.CNIPlugin
 	stateStorageClasses := state.StorageClasses
 	stateLoadBalancerMode := state.LoadBalancerMode
@@ -388,34 +387,31 @@ func (r *CMKubeClusterResource) Read(ctx context.Context, req resource.ReadReque
 		return
 	}
 
-	// CRITICAL FIX: Restore optional P3 fields from prior state ONLY if they're known values
-	// BCM API may not return these fields, but we want to keep the state values
-	// This prevents drift detection on fields that BCM doesn't return
-	if !stateManagementNetwork.IsUnknown() && !stateManagementNetwork.IsNull() {
+	// CRITICAL FIX: Restore optional P3 fields from prior state ONLY if BCM returned null
+	// This allows drift detection to work for fields BCM does return (like version, management_network)
+	// while preserving state for P3 fields BCM may not return
+	if state.ManagementNetwork.IsNull() && !stateManagementNetwork.IsNull() && !stateManagementNetwork.IsUnknown() {
 		state.ManagementNetwork = stateManagementNetwork
 	}
-	if !stateOverlayNetwork.IsUnknown() && !stateOverlayNetwork.IsNull() {
+	if state.OverlayNetwork.IsNull() && !stateOverlayNetwork.IsNull() && !stateOverlayNetwork.IsUnknown() {
 		state.OverlayNetwork = stateOverlayNetwork
 	}
-	if !stateDNSServers.IsUnknown() && !stateDNSServers.IsNull() {
+	if state.DNSServers.IsNull() && !stateDNSServers.IsNull() && !stateDNSServers.IsUnknown() {
 		state.DNSServers = stateDNSServers
 	}
-	if !stateVersion.IsUnknown() && !stateVersion.IsNull() {
-		state.Version = stateVersion
-	}
-	if !stateCNIPlugin.IsUnknown() && !stateCNIPlugin.IsNull() {
+	if state.CNIPlugin.IsNull() && !stateCNIPlugin.IsNull() && !stateCNIPlugin.IsUnknown() {
 		state.CNIPlugin = stateCNIPlugin
 	}
-	if !stateStorageClasses.IsUnknown() && !stateStorageClasses.IsNull() {
+	if state.StorageClasses.IsNull() && !stateStorageClasses.IsNull() && !stateStorageClasses.IsUnknown() {
 		state.StorageClasses = stateStorageClasses
 	}
-	if !stateLoadBalancerMode.IsUnknown() && !stateLoadBalancerMode.IsNull() {
+	if state.LoadBalancerMode.IsNull() && !stateLoadBalancerMode.IsNull() && !stateLoadBalancerMode.IsUnknown() {
 		state.LoadBalancerMode = stateLoadBalancerMode
 	}
-	if !stateAddons.IsUnknown() && !stateAddons.IsNull() {
+	if state.Addons.IsNull() && !stateAddons.IsNull() && !stateAddons.IsUnknown() {
 		state.Addons = stateAddons
 	}
-	if !stateIngressController.IsUnknown() && !stateIngressController.IsNull() {
+	if state.IngressController.IsNull() && !stateIngressController.IsNull() && !stateIngressController.IsUnknown() {
 		state.IngressController = stateIngressController
 	}
 

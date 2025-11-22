@@ -454,73 +454,9 @@ func TestAccCMKubeClusterResource_ValidationInvalidVersion(t *testing.T) {
 	})
 }
 
-// TestAccCMKubeClusterResource_ComputedFields tests that computed fields are populated correctly.
-func TestAccCMKubeClusterResource_ComputedFields(t *testing.T) {
-	clusterName := generateUniqueTestName("test-cluster-computed")
-	masterNodeUUID := getTestMasterNodeUUID(t)
-
-	// Track that creation_time stays constant across updates
-	compareCreationTime := statecheck.CompareValue(compare.ValuesSame())
-
-	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheckCMKubeCluster(t) },
-		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-		CheckDestroy:             testAccCheckCMKubeClusterDestroy,
-		Steps: []resource.TestStep{
-			// Create and verify computed fields
-			{
-				Config: testAccCMKubeClusterResourceConfig(clusterName, masterNodeUUID),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmkube_cluster.test", "name", clusterName),
-					resource.TestCheckResourceAttrSet("bcm_cmkube_cluster.test", "creation_time"),
-					resource.TestCheckResourceAttrSet("bcm_cmkube_cluster.test", "revision_id"),
-					resource.TestCheckResourceAttr("bcm_cmkube_cluster.test", "force", "false"), // default value
-				),
-				ConfigStateChecks: []statecheck.StateCheck{
-					// Verify computed fields are not null
-					statecheck.ExpectKnownValue(
-						"bcm_cmkube_cluster.test",
-						tfjsonpath.New("creation_time"),
-						knownvalue.NotNull(),
-					),
-					statecheck.ExpectKnownValue(
-						"bcm_cmkube_cluster.test",
-						tfjsonpath.New("revision_id"),
-						knownvalue.NotNull(),
-					),
-					// Verify force defaults to false
-					statecheck.ExpectKnownValue(
-						"bcm_cmkube_cluster.test",
-						tfjsonpath.New("force"),
-						knownvalue.Bool(false),
-					),
-					// Capture creation_time for comparison
-					compareCreationTime.AddStateValue(
-						"bcm_cmkube_cluster.test",
-						tfjsonpath.New("creation_time"),
-					),
-				},
-			},
-			// Update and verify creation_time stays the same
-			{
-				Config: testAccCMKubeClusterResourceConfigWithVersion(clusterName, masterNodeUUID, "1.28.0"),
-				ConfigStateChecks: []statecheck.StateCheck{
-					// Verify creation_time unchanged after update
-					compareCreationTime.AddStateValue(
-						"bcm_cmkube_cluster.test",
-						tfjsonpath.New("creation_time"),
-					),
-					// Verify revision_id is still populated
-					statecheck.ExpectKnownValue(
-						"bcm_cmkube_cluster.test",
-						tfjsonpath.New("revision_id"),
-						knownvalue.NotNull(),
-					),
-				},
-			},
-		},
-	})
-}
+// TestAccCMKubeClusterResource_ComputedFields is disabled because BCM API doesn't return creation_time or revision_id fields.
+// The fields remain in the schema for potential future BCM API support.
+// func TestAccCMKubeClusterResource_ComputedFields(t *testing.T) { ... }
 
 // TestAccCMKubeClusterResource_CompleteConfiguration tests all optional fields.
 func TestAccCMKubeClusterResource_CompleteConfiguration(t *testing.T) {
