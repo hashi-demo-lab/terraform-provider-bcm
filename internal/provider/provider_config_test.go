@@ -21,7 +21,7 @@ import (
 func createMockBCMServer(t *testing.T, loginSuccessful bool) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if loginSuccessful {
-			// Set authentication cookie
+			// Set authentication cookie.
 			http.SetCookie(w, &http.Cookie{
 				Name:     "cm-login-token",
 				Value:    "test-token-12345",
@@ -44,10 +44,13 @@ func createMockBCMServer(t *testing.T, loginSuccessful bool) *httptest.Server {
 
 // createProviderConfig creates a tfsdk.Config for testing provider configuration.
 func createProviderConfig(t *testing.T, endpoint, username, password string, insecureSkipVerify *bool, timeout *int64) tfsdk.Config {
-	// Get provider schema
+	// Get provider schema.
 	ctx := context.Background()
 	providerFactory := New("test")
-	p := providerFactory().(*BCMProvider)
+	p, ok := providerFactory().(*BCMProvider)
+	if !ok {
+		t.Fatalf("expected BCMProvider, got %T", providerFactory())
+	}
 
 	schemaReq := provider.SchemaRequest{}
 	schemaResp := &provider.SchemaResponse{}
@@ -57,7 +60,7 @@ func createProviderConfig(t *testing.T, endpoint, username, password string, ins
 		t.Fatalf("Failed to get provider schema: %v", schemaResp.Diagnostics)
 	}
 
-	// Build config value
+	// Build config value.
 	configValues := map[string]tftypes.Value{}
 
 	if endpoint != "" {
@@ -101,10 +104,10 @@ func createProviderConfig(t *testing.T, endpoint, username, password string, ins
 	}
 }
 
-// TestProviderConfigure_MissingEndpoint tests that provider configuration
+// TestProviderConfigure_MissingEndpoint tests that provider configuration.
 // fails when endpoint is missing from both config and environment.
 func TestProviderConfigure_MissingEndpoint(t *testing.T) {
-	// Clear environment variables
+	// Clear environment variables.
 	origEndpoint := os.Getenv("BCM_ENDPOINT")
 	origUsername := os.Getenv("BCM_USERNAME")
 	origPassword := os.Getenv("BCM_PASSWORD")
@@ -120,7 +123,10 @@ func TestProviderConfigure_MissingEndpoint(t *testing.T) {
 
 	ctx := context.Background()
 	providerFactory := New("test")
-	p := providerFactory().(*BCMProvider)
+	p, ok := providerFactory().(*BCMProvider)
+	if !ok {
+		t.Fatalf("expected BCMProvider, got %T", providerFactory())
+	}
 
 	config := createProviderConfig(t, "", "testuser", "testpass", nil, nil)
 
@@ -131,7 +137,7 @@ func TestProviderConfigure_MissingEndpoint(t *testing.T) {
 
 	p.Configure(ctx, req, resp)
 
-	// Verify error diagnostic
+	// Verify error diagnostic.
 	if !resp.Diagnostics.HasError() {
 		t.Fatal("Expected error for missing endpoint, got nil")
 	}
@@ -149,10 +155,10 @@ func TestProviderConfigure_MissingEndpoint(t *testing.T) {
 	}
 }
 
-// TestProviderConfigure_MissingUsername tests that provider configuration
+// TestProviderConfigure_MissingUsername tests that provider configuration.
 // fails when username is missing from both config and environment.
 func TestProviderConfigure_MissingUsername(t *testing.T) {
-	// Clear environment variables
+	// Clear environment variables.
 	origEndpoint := os.Getenv("BCM_ENDPOINT")
 	origUsername := os.Getenv("BCM_USERNAME")
 	origPassword := os.Getenv("BCM_PASSWORD")
@@ -168,7 +174,10 @@ func TestProviderConfigure_MissingUsername(t *testing.T) {
 
 	ctx := context.Background()
 	providerFactory := New("test")
-	p := providerFactory().(*BCMProvider)
+	p, ok := providerFactory().(*BCMProvider)
+	if !ok {
+		t.Fatalf("expected BCMProvider, got %T", providerFactory())
+	}
 
 	config := createProviderConfig(t, "https://test.example.com:8081", "", "testpass", nil, nil)
 
@@ -179,7 +188,7 @@ func TestProviderConfigure_MissingUsername(t *testing.T) {
 
 	p.Configure(ctx, req, resp)
 
-	// Verify error diagnostic
+	// Verify error diagnostic.
 	if !resp.Diagnostics.HasError() {
 		t.Fatal("Expected error for missing username, got nil")
 	}
@@ -197,10 +206,10 @@ func TestProviderConfigure_MissingUsername(t *testing.T) {
 	}
 }
 
-// TestProviderConfigure_MissingPassword tests that provider configuration
+// TestProviderConfigure_MissingPassword tests that provider configuration.
 // fails when password is missing from both config and environment.
 func TestProviderConfigure_MissingPassword(t *testing.T) {
-	// Clear environment variables
+	// Clear environment variables.
 	origEndpoint := os.Getenv("BCM_ENDPOINT")
 	origUsername := os.Getenv("BCM_USERNAME")
 	origPassword := os.Getenv("BCM_PASSWORD")
@@ -216,7 +225,10 @@ func TestProviderConfigure_MissingPassword(t *testing.T) {
 
 	ctx := context.Background()
 	providerFactory := New("test")
-	p := providerFactory().(*BCMProvider)
+	p, ok := providerFactory().(*BCMProvider)
+	if !ok {
+		t.Fatalf("expected BCMProvider, got %T", providerFactory())
+	}
 
 	config := createProviderConfig(t, "https://test.example.com:8081", "testuser", "", nil, nil)
 
@@ -227,7 +239,7 @@ func TestProviderConfigure_MissingPassword(t *testing.T) {
 
 	p.Configure(ctx, req, resp)
 
-	// Verify error diagnostic
+	// Verify error diagnostic.
 	if !resp.Diagnostics.HasError() {
 		t.Fatal("Expected error for missing password, got nil")
 	}
@@ -245,10 +257,10 @@ func TestProviderConfigure_MissingPassword(t *testing.T) {
 	}
 }
 
-// TestProviderConfigure_MissingAllCredentials tests that provider configuration
+// TestProviderConfigure_MissingAllCredentials tests that provider configuration.
 // fails when all credentials are missing.
 func TestProviderConfigure_MissingAllCredentials(t *testing.T) {
-	// Clear environment variables
+	// Clear environment variables.
 	origEndpoint := os.Getenv("BCM_ENDPOINT")
 	origUsername := os.Getenv("BCM_USERNAME")
 	origPassword := os.Getenv("BCM_PASSWORD")
@@ -264,7 +276,10 @@ func TestProviderConfigure_MissingAllCredentials(t *testing.T) {
 
 	ctx := context.Background()
 	providerFactory := New("test")
-	p := providerFactory().(*BCMProvider)
+	p, ok := providerFactory().(*BCMProvider)
+	if !ok {
+		t.Fatalf("expected BCMProvider, got %T", providerFactory())
+	}
 
 	config := createProviderConfig(t, "", "", "", nil, nil)
 
@@ -275,25 +290,25 @@ func TestProviderConfigure_MissingAllCredentials(t *testing.T) {
 
 	p.Configure(ctx, req, resp)
 
-	// Verify error diagnostics (should have multiple errors)
+	// Verify error diagnostics (should have multiple errors).
 	if !resp.Diagnostics.HasError() {
 		t.Fatal("Expected errors for missing credentials, got nil")
 	}
 
-	// Should have at least one error about missing credentials
+	// Should have at least one error about missing credentials.
 	if len(resp.Diagnostics.Errors()) == 0 {
 		t.Error("Expected at least one error diagnostic")
 	}
 }
 
-// TestProviderConfigure_EnvironmentVariables tests that provider configuration
+// TestProviderConfigure_EnvironmentVariables tests that provider configuration.
 // correctly reads credentials from environment variables.
 func TestProviderConfigure_EnvironmentVariables(t *testing.T) {
-	// Create mock server
+	// Create mock server.
 	server := createMockBCMServer(t, true)
 	defer server.Close()
 
-	// Save and set environment variables
+	// Save and set environment variables.
 	origEndpoint := os.Getenv("BCM_ENDPOINT")
 	origUsername := os.Getenv("BCM_USERNAME")
 	origPassword := os.Getenv("BCM_PASSWORD")
@@ -309,13 +324,14 @@ func TestProviderConfigure_EnvironmentVariables(t *testing.T) {
 
 	ctx := context.Background()
 	providerFactory := New("test")
-	p := providerFactory().(*BCMProvider)
+	p, ok := providerFactory().(*BCMProvider)
+	if !ok {
+		t.Fatalf("expected BCMProvider, got %T", providerFactory())
+	}
 
-	// Create config with empty values (should use environment)
-	config := createProviderConfig(t, "", "", "", nil, nil)
-
+	// Create config with empty values and insecureSkipVerify set (should use environment).
 	insecureSkipVerify := true
-	config = createProviderConfig(t, "", "", "", &insecureSkipVerify, nil)
+	config := createProviderConfig(t, "", "", "", &insecureSkipVerify, nil)
 
 	req := provider.ConfigureRequest{
 		Config: config,
@@ -324,12 +340,12 @@ func TestProviderConfigure_EnvironmentVariables(t *testing.T) {
 
 	p.Configure(ctx, req, resp)
 
-	// Verify no errors
+	// Verify no errors.
 	if resp.Diagnostics.HasError() {
 		t.Fatalf("Unexpected error: %v", resp.Diagnostics.Errors())
 	}
 
-	// Verify client was created
+	// Verify client was created.
 	if resp.ResourceData == nil {
 		t.Error("Expected ResourceData to be set with client")
 	}
@@ -338,14 +354,14 @@ func TestProviderConfigure_EnvironmentVariables(t *testing.T) {
 	}
 }
 
-// TestProviderConfigure_ConfigPrecedence tests that explicit provider configuration
+// TestProviderConfigure_ConfigPrecedence tests that explicit provider configuration.
 // takes precedence over environment variables.
 func TestProviderConfigure_ConfigPrecedence(t *testing.T) {
-	// Create mock server
+	// Create mock server.
 	server := createMockBCMServer(t, true)
 	defer server.Close()
 
-	// Save and set environment variables with different values
+	// Save and set environment variables with different values.
 	origEndpoint := os.Getenv("BCM_ENDPOINT")
 	origUsername := os.Getenv("BCM_USERNAME")
 	origPassword := os.Getenv("BCM_PASSWORD")
@@ -361,9 +377,12 @@ func TestProviderConfigure_ConfigPrecedence(t *testing.T) {
 
 	ctx := context.Background()
 	providerFactory := New("test")
-	p := providerFactory().(*BCMProvider)
+	p, ok := providerFactory().(*BCMProvider)
+	if !ok {
+		t.Fatalf("expected BCMProvider, got %T", providerFactory())
+	}
 
-	// Create config with explicit values (should override environment)
+	// Create config with explicit values (should override environment).
 	insecureSkipVerify := true
 	config := createProviderConfig(t, server.URL, "config-user", "config-pass", &insecureSkipVerify, nil)
 
@@ -374,25 +393,25 @@ func TestProviderConfigure_ConfigPrecedence(t *testing.T) {
 
 	p.Configure(ctx, req, resp)
 
-	// Verify no errors (config values were used)
+	// Verify no errors (config values were used).
 	if resp.Diagnostics.HasError() {
 		t.Fatalf("Unexpected error: %v", resp.Diagnostics.Errors())
 	}
 
-	// Verify client was created
+	// Verify client was created.
 	if resp.ResourceData == nil {
 		t.Error("Expected ResourceData to be set with client")
 	}
 }
 
-// TestProviderConfigure_DefaultValues tests that provider configuration
+// TestProviderConfigure_DefaultValues tests that provider configuration.
 // correctly applies default values for optional fields.
 func TestProviderConfigure_DefaultValues(t *testing.T) {
-	// Create mock server
+	// Create mock server.
 	server := createMockBCMServer(t, true)
 	defer server.Close()
 
-	// Clear environment variables
+	// Clear environment variables.
 	origEndpoint := os.Getenv("BCM_ENDPOINT")
 	origUsername := os.Getenv("BCM_USERNAME")
 	origPassword := os.Getenv("BCM_PASSWORD")
@@ -408,9 +427,12 @@ func TestProviderConfigure_DefaultValues(t *testing.T) {
 
 	ctx := context.Background()
 	providerFactory := New("test")
-	p := providerFactory().(*BCMProvider)
+	p, ok := providerFactory().(*BCMProvider)
+	if !ok {
+		t.Fatalf("expected BCMProvider, got %T", providerFactory())
+	}
 
-	// Create config without optional fields (should use defaults)
+	// Create config without optional fields (should use defaults).
 	// Default timeout: 30 seconds (provider.go line 135)
 	// Default insecure_skip_verify: false (provider.go line 130)
 	insecureSkipVerify := true // Override for testing with mock server
@@ -423,17 +445,17 @@ func TestProviderConfigure_DefaultValues(t *testing.T) {
 
 	p.Configure(ctx, req, resp)
 
-	// Verify no errors
+	// Verify no errors.
 	if resp.Diagnostics.HasError() {
 		t.Fatalf("Unexpected error: %v", resp.Diagnostics.Errors())
 	}
 
-	// Verify client was created with defaults
+	// Verify client was created with defaults.
 	if resp.ResourceData == nil {
 		t.Error("Expected ResourceData to be set with client")
 	}
 
-	// Verify the client exists
+	// Verify the client exists.
 	client, ok := resp.ResourceData.(*BCMClient)
 	if !ok {
 		t.Fatal("Expected BCMClient in ResourceData")
@@ -443,14 +465,14 @@ func TestProviderConfigure_DefaultValues(t *testing.T) {
 	}
 }
 
-// TestProviderConfigure_CustomTimeout tests that provider configuration
+// TestProviderConfigure_CustomTimeout tests that provider configuration.
 // correctly applies custom timeout value.
 func TestProviderConfigure_CustomTimeout(t *testing.T) {
-	// Create mock server
+	// Create mock server.
 	server := createMockBCMServer(t, true)
 	defer server.Close()
 
-	// Clear environment variables
+	// Clear environment variables.
 	origEndpoint := os.Getenv("BCM_ENDPOINT")
 	origUsername := os.Getenv("BCM_USERNAME")
 	origPassword := os.Getenv("BCM_PASSWORD")
@@ -466,9 +488,12 @@ func TestProviderConfigure_CustomTimeout(t *testing.T) {
 
 	ctx := context.Background()
 	providerFactory := New("test")
-	p := providerFactory().(*BCMProvider)
+	p, ok := providerFactory().(*BCMProvider)
+	if !ok {
+		t.Fatalf("expected BCMProvider, got %T", providerFactory())
+	}
 
-	// Create config with custom timeout
+	// Create config with custom timeout.
 	insecureSkipVerify := true
 	customTimeout := int64(60)
 	config := createProviderConfig(t, server.URL, "testuser", "testpass", &insecureSkipVerify, &customTimeout)
@@ -480,25 +505,25 @@ func TestProviderConfigure_CustomTimeout(t *testing.T) {
 
 	p.Configure(ctx, req, resp)
 
-	// Verify no errors
+	// Verify no errors.
 	if resp.Diagnostics.HasError() {
 		t.Fatalf("Unexpected error: %v", resp.Diagnostics.Errors())
 	}
 
-	// Verify client was created
+	// Verify client was created.
 	if resp.ResourceData == nil {
 		t.Error("Expected ResourceData to be set with client")
 	}
 }
 
-// TestProviderConfigure_CustomInsecureSkipVerify tests that provider configuration
+// TestProviderConfigure_CustomInsecureSkipVerify tests that provider configuration.
 // correctly applies custom insecure_skip_verify value.
 func TestProviderConfigure_CustomInsecureSkipVerify(t *testing.T) {
-	// Create mock server
+	// Create mock server.
 	server := createMockBCMServer(t, true)
 	defer server.Close()
 
-	// Clear environment variables
+	// Clear environment variables.
 	origEndpoint := os.Getenv("BCM_ENDPOINT")
 	origUsername := os.Getenv("BCM_USERNAME")
 	origPassword := os.Getenv("BCM_PASSWORD")
@@ -514,9 +539,12 @@ func TestProviderConfigure_CustomInsecureSkipVerify(t *testing.T) {
 
 	ctx := context.Background()
 	providerFactory := New("test")
-	p := providerFactory().(*BCMProvider)
+	p, ok := providerFactory().(*BCMProvider)
+	if !ok {
+		t.Fatalf("expected BCMProvider, got %T", providerFactory())
+	}
 
-	// Create config with custom insecure_skip_verify
+	// Create config with custom insecure_skip_verify.
 	insecureSkipVerify := true
 	config := createProviderConfig(t, server.URL, "testuser", "testpass", &insecureSkipVerify, nil)
 
@@ -527,25 +555,25 @@ func TestProviderConfigure_CustomInsecureSkipVerify(t *testing.T) {
 
 	p.Configure(ctx, req, resp)
 
-	// Verify no errors
+	// Verify no errors.
 	if resp.Diagnostics.HasError() {
 		t.Fatalf("Unexpected error: %v", resp.Diagnostics.Errors())
 	}
 
-	// Verify client was created
+	// Verify client was created.
 	if resp.ResourceData == nil {
 		t.Error("Expected ResourceData to be set with client")
 	}
 }
 
-// TestProviderConfigure_LoginFailure tests that provider configuration
+// TestProviderConfigure_LoginFailure tests that provider configuration.
 // fails gracefully when BCM login fails.
 func TestProviderConfigure_LoginFailure(t *testing.T) {
-	// Create mock server that returns login failure
+	// Create mock server that returns login failure.
 	server := createMockBCMServer(t, false)
 	defer server.Close()
 
-	// Clear environment variables
+	// Clear environment variables.
 	origEndpoint := os.Getenv("BCM_ENDPOINT")
 	origUsername := os.Getenv("BCM_USERNAME")
 	origPassword := os.Getenv("BCM_PASSWORD")
@@ -561,7 +589,10 @@ func TestProviderConfigure_LoginFailure(t *testing.T) {
 
 	ctx := context.Background()
 	providerFactory := New("test")
-	p := providerFactory().(*BCMProvider)
+	p, ok := providerFactory().(*BCMProvider)
+	if !ok {
+		t.Fatalf("expected BCMProvider, got %T", providerFactory())
+	}
 
 	insecureSkipVerify := true
 	config := createProviderConfig(t, server.URL, "baduser", "badpass", &insecureSkipVerify, nil)
@@ -573,7 +604,7 @@ func TestProviderConfigure_LoginFailure(t *testing.T) {
 
 	p.Configure(ctx, req, resp)
 
-	// Verify error diagnostic
+	// Verify error diagnostic.
 	if !resp.Diagnostics.HasError() {
 		t.Fatal("Expected error for login failure, got nil")
 	}
@@ -596,19 +627,22 @@ func TestProviderMetadata(t *testing.T) {
 	ctx := context.Background()
 	testVersion := "test-version"
 	providerFactory := New(testVersion)
-	p := providerFactory().(*BCMProvider)
+	p, ok := providerFactory().(*BCMProvider)
+	if !ok {
+		t.Fatalf("expected BCMProvider, got %T", providerFactory())
+	}
 
 	req := provider.MetadataRequest{}
 	resp := &provider.MetadataResponse{}
 
 	p.Metadata(ctx, req, resp)
 
-	// Verify type name
+	// Verify type name.
 	if resp.TypeName != "bcm" {
 		t.Errorf("Expected TypeName 'bcm', got '%s'", resp.TypeName)
 	}
 
-	// Verify version
+	// Verify version.
 	if resp.Version != testVersion {
 		t.Errorf("Expected Version '%s', got '%s'", testVersion, resp.Version)
 	}
@@ -618,19 +652,22 @@ func TestProviderMetadata(t *testing.T) {
 func TestProviderSchema(t *testing.T) {
 	ctx := context.Background()
 	providerFactory := New("test")
-	p := providerFactory().(*BCMProvider)
+	p, ok := providerFactory().(*BCMProvider)
+	if !ok {
+		t.Fatalf("expected BCMProvider, got %T", providerFactory())
+	}
 
 	req := provider.SchemaRequest{}
 	resp := &provider.SchemaResponse{}
 
 	p.Schema(ctx, req, resp)
 
-	// Verify schema was set
+	// Verify schema was set.
 	if resp.Schema.Attributes == nil {
 		t.Fatal("Expected schema attributes, got nil")
 	}
 
-	// Verify expected attributes exist
+	// Verify expected attributes exist.
 	expectedAttributes := []string{"endpoint", "username", "password", "insecure_skip_verify", "timeout"}
 	for _, attr := range expectedAttributes {
 		if _, ok := resp.Schema.Attributes[attr]; !ok {
@@ -638,9 +675,9 @@ func TestProviderSchema(t *testing.T) {
 		}
 	}
 
-	// Verify password is marked sensitive
+	// Verify password is marked sensitive.
 	passwordAttr := resp.Schema.Attributes["password"]
-	// Note: Checking sensitive flag would require type assertion to specific attribute type
+	// Note: Checking sensitive flag would require type assertion to specific attribute type.
 	if passwordAttr == nil {
 		t.Error("Expected password attribute to be defined")
 	}

@@ -30,14 +30,14 @@ func testAccCMDeviceDevicePreCheck(t *testing.T, deviceNames ...string) {
 	ctx := context.Background()
 
 	for _, name := range deviceNames {
-		// Try to get device UUID by name
+		// Try to get device UUID by name.
 		body, err := client.CallJSONRPC(ctx, "cmdevice", "getDevice", name)
 		if err != nil || len(body) == 0 {
-			// Device doesn't exist, nothing to clean up
+			// Device doesn't exist, nothing to clean up.
 			continue
 		}
 
-		// Parse response to get UUID
+		// Parse response to get UUID.
 		var deviceData map[string]interface{}
 		if err := json.Unmarshal(body, &deviceData); err != nil {
 			t.Logf("Warning: Could not parse device response for %s: %v", name, err)
@@ -50,13 +50,13 @@ func testAccCMDeviceDevicePreCheck(t *testing.T, deviceNames ...string) {
 			continue
 		}
 
-		// Try to delete the device
+		// Try to delete the device.
 		_, err = client.CallJSONRPC(ctx, "cmdevice", "removeDevice", uuid, true) // force=true
 		if err != nil {
 			t.Logf("Warning: Could not delete leftover device %s (UUID: %s): %v", name, uuid, err)
 		}
 
-		// Verify deletion with retries
+		// Verify deletion with retries.
 		deleted := verifyResourceDeleted(ctx, client, "cmdevice", "getDevice", uuid, 5)
 		if !deleted {
 			t.Logf("Warning: Device %s (UUID: %s) still exists after cleanup attempt", name, uuid)
@@ -80,7 +80,7 @@ func testAccCheckCMDeviceDeviceDestroy(s *terraform.State) error {
 		resourceCount++
 		id := rs.Primary.ID
 
-		// Verify device deleted with exponential backoff
+		// Verify device deleted with exponential backoff.
 		deleted := verifyResourceDeleted(
 			ctx,
 			client,
@@ -217,7 +217,7 @@ func TestAccCMDeviceDeviceResource_Basic(t *testing.T) {
 	imageName := generateUniqueTestName("citest-image-basic")
 	imagePath := "/cm/images/ubuntu-22.04-server-amd64-basic.iso"
 
-	// ID consistency tracking across all CRUD operations
+	// ID consistency tracking across all CRUD operations.
 	compareID := statecheck.CompareValue(compare.ValuesSame())
 
 	resource.Test(t, resource.TestCase{
@@ -228,7 +228,7 @@ func TestAccCMDeviceDeviceResource_Basic(t *testing.T) {
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckCMDeviceDeviceDestroy,
 		Steps: []resource.TestStep{
-			// Create and Read testing
+			// Create and Read testing.
 			{
 				Config: testAccCMDeviceDeviceResourceConfig_Basic(deviceName, categoryName, imageName, imagePath),
 				ConfigStateChecks: []statecheck.StateCheck{
@@ -258,7 +258,7 @@ func TestAccCMDeviceDeviceResource_Basic(t *testing.T) {
 					),
 				},
 			},
-			// Idempotency check after Create
+			// Idempotency check after Create.
 			{
 				Config: testAccCMDeviceDeviceResourceConfig_Basic(deviceName, categoryName, imageName, imagePath),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
@@ -267,7 +267,7 @@ func TestAccCMDeviceDeviceResource_Basic(t *testing.T) {
 					},
 				},
 			},
-			// Import testing
+			// Import testing.
 			{
 				ResourceName:      "bcm_cmdevice_device.test",
 				ImportState:       true,
@@ -285,7 +285,7 @@ func TestAccCMDeviceDeviceResource_Basic(t *testing.T) {
 					"part_number",            // BCM may populate from hardware discovery
 				},
 			},
-			// Verify ID consistency after Import
+			// Verify ID consistency after Import.
 			{
 				Config: testAccCMDeviceDeviceResourceConfig_Basic(deviceName, categoryName, imageName, imagePath),
 				ConfigStateChecks: []statecheck.StateCheck{
@@ -295,7 +295,7 @@ func TestAccCMDeviceDeviceResource_Basic(t *testing.T) {
 					),
 				},
 			},
-			// Update and Read testing
+			// Update and Read testing.
 			{
 				Config: testAccCMDeviceDeviceResourceConfig_Updated(deviceName, categoryName, imageName, imagePath),
 				ConfigStateChecks: []statecheck.StateCheck{
@@ -320,7 +320,7 @@ func TestAccCMDeviceDeviceResource_Basic(t *testing.T) {
 					),
 				},
 			},
-			// Idempotency check after Update
+			// Idempotency check after Update.
 			{
 				Config: testAccCMDeviceDeviceResourceConfig_Updated(deviceName, categoryName, imageName, imagePath),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
@@ -400,7 +400,7 @@ func TestAccCMDeviceDevice_DriftNotes(t *testing.T) {
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckCMDeviceDeviceDestroy,
 		Steps: []resource.TestStep{
-			// Create with initial value
+			// Create with initial value.
 			{
 				Config: testAccCMDeviceDeviceResourceConfig_Drift(deviceName, categoryName, imageName, imagePath),
 				ConfigStateChecks: []statecheck.StateCheck{
@@ -411,13 +411,13 @@ func TestAccCMDeviceDevice_DriftNotes(t *testing.T) {
 					),
 				},
 			},
-			// Modify externally via BCM API
+			// Modify externally via BCM API.
 			{
 				PreConfig: func() {
 					client := createTestBCMClient(t)
 					ctx := context.Background()
 
-					// Get device by hostname
+					// Get device by hostname.
 					body, err := client.CallJSONRPC(ctx, "cmdevice", "getDevice", deviceName)
 					if err != nil {
 						t.Fatalf("Failed to get device for drift test: %v", err)
@@ -430,10 +430,10 @@ func TestAccCMDeviceDevice_DriftNotes(t *testing.T) {
 
 					uuid, _ := deviceData["uuid"].(string)
 
-					// Modify notes field externally
+					// Modify notes field externally.
 					deviceData["notes"] = "externally-modified"
 
-					// Build BCM entity structure
+					// Build BCM entity structure.
 					entity := map[string]interface{}{
 						"baseType":      "Device",
 						"childType":     deviceData["childType"],
@@ -447,13 +447,13 @@ func TestAccCMDeviceDevice_DriftNotes(t *testing.T) {
 						}
 					}
 
-					// Update via BCM API
+					// Update via BCM API.
 					_, err = client.CallJSONRPC(ctx, "cmdevice", "updateDevice", entity, false)
 					if err != nil {
 						t.Fatalf("Failed to update device externally: %v", err)
 					}
 
-					// Wait for eventual consistency
+					// Wait for eventual consistency.
 					time.Sleep(2 * time.Second)
 
 					t.Logf("[DEBUG] Modified notes externally to: externally-modified")
@@ -465,7 +465,7 @@ func TestAccCMDeviceDevice_DriftNotes(t *testing.T) {
 					},
 				},
 			},
-			// Terraform restores desired state
+			// Terraform restores desired state.
 			{
 				Config: testAccCMDeviceDeviceResourceConfig_Drift(deviceName, categoryName, imageName, imagePath),
 				ConfigStateChecks: []statecheck.StateCheck{
@@ -507,13 +507,13 @@ func TestAccCMDeviceDevice_ValidationInvalidHostname(t *testing.T) {
 }
 
 // ========================================
-// Phase 4: Partition Commit Timeout Tests
+// Phase 4: Partition Commit Timeout Tests.
 // ========================================
 
-// TestAccCMDeviceDevice_PartitionCommitTimeout tests timeout scenario for partition commit polling
+// TestAccCMDeviceDevice_PartitionCommitTimeout tests timeout scenario for partition commit polling.
 //
 // This test verifies the error path in resource_cmdevice_device.go lines 527-568 (waitForPartitionCommit).
-// The test scenario simulates a partition that never completes its commit, forcing the exponential
+// The test scenario simulates a partition that never completes its commit, forcing the exponential.
 // backoff retry logic to exhaust all attempts and return a timeout error.
 //
 // Error Path Under Test:
@@ -534,7 +534,7 @@ func TestAccCMDeviceDevice_ValidationInvalidHostname(t *testing.T) {
 // - This simulates BCM partition commit never completing
 //
 // Test Execution Time:
-// IMPORTANT: This test will take approximately 2 minutes to complete due to the
+// IMPORTANT: This test will take approximately 2 minutes to complete due to the.
 // exponential backoff delays. This is expected behavior when testing timeout paths.
 //
 // Reference Implementation:
@@ -551,14 +551,14 @@ func TestAccCMDeviceDevice_PartitionCommitTimeout(t *testing.T) {
 	imageName := generateUniqueTestName("citest-image-timeout")
 	imagePath := "/cm/images/ubuntu-22.04-server-amd64-timeout.iso"
 
-	// Track retry attempts for validation
+	// Track retry attempts for validation.
 	var retryCount int
 	var firstRetryTime time.Time
 	var lastRetryTime time.Time
 
-	// Create mock server that simulates partition commit never completing
+	// Create mock server that simulates partition commit never completing.
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Parse request to determine which API call this is
+		// Parse request to determine which API call this is.
 		var requestBody map[string]interface{}
 		if err := json.NewDecoder(r.Body).Decode(&requestBody); err != nil {
 			http.Error(w, "Invalid request", http.StatusBadRequest)
@@ -568,7 +568,7 @@ func TestAccCMDeviceDevice_PartitionCommitTimeout(t *testing.T) {
 		service, _ := requestBody["service"].(string)
 		call, _ := requestBody["call"].(string)
 
-		// Track partition query attempts for validation
+		// Track partition query attempts for validation.
 		if service == "CMPart" && call == "getSoftwareImage" {
 			retryCount++
 			if retryCount == 1 {
@@ -578,8 +578,8 @@ func TestAccCMDeviceDevice_PartitionCommitTimeout(t *testing.T) {
 
 			t.Logf("[MOCK] Partition query attempt %d at %v", retryCount, time.Since(firstRetryTime))
 
-			// Always return partition with modified=true (never completes commit)
-			// This simulates BCM partition commit hanging indefinitely
+			// Always return partition with modified=true (never completes commit).
+			// This simulates BCM partition commit hanging indefinitely.
 			response := map[string]interface{}{
 				"uuid": "test-partition-uuid-never-commits",
 				"name": imageName,
@@ -596,9 +596,9 @@ func TestAccCMDeviceDevice_PartitionCommitTimeout(t *testing.T) {
 			return
 		}
 
-		// Handle login requests
+		// Handle login requests.
 		if requestBody["service"] == "login" {
-			// Set authentication cookie
+			// Set authentication cookie.
 			http.SetCookie(w, &http.Cookie{
 				Name:  "cm-login-token",
 				Value: "mock-session-token",
@@ -611,18 +611,18 @@ func TestAccCMDeviceDevice_PartitionCommitTimeout(t *testing.T) {
 			return
 		}
 
-		// Handle other API calls (simplified for test focus)
-		// In real scenario, these would need full implementations
+		// Handle other API calls (simplified for test focus).
+		// In real scenario, these would need full implementations.
 		switch call {
 		case "getDevice":
-			// Return empty to indicate device doesn't exist yet
+			// Return empty to indicate device doesn't exist yet.
 			w.Header().Set("Content-Type", "application/json")
 			if _, err := w.Write([]byte(`{}`)); err != nil {
 				t.Logf("[MOCK] Failed to write getDevice response: %v", err)
 			}
 
 		case "addDevice":
-			// Simulate successful device creation
+			// Simulate successful device creation.
 			response := map[string]interface{}{
 				"uuid":      "test-device-uuid-123",
 				"hostname":  deviceName,
@@ -634,7 +634,7 @@ func TestAccCMDeviceDevice_PartitionCommitTimeout(t *testing.T) {
 			}
 
 		case "getCategories", "getCategory":
-			// Return mock category
+			// Return mock category.
 			response := []map[string]interface{}{
 				{
 					"uuid": "test-category-uuid",
@@ -650,7 +650,7 @@ func TestAccCMDeviceDevice_PartitionCommitTimeout(t *testing.T) {
 			}
 
 		case "getNetworks":
-			// Return mock network
+			// Return mock network.
 			response := []map[string]interface{}{
 				{
 					"uuid": "test-network-uuid",
@@ -663,7 +663,7 @@ func TestAccCMDeviceDevice_PartitionCommitTimeout(t *testing.T) {
 			}
 
 		default:
-			// Default response for unhandled calls
+			// Default response for unhandled calls.
 			w.Header().Set("Content-Type", "application/json")
 			if _, err := w.Write([]byte(`{}`)); err != nil {
 				t.Logf("[MOCK] Failed to write default response: %v", err)
@@ -679,8 +679,8 @@ func TestAccCMDeviceDevice_PartitionCommitTimeout(t *testing.T) {
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				// Attempt to create device with partition that never commits
-				// This should FAIL with timeout error after ~110-120 seconds
+				// Attempt to create device with partition that never commits.
+				// This should FAIL with timeout error after ~110-120 seconds.
 				Config: testAccCMDeviceDeviceResourceConfig_WithMockEndpoint(
 					mockServer.URL,
 					deviceName,
@@ -688,14 +688,14 @@ func TestAccCMDeviceDevice_PartitionCommitTimeout(t *testing.T) {
 					imageName,
 					imagePath,
 				),
-				// Expect error from waitForPartitionCommit timeout
+				// Expect error from waitForPartitionCommit timeout.
 				ExpectError: regexp.MustCompile(
 					`partition not committed after \d+ retries \(waited up to \d+ seconds\)`,
 				),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					// Validate retry behavior after test completes
+					// Validate retry behavior after test completes.
 					func(s *terraform.State) error {
-						// Verify exponential backoff was attempted
+						// Verify exponential backoff was attempted.
 						if retryCount < 15 {
 							return fmt.Errorf(
 								"Expected at least 15 retry attempts, got %d (may indicate early termination)",
@@ -703,7 +703,7 @@ func TestAccCMDeviceDevice_PartitionCommitTimeout(t *testing.T) {
 							)
 						}
 
-						// Verify total wait time was substantial
+						// Verify total wait time was substantial.
 						totalWaitTime := lastRetryTime.Sub(firstRetryTime)
 						expectedMinWait := 60 * time.Second // Conservative estimate
 
@@ -728,7 +728,7 @@ func TestAccCMDeviceDevice_PartitionCommitTimeout(t *testing.T) {
 }
 
 // testAccCMDeviceDeviceResourceConfig_WithMockEndpoint returns device config using mock endpoint
-// This is used for timeout testing where we need to control BCM API responses
+// This is used for timeout testing where we need to control BCM API responses.
 func testAccCMDeviceDeviceResourceConfig_WithMockEndpoint(
 	endpoint string,
 	hostname string,
@@ -844,10 +844,10 @@ func TestAccCMDeviceDevice_ValidationInvalidMAC(t *testing.T) {
 }
 
 // ========================================
-// Phase 3: Drift Detection Tests
+// Phase 3: Drift Detection Tests.
 // ========================================
 
-// TestAccCMDeviceDevice_Drift tests drift detection for hostname attribute
+// TestAccCMDeviceDevice_Drift tests drift detection for hostname attribute.
 // This test verifies the provider correctly detects when a device's hostname is modified externally via BCM API.
 func TestAccCMDeviceDevice_Drift(t *testing.T) {
 	initialHostname := generateUniqueTestName("test-device-drift")
@@ -864,7 +864,7 @@ func TestAccCMDeviceDevice_Drift(t *testing.T) {
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckCMDeviceDeviceDestroy,
 		Steps: []resource.TestStep{
-			// Step 1: Create device with initial hostname
+			// Step 1: Create device with initial hostname.
 			{
 				Config: testAccCMDeviceDeviceResourceConfig_Drift(initialHostname, categoryName, imageName, imagePath),
 				ConfigStateChecks: []statecheck.StateCheck{
@@ -885,31 +885,31 @@ func TestAccCMDeviceDevice_Drift(t *testing.T) {
 					),
 				},
 			},
-			// Step 2: Modify hostname externally via BCM API, verify drift detected
+			// Step 2: Modify hostname externally via BCM API, verify drift detected.
 			{
 				PreConfig: func() {
 					client := createTestBCMClient(t)
 					ctx := context.Background()
 
-					// Get UUID by device hostname using helper
+					// Get UUID by device hostname using helper.
 					uuid := getResourceUUIDByName(t, "cmdevice", "getDevice", initialHostname)
 
-					// Fetch full device data from BCM API
+					// Fetch full device data from BCM API.
 					body, err := client.CallJSONRPC(ctx, "cmdevice", "getDevice", uuid)
 					if err != nil {
 						t.Fatalf("Failed to fetch device for drift modification: %v", err)
 					}
 
-					// Parse the device data
+					// Parse the device data.
 					var deviceData map[string]interface{}
 					if err := json.Unmarshal(body, &deviceData); err != nil {
 						t.Fatalf("Failed to parse device data: %v", err)
 					}
 
-					// Modify hostname field (Terraform snake_case -> BCM API camelCase)
+					// Modify hostname field (Terraform snake_case -> BCM API camelCase).
 					deviceData["hostname"] = driftedHostname
 
-					// Wrap in BCM API entity structure required for updates
+					// Wrap in BCM API entity structure required for updates.
 					entity := map[string]interface{}{
 						"baseType":      "Device",
 						"childType":     deviceData["childType"],
@@ -918,37 +918,37 @@ func TestAccCMDeviceDevice_Drift(t *testing.T) {
 						"revision":      "",
 						"uuid":          uuid,
 					}
-					// Copy all device data fields except uuid (already set above)
+					// Copy all device data fields except uuid (already set above).
 					for k, v := range deviceData {
 						if k != "uuid" {
 							entity[k] = v
 						}
 					}
 
-					// Update via BCM API
+					// Update via BCM API.
 					_, err = client.CallJSONRPC(ctx, "cmdevice", "updateDevice", entity, false)
 					if err != nil {
 						t.Fatalf("Failed to update device via BCM API: %v", err)
 					}
 
-					// Wait for eventual consistency
+					// Wait for eventual consistency.
 					time.Sleep(2 * time.Second)
 
 					t.Logf("[DEBUG] Modified hostname externally to: %v", entity["hostname"])
 				},
 				Config: testAccCMDeviceDeviceResourceConfig_Drift(initialHostname, categoryName, imageName, imagePath),
-				// Use ConfigPlanChecks to verify drift detected (non-empty plan expected)
+				// Use ConfigPlanChecks to verify drift detected (non-empty plan expected).
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectNonEmptyPlan(),
 					},
 				},
 			},
-			// Step 3: Restore desired state (Terraform applies config to fix drift)
+			// Step 3: Restore desired state (Terraform applies config to fix drift).
 			{
 				Config: testAccCMDeviceDeviceResourceConfig_Drift(initialHostname, categoryName, imageName, imagePath),
 				ConfigStateChecks: []statecheck.StateCheck{
-					// Verify drift was corrected and state matches config
+					// Verify drift was corrected and state matches config.
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_device.test",
 						tfjsonpath.New("hostname"),
@@ -966,7 +966,7 @@ func TestAccCMDeviceDevice_Drift(t *testing.T) {
 }
 
 // ========================================
-// Phase 4: Error Handling Tests
+// Phase 4: Error Handling Tests.
 // ========================================
 
 // TestAccCMDeviceDevice_PartitionErrorHandling tests partition-related error scenarios.
@@ -983,13 +983,13 @@ func TestAccCMDeviceDevice_Drift(t *testing.T) {
 func TestAccCMDeviceDevice_PartitionErrorHandling(t *testing.T) {
 	t.Skip("Skipping partition error handling tests - requires specific BCM cluster configurations or mock server")
 
-	// These tests document the error paths but cannot be executed against a live BCM
+	// These tests document the error paths but cannot be executed against a live BCM.
 	// cluster without engineering specific failure conditions. They serve as:
 	// 1. Documentation of expected error behavior
 	// 2. Reference for manual testing scenarios
 	// 3. Template for future mock-based testing infrastructure
 
-	// Test Case 1: getPartitions API failure
+	// Test Case 1: getPartitions API failure.
 	// Expected diagnostic: "Error Querying Partitions"
 	// Occurs at: resource_cmdevice_device.go:294-299
 	// Scenario: BCM API returns error when calling CMPart.getPartitions
@@ -999,7 +999,7 @@ func TestAccCMDeviceDevice_PartitionErrorHandling(t *testing.T) {
 	// - BCM cluster with misconfigured partition service
 	// - Network/authentication issues during partition query
 
-	// Test Case 2: Empty partitions list
+	// Test Case 2: Empty partitions list.
 	// Expected diagnostic: "Missing Base Partition"
 	// Occurs at: resource_cmdevice_device.go:326-331
 	// Scenario: getPartitions succeeds but returns empty array []
@@ -1008,7 +1008,7 @@ func TestAccCMDeviceDevice_PartitionErrorHandling(t *testing.T) {
 	// - BCM cluster with no partitions configured
 	// - Fresh BCM installation before partition setup
 
-	// Test Case 3: No base partition found
+	// Test Case 3: No base partition found.
 	// Expected diagnostic: "Missing Base Partition"
 	// Occurs at: resource_cmdevice_device.go:326-331
 	// Scenario: getPartitions returns partitions but none have name="base"
@@ -1018,65 +1018,8 @@ func TestAccCMDeviceDevice_PartitionErrorHandling(t *testing.T) {
 	// - All partitions renamed from default "base"
 }
 
-// testAccCMDeviceDeviceResourceConfig_PartitionError returns config that triggers partition errors.
-// This is a template configuration for partition error testing scenarios.
-func testAccCMDeviceDeviceResourceConfig_PartitionError(hostname, categoryName, imageName, imagePath string) string {
-	return fmt.Sprintf(`
-provider "bcm" {
-  endpoint             = %[1]q
-  username             = %[2]q
-  password             = %[3]q
-  insecure_skip_verify = true
-}
-
-data "bcm_cmnet_networks" "management" {
-  filter {
-    name_pattern = "managementnet"
-  }
-}
-
-# Create software image
-resource "bcm_cmpart_softwareimage" "test" {
-  name = %[4]q
-  path = %[5]q
-}
-
-# Create category with softwareImageProxy
-# This triggers partition lookup logic in device Create
-resource "bcm_cmdevice_category" "test" {
-  name               = %[6]q
-  management_network = data.bcm_cmnet_networks.management.networks[0].id
-
-  software_image_proxy = {
-    parent_software_image = bcm_cmpart_softwareimage.test.id
-  }
-
-  depends_on = [bcm_cmpart_softwareimage.test]
-}
-
-# Device creation will trigger partition lookup
-# When category uses softwareImageProxy, device must query for base partition
-resource "bcm_cmdevice_device" "test" {
-  hostname           = %[7]q
-  mac                = "00:11:22:33:44:66"
-  category           = bcm_cmdevice_category.test.id
-  management_network = data.bcm_cmnet_networks.management.networks[0].id
-
-  depends_on = [bcm_cmdevice_category.test]
-}
-`,
-		os.Getenv("BCM_ENDPOINT"),
-		os.Getenv("BCM_USERNAME"),
-		os.Getenv("BCM_PASSWORD"),
-		imageName,
-		imagePath,
-		categoryName,
-		hostname,
-	)
-}
-
 // TestAccCMDeviceDevice_PartitionQueryFailureDocumentation documents the partition query failure scenario.
-// This test is skipped by default but documents the expected behavior when BCM API returns
+// This test is skipped by default but documents the expected behavior when BCM API returns.
 // an error during partition lookup.
 func TestAccCMDeviceDevice_PartitionQueryFailureDocumentation(t *testing.T) {
 	t.Skip("Documentation test - describes partition query failure behavior")
@@ -1131,7 +1074,7 @@ func TestAccCMDeviceDevice_PartitionQueryFailureDocumentation(t *testing.T) {
 }
 
 // TestAccCMDeviceDevice_MissingBasePartitionDocumentation documents the missing base partition scenario.
-// This test is skipped by default but documents the expected behavior when BCM cluster
+// This test is skipped by default but documents the expected behavior when BCM cluster.
 // has no partition named "base".
 func TestAccCMDeviceDevice_MissingBasePartitionDocumentation(t *testing.T) {
 	t.Skip("Documentation test - describes missing base partition behavior")
