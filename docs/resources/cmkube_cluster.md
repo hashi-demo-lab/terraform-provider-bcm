@@ -16,33 +16,62 @@ Kubernetes clusters in BCM define the cluster topology (master and worker nodes)
 ## Example Usage
 
 ```terraform
-# Basic Kubernetes cluster with minimal configuration
+# Basic Kubernetes cluster resource example
+
+# Query available nodes for the cluster
+data "bcm_cmdevice_nodes" "masters" {
+  filter {
+    hostname_pattern = "master"
+  }
+}
+
+data "bcm_cmdevice_nodes" "workers" {
+  filter {
+    hostname_pattern = "worker"
+  }
+}
+
+# Query available networks for cluster management
+data "bcm_cmnet_networks" "all" {}
+
+# Create a Kubernetes cluster with minimal configuration
 resource "bcm_cmkube_cluster" "example" {
   name         = "my-k8s-cluster"
-  master_nodes = ["<master-node-uuid>"]
+  master_nodes = [data.bcm_cmdevice_nodes.masters.nodes[0].id]
+}
 
-  # Optional: Add worker nodes
-  worker_nodes = [
-    "<worker-node-uuid-1>",
-    "<worker-node-uuid-2>",
-  ]
+# Create a Kubernetes cluster with worker nodes
+resource "bcm_cmkube_cluster" "with_workers" {
+  name         = "prod-cluster"
+  master_nodes = [data.bcm_cmdevice_nodes.masters.nodes[0].id]
+  worker_nodes = slice(data.bcm_cmdevice_nodes.workers.nodes[*].id, 0, 3)
 
-  # Optional: Specify Kubernetes version
   version = "1.28.0"
-
-  # Optional: Management network
-  management_network = "<network-uuid>"
 }
 
-# Output cluster UUID for reference
-output "cluster_uuid" {
-  value       = bcm_cmkube_cluster.example.uuid
-  description = "BCM-assigned cluster UUID"
+# Create a Kubernetes cluster with full configuration
+resource "bcm_cmkube_cluster" "advanced" {
+  name         = "advanced-cluster"
+  master_nodes = slice(data.bcm_cmdevice_nodes.masters.nodes[*].id, 0, 3)
+  worker_nodes = slice(data.bcm_cmdevice_nodes.workers.nodes[*].id, 0, 5)
+
+  version            = "1.29.0"
+  management_network = data.bcm_cmnet_networks.all.networks[0].id
+
+  force = false # Set to true to bypass validation
 }
 
+# Output cluster information
 output "cluster_id" {
-  value       = bcm_cmkube_cluster.example.id
-  description = "Terraform resource identifier"
+  value = bcm_cmkube_cluster.example.id
+}
+
+output "cluster_uuid" {
+  value = bcm_cmkube_cluster.example.uuid
+}
+
+output "cluster_creation_time" {
+  value = bcm_cmkube_cluster.example.creation_time
 }
 ```
 
@@ -56,8 +85,15 @@ output "cluster_id" {
 
 ### Optional
 
+- `addons` (String) Cluster addons configuration (JSON-encoded array of addon definitions for monitoring, logging, etc.)
+- `cni_plugin` (String) CNI plugin selection (e.g., 'calico', 'flannel', 'weave')
+- `dns_servers` (List of String) List of custom DNS server IPs for the cluster
 - `force` (Boolean) Bypass validation warnings during operations (default: false)
-- `management_network` (String) Management network UUID
+- `ingress_controller` (String) Ingress controller configuration (JSON-encoded object)
+- `load_balancer_mode` (String) Load balancer strategy for the cluster
+- `management_network` (String) Management network UUID for cluster management traffic
+- `overlay_network` (String) Overlay network configuration for pod networking (UUID or configuration string)
+- `storage_classes` (String) Storage class definitions (JSON-encoded array of storage class configurations)
 - `version` (String) Kubernetes version (semver format, e.g., '1.28.0')
 - `worker_nodes` (List of String) List of worker node UUIDs
 
@@ -76,10 +112,19 @@ The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/c
 
 ```shell
 #!/bin/bash
-# Import an existing Kubernetes cluster by UUID
+# Import an existing Kubernetes cluster into Terraform state
 
-# Cluster UUID can be found via BCM UI or API
-CLUSTER_UUID="<cluster-uuid>"
+# Get the cluster UUID from BCM
+# You can find this via the BCM API or web interface
 
+CLUSTER_UUID="your-cluster-uuid-here"
+
+# Import the cluster
 terraform import bcm_cmkube_cluster.example "${CLUSTER_UUID}"
+
+# After import, create a matching configuration:
+# resource "bcm_cmkube_cluster" "example" {
+#   name         = "existing-cluster"
+#   master_nodes = ["master-uuid"]
+# }
 ```

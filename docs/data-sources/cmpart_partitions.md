@@ -39,7 +39,7 @@ output "all_partition_names" {
 
 output "base_partition_uuid" {
   description = "UUID of the first partition matching 'base'"
-  value = length(data.bcm_cmpart_partitions.base_partitions.partitions) > 0 ? data.bcm_cmpart_partitions.base_partitions.partitions[0].uuid : null
+  value       = length(data.bcm_cmpart_partitions.base_partitions.partitions) > 0 ? data.bcm_cmpart_partitions.base_partitions.partitions[0].uuid : null
 }
 
 output "partition_details" {

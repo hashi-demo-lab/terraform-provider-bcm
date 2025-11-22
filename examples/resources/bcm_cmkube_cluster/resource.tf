@@ -13,17 +13,20 @@ data "bcm_cmdevice_nodes" "workers" {
   }
 }
 
+# Query available networks for cluster management
+data "bcm_cmnet_networks" "all" {}
+
 # Create a Kubernetes cluster with minimal configuration
 resource "bcm_cmkube_cluster" "example" {
   name         = "my-k8s-cluster"
-  master_nodes = [data.bcm_cmdevice_nodes.masters.nodes[0].uuid]
+  master_nodes = [data.bcm_cmdevice_nodes.masters.nodes[0].id]
 }
 
 # Create a Kubernetes cluster with worker nodes
 resource "bcm_cmkube_cluster" "with_workers" {
   name         = "prod-cluster"
-  master_nodes = [data.bcm_cmdevice_nodes.masters.nodes[0].uuid]
-  worker_nodes = slice(data.bcm_cmdevice_nodes.workers.nodes[*].uuid, 0, 3)
+  master_nodes = [data.bcm_cmdevice_nodes.masters.nodes[0].id]
+  worker_nodes = slice(data.bcm_cmdevice_nodes.workers.nodes[*].id, 0, 3)
 
   version = "1.28.0"
 }
@@ -31,11 +34,11 @@ resource "bcm_cmkube_cluster" "with_workers" {
 # Create a Kubernetes cluster with full configuration
 resource "bcm_cmkube_cluster" "advanced" {
   name         = "advanced-cluster"
-  master_nodes = slice(data.bcm_cmdevice_nodes.masters.nodes[*].uuid, 0, 3)
-  worker_nodes = slice(data.bcm_cmdevice_nodes.workers.nodes[*].uuid, 0, 5)
+  master_nodes = slice(data.bcm_cmdevice_nodes.masters.nodes[*].id, 0, 3)
+  worker_nodes = slice(data.bcm_cmdevice_nodes.workers.nodes[*].id, 0, 5)
 
   version            = "1.29.0"
-  management_network = "network-uuid-here"
+  management_network = data.bcm_cmnet_networks.all.networks[0].id
 
   force = false # Set to true to bypass validation
 }

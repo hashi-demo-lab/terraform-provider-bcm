@@ -14,20 +14,23 @@ data "bcm_cmdevice_nodes" "workers" {
   }
 }
 
+# Query available networks for cluster management
+data "bcm_cmnet_networks" "all" {}
+
 # Example 1: Production cluster with advanced networking
 resource "bcm_cmkube_cluster" "production_advanced" {
   name         = "prod-k8s-advanced"
-  master_nodes = slice(data.bcm_cmdevice_nodes.masters.nodes[*].uuid, 0, 3)
-  worker_nodes = slice(data.bcm_cmdevice_nodes.workers.nodes[*].uuid, 0, 5)
+  master_nodes = slice(data.bcm_cmdevice_nodes.masters.nodes[*].id, 0, 3)
+  worker_nodes = slice(data.bcm_cmdevice_nodes.workers.nodes[*].id, 0, 5)
 
   # Kubernetes configuration
   version    = "1.29.0"
   cni_plugin = "calico"
 
   # Network configuration
-  management_network = "<management-network-uuid>"
-  overlay_network    = "<overlay-network-uuid>" # Pod network overlay
-  dns_servers        = ["8.8.8.8", "8.8.4.4"]   # Custom DNS servers
+  management_network = data.bcm_cmnet_networks.all.networks[0].id
+  overlay_network    = "10.244.0.0/16"        # Pod network CIDR
+  dns_servers        = ["8.8.8.8", "8.8.4.4"] # Custom DNS servers
 
   # Load balancer configuration
   load_balancer_mode = "metallb"
@@ -112,7 +115,7 @@ resource "bcm_cmkube_cluster" "production_advanced" {
 # Example 2: Development cluster with minimal P3 features
 resource "bcm_cmkube_cluster" "dev_with_addons" {
   name         = "dev-k8s-addons"
-  master_nodes = [data.bcm_cmdevice_nodes.masters.nodes[0].uuid]
+  master_nodes = [data.bcm_cmdevice_nodes.masters.nodes[0].id]
 
   # Kubernetes configuration
   version    = "1.28.0"
@@ -140,16 +143,16 @@ resource "bcm_cmkube_cluster" "dev_with_addons" {
 # Example 3: High-availability cluster with Weave CNI and full stack
 resource "bcm_cmkube_cluster" "ha_full_stack" {
   name         = "ha-k8s-full"
-  master_nodes = slice(data.bcm_cmdevice_nodes.masters.nodes[*].uuid, 0, 3)
-  worker_nodes = slice(data.bcm_cmdevice_nodes.workers.nodes[*].uuid, 0, 10)
+  master_nodes = slice(data.bcm_cmdevice_nodes.masters.nodes[*].id, 0, 3)
+  worker_nodes = slice(data.bcm_cmdevice_nodes.workers.nodes[*].id, 0, 10)
 
   # Kubernetes configuration
   version    = "1.29.0"
   cni_plugin = "weave"
 
   # Network configuration
-  management_network = "<management-network-uuid>"
-  overlay_network    = "<weave-network-config>"
+  management_network = data.bcm_cmnet_networks.all.networks[0].id
+  overlay_network    = "10.32.0.0/12"             # Weave network CIDR
   dns_servers        = ["10.0.0.10", "10.0.0.11"] # Internal DNS
 
   # Load balancer

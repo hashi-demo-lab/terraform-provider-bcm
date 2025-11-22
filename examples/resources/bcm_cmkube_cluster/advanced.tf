@@ -1,27 +1,34 @@
+# Query available nodes for the cluster
+data "bcm_cmdevice_nodes" "masters" {
+  filter {
+    hostname_pattern = "master"
+  }
+}
+
+data "bcm_cmdevice_nodes" "workers" {
+  filter {
+    hostname_pattern = "worker"
+  }
+}
+
+# Query available networks for cluster management
+data "bcm_cmnet_networks" "all" {}
+
 # Advanced cluster configuration with multiple workers
 resource "bcm_cmkube_cluster" "production" {
   name = "prod-k8s-cluster"
 
-  # High-availability master nodes
-  master_nodes = [
-    "<master-1-uuid>",
-    "<master-2-uuid>",
-    "<master-3-uuid>",
-  ]
+  # High-availability master nodes (use first 3 masters)
+  master_nodes = slice(data.bcm_cmdevice_nodes.masters.nodes[*].id, 0, 3)
 
-  # Worker nodes for workloads
-  worker_nodes = [
-    "<worker-1-uuid>",
-    "<worker-2-uuid>",
-    "<worker-3-uuid>",
-    "<worker-4-uuid>",
-  ]
+  # Worker nodes for workloads (use first 4 workers)
+  worker_nodes = slice(data.bcm_cmdevice_nodes.workers.nodes[*].id, 0, 4)
 
   # Kubernetes version
   version = "1.29.0"
 
   # Management network
-  management_network = "<prod-network-uuid>"
+  management_network = data.bcm_cmnet_networks.all.networks[0].id
 
   # Force operations (use with caution)
   force = false
@@ -30,7 +37,7 @@ resource "bcm_cmkube_cluster" "production" {
 # Example: Minimal cluster for development
 resource "bcm_cmkube_cluster" "dev" {
   name         = "dev-k8s-cluster"
-  master_nodes = ["<dev-master-uuid>"]
+  master_nodes = [data.bcm_cmdevice_nodes.masters.nodes[0].id]
   version      = "1.28.0"
 }
 
