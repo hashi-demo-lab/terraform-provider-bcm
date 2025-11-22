@@ -14,7 +14,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
 )
 
-// TestAccCMPartPartitionsDataSource_Basic verifies data source retrieves all partitions without filters
+// TestAccCMPartPartitionsDataSource_Basic verifies data source retrieves all partitions without filters.
 func TestAccCMPartPartitionsDataSource_Basic(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -37,7 +37,7 @@ func TestAccCMPartPartitionsDataSource_Basic(t *testing.T) {
 	})
 }
 
-// TestAccCMPartPartitionsDataSource_FilterByNamePattern verifies client-side filtering by name pattern works
+// TestAccCMPartPartitionsDataSource_FilterByNamePattern verifies client-side filtering by name pattern works.
 func TestAccCMPartPartitionsDataSource_FilterByNamePattern(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -60,7 +60,7 @@ func TestAccCMPartPartitionsDataSource_FilterByNamePattern(t *testing.T) {
 	})
 }
 
-// TestAccCMPartPartitionsDataSource_NoMatches verifies filter returning no results returns empty list, not error
+// TestAccCMPartPartitionsDataSource_NoMatches verifies filter returning no results returns empty list, not error.
 func TestAccCMPartPartitionsDataSource_NoMatches(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -81,7 +81,7 @@ func TestAccCMPartPartitionsDataSource_NoMatches(t *testing.T) {
 	})
 }
 
-// TestAccCMPartPartitionsDataSource_ComputedFields verifies all partition attributes are exposed with correct types
+// TestAccCMPartPartitionsDataSource_ComputedFields verifies all partition attributes are exposed with correct types.
 // This test assumes at least one partition exists in the BCM cluster (typical for any configured cluster)
 func TestAccCMPartPartitionsDataSource_ComputedFields(t *testing.T) {
 	resource.Test(t, resource.TestCase{
@@ -113,7 +113,7 @@ func TestAccCMPartPartitionsDataSource_ComputedFields(t *testing.T) {
 	})
 }
 
-// testAccCMPartPartitionsDataSourceConfig returns provider config + basic data source declaration
+// testAccCMPartPartitionsDataSourceConfig returns provider config + basic data source declaration.
 func testAccCMPartPartitionsDataSourceConfig() string {
 	return fmt.Sprintf(`
 provider "bcm" {
@@ -131,7 +131,7 @@ data "bcm_cmpart_partitions" "test" {}
 	)
 }
 
-// testAccCMPartPartitionsDataSourceConfigFilter returns provider config + data source with name pattern filter
+// testAccCMPartPartitionsDataSourceConfigFilter returns provider config + data source with name pattern filter.
 func testAccCMPartPartitionsDataSourceConfigFilter(namePattern string) string {
 	return fmt.Sprintf(`
 provider "bcm" {
