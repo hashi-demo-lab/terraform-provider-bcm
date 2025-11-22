@@ -1,0 +1,267 @@
+{
+  "service": "cmpart",
+  "method": "getPartitions",
+  "description": "Retrieves all partitions from BCM cluster",
+  "authentication": "Cookie-based (cm-login-token)",
+  "endpoint": "https://<BCM_HOST>:8081/json",
+
+  "request": {
+    "service": "cmpart",
+    "call": "getPartitions",
+    "args": []
+  },
+
+  "response": {
+    "type": "array",
+    "description": "JSON array of partition objects",
+    "example": [
+      {
+        "uuid": "f3652da2-2efe-414b-a650-10c8feea5d8f",
+        "name": "base-partition",
+        "clusterName": "production-cluster",
+        "slaveName": "node",
+        "slaveDigits": 3,
+        "relayHost": "smtp.example.com",
+        "adminEmail": ["admin@example.com", "ops@example.com"],
+        "timeServers": ["time1.google.com", "time2.google.com"],
+        "searchDomains": ["example.com", "internal.local"],
+        "nameServers": ["8.8.8.8", "8.8.4.4"],
+        "noZeroConf": false,
+        "baseType": "Partition",
+        "childType": "",
+        "creationTime": 1700000000,
+        "modified": false,
+        "to_be_removed": false,
+        "revision": "1",
+        "notes": "Production base partition"
+      }
+    ]
+  },
+
+  "fields": {
+    "uuid": {
+      "type": "string",
+      "required": true,
+      "description": "Unique partition identifier (UUID format)",
+      "terraform_field": "uuid",
+      "terraform_type": "types.String"
+    },
+    "name": {
+      "type": "string",
+      "required": true,
+      "description": "Human-readable partition name",
+      "terraform_field": "name",
+      "terraform_type": "types.String"
+    },
+    "clusterName": {
+      "type": "string",
+      "required": false,
+      "nullable": true,
+      "description": "Display name for the cluster",
+      "terraform_field": "cluster_name",
+      "terraform_type": "types.String"
+    },
+    "slaveName": {
+      "type": "string",
+      "required": false,
+      "nullable": true,
+      "description": "Node naming prefix (e.g., 'node' for node001, node002)",
+      "terraform_field": "slave_name",
+      "terraform_type": "types.String"
+    },
+    "slaveDigits": {
+      "type": "integer",
+      "required": false,
+      "nullable": true,
+      "description": "Number of digits in node numbering (e.g., 3 for node001)",
+      "terraform_field": "slave_digits",
+      "terraform_type": "types.Int64"
+    },
+    "relayHost": {
+      "type": "string",
+      "required": false,
+      "nullable": true,
+      "description": "SMTP relay hostname for email notifications",
+      "terraform_field": "relay_host",
+      "terraform_type": "types.String"
+    },
+    "adminEmail": {
+      "type": "array",
+      "element_type": "string",
+      "required": false,
+      "nullable": true,
+      "description": "Administrator email addresses",
+      "terraform_field": "admin_email",
+      "terraform_type": "types.List (of types.String)"
+    },
+    "timeServers": {
+      "type": "array",
+      "element_type": "string",
+      "required": false,
+      "nullable": true,
+      "description": "NTP time server addresses",
+      "terraform_field": "time_servers",
+      "terraform_type": "types.List (of types.String)"
+    },
+    "searchDomains": {
+      "type": "array",
+      "element_type": "string",
+      "required": false,
+      "nullable": true,
+      "description": "DNS search domains",
+      "terraform_field": "search_domains",
+      "terraform_type": "types.List (of types.String)"
+    },
+    "nameServers": {
+      "type": "array",
+      "element_type": "string",
+      "required": false,
+      "nullable": true,
+      "description": "DNS name server addresses",
+      "terraform_field": "name_servers",
+      "terraform_type": "types.List (of types.String)"
+    },
+    "noZeroConf": {
+      "type": "boolean",
+      "required": false,
+      "nullable": true,
+      "default": false,
+      "description": "Disable Zeroconf networking",
+      "terraform_field": "no_zero_conf",
+      "terraform_type": "types.Bool"
+    },
+    "baseType": {
+      "type": "string",
+      "required": true,
+      "description": "BCM entity base type (typically 'Partition')",
+      "terraform_field": "base_type",
+      "terraform_type": "types.String"
+    },
+    "childType": {
+      "type": "string",
+      "required": true,
+      "description": "BCM polymorphic type discriminator (empty for base partition type)",
+      "terraform_field": "child_type",
+      "terraform_type": "types.String"
+    },
+    "creationTime": {
+      "type": "integer",
+      "required": true,
+      "description": "Unix timestamp of partition creation",
+      "terraform_field": "creation_time",
+      "terraform_type": "types.Int64"
+    },
+    "modified": {
+      "type": "boolean",
+      "required": true,
+      "description": "Whether partition has uncommitted modifications",
+      "terraform_field": "modified",
+      "terraform_type": "types.Bool"
+    },
+    "to_be_removed": {
+      "type": "boolean",
+      "required": true,
+      "description": "Whether partition is marked for deletion",
+      "terraform_field": "to_be_removed",
+      "terraform_type": "types.Bool"
+    },
+    "revision": {
+      "type": "string",
+      "required": false,
+      "nullable": true,
+      "description": "BCM revision tracking field",
+      "terraform_field": "revision",
+      "terraform_type": "types.String"
+    },
+    "notes": {
+      "type": "string",
+      "required": false,
+      "nullable": true,
+      "description": "User notes or description",
+      "terraform_field": "notes",
+      "terraform_type": "types.String"
+    }
+  },
+
+  "error_responses": {
+    "authentication_failure": {
+      "status": 401,
+      "description": "Invalid credentials or expired session",
+      "handling": "BCMClient handles authentication errors and returns error to caller"
+    },
+    "service_unavailable": {
+      "status": 500,
+      "description": "BCM service is down or unreachable",
+      "handling": "Return error to Terraform with diagnostic message"
+    },
+    "malformed_response": {
+      "status": 200,
+      "description": "Response is not valid JSON or not an array",
+      "handling": "Return JSON parsing error to Terraform"
+    }
+  },
+
+  "test_scenarios": {
+    "basic_retrieval": {
+      "description": "Retrieve all partitions without filters",
+      "request": {
+        "service": "cmpart",
+        "call": "getPartitions"
+      },
+      "expected": "Returns array of all partitions (may be empty if cluster has no partitions)",
+      "test_file": "TestAccCMPartPartitionsDataSource_Basic"
+    },
+    "filter_by_name": {
+      "description": "Client-side filtering by name pattern",
+      "filter": {
+        "name_pattern": "base"
+      },
+      "expected": "Returns only partitions where name contains 'base' (case-insensitive)",
+      "test_file": "TestAccCMPartPartitionsDataSource_FilterByNamePattern"
+    },
+    "no_matches": {
+      "description": "Filter pattern matches no partitions",
+      "filter": {
+        "name_pattern": "nonexistent-partition-12345"
+      },
+      "expected": "Returns empty array (not an error)",
+      "test_file": "TestAccCMPartPartitionsDataSource_NoMatches"
+    },
+    "empty_cluster": {
+      "description": "BCM cluster with no partitions configured",
+      "request": {
+        "service": "cmpart",
+        "call": "getPartitions"
+      },
+      "expected": "Returns empty array []",
+      "handling": "Data source sets partitions = [] and id = 'placeholder' without error"
+    }
+  },
+
+  "implementation_notes": {
+    "null_safety": "All field extractions use null-safe helper functions (getStringValue, getBoolValue, getInt64Value, getStringListValue)",
+    "filtering": "All filtering is client-side - BCM API does not support server-side filtering",
+    "case_sensitivity": "Name pattern filtering is case-insensitive using strings.ToLower() and strings.Contains()",
+    "empty_arrays": "Array fields may be null, empty array [], or populated - getStringListValue() handles all cases",
+    "id_field": "Data source ID is always 'placeholder' (not used for state tracking of read-only data sources)"
+  },
+
+  "validation_checklist": [
+    "Verify API returns array type (not object)",
+    "Confirm all required fields (uuid, name, baseType, childType, creationTime, modified, to_be_removed) are present",
+    "Test null handling for optional fields",
+    "Validate array fields handle empty arrays and null values",
+    "Confirm camelCase to snake_case mapping works correctly",
+    "Test client-side filtering with various patterns",
+    "Verify empty cluster returns [] without error",
+    "Check filter with no matches returns [] without error"
+  ],
+
+  "references": {
+    "bcm_client": "/workspace/internal/provider/bcm_client.go",
+    "similar_data_source": "/workspace/internal/provider/data_source_cmpart_softwareimages.go",
+    "research": "/workspace/specs/001-partitions-data-source/research.md",
+    "data_model": "/workspace/specs/001-partitions-data-source/data-model.md",
+    "spec": "/workspace/specs/001-partitions-data-source/spec.md"
+  }
+}
