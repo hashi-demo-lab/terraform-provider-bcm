@@ -1,0 +1,78 @@
+{
+  "description": "BCM API contract for updating a Kubernetes cluster",
+  "operation": "Update",
+  "api_method": "cmkube.updateKubeCluster",
+
+  "request": {
+    "service": "cmkube",
+    "call": "updateKubeCluster",
+    "args": [
+      {
+        "baseType": "KubeCluster",
+        "childType": "",
+        "modified": true,
+        "to_be_removed": false,
+        "revision": "42",
+        "uuid": "550e8400-e29b-41d4-a716-446655440000",
+        "name": "production-cluster-renamed",
+        "masterNodes": [
+          "650e8400-e29b-41d4-a716-446655440001"
+        ],
+        "workerNodes": [
+          "750e8400-e29b-41d4-a716-446655440002",
+          "750e8400-e29b-41d4-a716-446655440003",
+          "750e8400-e29b-41d4-a716-446655440005"
+        ],
+        "managementNetwork": "850e8400-e29b-41d4-a716-446655440004",
+        "version": "1.29.0"
+      },
+      false
+    ]
+  },
+
+  "request_notes": {
+    "args[0]": "FULL KubeCluster entity including uuid (PUT semantics)",
+    "args[1]": "Force parameter (boolean)",
+    "uuid": "Required for update operations",
+    "revision": "Current revision for optimistic locking",
+    "modified": "Must be true for updates",
+    "semantics": "Requires complete entity, cannot send partial updates (PATCH)"
+  },
+
+  "response_success": {
+    "success": true
+  },
+
+  "response_notes": {
+    "return_value": "Success boolean, does not return full entity",
+    "timing": "Returns in 2-5 seconds, actual update may be asynchronous",
+    "read_after": "Call getKubeCluster after update to get new state"
+  },
+
+  "response_error": {
+    "success": false,
+    "error": "Cluster UUID '550e8400-e29b-41d4-a716-446655440000' not found"
+  },
+
+  "response_error_conflict": {
+    "success": false,
+    "error": "Revision conflict - cluster has been modified by another process"
+  },
+
+  "terraform_usage": {
+    "phase": "resource.Update()",
+    "steps": [
+      "1. Read plan and current state",
+      "2. Build cluster entity with UUID from state using buildClusterEntity()",
+      "3. Call client.CallJSONRPC(ctx, 'cmkube', 'updateKubeCluster', entity, force)",
+      "4. Check response for success",
+      "5. Call readCluster() to fetch updated state from BCM",
+      "6. Save updated state"
+    ],
+    "important_notes": [
+      "Entity must include ALL fields, not just changed ones",
+      "UUID comes from state, other values from plan",
+      "Must read back after update to get computed fields"
+    ]
+  }
+}

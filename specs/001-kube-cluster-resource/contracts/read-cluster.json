@@ -1,0 +1,70 @@
+{
+  "description": "BCM API contract for reading a Kubernetes cluster",
+  "operation": "Read",
+  "api_method": "cmkube.getKubeCluster",
+
+  "request": {
+    "service": "cmkube",
+    "call": "getKubeCluster",
+    "args": [
+      "550e8400-e29b-41d4-a716-446655440000"
+    ]
+  },
+
+  "request_notes": {
+    "args[0]": "Cluster UUID for direct lookup (args pattern)",
+    "pattern": "Uses efficient UUID lookup, NOT list+filter"
+  },
+
+  "response_success": {
+    "baseType": "KubeCluster",
+    "childType": "",
+    "uuid": "550e8400-e29b-41d4-a716-446655440000",
+    "name": "production-cluster",
+    "masterNodes": [
+      "650e8400-e29b-41d4-a716-446655440001"
+    ],
+    "workerNodes": [
+      "750e8400-e29b-41d4-a716-446655440002",
+      "750e8400-e29b-41d4-a716-446655440003"
+    ],
+    "managementNetwork": "850e8400-e29b-41d4-a716-446655440004",
+    "version": "1.28.0",
+    "creationTime": 1700000000000,
+    "revisionID": 42,
+    "modified": false,
+    "to_be_removed": false,
+    "revision": "42"
+  },
+
+  "response_notes": {
+    "fields": "Returns complete KubeCluster entity with all fields",
+    "computed_fields": "creationTime, revisionID are BCM-assigned",
+    "timing": "Typically <2 seconds"
+  },
+
+  "response_error": {
+    "success": false,
+    "error": "Cluster UUID '550e8400-e29b-41d4-a716-446655440000' not found"
+  },
+
+  "terraform_usage": {
+    "phase": "resource.Read() and readCluster() helper",
+    "steps": [
+      "1. Get cluster UUID from state",
+      "2. Call client.CallJSONRPC(ctx, 'cmkube', 'getKubeCluster', uuid)",
+      "3. Parse JSON response into map[string]interface{}",
+      "4. Map BCM fields to Terraform model using helpers",
+      "5. Handle field name conversions (camelCase → snake_case)",
+      "6. Set computed fields (creationTime → creation_time)",
+      "7. Update state with refreshed values"
+    ],
+    "field_mappings": {
+      "masterNodes": "master_nodes (List of strings)",
+      "workerNodes": "worker_nodes (List of strings)",
+      "managementNetwork": "management_network (String)",
+      "creationTime": "creation_time (Int64)",
+      "revisionID": "revision_id (Int64)"
+    }
+  }
+}

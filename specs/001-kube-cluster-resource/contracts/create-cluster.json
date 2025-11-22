@@ -1,0 +1,61 @@
+{
+  "description": "BCM API contract for creating a Kubernetes cluster",
+  "operation": "Create",
+  "api_method": "cmkube.addKubeCluster",
+
+  "request": {
+    "service": "cmkube",
+    "call": "addKubeCluster",
+    "args": [
+      {
+        "baseType": "KubeCluster",
+        "childType": "",
+        "modified": true,
+        "to_be_removed": false,
+        "revision": "",
+        "name": "production-cluster",
+        "masterNodes": [
+          "650e8400-e29b-41d4-a716-446655440001"
+        ],
+        "workerNodes": [
+          "750e8400-e29b-41d4-a716-446655440002",
+          "750e8400-e29b-41d4-a716-446655440003"
+        ],
+        "managementNetwork": "850e8400-e29b-41d4-a716-446655440004",
+        "version": "1.28.0"
+      },
+      false
+    ]
+  },
+
+  "request_notes": {
+    "args[0]": "Complete KubeCluster entity (no uuid for create)",
+    "args[1]": "Force parameter (boolean) - bypasses validation warnings"
+  },
+
+  "response_success": {
+    "uuid": "550e8400-e29b-41d4-a716-446655440000"
+  },
+
+  "response_notes": {
+    "uuid": "BCM-assigned cluster UUID returned immediately",
+    "timing": "Returns in 2-5 seconds, actual provisioning is asynchronous"
+  },
+
+  "response_error": {
+    "success": false,
+    "error": "Node UUID '750e8400-e29b-41d4-a716-446655440002' not found"
+  },
+
+  "terraform_usage": {
+    "phase": "resource.Create()",
+    "steps": [
+      "1. Build cluster entity from plan using buildClusterEntity()",
+      "2. Call client.CallJSONRPC(ctx, 'cmkube', 'addKubeCluster', entity, force)",
+      "3. Parse UUID from response",
+      "4. Set UUID and ID in state",
+      "5. Call readCluster() to populate computed fields",
+      "6. Save final state"
+    ]
+  }
+}

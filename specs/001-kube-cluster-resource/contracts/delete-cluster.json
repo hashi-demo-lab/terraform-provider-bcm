@@ -1,0 +1,77 @@
+{
+  "description": "BCM API contract for deleting a Kubernetes cluster",
+  "operation": "Delete",
+  "api_method": "cmkube.removeKubeCluster",
+
+  "request": {
+    "service": "cmkube",
+    "call": "removeKubeCluster",
+    "args": [
+      "550e8400-e29b-41d4-a716-446655440000",
+      false
+    ]
+  },
+
+  "request_notes": {
+    "args[0]": "Cluster UUID to delete",
+    "args[1]": "Force parameter (boolean) - bypasses deletion warnings"
+  },
+
+  "response_success": {
+    "success": true
+  },
+
+  "response_notes": {
+    "return_value": "Success boolean immediately",
+    "timing": "Returns in <2 seconds, actual deletion is asynchronous",
+    "async_deletion": "Cluster teardown happens in background",
+    "verification": "Use getKubeCluster to verify deletion (should return 404)"
+  },
+
+  "response_error": {
+    "success": false,
+    "error": "Cluster UUID '550e8400-e29b-41d4-a716-446655440000' not found"
+  },
+
+  "response_warning": {
+    "success": false,
+    "warning": "Cluster has active workloads - use force=true to override"
+  },
+
+  "terraform_usage": {
+    "phase": "resource.Delete()",
+    "steps": [
+      "1. Get cluster UUID from state",
+      "2. Get force parameter from state",
+      "3. Call client.CallJSONRPC(ctx, 'cmkube', 'removeKubeCluster', uuid, force)",
+      "4. Check response for success",
+      "5. State is automatically cleared by framework on success"
+    ],
+    "check_destroy": {
+      "purpose": "Verify cluster was actually deleted (test validation)",
+      "implementation": "Use verifyResourceDeleted() helper with exponential backoff",
+      "retries": "4 attempts (2s, 4s, 8s, 16s intervals)",
+      "total_timeout": "~30 seconds for verification"
+    }
+  },
+
+  "edge_cases": {
+    "already_deleted": {
+      "request": {
+        "service": "cmkube",
+        "call": "removeKubeCluster",
+        "args": ["non-existent-uuid", false]
+      },
+      "response": {
+        "success": false,
+        "error": "Cluster UUID 'non-existent-uuid' not found"
+      },
+      "handling": "Treat as success in Delete method (idempotent delete)"
+    },
+    "force_deletion": {
+      "scenario": "Cluster has active resources/workloads",
+      "solution": "Set force=true to bypass warnings",
+      "caution": "May orphan resources - use carefully"
+    }
+  }
+}
