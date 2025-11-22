@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
@@ -672,9 +673,65 @@ func (r *CMDeviceCategoryResource) Create(ctx context.Context, req resource.Crea
 	plan.UUID = types.StringValue(createdUUID)
 
 	// Read back created category to populate all fields
-	r.readCategory(ctx, &plan, &resp.Diagnostics)
-	if resp.Diagnostics.HasError() {
-		return
+	// BCM has eventual consistency - retry if computed fields are not populated
+	// Pattern from terraform-provider-design skill: api_client_patterns.md lines 294-326
+	maxRetries := 5
+	var lastReadErr error
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		// Clear diagnostics from previous attempt
+		resp.Diagnostics = diag.Diagnostics{}
+
+		r.readCategory(ctx, &plan, &resp.Diagnostics)
+		if resp.Diagnostics.HasError() {
+			lastReadErr = fmt.Errorf("read attempt %d failed", attempt+1)
+			if attempt < maxRetries-1 {
+				// Wait with exponential backoff before retry
+				sleepDuration := time.Duration(1<<attempt) * time.Second
+				tflog.Warn(ctx, "Category read failed, retrying due to eventual consistency", map[string]interface{}{
+					"attempt":       attempt + 1,
+					"sleep_seconds": sleepDuration.Seconds(),
+				})
+				time.Sleep(sleepDuration)
+				continue
+			}
+			// Last attempt failed - return the error
+			return
+		}
+
+		// Check if computed metadata fields are properly populated
+		// BCM should return baseType="Category" for all categories
+		fieldsPopulated := !plan.BaseType.IsNull() &&
+			!plan.BaseType.IsUnknown() &&
+			plan.BaseType.ValueString() == "Category"
+
+		if fieldsPopulated {
+			// Fields populated successfully
+			tflog.Debug(ctx, "Computed fields populated successfully", map[string]interface{}{
+				"attempt":   attempt + 1,
+				"base_type": plan.BaseType.ValueString(),
+			})
+			break
+		}
+
+		if attempt < maxRetries-1 {
+			// Wait with exponential backoff before retry: 1s, 2s, 4s, 8s, 16s
+			sleepDuration := time.Duration(1<<attempt) * time.Second
+			tflog.Debug(ctx, "Retrying category read due to eventual consistency (computed fields not populated)", map[string]interface{}{
+				"attempt":           attempt + 1,
+				"sleep_seconds":     sleepDuration.Seconds(),
+				"base_type_is_null": plan.BaseType.IsNull(),
+				"base_type_unknown": plan.BaseType.IsUnknown(),
+			})
+			time.Sleep(sleepDuration)
+		} else {
+			// Max retries reached - log warning but continue
+			tflog.Warn(ctx, "Computed fields not fully populated after retries", map[string]interface{}{
+				"attempts":          maxRetries,
+				"base_type_is_null": plan.BaseType.IsNull(),
+				"base_type_unknown": plan.BaseType.IsUnknown(),
+				"last_error":        lastReadErr,
+			})
+		}
 	}
 
 	tflog.Info(ctx, "Created category resource", map[string]interface{}{
@@ -693,26 +750,87 @@ func (r *CMDeviceCategoryResource) Read(ctx context.Context, req resource.ReadRe
 		return
 	}
 
-	// Fetch current state from BCM API
-	r.readCategory(ctx, &state, &resp.Diagnostics)
-	if resp.Diagnostics.HasError() {
-		// Check if resource was externally deleted
-		for _, diagnostic := range resp.Diagnostics.Errors() {
-			summary := diagnostic.Summary()
-			detail := diagnostic.Detail()
-			// Check for various "not found" error patterns
-			if summary == "Category Not Found" ||
-				(summary == "Category Read Failed" && (containsAny(detail, []string{"not found", "unexpected JSON type in response: null"}))) {
-				// Resource no longer exists - remove from state
-				tflog.Info(ctx, "Category not found during refresh - removing from state", map[string]interface{}{
-					"name": state.Name.ValueString(),
-				})
-				resp.State.RemoveResource(ctx)
-				resp.Diagnostics = nil // Clear the diagnostics
+	// Fetch current state from BCM API with retry for eventual consistency
+	// BCM may not return all computed fields immediately after create/update
+	maxRetries := 5
+	var lastReadErr error
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		// Clear diagnostics from previous attempt
+		resp.Diagnostics = diag.Diagnostics{}
+
+		r.readCategory(ctx, &state, &resp.Diagnostics)
+		if resp.Diagnostics.HasError() {
+			// Check if resource was externally deleted
+			resourceDeleted := false
+			for _, diagnostic := range resp.Diagnostics.Errors() {
+				summary := diagnostic.Summary()
+				detail := diagnostic.Detail()
+				// Check for various "not found" error patterns
+				if summary == "Category Not Found" ||
+					(summary == "Category Read Failed" && (containsAny(detail, []string{"not found", "unexpected JSON type in response: null"}))) {
+					// Resource no longer exists - remove from state
+					tflog.Info(ctx, "Category not found during refresh - removing from state", map[string]interface{}{
+						"name": state.Name.ValueString(),
+					})
+					resp.State.RemoveResource(ctx)
+					resp.Diagnostics = nil // Clear the diagnostics
+					resourceDeleted = true
+					break
+				}
+			}
+			if resourceDeleted {
 				return
 			}
+
+			// Other read error - retry with backoff
+			lastReadErr = fmt.Errorf("read attempt %d failed", attempt+1)
+			if attempt < maxRetries-1 {
+				sleepDuration := time.Duration(1<<attempt) * time.Second
+				tflog.Warn(ctx, "Category read failed, retrying due to eventual consistency", map[string]interface{}{
+					"attempt":       attempt + 1,
+					"sleep_seconds": sleepDuration.Seconds(),
+				})
+				time.Sleep(sleepDuration)
+				continue
+			}
+			// Last attempt failed - return the error
+			return
 		}
-		return
+
+		// Check if computed metadata fields are properly populated
+		// BCM should return baseType="Category" for all categories
+		fieldsPopulated := !state.BaseType.IsNull() &&
+			!state.BaseType.IsUnknown() &&
+			state.BaseType.ValueString() == "Category"
+
+		if fieldsPopulated {
+			// Fields populated successfully
+			tflog.Debug(ctx, "Computed fields populated successfully in Read", map[string]interface{}{
+				"attempt":   attempt + 1,
+				"base_type": state.BaseType.ValueString(),
+			})
+			break
+		}
+
+		if attempt < maxRetries-1 {
+			// Wait with exponential backoff before retry: 1s, 2s, 4s, 8s, 16s
+			sleepDuration := time.Duration(1<<attempt) * time.Second
+			tflog.Debug(ctx, "Retrying category read due to eventual consistency (computed fields not populated)", map[string]interface{}{
+				"attempt":           attempt + 1,
+				"sleep_seconds":     sleepDuration.Seconds(),
+				"base_type_is_null": state.BaseType.IsNull(),
+				"base_type_unknown": state.BaseType.IsUnknown(),
+			})
+			time.Sleep(sleepDuration)
+		} else {
+			// Max retries reached - log warning but continue
+			tflog.Warn(ctx, "Computed fields not fully populated after retries in Read", map[string]interface{}{
+				"attempts":          maxRetries,
+				"base_type_is_null": state.BaseType.IsNull(),
+				"base_type_unknown": state.BaseType.IsUnknown(),
+				"last_error":        lastReadErr,
+			})
+		}
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
@@ -760,12 +878,61 @@ func (r *CMDeviceCategoryResource) Update(ctx context.Context, req resource.Upda
 		return
 	}
 
-	// Read back updated category to verify changes
+	// Read back updated category with retry for eventual consistency
 	// Preserve boot_loader: BCM may reset it to default after update
 	planBootLoader := plan.BootLoader
-	r.readCategory(ctx, &plan, &resp.Diagnostics)
-	if resp.Diagnostics.HasError() {
-		return
+	maxRetries := 5
+	var lastReadErr error
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		// Clear diagnostics from previous attempt
+		resp.Diagnostics = diag.Diagnostics{}
+
+		r.readCategory(ctx, &plan, &resp.Diagnostics)
+		if resp.Diagnostics.HasError() {
+			lastReadErr = fmt.Errorf("read attempt %d failed", attempt+1)
+			if attempt < maxRetries-1 {
+				sleepDuration := time.Duration(1<<attempt) * time.Second
+				tflog.Warn(ctx, "Category read failed after update, retrying due to eventual consistency", map[string]interface{}{
+					"attempt":       attempt + 1,
+					"sleep_seconds": sleepDuration.Seconds(),
+				})
+				time.Sleep(sleepDuration)
+				continue
+			}
+			// Last attempt failed - return the error
+			return
+		}
+
+		// Check if computed metadata fields are properly populated
+		fieldsPopulated := !plan.BaseType.IsNull() &&
+			!plan.BaseType.IsUnknown() &&
+			plan.BaseType.ValueString() == "Category"
+
+		if fieldsPopulated {
+			tflog.Debug(ctx, "Computed fields populated successfully after Update", map[string]interface{}{
+				"attempt":   attempt + 1,
+				"base_type": plan.BaseType.ValueString(),
+			})
+			break
+		}
+
+		if attempt < maxRetries-1 {
+			sleepDuration := time.Duration(1<<attempt) * time.Second
+			tflog.Debug(ctx, "Retrying category read after update due to eventual consistency", map[string]interface{}{
+				"attempt":           attempt + 1,
+				"sleep_seconds":     sleepDuration.Seconds(),
+				"base_type_is_null": plan.BaseType.IsNull(),
+				"base_type_unknown": plan.BaseType.IsUnknown(),
+			})
+			time.Sleep(sleepDuration)
+		} else {
+			tflog.Warn(ctx, "Computed fields not fully populated after retries in Update", map[string]interface{}{
+				"attempts":          maxRetries,
+				"base_type_is_null": plan.BaseType.IsNull(),
+				"base_type_unknown": plan.BaseType.IsUnknown(),
+				"last_error":        lastReadErr,
+			})
+		}
 	}
 
 	// CRITICAL FIX: Restore boot_loader from plan if explicitly set, never use Unknown values
