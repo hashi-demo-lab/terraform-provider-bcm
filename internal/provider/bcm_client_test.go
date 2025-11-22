@@ -12,7 +12,7 @@ import (
 	"testing"
 )
 
-// TestNewBCMClient_Success tests successful client creation and login
+// TestNewBCMClient_Success tests successful client creation and login.
 func TestNewBCMClient_Success(t *testing.T) {
 	// Create mock server that returns successful login response
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -55,7 +55,9 @@ func TestNewBCMClient_Success(t *testing.T) {
 
 		// Return successful login response
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("true"))
+		if _, err := w.Write([]byte("true")); err != nil {
+			t.Logf("Failed to write login response: %v", err)
+		}
 	}))
 	defer server.Close()
 
@@ -81,11 +83,13 @@ func TestNewBCMClient_Success(t *testing.T) {
 	}
 }
 
-// TestNewBCMClient_LoginFailure_InvalidCredentials tests login failure with 401
+// TestNewBCMClient_LoginFailure_InvalidCredentials tests login failure with 401.
 func TestNewBCMClient_LoginFailure_InvalidCredentials(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
-		w.Write([]byte(`{"error": "Invalid credentials"}`))
+		if _, err := w.Write([]byte(`{"error": "Invalid credentials"}`)); err != nil {
+			t.Logf("Failed to write error response: %v", err)
+		}
 	}))
 	defer server.Close()
 
@@ -104,12 +108,14 @@ func TestNewBCMClient_LoginFailure_InvalidCredentials(t *testing.T) {
 	}
 }
 
-// TestNewBCMClient_LoginFailure_MissingCookie tests login failure when cookie is missing
+// TestNewBCMClient_LoginFailure_MissingCookie tests login failure when cookie is missing.
 func TestNewBCMClient_LoginFailure_MissingCookie(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Return success but no cookie
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("true"))
+		if _, err := w.Write([]byte("true")); err != nil {
+			t.Logf("Failed to write response: %v", err)
+		}
 		// Intentionally not setting cm-login-token cookie
 	}))
 	defer server.Close()
@@ -129,7 +135,7 @@ func TestNewBCMClient_LoginFailure_MissingCookie(t *testing.T) {
 	}
 }
 
-// TestNewBCMClient_LoginFailure_FalseResponse tests login failure with false response
+// TestNewBCMClient_LoginFailure_FalseResponse tests login failure with false response.
 func TestNewBCMClient_LoginFailure_FalseResponse(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.SetCookie(w, &http.Cookie{
@@ -137,7 +143,9 @@ func TestNewBCMClient_LoginFailure_FalseResponse(t *testing.T) {
 			Value: "test-token",
 		})
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("false")) // Login failed
+		if _, err := w.Write([]byte("false")); err != nil { // Login failed
+			t.Logf("Failed to write login response: %v", err)
+		}
 	}))
 	defer server.Close()
 
@@ -156,7 +164,7 @@ func TestNewBCMClient_LoginFailure_FalseResponse(t *testing.T) {
 	}
 }
 
-// TestCallJSONRPC_Success tests successful JSON-RPC call without args
+// TestCallJSONRPC_Success tests successful JSON-RPC call without args.
 func TestCallJSONRPC_Success(t *testing.T) {
 	// Track login and API calls
 	callCount := 0
@@ -169,7 +177,9 @@ func TestCallJSONRPC_Success(t *testing.T) {
 				Value: "test-token",
 			})
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("true"))
+			if _, err := w.Write([]byte("true")); err != nil {
+				t.Logf("Failed to write login response: %v", err)
+			}
 		} else {
 			// Second call: actual API call
 			var req JSONRPCRequest
@@ -190,7 +200,9 @@ func TestCallJSONRPC_Success(t *testing.T) {
 
 			// Return successful response
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`[{"hostname": "node1"}, {"hostname": "node2"}]`))
+			if _, err := w.Write([]byte(`[{"hostname": "node1"}, {"hostname": "node2"}]`)); err != nil {
+				t.Logf("Failed to write response: %v", err)
+			}
 		}
 	}))
 	defer server.Close()
@@ -217,7 +229,7 @@ func TestCallJSONRPC_Success(t *testing.T) {
 	}
 }
 
-// TestCallJSONRPC_WithArgs tests JSON-RPC call with arguments
+// TestCallJSONRPC_WithArgs tests JSON-RPC call with arguments.
 func TestCallJSONRPC_WithArgs(t *testing.T) {
 	callCount := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -226,11 +238,15 @@ func TestCallJSONRPC_WithArgs(t *testing.T) {
 			// Login
 			http.SetCookie(w, &http.Cookie{Name: "cm-login-token", Value: "token"})
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("true"))
+			if _, err := w.Write([]byte("true")); err != nil {
+				t.Logf("Failed to write login response: %v", err)
+			}
 		} else {
 			// API call with args
 			var req JSONRPCRequest
-			json.NewDecoder(r.Body).Decode(&req)
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				t.Logf("Failed to decode request: %v", err)
+			}
 
 			// Verify args parameter is present
 			if len(req.Args) != 1 {
@@ -241,7 +257,9 @@ func TestCallJSONRPC_WithArgs(t *testing.T) {
 			}
 
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`{"name": "test-image"}`))
+			if _, err := w.Write([]byte(`{"name": "test-image"}`)); err != nil {
+				t.Logf("Failed to write response: %v", err)
+			}
 		}
 	}))
 	defer server.Close()
@@ -261,7 +279,7 @@ func TestCallJSONRPC_WithArgs(t *testing.T) {
 	}
 }
 
-// TestCallJSONRPC_WithMultipleArgs tests JSON-RPC call with multiple arguments
+// TestCallJSONRPC_WithMultipleArgs tests JSON-RPC call with multiple arguments.
 func TestCallJSONRPC_WithMultipleArgs(t *testing.T) {
 	callCount := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -270,11 +288,15 @@ func TestCallJSONRPC_WithMultipleArgs(t *testing.T) {
 			// Login
 			http.SetCookie(w, &http.Cookie{Name: "cm-login-token", Value: "token"})
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("true"))
+			if _, err := w.Write([]byte("true")); err != nil {
+				t.Logf("Failed to write login response: %v", err)
+			}
 		} else {
 			// API call with multiple args
 			var req JSONRPCRequest
-			json.NewDecoder(r.Body).Decode(&req)
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				t.Logf("Failed to decode request: %v", err)
+			}
 
 			// Verify multiple args
 			if len(req.Args) != 2 {
@@ -282,7 +304,9 @@ func TestCallJSONRPC_WithMultipleArgs(t *testing.T) {
 			}
 
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`{"success": true}`))
+			if _, err := w.Write([]byte(`{"success": true}`)); err != nil {
+				t.Logf("Failed to write response: %v", err)
+			}
 		}
 	}))
 	defer server.Close()
@@ -298,7 +322,7 @@ func TestCallJSONRPC_WithMultipleArgs(t *testing.T) {
 	}
 }
 
-// TestParseErrorResponse_Success tests successful response parsing
+// TestParseErrorResponse_Success tests successful response parsing.
 func TestParseErrorResponse_Success(t *testing.T) {
 	testCases := []struct {
 		name       string
@@ -345,7 +369,7 @@ func TestParseErrorResponse_Success(t *testing.T) {
 	}
 }
 
-// TestParseErrorResponse_Errors tests error response parsing
+// TestParseErrorResponse_Errors tests error response parsing.
 func TestParseErrorResponse_Errors(t *testing.T) {
 	testCases := []struct {
 		name       string
@@ -404,7 +428,7 @@ func TestParseErrorResponse_Errors(t *testing.T) {
 	}
 }
 
-// TestFormatValidationErrors tests validation error formatting
+// TestFormatValidationErrors tests validation error formatting.
 func TestFormatValidationErrors(t *testing.T) {
 	testCases := []struct {
 		name       string
@@ -472,7 +496,7 @@ func TestFormatValidationErrors(t *testing.T) {
 	}
 }
 
-// TestLimitString tests string truncation
+// TestLimitString tests string truncation.
 func TestLimitString(t *testing.T) {
 	testCases := []struct {
 		name      string
@@ -520,7 +544,7 @@ func TestLimitString(t *testing.T) {
 	}
 }
 
-// TestCallJSONRPC_HTTPError tests error handling for failed HTTP requests
+// TestCallJSONRPC_HTTPError tests error handling for failed HTTP requests.
 func TestCallJSONRPC_HTTPError(t *testing.T) {
 	callCount := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -529,11 +553,15 @@ func TestCallJSONRPC_HTTPError(t *testing.T) {
 			// Login
 			http.SetCookie(w, &http.Cookie{Name: "cm-login-token", Value: "token"})
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("true"))
+			if _, err := w.Write([]byte("true")); err != nil {
+				t.Logf("Failed to write login response: %v", err)
+			}
 		} else {
 			// Return HTTP error
 			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte(`{"error": "Internal server error"}`))
+			if _, err := w.Write([]byte(`{"error": "Internal server error"}`)); err != nil {
+				t.Logf("Failed to write error response: %v", err)
+			}
 		}
 	}))
 	defer server.Close()
@@ -551,7 +579,7 @@ func TestCallJSONRPC_HTTPError(t *testing.T) {
 	}
 }
 
-// TestCallJSONRPC_ValidationError tests handling of BCM validation errors
+// TestCallJSONRPC_ValidationError tests handling of BCM validation errors.
 func TestCallJSONRPC_ValidationError(t *testing.T) {
 	callCount := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -560,17 +588,21 @@ func TestCallJSONRPC_ValidationError(t *testing.T) {
 			// Login
 			http.SetCookie(w, &http.Cookie{Name: "cm-login-token", Value: "token"})
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("true"))
+			if _, err := w.Write([]byte("true")); err != nil {
+				t.Logf("Failed to write login response: %v", err)
+			}
 		} else {
 			// Return validation error
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`{
+			if _, err := w.Write([]byte(`{
 				"success": false,
 				"validation": [
 					{"field": "path", "message": "The software image path does not exist"},
 					{"field": "kernelVersion", "message": "Specified kernel does not exist"}
 				]
-			}`))
+			}`)); err != nil {
+				t.Logf("Failed to write validation error response: %v", err)
+			}
 		}
 	}))
 	defer server.Close()

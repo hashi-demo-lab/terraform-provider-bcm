@@ -14,7 +14,7 @@ import (
 	"os"
 )
 
-// JSONRPCRequestWithArgs represents BCM JSON-RPC request with args parameter
+// JSONRPCRequestWithArgs represents BCM JSON-RPC request with args parameter.
 type JSONRPCRequestWithArgs struct {
 	Service string        `json:"service"`
 	Call    string        `json:"call"`

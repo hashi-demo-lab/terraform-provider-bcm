@@ -315,7 +315,7 @@ func (d *CMNetNetworksDataSource) Read(ctx context.Context, req datasource.ReadR
 			fmt.Sprintf("The BCM API returned malformed JSON that could not be parsed.\n\n"+
 				"This may indicate an API version mismatch or internal BCM error.\n\n"+
 				"Error details: %s\n"+
-				"Response preview: %s", err.Error(), string(body[:min(len(body), 200)])),
+				"Response preview: %s", err.Error(), string(body[:minInt(len(body), 200)])),
 		)
 		return
 	}
@@ -360,8 +360,8 @@ func (d *CMNetNetworksDataSource) Read(ctx context.Context, req datasource.ReadR
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
-// min returns the minimum of two integers (helper for error message truncation).
-func min(a, b int) int {
+// minInt returns the minimum of two integers (helper for error message truncation).
+func minInt(a, b int) int {
 	if a < b {
 		return a
 	}

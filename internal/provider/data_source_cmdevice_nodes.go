@@ -38,14 +38,14 @@ type CMDeviceNodesDataSourceModel struct {
 	Nodes  []NodeModel  `tfsdk:"nodes"`
 }
 
-// FilterModel represents client-side filtering configuration
+// FilterModel represents client-side filtering configuration.
 type FilterModel struct {
 	ChildType       types.String `tfsdk:"child_type"`
 	CategoryUUID    types.String `tfsdk:"category_uuid"`
 	HostnamePattern types.String `tfsdk:"hostname_pattern"`
 }
 
-// NodeModel represents a BCM cluster node
+// NodeModel represents a BCM cluster node.
 type NodeModel struct {
 	// Identity
 	ID           types.String `tfsdk:"id"`
@@ -76,7 +76,7 @@ type NodeModel struct {
 	ToBeRemoved types.Bool `tfsdk:"to_be_removed"`
 }
 
-// NetworkInterfaceModel represents a network interface
+// NetworkInterfaceModel represents a network interface.
 type NetworkInterfaceModel struct {
 	Name      types.String `tfsdk:"name"`
 	MAC       types.String `tfsdk:"mac"`
@@ -91,7 +91,7 @@ type NetworkInterfaceModel struct {
 	StartIf   types.String `tfsdk:"start_if"`
 }
 
-// RoleModel represents a service role
+// RoleModel represents a service role.
 type RoleModel struct {
 	UUID        types.String `tfsdk:"uuid"`
 	Name        types.String `tfsdk:"name"`
@@ -356,7 +356,7 @@ func (d *CMDeviceNodesDataSource) Read(ctx context.Context, req datasource.ReadR
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
-// mapAPIToNode converts API response data to NodeModel
+// mapAPIToNode converts API response data to NodeModel.
 func mapAPIToNode(apiData map[string]interface{}) NodeModel {
 	model := NodeModel{
 		// Identity
@@ -391,7 +391,7 @@ func mapAPIToNode(apiData map[string]interface{}) NodeModel {
 	return model
 }
 
-// mapInterfaces converts API interfaces array to model slice
+// mapInterfaces converts API interfaces array to model slice.
 func mapInterfaces(data interface{}) []NetworkInterfaceModel {
 	interfaceArray, ok := data.([]interface{})
 	if !ok || interfaceArray == nil {
@@ -424,7 +424,7 @@ func mapInterfaces(data interface{}) []NetworkInterfaceModel {
 	return models
 }
 
-// mapRoles converts API roles array to model slice
+// mapRoles converts API roles array to model slice.
 func mapRoles(data interface{}) []RoleModel {
 	roleArray, ok := data.([]interface{})
 	if !ok || roleArray == nil {
@@ -451,7 +451,7 @@ func mapRoles(data interface{}) []RoleModel {
 	return models
 }
 
-// matchesFilter checks if a node matches the filter criteria
+// matchesFilter checks if a node matches the filter criteria.
 func matchesFilter(node NodeModel, filter *FilterModel) bool {
 	if filter == nil {
 		return true

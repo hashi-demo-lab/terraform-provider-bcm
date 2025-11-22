@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
@@ -21,18 +22,18 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
-// Ensure provider defined types fully satisfy framework interfaces
+// Ensure provider defined types fully satisfy framework interfaces.
 var (
 	_ resource.Resource                = &CMDeviceCategoryResource{}
 	_ resource.ResourceWithImportState = &CMDeviceCategoryResource{}
 )
 
-// CMDeviceCategoryResource defines the resource implementation
+// CMDeviceCategoryResource defines the resource implementation.
 type CMDeviceCategoryResource struct {
 	client *BCMClient
 }
 
-// CMDeviceCategoryResourceModel describes the resource data model
+// CMDeviceCategoryResourceModel describes the resource data model.
 type CMDeviceCategoryResourceModel struct {
 	// Identity fields
 	ID   types.String `tfsdk:"id"`   // Computed, same as UUID
@@ -130,14 +131,14 @@ type CMDeviceCategoryResourceModel struct {
 	ChildType   types.String `tfsdk:"child_type"`    // Computed, empty for base type
 }
 
-// SoftwareImageProxyModel describes a software image proxy nested object
+// SoftwareImageProxyModel describes a software image proxy nested object.
 type SoftwareImageProxyModel struct {
 	UUID                types.String `tfsdk:"uuid"`                  // Computed
 	ParentSoftwareImage types.String `tfsdk:"parent_software_image"` // Required, UUID reference
 	RevisionID          types.Int64  `tfsdk:"revision_id"`           // Computed
 }
 
-// BMCSettingsModel describes BMC configuration nested object
+// BMCSettingsModel describes BMC configuration nested object.
 type BMCSettingsModel struct {
 	UUID               types.String  `tfsdk:"uuid"`                 // Computed
 	UserName           types.String  `tfsdk:"user_name"`            // Optional
@@ -150,7 +151,7 @@ type BMCSettingsModel struct {
 	PowerResetDelay    types.Int64   `tfsdk:"power_reset_delay"`    // Optional, seconds
 }
 
-// FSMountModel describes a filesystem mount nested object
+// FSMountModel describes a filesystem mount nested object.
 type FSMountModel struct {
 	UUID         types.String `tfsdk:"uuid"`         // Computed
 	Device       types.String `tfsdk:"device"`       // Required
@@ -162,23 +163,23 @@ type FSMountModel struct {
 	RDMA         types.Bool   `tfsdk:"rdma"`         // Optional
 }
 
-// KernelModuleCategoryModel describes a kernel module nested object
+// KernelModuleCategoryModel describes a kernel module nested object.
 type KernelModuleCategoryModel struct {
 	Name       types.String `tfsdk:"name"`       // Required
 	Parameters types.String `tfsdk:"parameters"` // Optional
 }
 
-// NewCMDeviceCategoryResource creates a new resource instance
+// NewCMDeviceCategoryResource creates a new resource instance.
 func NewCMDeviceCategoryResource() resource.Resource {
 	return &CMDeviceCategoryResource{}
 }
 
-// Metadata returns the resource type name
+// Metadata returns the resource type name.
 func (r *CMDeviceCategoryResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_cmdevice_category"
 }
 
-// Schema defines the resource schema
+// Schema defines the resource schema.
 func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		MarkdownDescription: "Manages a BCM device category.\n\n" +
@@ -568,7 +569,7 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 	}
 }
 
-// Configure stores the provider client for later use
+// Configure stores the provider client for later use.
 func (r *CMDeviceCategoryResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	// Prevent panic if the provider has not been configured
 	if req.ProviderData == nil {
@@ -587,7 +588,7 @@ func (r *CMDeviceCategoryResource) Configure(ctx context.Context, req resource.C
 	r.client = client
 }
 
-// Create implements resource.Resource (REFACTOR phase - Real API integration)
+// Create implements resource.Resource (REFACTOR phase - Real API integration).
 func (r *CMDeviceCategoryResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan CMDeviceCategoryResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -653,7 +654,14 @@ func (r *CMDeviceCategoryResource) Create(ctx context.Context, req resource.Crea
 	}
 
 	// When validation succeeds, BCM returns the UUID in the entity we provided
-	createdUUID := entity["uuid"].(string)
+	createdUUID, ok := entity["uuid"].(string)
+	if !ok {
+		resp.Diagnostics.AddError(
+			"Failed to extract UUID from created category",
+			"The UUID returned from BCM API was not a string",
+		)
+		return
+	}
 
 	tflog.Debug(ctx, "Category created successfully", map[string]interface{}{
 		"name": plan.Name.ValueString(),
@@ -665,9 +673,65 @@ func (r *CMDeviceCategoryResource) Create(ctx context.Context, req resource.Crea
 	plan.UUID = types.StringValue(createdUUID)
 
 	// Read back created category to populate all fields
-	r.readCategory(ctx, &plan, &resp.Diagnostics)
-	if resp.Diagnostics.HasError() {
-		return
+	// BCM has eventual consistency - retry if computed fields are not populated
+	// Pattern from terraform-provider-design skill: api_client_patterns.md lines 294-326
+	maxRetries := 5
+	var lastReadErr error
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		// Clear diagnostics from previous attempt
+		resp.Diagnostics = diag.Diagnostics{}
+
+		r.readCategory(ctx, &plan, &resp.Diagnostics)
+		if resp.Diagnostics.HasError() {
+			lastReadErr = fmt.Errorf("read attempt %d failed", attempt+1)
+			if attempt < maxRetries-1 {
+				// Wait with exponential backoff before retry
+				sleepDuration := time.Duration(1<<attempt) * time.Second
+				tflog.Warn(ctx, "Category read failed, retrying due to eventual consistency", map[string]interface{}{
+					"attempt":       attempt + 1,
+					"sleep_seconds": sleepDuration.Seconds(),
+				})
+				time.Sleep(sleepDuration)
+				continue
+			}
+			// Last attempt failed - return the error
+			return
+		}
+
+		// Check if computed metadata fields are properly populated
+		// BCM should return baseType="Category" for all categories
+		fieldsPopulated := !plan.BaseType.IsNull() &&
+			!plan.BaseType.IsUnknown() &&
+			plan.BaseType.ValueString() == "Category"
+
+		if fieldsPopulated {
+			// Fields populated successfully
+			tflog.Debug(ctx, "Computed fields populated successfully", map[string]interface{}{
+				"attempt":   attempt + 1,
+				"base_type": plan.BaseType.ValueString(),
+			})
+			break
+		}
+
+		if attempt < maxRetries-1 {
+			// Wait with exponential backoff before retry: 1s, 2s, 4s, 8s, 16s
+			sleepDuration := time.Duration(1<<attempt) * time.Second
+			tflog.Debug(ctx, "Retrying category read due to eventual consistency (computed fields not populated)", map[string]interface{}{
+				"attempt":           attempt + 1,
+				"sleep_seconds":     sleepDuration.Seconds(),
+				"base_type_is_null": plan.BaseType.IsNull(),
+				"base_type_unknown": plan.BaseType.IsUnknown(),
+			})
+			time.Sleep(sleepDuration)
+		} else {
+			// Max retries reached - log warning but continue
+			tflog.Warn(ctx, "Computed fields not fully populated after retries", map[string]interface{}{
+				"attempts":          maxRetries,
+				"base_type_is_null": plan.BaseType.IsNull(),
+				"base_type_unknown": plan.BaseType.IsUnknown(),
+				"last_error":        lastReadErr,
+			})
+		}
 	}
 
 	tflog.Info(ctx, "Created category resource", map[string]interface{}{
@@ -678,7 +742,7 @@ func (r *CMDeviceCategoryResource) Create(ctx context.Context, req resource.Crea
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
-// Read implements resource.Resource (REFACTOR phase - Real API integration)
+// Read implements resource.Resource (REFACTOR phase - Real API integration).
 func (r *CMDeviceCategoryResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var state CMDeviceCategoryResourceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -686,32 +750,93 @@ func (r *CMDeviceCategoryResource) Read(ctx context.Context, req resource.ReadRe
 		return
 	}
 
-	// Fetch current state from BCM API
-	r.readCategory(ctx, &state, &resp.Diagnostics)
-	if resp.Diagnostics.HasError() {
-		// Check if resource was externally deleted
-		for _, diagnostic := range resp.Diagnostics.Errors() {
-			summary := diagnostic.Summary()
-			detail := diagnostic.Detail()
-			// Check for various "not found" error patterns
-			if summary == "Category Not Found" ||
-				(summary == "Category Read Failed" && (containsAny(detail, []string{"not found", "unexpected JSON type in response: null"}))) {
-				// Resource no longer exists - remove from state
-				tflog.Info(ctx, "Category not found during refresh - removing from state", map[string]interface{}{
-					"name": state.Name.ValueString(),
-				})
-				resp.State.RemoveResource(ctx)
-				resp.Diagnostics = nil // Clear the diagnostics
+	// Fetch current state from BCM API with retry for eventual consistency
+	// BCM may not return all computed fields immediately after create/update
+	maxRetries := 5
+	var lastReadErr error
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		// Clear diagnostics from previous attempt
+		resp.Diagnostics = diag.Diagnostics{}
+
+		r.readCategory(ctx, &state, &resp.Diagnostics)
+		if resp.Diagnostics.HasError() {
+			// Check if resource was externally deleted
+			resourceDeleted := false
+			for _, diagnostic := range resp.Diagnostics.Errors() {
+				summary := diagnostic.Summary()
+				detail := diagnostic.Detail()
+				// Check for various "not found" error patterns
+				if summary == "Category Not Found" ||
+					(summary == "Category Read Failed" && (containsAny(detail, []string{"not found", "unexpected JSON type in response: null"}))) {
+					// Resource no longer exists - remove from state
+					tflog.Info(ctx, "Category not found during refresh - removing from state", map[string]interface{}{
+						"name": state.Name.ValueString(),
+					})
+					resp.State.RemoveResource(ctx)
+					resp.Diagnostics = nil // Clear the diagnostics
+					resourceDeleted = true
+					break
+				}
+			}
+			if resourceDeleted {
 				return
 			}
+
+			// Other read error - retry with backoff
+			lastReadErr = fmt.Errorf("read attempt %d failed", attempt+1)
+			if attempt < maxRetries-1 {
+				sleepDuration := time.Duration(1<<attempt) * time.Second
+				tflog.Warn(ctx, "Category read failed, retrying due to eventual consistency", map[string]interface{}{
+					"attempt":       attempt + 1,
+					"sleep_seconds": sleepDuration.Seconds(),
+				})
+				time.Sleep(sleepDuration)
+				continue
+			}
+			// Last attempt failed - return the error
+			return
 		}
-		return
+
+		// Check if computed metadata fields are properly populated
+		// BCM should return baseType="Category" for all categories
+		fieldsPopulated := !state.BaseType.IsNull() &&
+			!state.BaseType.IsUnknown() &&
+			state.BaseType.ValueString() == "Category"
+
+		if fieldsPopulated {
+			// Fields populated successfully
+			tflog.Debug(ctx, "Computed fields populated successfully in Read", map[string]interface{}{
+				"attempt":   attempt + 1,
+				"base_type": state.BaseType.ValueString(),
+			})
+			break
+		}
+
+		if attempt < maxRetries-1 {
+			// Wait with exponential backoff before retry: 1s, 2s, 4s, 8s, 16s
+			sleepDuration := time.Duration(1<<attempt) * time.Second
+			tflog.Debug(ctx, "Retrying category read due to eventual consistency (computed fields not populated)", map[string]interface{}{
+				"attempt":           attempt + 1,
+				"sleep_seconds":     sleepDuration.Seconds(),
+				"base_type_is_null": state.BaseType.IsNull(),
+				"base_type_unknown": state.BaseType.IsUnknown(),
+			})
+			time.Sleep(sleepDuration)
+		} else {
+			// Max retries reached - log warning but continue
+			tflog.Warn(ctx, "Computed fields not fully populated after retries in Read", map[string]interface{}{
+				"attempts":          maxRetries,
+				"base_type_is_null": state.BaseType.IsNull(),
+				"base_type_unknown": state.BaseType.IsUnknown(),
+				"last_error":        lastReadErr,
+			})
+		}
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
-// Update implements resource.Resource (REFACTOR phase - Real API integration)
+// Update implements resource.Resource (REFACTOR phase - Real API integration).
 func (r *CMDeviceCategoryResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan CMDeviceCategoryResourceModel
 	var state CMDeviceCategoryResourceModel
@@ -753,12 +878,61 @@ func (r *CMDeviceCategoryResource) Update(ctx context.Context, req resource.Upda
 		return
 	}
 
-	// Read back updated category to verify changes
+	// Read back updated category with retry for eventual consistency
 	// Preserve boot_loader: BCM may reset it to default after update
 	planBootLoader := plan.BootLoader
-	r.readCategory(ctx, &plan, &resp.Diagnostics)
-	if resp.Diagnostics.HasError() {
-		return
+	maxRetries := 5
+	var lastReadErr error
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		// Clear diagnostics from previous attempt
+		resp.Diagnostics = diag.Diagnostics{}
+
+		r.readCategory(ctx, &plan, &resp.Diagnostics)
+		if resp.Diagnostics.HasError() {
+			lastReadErr = fmt.Errorf("read attempt %d failed", attempt+1)
+			if attempt < maxRetries-1 {
+				sleepDuration := time.Duration(1<<attempt) * time.Second
+				tflog.Warn(ctx, "Category read failed after update, retrying due to eventual consistency", map[string]interface{}{
+					"attempt":       attempt + 1,
+					"sleep_seconds": sleepDuration.Seconds(),
+				})
+				time.Sleep(sleepDuration)
+				continue
+			}
+			// Last attempt failed - return the error
+			return
+		}
+
+		// Check if computed metadata fields are properly populated
+		fieldsPopulated := !plan.BaseType.IsNull() &&
+			!plan.BaseType.IsUnknown() &&
+			plan.BaseType.ValueString() == "Category"
+
+		if fieldsPopulated {
+			tflog.Debug(ctx, "Computed fields populated successfully after Update", map[string]interface{}{
+				"attempt":   attempt + 1,
+				"base_type": plan.BaseType.ValueString(),
+			})
+			break
+		}
+
+		if attempt < maxRetries-1 {
+			sleepDuration := time.Duration(1<<attempt) * time.Second
+			tflog.Debug(ctx, "Retrying category read after update due to eventual consistency", map[string]interface{}{
+				"attempt":           attempt + 1,
+				"sleep_seconds":     sleepDuration.Seconds(),
+				"base_type_is_null": plan.BaseType.IsNull(),
+				"base_type_unknown": plan.BaseType.IsUnknown(),
+			})
+			time.Sleep(sleepDuration)
+		} else {
+			tflog.Warn(ctx, "Computed fields not fully populated after retries in Update", map[string]interface{}{
+				"attempts":          maxRetries,
+				"base_type_is_null": plan.BaseType.IsNull(),
+				"base_type_unknown": plan.BaseType.IsUnknown(),
+				"last_error":        lastReadErr,
+			})
+		}
 	}
 
 	// CRITICAL FIX: Restore boot_loader from plan if explicitly set, never use Unknown values
@@ -775,7 +949,7 @@ func (r *CMDeviceCategoryResource) Update(ctx context.Context, req resource.Upda
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
-// Delete implements resource.Resource (REFACTOR phase - Real API integration)
+// Delete implements resource.Resource (REFACTOR phase - Real API integration).
 func (r *CMDeviceCategoryResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var state CMDeviceCategoryResourceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -848,7 +1022,7 @@ func (r *CMDeviceCategoryResource) Delete(ctx context.Context, req resource.Dele
 	})
 }
 
-// containsAny checks if a string contains any of the specified substrings (case-insensitive)
+// containsAny checks if a string contains any of the specified substrings (case-insensitive).
 func containsAny(s string, substrings []string) bool {
 	// Import strings package functionality inline for case-insensitive check
 	lowerStr := ""
@@ -880,7 +1054,7 @@ func containsAny(s string, substrings []string) bool {
 	return false
 }
 
-// ImportState implements resource.ResourceWithImportState
+// ImportState implements resource.ResourceWithImportState.
 func (r *CMDeviceCategoryResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	// T034-T035: Two-phase import implementation
 	// Phase 1: Call getCategories to list all categories and find the one with matching UUID
@@ -963,7 +1137,7 @@ func (r *CMDeviceCategoryResource) ImportState(ctx context.Context, req resource
 // REFACTOR PHASE: Helper Functions
 // ========================================
 
-// buildAPIEntity constructs a BCM API Category entity from Terraform model
+// buildAPIEntity constructs a BCM API Category entity from Terraform model.
 func (r *CMDeviceCategoryResource) buildAPIEntity(ctx context.Context, model *CMDeviceCategoryResourceModel, uuid string) map[string]interface{} {
 	entity := map[string]interface{}{
 		"baseType":      "Category",
@@ -1079,7 +1253,7 @@ func (r *CMDeviceCategoryResource) buildAPIEntity(ctx context.Context, model *CM
 	return entity
 }
 
-// readCategory fetches category data from BCM API using efficient getCategory(name)
+// readCategory fetches category data from BCM API using efficient getCategory(name).
 func (r *CMDeviceCategoryResource) readCategory(ctx context.Context, model *CMDeviceCategoryResourceModel, diags *diag.Diagnostics) {
 
 	// Determine which identifier to use for lookup
@@ -1129,7 +1303,7 @@ func (r *CMDeviceCategoryResource) readCategory(ctx context.Context, model *CMDe
 	}
 
 	// Check if category not found (empty response)
-	if categoryData == nil || len(categoryData) == 0 {
+	if len(categoryData) == 0 {
 		diags.AddError(
 			"Category Not Found",
 			fmt.Sprintf("Category '%s' not found in BCM", lookupName),
@@ -1275,7 +1449,7 @@ func (r *CMDeviceCategoryResource) readCategory(ctx context.Context, model *CMDe
 	// - bmc_settings (nested BMCSettings)
 }
 
-// generateUUID creates a new UUID v4 string
+// generateUUID creates a new UUID v4 string.
 func generateUUID() string {
 	return uuid.New().String()
 }

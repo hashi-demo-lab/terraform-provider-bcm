@@ -85,7 +85,10 @@ func main() {
 
 	fmt.Printf("Found %d test images to delete:\n\n", len(testImages))
 	for _, img := range testImages {
-		name := img["name"].(string)
+		name, ok := img["name"].(string)
+		if !ok {
+			continue
+		}
 		uuid, _ := img["uuid"].(string)
 		fmt.Printf("  - %s (UUID: %s)\n", name, uuid)
 	}
@@ -94,7 +97,11 @@ func main() {
 	// Confirm deletion
 	fmt.Print("Delete these images? (yes/no): ")
 	var response string
-	fmt.Scanln(&response)
+	_, err = fmt.Scanln(&response)
+	if err != nil {
+		fmt.Printf("Error reading input: %v\n", err)
+		return
+	}
 
 	if strings.ToLower(response) != "yes" {
 		fmt.Println("Aborted")
@@ -107,9 +114,14 @@ func main() {
 	failed := 0
 
 	for _, img := range testImages {
-		name := img["name"].(string)
-		uuid, ok := img["uuid"].(string)
-		if !ok || uuid == "" {
+		name, ok := img["name"].(string)
+		if !ok {
+			fmt.Printf("  ✗ unknown - invalid name field\n")
+			failed++
+			continue
+		}
+		uuid, uuidOk := img["uuid"].(string)
+		if !uuidOk || uuid == "" {
 			fmt.Printf("  ✗ %s - no UUID\n", name)
 			failed++
 			continue

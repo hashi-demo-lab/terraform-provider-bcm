@@ -40,3 +40,4 @@ website/vendor
 
 terraform-provider-bcm
 terraform-provider-bcm_v0.1.0
+coverage.out

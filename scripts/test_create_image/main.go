@@ -39,8 +39,14 @@ func main() {
 		log.Fatalf("Failed to parse default-image: %v", err)
 	}
 
-	defaultUUID := defaultImg["uuid"].(string)
-	kernelVersion := defaultImg["kernelVersion"].(string)
+	defaultUUID, ok := defaultImg["uuid"].(string)
+	if !ok {
+		log.Fatal("Failed to extract UUID from default-image: invalid type")
+	}
+	kernelVersion, ok := defaultImg["kernelVersion"].(string)
+	if !ok {
+		log.Fatal("Failed to extract kernelVersion from default-image: invalid type")
+	}
 
 	// Test different image names
 	testCases := []struct {
