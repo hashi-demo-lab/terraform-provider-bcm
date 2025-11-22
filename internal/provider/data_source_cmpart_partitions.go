@@ -22,7 +22,7 @@ var (
 	_ datasource.DataSourceWithConfigure = &CMPartPartitionsDataSource{}
 )
 
-// Constants for BCM API calls
+// Constants for BCM API calls.
 const (
 	bcmPartitionService    = "cmpart"
 	bcmPartitionMethod     = "getPartitions"

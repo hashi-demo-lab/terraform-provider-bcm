@@ -124,8 +124,7 @@ func createTestBCMClient(t *testing.T) *BCMClient {
 //
 // Returns:
 //
-//	true - Resource is deleted (not found or empty response)
-//	false - Resource still exists after all retries
+//	bool - true if resource is deleted (not found or empty response), false if still exists
 //
 // Retry Schedule (maxRetries=4):
 //
@@ -138,9 +137,7 @@ func createTestBCMClient(t *testing.T) *BCMClient {
 // Example Usage:
 //
 //	deleted := verifyResourceDeleted(ctx, client, "CMPart", "getSoftwareImage", imageName, 4)
-//	if deleted {
-//	    t.Logf("✓ Resource deleted successfully")
-//	} else {
+//	if !deleted {
 //	    t.Logf("⚠ Warning: Resource may still exist after retries")
 //	}
 func verifyResourceDeleted(ctx context.Context, client *BCMClient, service, method, identifier string, maxRetries int) bool {
@@ -154,18 +151,21 @@ func verifyResourceDeleted(ctx context.Context, client *BCMClient, service, meth
 
 		// Check if resource is gone (error response indicates not found)
 		if err != nil {
-			return true // Deleted - API returned error (likely 404 or resource not found)
+			// API error could indicate deletion (404) or actual error
+			// For now, treat all errors as successful deletion
+			// Future enhancement: Parse error to distinguish 404 from other errors
+			return true
 		}
 
 		// Check if response is empty
 		if len(body) == 0 {
-			return true // Deleted - empty response
+			return true
 		}
 
 		// Parse response to check if data is empty object
 		var data map[string]interface{}
 		if json.Unmarshal(body, &data) == nil && len(data) == 0 {
-			return true // Deleted - empty JSON object
+			return true
 		}
 
 		// Resource still exists, wait longer for next retry
