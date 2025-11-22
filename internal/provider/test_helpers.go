@@ -57,7 +57,14 @@ import (
 //   master_nodes        → masterNodes
 //   worker_nodes        → workerNodes
 //   management_network  → managementNetwork
+//   overlay_network     → overlayNetwork
+//   dns_servers         → dnsServers
 //   version             → version
+//   cni_plugin          → cniPlugin
+//   storage_classes     → storageClasses (JSON-encoded)
+//   load_balancer_mode  → loadBalancerMode
+//   addons              → addons (JSON-encoded)
+//   ingress_controller  → ingressController (JSON-encoded)
 //   creation_time       → creationTime
 //   revision_id         → revisionID
 //   force               → force (not persisted in BCM)
