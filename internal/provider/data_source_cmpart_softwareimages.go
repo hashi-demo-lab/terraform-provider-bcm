@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
@@ -32,8 +33,16 @@ type CMPartSoftwareImagesDataSource struct {
 
 // CMPartSoftwareImagesDataSourceModel describes the data source data model.
 type CMPartSoftwareImagesDataSourceModel struct {
-	ID     types.String         `tfsdk:"id"`
-	Images []SoftwareImageModel `tfsdk:"images"`
+	ID     types.String                 `tfsdk:"id"`
+	Filter *SoftwareImageFilterModel    `tfsdk:"filter"`
+	Images []SoftwareImageModel         `tfsdk:"images"`
+}
+
+// SoftwareImageFilterModel describes the filter block for client-side filtering.
+// Multiple filters use AND logic (all filters must match for an image to be included).
+type SoftwareImageFilterModel struct {
+	NamePattern types.String `tfsdk:"name_pattern"` // Case-insensitive substring match for image name
+	Category    types.String `tfsdk:"category"`     // Exact match for child_type (category)
 }
 
 // SoftwareImageModel represents a BCM software image with all fields
@@ -259,6 +268,21 @@ func (d *CMPartSoftwareImagesDataSource) Schema(_ context.Context, _ datasource.
 				},
 			},
 		},
+		Blocks: map[string]schema.Block{
+			"filter": schema.SingleNestedBlock{
+				MarkdownDescription: "Optional filters to narrow down the list of software images.",
+				Attributes: map[string]schema.Attribute{
+					"name_pattern": schema.StringAttribute{
+						Optional:            true,
+						MarkdownDescription: "Case-insensitive substring match for image name.",
+					},
+					"category": schema.StringAttribute{
+						Optional:            true,
+						MarkdownDescription: "Exact match for image category (child_type).",
+					},
+				},
+			},
+		},
 	}
 }
 
@@ -282,7 +306,18 @@ func (d *CMPartSoftwareImagesDataSource) Configure(_ context.Context, req dataso
 
 // Read refreshes the Terraform state with the latest data.
 func (d *CMPartSoftwareImagesDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
-	var state CMPartSoftwareImagesDataSourceModel
+	var config CMPartSoftwareImagesDataSourceModel
+
+	// Read configuration
+	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	tflog.Debug(ctx, "Reading BCM software images from API", map[string]interface{}{
+		"service": "CMPart",
+		"call":    "getSoftwareImages",
+	})
 
 	// Call BCM API
 	body, err := d.client.CallJSONRPC(ctx, "CMPart", "getSoftwareImages")
@@ -295,6 +330,10 @@ func (d *CMPartSoftwareImagesDataSource) Read(ctx context.Context, req datasourc
 		)
 		return
 	}
+
+	tflog.Trace(ctx, "Successfully retrieved BCM API response", map[string]interface{}{
+		"response_size": len(body),
+	})
 
 	// Parse JSON response
 	var apiResponse []map[string]interface{}
@@ -309,21 +348,44 @@ func (d *CMPartSoftwareImagesDataSource) Read(ctx context.Context, req datasourc
 		return
 	}
 
-	// Map API response to Terraform models
-	state.Images = make([]SoftwareImageModel, 0, len(apiResponse))
-	for _, imgData := range apiResponse {
-		state.Images = append(state.Images, mapAPIResponseToModel(imgData))
+	tflog.Debug(ctx, "Parsed BCM API response", map[string]interface{}{
+		"total_images": len(apiResponse),
+	})
+
+	// Map and filter images
+	state := CMPartSoftwareImagesDataSourceModel{
+		ID:     types.StringValue("placeholder"),
+		Filter: config.Filter,
+		Images: []SoftwareImageModel{},
 	}
 
-	// Set placeholder ID
-	state.ID = types.StringValue("placeholder")
+	// Log filter criteria if present
+	if config.Filter != nil {
+		filterCriteria := map[string]interface{}{}
+		if !config.Filter.NamePattern.IsNull() {
+			filterCriteria["name_pattern"] = config.Filter.NamePattern.ValueString()
+		}
+		if !config.Filter.Category.IsNull() {
+			filterCriteria["category"] = config.Filter.Category.ValueString()
+		}
+		tflog.Debug(ctx, "Applying client-side filters", filterCriteria)
+	}
+
+	// Map and filter images
+	for _, imgData := range apiResponse {
+		image := mapAPIResponseToModel(imgData)
+		if matchesSoftwareImageFilter(image, config.Filter) {
+			state.Images = append(state.Images, image)
+		}
+	}
+
+	tflog.Info(ctx, "Software images data source read complete", map[string]interface{}{
+		"total_images":    len(apiResponse),
+		"filtered_images": len(state.Images),
+	})
 
 	// Save state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
-
-	tflog.Debug(ctx, "Successfully read software images", map[string]interface{}{
-		"count": len(state.Images),
-	})
 }
 
 // mapAPIResponseToModel converts API JSON to SoftwareImageModel with null-safe field extraction
@@ -428,4 +490,41 @@ func getInt64Value(data map[string]interface{}, key string) types.Int64 {
 		}
 	}
 	return types.Int64Null()
+}
+
+// matchesSoftwareImageFilter checks if an image matches the filter criteria.
+// Multiple filters use AND logic - the image must match all specified filters.
+//
+// Filter behavior:
+//   - name_pattern: Case-insensitive substring matching (e.g., "ubuntu" matches "Ubuntu-20.04", "ubuntu-base")
+//   - category: Exact case-sensitive matching for child_type (e.g., "Ubuntu" matches only images with child_type="Ubuntu")
+//   - Omitted filters are ignored (do not restrict results)
+//
+// Returns true if the image matches all specified filters, false otherwise.
+func matchesSoftwareImageFilter(image SoftwareImageModel, filter *SoftwareImageFilterModel) bool {
+	// No filter means all images match
+	if filter == nil {
+		return true
+	}
+
+	// Name pattern filter: case-insensitive substring matching
+	if !filter.NamePattern.IsNull() && !filter.NamePattern.IsUnknown() {
+		pattern := strings.ToLower(filter.NamePattern.ValueString())
+		name := strings.ToLower(image.Name.ValueString())
+		// Image name must contain the pattern (case-insensitive)
+		if !strings.Contains(name, pattern) {
+			return false
+		}
+	}
+
+	// Category filter: exact case-sensitive matching for child_type
+	if !filter.Category.IsNull() && !filter.Category.IsUnknown() {
+		// Image child_type must exactly match the filter category
+		if filter.Category.ValueString() != image.ChildType.ValueString() {
+			return false
+		}
+	}
+
+	// Image matches all specified filters
+	return true
 }

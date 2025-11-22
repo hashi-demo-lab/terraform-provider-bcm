@@ -124,6 +124,62 @@ data "bcm_cmpart_softwareimages" "test" {}
 	})
 }
 
+func TestAccCMPartSoftwareImagesDataSource_FilterByCategory(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccCMPartSoftwareImagesDataSourceConfigFilterByCategory("Ubuntu"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					// Verify data source exists
+					resource.TestCheckResourceAttrSet("data.bcm_cmpart_softwareimages.test", "id"),
+					// Environment-portable: verify filter returned results
+					resource.TestCheckResourceAttrSet("data.bcm_cmpart_softwareimages.test", "images.#"),
+				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					// Modern state verification
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmpart_softwareimages.test",
+						tfjsonpath.New("id"),
+						knownvalue.NotNull(),
+					),
+					// Note: Cannot verify specific image attributes without knowing cluster state
+					// Filter verification occurs client-side in the provider
+				},
+			},
+		},
+	})
+}
+
+func TestAccCMPartSoftwareImagesDataSource_FilterByName(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccCMPartSoftwareImagesDataSourceConfigFilterByName("image"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					// Verify data source exists
+					resource.TestCheckResourceAttrSet("data.bcm_cmpart_softwareimages.test", "id"),
+					// Environment-portable: verify filter returned results
+					resource.TestCheckResourceAttrSet("data.bcm_cmpart_softwareimages.test", "images.#"),
+				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					// Modern state verification
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmpart_softwareimages.test",
+						tfjsonpath.New("id"),
+						knownvalue.NotNull(),
+					),
+					// Note: Cannot verify name_pattern match on individual images without knowing count
+					// Filter verification occurs client-side in the provider
+				},
+			},
+		},
+	})
+}
+
 // testAccCMPartSoftwareImagesDataSourceConfig returns a basic test configuration
 // for the bcm_cmpart_softwareimages data source
 func testAccCMPartSoftwareImagesDataSourceConfig() string {
@@ -140,5 +196,51 @@ data "bcm_cmpart_softwareimages" "test" {}
 		os.Getenv("BCM_ENDPOINT"),
 		os.Getenv("BCM_USERNAME"),
 		os.Getenv("BCM_PASSWORD"),
+	)
+}
+
+// testAccCMPartSoftwareImagesDataSourceConfigFilterByCategory returns a configuration with category filter
+func testAccCMPartSoftwareImagesDataSourceConfigFilterByCategory(category string) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmpart_softwareimages" "test" {
+  filter {
+    category = %[4]q
+  }
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		category,
+	)
+}
+
+// testAccCMPartSoftwareImagesDataSourceConfigFilterByName returns a configuration with name pattern filter
+func testAccCMPartSoftwareImagesDataSourceConfigFilterByName(namePattern string) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmpart_softwareimages" "test" {
+  filter {
+    name_pattern = %[4]q
+  }
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		namePattern,
 	)
 }

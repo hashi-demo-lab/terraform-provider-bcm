@@ -561,3 +561,131 @@ func TestAccCMDeviceDevice_ValidationInvalidMAC(t *testing.T) {
 		},
 	})
 }
+
+// ========================================
+// Phase 3: Drift Detection Tests
+// ========================================
+
+// TestAccCMDeviceDevice_Drift tests drift detection for hostname attribute
+// This test verifies the provider correctly detects when a device's hostname is modified externally via BCM API
+func TestAccCMDeviceDevice_Drift(t *testing.T) {
+	initialHostname := generateUniqueTestName("test-device-drift")
+	driftedHostname := generateUniqueTestName("drifted-device")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+			testAccCMDeviceDevicePreCheck(t, initialHostname, driftedHostname)
+		},
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceDeviceDestroy,
+		Steps: []resource.TestStep{
+			// Step 1: Create device with initial hostname
+			{
+				Config: testAccCMDeviceDeviceResourceConfig_Drift(initialHostname, "initial-notes"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("bcm_cmdevice_device.test", "hostname", initialHostname),
+					resource.TestCheckResourceAttr("bcm_cmdevice_device.test", "notes", "initial-notes"),
+					resource.TestCheckResourceAttrSet("bcm_cmdevice_device.test", "uuid"),
+				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("hostname"),
+						knownvalue.StringExact(initialHostname),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("notes"),
+						knownvalue.StringExact("initial-notes"),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("uuid"),
+						knownvalue.NotNull(),
+					),
+				},
+			},
+			// Step 2: Modify hostname externally via BCM API, verify drift detected
+			{
+				PreConfig: func() {
+					client := createTestBCMClient(t)
+					ctx := context.Background()
+
+					// Get UUID by device hostname using helper
+					uuid := getResourceUUIDByName(t, "cmdevice", "getDevice", initialHostname)
+
+					// Fetch full device data from BCM API
+					body, err := client.CallJSONRPC(ctx, "cmdevice", "getDevice", uuid)
+					if err != nil {
+						t.Fatalf("Failed to fetch device for drift modification: %v", err)
+					}
+
+					// Parse the device data
+					var deviceData map[string]interface{}
+					if err := json.Unmarshal(body, &deviceData); err != nil {
+						t.Fatalf("Failed to parse device data: %v", err)
+					}
+
+					// Modify hostname field (Terraform snake_case -> BCM API camelCase)
+					deviceData["hostname"] = driftedHostname
+
+					// Wrap in BCM API entity structure required for updates
+					entity := map[string]interface{}{
+						"baseType":      "Device",
+						"childType":     deviceData["childType"],
+						"modified":      true,
+						"to_be_removed": false,
+						"revision":      "",
+						"uuid":          uuid,
+					}
+					// Copy all device data fields except uuid (already set above)
+					for k, v := range deviceData {
+						if k != "uuid" {
+							entity[k] = v
+						}
+					}
+
+					// Update via BCM API
+					_, err = client.CallJSONRPC(ctx, "cmdevice", "updateDevice", entity, false)
+					if err != nil {
+						t.Fatalf("Failed to update device via BCM API: %v", err)
+					}
+
+					// Wait for eventual consistency
+					time.Sleep(2 * time.Second)
+
+					t.Logf("[DEBUG] Modified hostname externally to: %v", entity["hostname"])
+				},
+				Config: testAccCMDeviceDeviceResourceConfig_Drift(initialHostname, "initial-notes"),
+				// Use ConfigPlanChecks to verify drift detected (non-empty plan expected)
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectNonEmptyPlan(),
+					},
+				},
+			},
+			// Step 3: Restore desired state (Terraform applies config to fix drift)
+			{
+				Config: testAccCMDeviceDeviceResourceConfig_Drift(initialHostname, "initial-notes"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					// Verify drift was corrected and state matches config
+					resource.TestCheckResourceAttr("bcm_cmdevice_device.test", "hostname", initialHostname),
+					resource.TestCheckResourceAttr("bcm_cmdevice_device.test", "notes", "initial-notes"),
+				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("hostname"),
+						knownvalue.StringExact(initialHostname),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("notes"),
+						knownvalue.StringExact("initial-notes"),
+					),
+				},
+			},
+		},
+	})
+}
