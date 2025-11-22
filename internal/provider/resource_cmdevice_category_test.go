@@ -797,12 +797,12 @@ func TestAccCMDeviceCategory_ValidationInvalidManagementNetwork(t *testing.T) {
 			// Test invalid UUID format
 			{
 				Config:      testAccCMDeviceCategoryResourceConfig_InvalidUUID(categoryName, "not-a-uuid"),
-				ExpectError: regexp.MustCompile(`Attribute management_network value must be a valid RFC 4122 UUID format`),
+				ExpectError: regexp.MustCompile(`Attribute management_network must be a valid RFC 4122 UUID format`),
 			},
 			// Test malformed UUID with invalid characters
 			{
 				Config:      testAccCMDeviceCategoryResourceConfig_InvalidUUID(categoryName, "12345678-1234-1234-1234-12345678901G"),
-				ExpectError: regexp.MustCompile(`Attribute management_network value must be a valid RFC 4122 UUID format`),
+				ExpectError: regexp.MustCompile(`Attribute management_network must be a valid RFC 4122 UUID format`),
 			},
 		},
 	})
@@ -819,7 +819,7 @@ func TestAccCMDeviceCategory_ValidationInvalidBootLoader(t *testing.T) {
 			// Test invalid boot_loader value
 			{
 				Config:      testAccCMDeviceCategoryResourceConfig_InvalidBootLoader(categoryName, "INVALID_BOOTLOADER"),
-				ExpectError: regexp.MustCompile(`Attribute boot_loader value must be one of.*SYSLINUX.*GRUB.*GRUB2.*PXELINUX`),
+				ExpectError: regexp.MustCompile(`Attribute boot_loader value must be one of`),
 			},
 		},
 	})

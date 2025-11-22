@@ -1,7 +1,7 @@
 # Filter nodes by type (PhysicalNode)
 data "bcm_cmdevice_nodes" "physical" {
   filter {
-    node_type = "PhysicalNode"
+    child_type = "PhysicalNode"
   }
 }
 
@@ -17,7 +17,7 @@ output "physical_nodes" {
 # Filter for compute nodes
 data "bcm_cmdevice_nodes" "compute" {
   filter {
-    node_type = "ComputeNode"
+    child_type = "ComputeNode"
   }
 }
 

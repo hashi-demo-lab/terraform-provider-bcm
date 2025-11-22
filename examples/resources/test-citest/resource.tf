@@ -2,22 +2,6 @@
 # This example is used by test-examples.sh to validate resource CRUD operations
 # Uses bcm_cmdevice_category with unique citest naming pattern
 
-terraform {
-  required_version = ">= 1.5.0"
-
-  required_providers {
-    bcm = {
-      source  = "hashicorp/bcm"
-      version = "~> 0.1"
-    }
-  }
-}
-
-# Provider configuration using environment variables
-# Set BCM_ENDPOINT, BCM_USERNAME, BCM_PASSWORD before running
-provider "bcm" {
-  insecure_skip_verify = true
-}
 
 # Query existing software images to find base image for cloning
 data "bcm_cmpart_softwareimages" "available" {}
