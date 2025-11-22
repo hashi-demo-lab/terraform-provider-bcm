@@ -201,9 +201,9 @@
 
 ### Example Validation
 
-- [ ] T061 Test example configuration against real BCM cluster: `cd examples/data-sources/bcm_cmpart_partitions && terraform init && terraform validate`
-- [ ] T062 Run `terraform plan` on example to verify no errors
-- [ ] T063 Optionally run `terraform apply` to verify outputs display partition information
+- [X] T061 Test example configuration against real BCM cluster: `cd examples/data-sources/bcm_cmpart_partitions && terraform init && terraform validate`
+- [X] T062 Run `terraform plan` on example to verify no errors
+- [X] T063 Optionally run `terraform apply` to verify outputs display partition information
 
 **Checkpoint**: Documentation complete and validated
 
@@ -217,28 +217,28 @@
 
 ### Full Test Suite
 
-- [ ] T064 Run complete acceptance test suite: `TF_ACC=1 go test -v -timeout 120m ./internal/provider/`
-- [ ] T065 Verify no regressions in existing tests (software images, nodes, networks data sources)
+- [X] T064 Run complete acceptance test suite: `TF_ACC=1 go test -v -timeout 120m ./internal/provider/`
+- [X] T065 Verify no regressions in existing tests (software images, nodes, networks data sources)
 
 ### Code Quality Final Checks
 
-- [ ] T066 Run `make fmt` - verify no formatting changes needed
-- [ ] T067 Run `make lint` - verify no linting errors
-- [ ] T068 Run `make test` - verify all unit tests pass
+- [X] T066 Run `make fmt` - verify no formatting changes needed
+- [X] T067 Run `make lint` - verify no linting errors
+- [X] T068 Run `make test` - verify all unit tests pass
 
 ### Specification Compliance Review
 
-- [ ] T069 Verify FR-001: Data source calls `cmpart.getPartitions` API ✓
-- [ ] T070 Verify FR-002: All partition attributes exposed ✓
-- [ ] T071 Verify FR-003: Supports name_pattern filter ✓
-- [ ] T072 Verify FR-004: Handles null fields gracefully ✓
-- [ ] T073 Verify FR-009: Uses modern testing patterns (statecheck.ExpectKnownValue) ✓
-- [ ] T074 Verify FR-010: Tests are environment-portable ✓
+- [X] T069 Verify FR-001: Data source calls `cmpart.getPartitions` API ✓
+- [X] T070 Verify FR-002: All partition attributes exposed ✓
+- [X] T071 Verify FR-003: Supports name_pattern filter ✓
+- [X] T072 Verify FR-004: Handles null fields gracefully ✓
+- [X] T073 Verify FR-009: Uses modern testing patterns (statecheck.ExpectKnownValue) ✓
+- [X] T074 Verify FR-010: Tests are environment-portable ✓
 
 ### Git Commit
 
-- [ ] T075 Stage all implementation files for commit
-- [ ] T076 Commit with message: "feat: add bcm_cmpart_partitions data source\n\nImplement read-only data source for retrieving partition information from BCM cluster. Supports client-side filtering by name pattern.\n\n- Add data source implementation with 30+ computed attributes\n- Add 4 acceptance tests using modern terraform-plugin-testing patterns\n- Add example configuration and auto-generated documentation\n- Follow TDD RED-GREEN-REFACTOR workflow\n\nCloses: 001-partitions-data-source\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>"
+- [X] T075 Stage all implementation files for commit
+- [X] T076 Commit with message: "feat: add bcm_cmpart_partitions data source\n\nImplement read-only data source for retrieving partition information from BCM cluster. Supports client-side filtering by name pattern.\n\n- Add data source implementation with 30+ computed attributes\n- Add 4 acceptance tests using modern terraform-plugin-testing patterns\n- Add example configuration and auto-generated documentation\n- Follow TDD RED-GREEN-REFACTOR workflow\n\nCloses: 001-partitions-data-source\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>"
 
 **Checkpoint**: Feature complete and committed to branch
 
