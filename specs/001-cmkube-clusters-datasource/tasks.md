@@ -18,12 +18,12 @@
 
 **Purpose**: Verify BCM API and establish test infrastructure
 
-- [ ] T001 Verify cmkube.getKubeClusters API method via /workspace/sampleRest/cmkube-get-clusters.py script
-- [ ] T002 Document API response structure in /workspace/specs/001-cmkube-clusters-datasource/contracts/cmkube-api.json
-- [ ] T003 [P] Review existing data source patterns in /workspace/internal/provider/data_source_cmpart_softwareimages.go for filter implementation
-- [ ] T004 [P] Review modern testing patterns in /workspace/internal/provider/data_source_cmdevice_nodes_test.go for statecheck usage
+- [X] T001 Verify cmkube.getKubeClusters API method via /workspace/sampleRest/cmkube-get-clusters.py script
+- [X] T002 Document API response structure in /workspace/specs/001-cmkube-clusters-datasource/contracts/cmkube-api.json
+- [X] T003 [P] Review existing data source patterns in /workspace/internal/provider/data_source_cmpart_softwareimages.go for filter implementation
+- [X] T004 [P] Review modern testing patterns in /workspace/internal/provider/data_source_cmdevice_nodes_test.go for statecheck usage
 
-**Checkpoint**: API verified, patterns identified, ready to write tests
+**Checkpoint**: API verified, patterns identified, ready to write tests ✅
 
 ---
 
@@ -38,7 +38,7 @@
 **Goal**: Engineers can discover all BCM Kubernetes clusters without filters
 **Independent Test**: Query data source without filters, verify all clusters returned with UUIDs and names
 
-- [ ] T005 [US1] Write TestAccCMKubeClustersDataSource_Basic in /workspace/internal/provider/data_source_cmkube_clusters_test.go
+- [X] T005 [US1] Write TestAccCMKubeClustersDataSource_Basic in /workspace/internal/provider/data_source_cmkube_clusters_test.go
   - Assert: ID is not null (placeholder "cmkube-clusters")
   - Assert: clusters[0].uuid is not null
   - Assert: clusters[0].name is not null
@@ -51,7 +51,7 @@
 **Goal**: Engineers can filter clusters by name pattern for environment organization
 **Independent Test**: Create test cluster, filter by name pattern, verify only matching clusters returned
 
-- [ ] T006 [US2] Write TestAccCMKubeClustersDataSource_FilterByName in /workspace/internal/provider/data_source_cmkube_clusters_test.go
+- [X] T006 [US2] Write TestAccCMKubeClustersDataSource_FilterByName in /workspace/internal/provider/data_source_cmkube_clusters_test.go
   - Config: filter { name_pattern = "test-cluster" }
   - Assert: All returned clusters contain pattern in name (case-insensitive)
   - Use statecheck.ExpectKnownValue() for type-safe assertions
@@ -62,7 +62,7 @@
 **Goal**: Engineers can identify clusters by Kubernetes version for upgrade planning
 **Independent Test**: Filter by specific version, verify only matching clusters returned
 
-- [ ] T007 [US3] Write TestAccCMKubeClustersDataSource_FilterByVersion in /workspace/internal/provider/data_source_cmkube_clusters_test.go
+- [X] T007 [US3] Write TestAccCMKubeClustersDataSource_FilterByVersion in /workspace/internal/provider/data_source_cmkube_clusters_test.go
   - Config: filter { version = "1.28.0" }
   - Assert: All returned clusters have version = "1.28.0"
   - Use knownvalue.StringExact() for version matching
@@ -73,36 +73,36 @@
 **Goal**: Engineers can find which cluster(s) contain a specific master node
 **Independent Test**: Filter by master node UUID, verify clusters containing that node returned
 
-- [ ] T008 [US4] Write TestAccCMKubeClustersDataSource_FilterByMasterNode in /workspace/internal/provider/data_source_cmkube_clusters_test.go
+- [X] T008 [US4] Write TestAccCMKubeClustersDataSource_FilterByMasterNode in /workspace/internal/provider/data_source_cmkube_clusters_test.go
   - Config: filter { master_node_id = "node-uuid-123" }
   - Assert: All returned clusters contain specified UUID in master_nodes list
   - Use tfjsonpath to navigate nested list attributes
 
 ### Edge Case Tests (All User Stories)
 
-- [ ] T009 [P] Write TestAccCMKubeClustersDataSource_MultipleFilters in /workspace/internal/provider/data_source_cmkube_clusters_test.go
+- [X] T009 [P] Write TestAccCMKubeClustersDataSource_MultipleFilters in /workspace/internal/provider/data_source_cmkube_clusters_test.go
   - Config: filter { name_pattern = "prod"; version = "1.28.0" }
   - Assert: Returned clusters match ALL filters (AND logic)
   - Verify filter combination behavior
 
-- [ ] T010 [P] Write TestAccCMKubeClustersDataSource_EmptyResults in /workspace/internal/provider/data_source_cmkube_clusters_test.go
+- [X] T010 [P] Write TestAccCMKubeClustersDataSource_EmptyResults in /workspace/internal/provider/data_source_cmkube_clusters_test.go
   - Config: filter { name_pattern = "nonexistent-cluster-xyz" }
   - Assert: clusters list is empty (not error)
   - Assert: ID still set to "cmkube-clusters"
   - Verify graceful handling of no matches
 
-- [ ] T011 [P] Write TestAccCMKubeClustersDataSource_NullFields in /workspace/internal/provider/data_source_cmkube_clusters_test.go
+- [X] T011 [P] Write TestAccCMKubeClustersDataSource_NullFields in /workspace/internal/provider/data_source_cmkube_clusters_test.go
   - Assumes BCM has cluster with null optional fields
   - Assert: Optional fields (worker_nodes, dns_servers) can be null
   - Assert: Required fields (uuid, name, master_nodes) present
   - Verify null-safe field extraction
 
-- [ ] T012 Run acceptance tests to verify ALL tests FAIL with "resource not found" errors
+- [X] T012 Run acceptance tests to verify ALL tests FAIL with "resource not found" errors
   - Command: TF_ACC=1 go test -v -timeout 120m ./internal/provider/ -run TestAccCMKubeClustersDataSource
   - Expected: 0 passed, 7 failed (no data source implementation exists)
   - Verify: Clear error messages about missing data source
 
-**Checkpoint**: 7 failing tests written, RED phase complete ✅
+**Checkpoint**: 7 failing tests written, RED phase complete ✅ DONE
 
 ---
 
@@ -112,7 +112,7 @@
 
 ### Data Source Skeleton
 
-- [ ] T013 Create /workspace/internal/provider/data_source_cmkube_clusters.go with minimal structure
+- [X] T013 Create /workspace/internal/provider/data_source_cmkube_clusters.go with minimal structure
   - Define CMKubeClustersDataSource struct
   - Implement Metadata() method (returns "cmkube_clusters")
   - Define placeholder Schema() method (empty schema)
@@ -121,7 +121,7 @@
 
 ### Schema Definition
 
-- [ ] T014 Implement Schema() method in /workspace/internal/provider/data_source_cmkube_clusters.go
+- [X] T014 Implement Schema() method in /workspace/internal/provider/data_source_cmkube_clusters.go
   - Define "id" attribute (computed string, placeholder "cmkube-clusters")
   - Define "clusters" attribute (computed list of nested objects)
   - Define cluster nested attributes: id, uuid, name, master_nodes, worker_nodes, etc.
@@ -131,14 +131,14 @@
 
 ### Helper Functions
 
-- [ ] T015 [P] Add getListValue() helper function in /workspace/internal/provider/data_source_cmkube_clusters.go
+- [X] T015 [P] Add getListValue() helper function in /workspace/internal/provider/data_source_cmkube_clusters.go
   - Extract []interface{} from BCM API response
   - Convert to types.List with StringType elements
   - Handle null/empty lists gracefully
   - Return types.ListNull(types.StringType) if missing
   - Pattern: research.md lines 246-269
 
-- [ ] T016 [P] Add mapClusterDataToModel() helper function in /workspace/internal/provider/data_source_cmkube_clusters.go
+- [X] T016 [P] Add mapClusterDataToModel() helper function in /workspace/internal/provider/data_source_cmkube_clusters.go
   - Map BCM API fields (camelCase) to Terraform attributes (snake_case)
   - Use getStringValue() for string fields
   - Use getInt64Value() for numeric fields
@@ -147,7 +147,7 @@
 
 ### Configure Method
 
-- [ ] T017 Implement Configure() method in /workspace/internal/provider/data_source_cmkube_clusters.go
+- [X] T017 Implement Configure() method in /workspace/internal/provider/data_source_cmkube_clusters.go
   - Accept BCMClient from provider configuration
   - Store client reference for Read() method
   - Handle nil client gracefully
@@ -155,7 +155,7 @@
 
 ### Read Method (Minimal - Hardcoded Response)
 
-- [ ] T018 Implement Read() method with HARDCODED response in /workspace/internal/provider/data_source_cmkube_clusters.go
+- [X] T018 Implement Read() method with HARDCODED response in /workspace/internal/provider/data_source_cmkube_clusters.go
   - Create hardcoded cluster data (static JSON)
   - Map to KubeClusterModel structs
   - Set data.Clusters = hardcoded list
@@ -165,19 +165,19 @@
 
 ### Provider Registration
 
-- [ ] T019 Register CMKubeClustersDataSource in /workspace/internal/provider/provider.go DataSources() method
+- [X] T019 Register CMKubeClustersDataSource in /workspace/internal/provider/provider.go DataSources() method
   - Add NewCMKubeClustersDataSource to DataSources() return slice
   - Ensure alphabetical ordering with other data sources
   - Pattern: provider.go DataSources() method
 
 ### Verify GREEN Phase
 
-- [ ] T020 Run acceptance tests to verify ALL tests PASS with minimal implementation
+- [X] T020 Run acceptance tests to verify ALL tests PASS with minimal implementation
   - Command: TF_ACC=1 go test -v -timeout 120m ./internal/provider/ -run TestAccCMKubeClustersDataSource
   - Expected: 7 passed, 0 failed (hardcoded data satisfies test assertions)
   - Fix any failing tests by adjusting hardcoded data
 
-**Checkpoint**: All tests passing with minimal implementation, GREEN phase complete ✅
+**Checkpoint**: All tests passing with minimal implementation, GREEN phase complete ✅ DONE
 
 ---
 
@@ -187,7 +187,7 @@
 
 ### API Integration
 
-- [ ] T021 Replace hardcoded response with BCM API call in Read() method
+- [X] T021 Replace hardcoded response with BCM API call in Read() method
   - Call d.client.CallJSONRPC(ctx, "cmkube", "getKubeClusters")
   - Handle API errors with resp.Diagnostics.AddError()
   - Parse JSON response into []map[string]interface{}
@@ -196,7 +196,7 @@
 
 ### Filter Implementation - User Story 2 (Name Pattern)
 
-- [ ] T022 [US2] Implement name_pattern filter in Read() method
+- [X] T022 [US2] Implement name_pattern filter in Read() method
   - Check if data.Filter != nil && !data.Filter.NamePattern.IsNull()
   - Extract pattern: strings.ToLower(data.Filter.NamePattern.ValueString())
   - Extract cluster name: strings.ToLower(getStringValue(clusterData, "name").ValueString())
@@ -205,7 +205,7 @@
 
 ### Filter Implementation - User Story 3 (Version)
 
-- [ ] T023 [US3] Implement version filter in Read() method
+- [X] T023 [US3] Implement version filter in Read() method
   - Check if data.Filter != nil && !data.Filter.Version.IsNull()
   - Extract cluster version: getStringValue(clusterData, "version").ValueString()
   - Apply filter: clusterVersion != data.Filter.Version.ValueString() → exclude = true
@@ -214,7 +214,7 @@
 
 ### Filter Implementation - User Story 4 (Master Node)
 
-- [ ] T024 [US4] Implement master_node_id filter in Read() method
+- [X] T024 [US4] Implement master_node_id filter in Read() method
   - Check if data.Filter != nil && !data.Filter.MasterNodeID.IsNull()
   - Extract masterNodes array from clusterData["masterNodes"].([]interface{})
   - Iterate list, check if any element matches target UUID
@@ -223,7 +223,7 @@
 
 ### Error Handling Enhancement
 
-- [ ] T025 Add comprehensive error handling in Read() method
+- [X] T025 Add comprehensive error handling in Read() method
   - BCM API unreachable → clear error message
   - Authentication failure → clear error message
   - Invalid JSON response → clear error message
@@ -233,13 +233,13 @@
 
 ### Verify REFACTOR Phase
 
-- [ ] T026 Run acceptance tests to verify ALL tests PASS with real BCM API integration
+- [X] T026 Run acceptance tests to verify ALL tests PASS with real BCM API integration
   - Command: TF_ACC=1 go test -v -timeout 120m ./internal/provider/ -run TestAccCMKubeClustersDataSource
   - Expected: 7 passed, 0 failed (real API data satisfies test assertions)
   - Verify filters work correctly with live BCM data
   - Fix any issues with null field handling or filter logic
 
-**Checkpoint**: Full implementation complete with BCM API, tests passing, REFACTOR phase complete ✅
+**Checkpoint**: Full implementation complete with BCM API, tests passing, REFACTOR phase complete ✅ DONE
 
 ---
 
@@ -249,12 +249,12 @@
 
 ### Example Configurations
 
-- [ ] T027 [P] Create /workspace/examples/data-sources/bcm_cmkube_clusters/data-source.tf with basic example
+- [X] T027 [P] Create /workspace/examples/data-sources/bcm_cmkube_clusters/data-source.tf with basic example
   - Example: List all clusters (no filter)
   - Include provider block with environment variables
   - Pattern: examples/data-sources/bcm_cmdevice_nodes/data-source.tf
 
-- [ ] T028 [P] Add filter examples to /workspace/examples/data-sources/bcm_cmkube_clusters/data-source.tf
+- [X] T028 [P] Add filter examples to /workspace/examples/data-sources/bcm_cmkube_clusters/data-source.tf
   - Example: Filter by name pattern (filter { name_pattern = "prod-*" })
   - Example: Filter by version (filter { version = "1.28.0" })
   - Example: Filter by master node (filter { master_node_id = "node-uuid" })
@@ -263,7 +263,7 @@
 
 ### Documentation Generation
 
-- [ ] T029 Generate provider documentation via make generate
+- [X] T029 Generate provider documentation via make generate
   - Command: make generate
   - Expected: /workspace/docs/data-sources/cmkube_clusters.md created
   - Verify: All attributes documented with descriptions
@@ -272,31 +272,31 @@
 
 ### Code Quality
 
-- [ ] T030 [P] Run code formatting and linting
+- [X] T030 [P] Run code formatting and linting
   - Command: make fmt && make lint
   - Expected: No formatting issues, no lint errors
   - Fix any issues reported by golangci-lint
 
 ### Final Validation
 
-- [ ] T031 Run full acceptance test suite for data source
+- [X] T031 Run full acceptance test suite for data source
   - Command: TF_ACC=1 go test -v -timeout 120m ./internal/provider/ -run TestAccCMKubeClustersDataSource
   - Expected: All 7 tests pass (Basic, FilterByName, FilterByVersion, FilterByMasterNode, MultipleFilters, EmptyResults, NullFields)
   - Verify: No flaky tests, consistent results across runs
 
-- [ ] T032 Validate example configurations work with BCM
+- [X] T032 Validate example configurations work with BCM
   - Navigate to /workspace/examples/data-sources/bcm_cmkube_clusters/
   - Run: terraform init && terraform validate
   - Run: terraform plan (with BCM credentials)
   - Verify: Examples execute successfully without errors
 
-- [ ] T033 Verify schema consistency with resource_cmkube_cluster.go
+- [X] T033 Verify schema consistency with resource_cmkube_cluster.go
   - Cross-reference attribute names and types
   - Verify: All resource attributes present in data source
   - Verify: Type consistency (types.String, types.List, types.Int64)
   - Verify: Import compatibility (cluster UUID can be used for terraform import)
 
-**Checkpoint**: Documentation complete, all validation passing, feature ready for review ✅
+**Checkpoint**: Documentation complete, all validation passing, feature ready for review ✅ DONE
 
 ---
 
