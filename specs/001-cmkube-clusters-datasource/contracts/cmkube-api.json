@@ -1,0 +1,247 @@
+{
+  "service": "cmkube",
+  "method": "getKubeClusters",
+  "description": "Retrieves all Kubernetes clusters managed by BCM",
+  "authentication": "Cookie-based (cm-login-token)",
+  "request": {
+    "format": "JSON-RPC",
+    "endpoint": "/json",
+    "payload": {
+      "service": "cmkube",
+      "call": "getKubeClusters"
+    },
+    "arguments": "None (retrieves all clusters)"
+  },
+  "response": {
+    "type": "Array of cluster objects",
+    "example": [
+      {
+        "uuid": "cluster-uuid-1",
+        "name": "prod-k8s-cluster",
+        "baseType": "KubeCluster",
+        "childType": "",
+        "masterNodes": [
+          "node-uuid-1",
+          "node-uuid-2"
+        ],
+        "workerNodes": [
+          "node-uuid-3",
+          "node-uuid-4"
+        ],
+        "managementNetwork": "network-uuid",
+        "overlayNetwork": "10.244.0.0/16",
+        "dnsServers": [
+          "8.8.8.8",
+          "8.8.4.4"
+        ],
+        "version": "1.28.0",
+        "cniPlugin": "calico",
+        "storageClasses": "{\"default\":\"rbd\"}",
+        "loadBalancerMode": "metallb",
+        "addons": "[{\"name\":\"monitoring\"}]",
+        "ingressController": "{\"type\":\"nginx\"}",
+        "creationTime": 1700000000,
+        "revisionID": 5,
+        "modified": false,
+        "to_be_removed": false,
+        "revision": ""
+      },
+      {
+        "uuid": "cluster-uuid-2",
+        "name": "dev-k8s-cluster",
+        "baseType": "KubeCluster",
+        "childType": "",
+        "masterNodes": [
+          "node-uuid-5"
+        ],
+        "workerNodes": null,
+        "managementNetwork": "network-uuid",
+        "overlayNetwork": null,
+        "dnsServers": null,
+        "version": "1.27.3",
+        "cniPlugin": "flannel",
+        "storageClasses": null,
+        "loadBalancerMode": null,
+        "addons": null,
+        "ingressController": null,
+        "creationTime": 1695000000,
+        "revisionID": 2,
+        "modified": false,
+        "to_be_removed": false,
+        "revision": ""
+      }
+    ]
+  },
+  "fieldMappings": {
+    "bcmTerraformMappings": [
+      {
+        "bcmField": "uuid",
+        "terraformAttribute": "uuid, id",
+        "type": "string",
+        "required": true,
+        "description": "BCM cluster UUID (used for both id and uuid in Terraform)"
+      },
+      {
+        "bcmField": "name",
+        "terraformAttribute": "name",
+        "type": "string",
+        "required": true,
+        "description": "Cluster name"
+      },
+      {
+        "bcmField": "masterNodes",
+        "terraformAttribute": "master_nodes",
+        "type": "list(string)",
+        "required": true,
+        "description": "List of master node UUIDs (minimum 1)"
+      },
+      {
+        "bcmField": "workerNodes",
+        "terraformAttribute": "worker_nodes",
+        "type": "list(string)",
+        "required": false,
+        "description": "List of worker node UUIDs (can be null/empty)"
+      },
+      {
+        "bcmField": "managementNetwork",
+        "terraformAttribute": "management_network",
+        "type": "string",
+        "required": false,
+        "description": "Management network UUID"
+      },
+      {
+        "bcmField": "overlayNetwork",
+        "terraformAttribute": "overlay_network",
+        "type": "string",
+        "required": false,
+        "description": "Pod network overlay configuration (CIDR)"
+      },
+      {
+        "bcmField": "dnsServers",
+        "terraformAttribute": "dns_servers",
+        "type": "list(string)",
+        "required": false,
+        "description": "List of DNS server IP addresses"
+      },
+      {
+        "bcmField": "version",
+        "terraformAttribute": "version",
+        "type": "string",
+        "required": false,
+        "description": "Kubernetes version (semver format)"
+      },
+      {
+        "bcmField": "cniPlugin",
+        "terraformAttribute": "cni_plugin",
+        "type": "string",
+        "required": false,
+        "description": "Container Network Interface plugin name"
+      },
+      {
+        "bcmField": "storageClasses",
+        "terraformAttribute": "storage_classes",
+        "type": "string (JSON-encoded)",
+        "required": false,
+        "description": "Storage class definitions as JSON string"
+      },
+      {
+        "bcmField": "loadBalancerMode",
+        "terraformAttribute": "load_balancer_mode",
+        "type": "string",
+        "required": false,
+        "description": "Load balancer mode/strategy"
+      },
+      {
+        "bcmField": "addons",
+        "terraformAttribute": "addons",
+        "type": "string (JSON-encoded)",
+        "required": false,
+        "description": "Cluster addons configuration as JSON string"
+      },
+      {
+        "bcmField": "ingressController",
+        "terraformAttribute": "ingress_controller",
+        "type": "string (JSON-encoded)",
+        "required": false,
+        "description": "Ingress controller configuration as JSON string"
+      },
+      {
+        "bcmField": "creationTime",
+        "terraformAttribute": "creation_time",
+        "type": "int64",
+        "required": true,
+        "description": "Cluster creation timestamp (Unix epoch)"
+      },
+      {
+        "bcmField": "revisionID",
+        "terraformAttribute": "revision_id",
+        "type": "int64",
+        "required": true,
+        "description": "BCM revision number for change tracking"
+      }
+    ],
+    "internalFieldsNotExposed": [
+      {
+        "bcmField": "baseType",
+        "value": "KubeCluster",
+        "reason": "Internal BCM type identifier, not useful to Terraform users"
+      },
+      {
+        "bcmField": "childType",
+        "value": "",
+        "reason": "Internal BCM subtype (always empty for clusters)"
+      },
+      {
+        "bcmField": "modified",
+        "type": "boolean",
+        "reason": "Internal BCM state flag, not relevant to Terraform state"
+      },
+      {
+        "bcmField": "to_be_removed",
+        "type": "boolean",
+        "reason": "Internal BCM deletion flag, not relevant to Terraform state"
+      },
+      {
+        "bcmField": "revision",
+        "type": "string",
+        "reason": "Internal BCM version string (revisionID is sufficient)"
+      }
+    ]
+  },
+  "errorHandling": {
+    "authenticationFailure": {
+      "httpStatus": "401/403",
+      "terraformError": "Error Reading Clusters: Authentication failed"
+    },
+    "networkError": {
+      "httpStatus": "N/A",
+      "terraformError": "Error Reading Clusters: Could not connect to BCM API"
+    },
+    "invalidJsonResponse": {
+      "httpStatus": "200",
+      "terraformError": "Error Parsing Clusters: Could not parse response"
+    },
+    "emptyClusterList": {
+      "httpStatus": "200",
+      "terraformError": "None (success with empty clusters array)"
+    }
+  },
+  "usage": {
+    "goClient": {
+      "package": "internal/provider",
+      "method": "client.CallJSONRPC(ctx, \"cmkube\", \"getKubeClusters\")",
+      "returns": "([]byte, error)"
+    },
+    "pythonExample": {
+      "script": "/workspace/sampleRest/cmkube-get-clusters.py",
+      "command": "BCM_ENDPOINT=\"https://...\" BCM_USERNAME=\"root\" BCM_PASSWORD=\"...\" python3 cmkube-get-clusters.py"
+    }
+  },
+  "notes": [
+    "No pagination - single API call retrieves all clusters",
+    "No server-side filtering - must filter results client-side in Terraform provider",
+    "Response is array (not single object) even if only one cluster exists",
+    "Optional fields can be null or missing from response (use null-safe extraction)",
+    "JSON-encoded fields (storageClasses, addons, ingressController) are strings, not objects"
+  ]
+}

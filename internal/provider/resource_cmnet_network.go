@@ -10,6 +10,7 @@ import (
 	"net"
 	"regexp"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -17,7 +18,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
@@ -39,27 +39,27 @@ type CMNetNetworkResource struct {
 
 // CMNetNetworkResourceModel describes the resource data model.
 type CMNetNetworkResourceModel struct {
-	ID              types.String `tfsdk:"id"`
-	UUID            types.String `tfsdk:"uuid"`
-	Name            types.String `tfsdk:"name"`
-	Subnet          types.String `tfsdk:"subnet"`
-	BaseAddress     types.String `tfsdk:"base_address"`
-	NetmaskBits     types.Int64  `tfsdk:"netmask_bits"`
-	Gateway         types.String `tfsdk:"gateway"`
-	NetworkType     types.String `tfsdk:"network_type"`
-	MTU             types.Int64  `tfsdk:"mtu"`
-	DomainName      types.String `tfsdk:"domain_name"`
-	DHCPEnabled     types.Bool   `tfsdk:"dhcp_enabled"`
-	DHCPRangeStart  types.String `tfsdk:"dhcp_range_start"`
-	DHCPRangeEnd    types.String `tfsdk:"dhcp_range_end"`
-	Management      types.Bool   `tfsdk:"management"`
-	Bootable        types.Bool   `tfsdk:"bootable"`
-	Notes           types.String `tfsdk:"notes"`
-	BaseType        types.String `tfsdk:"base_type"`
-	ChildType       types.String `tfsdk:"child_type"`
-	Revision        types.String `tfsdk:"revision"`
-	Modified        types.Bool   `tfsdk:"modified"`
-	ToBeRemoved     types.Bool   `tfsdk:"to_be_removed"`
+	ID             types.String `tfsdk:"id"`
+	UUID           types.String `tfsdk:"uuid"`
+	Name           types.String `tfsdk:"name"`
+	Subnet         types.String `tfsdk:"subnet"`
+	BaseAddress    types.String `tfsdk:"base_address"`
+	NetmaskBits    types.Int64  `tfsdk:"netmask_bits"`
+	Gateway        types.String `tfsdk:"gateway"`
+	NetworkType    types.String `tfsdk:"network_type"`
+	MTU            types.Int64  `tfsdk:"mtu"`
+	DomainName     types.String `tfsdk:"domain_name"`
+	DHCPEnabled    types.Bool   `tfsdk:"dhcp_enabled"`
+	DHCPRangeStart types.String `tfsdk:"dhcp_range_start"`
+	DHCPRangeEnd   types.String `tfsdk:"dhcp_range_end"`
+	Management     types.Bool   `tfsdk:"management"`
+	Bootable       types.Bool   `tfsdk:"bootable"`
+	Notes          types.String `tfsdk:"notes"`
+	BaseType       types.String `tfsdk:"base_type"`
+	ChildType      types.String `tfsdk:"child_type"`
+	Revision       types.String `tfsdk:"revision"`
+	Modified       types.Bool   `tfsdk:"modified"`
+	ToBeRemoved    types.Bool   `tfsdk:"to_be_removed"`
 }
 
 // Metadata returns the resource type name.
