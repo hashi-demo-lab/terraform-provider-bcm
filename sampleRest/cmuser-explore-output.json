@@ -1,0 +1,63 @@
+{
+  "cmuser.getUsers": {
+    "success": true,
+    "data": [
+      {
+        "ID": "1000",
+        "allowGPUWorkloadPowerProfiles": false,
+        "authorizedSshKeys": "",
+        "baseType": "User",
+        "certSerialNumber": -1,
+        "childType": "",
+        "commonName": "cmsupport",
+        "createSshKey": false,
+        "disablePasswordSsh": false,
+        "email": "",
+        "extra_values": null,
+        "groupID": "1000",
+        "homeDirOperation": true,
+        "homeDirectory": "/home/cmsupport",
+        "homePage": "",
+        "information": "",
+        "loginShell": "/bin/bash",
+        "modified": false,
+        "name": "cmsupport",
+        "notes": "",
+        "password": "",
+        "profile": "",
+        "projectManager": null,
+        "revision": "",
+        "shadowExpire": 24837,
+        "shadowInactive": 0,
+        "shadowLastChange": 20405,
+        "shadowMax": 99999,
+        "shadowMin": 0,
+        "shadowWarning": 7,
+        "surname": "cmsupport",
+        "to_be_removed": false,
+        "uuid": "c792c8d3-3a5a-5003-bf6e-5bed0e59706f",
+        "writeSshProxyConfig": false
+      }
+    ]
+  },
+  "cmuser.listUsers": {
+    "success": false,
+    "error": "400 Client Error: Bad Request for url: https://172.21.15.254:8081/json"
+  },
+  "cmuser.getUserList": {
+    "success": false,
+    "error": "400 Client Error: Bad Request for url: https://172.21.15.254:8081/json"
+  },
+  "cmuser.getAllUsers": {
+    "success": false,
+    "error": "400 Client Error: Bad Request for url: https://172.21.15.254:8081/json"
+  },
+  "cmuser.getUser(['root'])": {
+    "success": true,
+    "data": null
+  },
+  "cmuser.getUserByName(['root'])": {
+    "success": false,
+    "error": "400 Client Error: Bad Request for url: https://172.21.15.254:8081/json"
+  }
+}
