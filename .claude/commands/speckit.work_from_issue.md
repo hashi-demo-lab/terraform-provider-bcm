@@ -21,4 +21,4 @@ ToDo List - autonomously
 7. commit and update Git issue
 8. `/speckit.analyze` - Analyze spec for TDD compliance
 9. commit and update Git issue
-10. `/speckit.implement` - Execute all tasks to implement the feature, use tdd make surew you use the terraform-provider-design skill, resolve issues independently, validate all tests passing, validate all examples passing, documentation generated. fix any linting issues Create PR and provider summary
+10. `/speckit.implement` - Execute all tasks to implement the feature, use tdd, make sure you use the terraform-provider-design skill, resolve issues independently, validate all tests passing, validate all examples passing, documentation generated. validate linking and fix any linting issues Create PR with summary
