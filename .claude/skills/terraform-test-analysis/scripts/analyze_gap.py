@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """
-Terraform Provider Test Modernization Gap Analyzer
+Terraform Provider Test Coverage Analyzer
 
-Scans test files for legacy patterns and generates a comprehensive gap analysis report.
+Scans test files and generates comprehensive coverage analysis reports.
 Detects:
 - Legacy Check blocks (resource.TestCheckResourceAttr)
 - Missing drift detection tests
 - Missing import tests
 - Missing idempotency checks
 - Modern pattern usage statistics
+- Optional field coverage
 
 Usage:
     python analyze_gap.py <test_directory> [--output report.md]
@@ -708,7 +709,7 @@ ConfigStateChecks: []statecheck.StateCheck{
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Analyze Terraform provider tests for modernization gaps"
+        description="Analyze Terraform provider test coverage and quality"
     )
     parser.add_argument(
         "test_dir",

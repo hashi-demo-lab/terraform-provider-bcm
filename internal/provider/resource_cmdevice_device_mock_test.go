@@ -103,6 +103,7 @@ func createMockBCMServerForDeviceErrors(scenario mockBCMServerScenario) *httptes
 		if req.Service == "login" {
 			w.Header().Set("Set-Cookie", "cm-login-token=test-token; Path=/")
 			w.WriteHeader(http.StatusOK)
+			// Return boolean true to match real BCM API login response
 			_ = json.NewEncoder(w).Encode(true)
 			return
 		}
@@ -207,7 +208,7 @@ func handleCategoryInvalidJSON(w http.ResponseWriter, req struct {
 		})
 		return
 	}
-	if req.Service == "cmpart" && req.Call == "getPartitions" {
+	if req.Service == "CMPart" && req.Call == "getPartitions" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode([]map[string]interface{}{
@@ -272,7 +273,7 @@ func handleCategoryProxyMissing(w http.ResponseWriter, req struct {
 		})
 		return
 	}
-	if req.Service == "cmpart" && req.Call == "getPartitions" {
+	if req.Service == "CMPart" && req.Call == "getPartitions" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode([]map[string]interface{}{
@@ -304,7 +305,7 @@ func handlePartitionsQueryError(w http.ResponseWriter, req struct {
 	Call    string        `json:"call"`
 	Args    []interface{} `json:"args,omitempty"`
 }) {
-	if req.Service == "cmpart" && req.Call == "getPartitions" {
+	if req.Service == "CMPart" && req.Call == "getPartitions" {
 		http.Error(w, "Failed to query partitions", http.StatusInternalServerError)
 		return
 	}
@@ -345,7 +346,7 @@ func handlePartitionsInvalidJSON(w http.ResponseWriter, req struct {
 		return
 	}
 	// Return invalid JSON only for getPartitions (cmpart service)
-	if req.Service == "cmpart" && req.Call == "getPartitions" {
+	if req.Service == "CMPart" && req.Call == "getPartitions" {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("not valid json ["))
 		return
@@ -362,7 +363,7 @@ func handlePartitionsNoBase(w http.ResponseWriter, req struct {
 	Call    string        `json:"call"`
 	Args    []interface{} `json:"args,omitempty"`
 }) {
-	if req.Service == "cmpart" && req.Call == "getPartitions" {
+	if req.Service == "CMPart" && req.Call == "getPartitions" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode([]map[string]interface{}{
@@ -409,7 +410,7 @@ func handlePartitionNotCommitted(w http.ResponseWriter, req struct {
 		return
 	}
 	// Always return error for getSoftwareImage to simulate partition not ready
-	if req.Service == "cmpart" && req.Call == "getSoftwareImage" {
+	if req.Service == "CMPart" && req.Call == "getSoftwareImage" {
 		http.Error(w, "Software image not found or not committed", http.StatusNotFound)
 		return
 	}
@@ -434,7 +435,7 @@ func handleDeviceCreateError(w http.ResponseWriter, req struct {
 		})
 		return
 	}
-	if req.Service == "cmpart" && req.Call == "getSoftwareImage" {
+	if req.Service == "CMPart" && req.Call == "getSoftwareImage" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{"uuid": "11111111-1111-1111-1111-111111111111"})
@@ -467,7 +468,7 @@ func handleDeviceCreateInvalidJSON(w http.ResponseWriter, req struct {
 		return
 	}
 	// Return valid partition data
-	if req.Service == "cmpart" && req.Call == "getSoftwareImage" {
+	if req.Service == "CMPart" && req.Call == "getSoftwareImage" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{"uuid": "11111111-1111-1111-1111-111111111111"})
@@ -501,7 +502,7 @@ func handleDeviceValidationFailure(w http.ResponseWriter, req struct {
 		})
 		return
 	}
-	if req.Service == "cmpart" && req.Call == "getSoftwareImage" {
+	if req.Service == "CMPart" && req.Call == "getSoftwareImage" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{"uuid": "11111111-1111-1111-1111-111111111111"})
@@ -547,7 +548,7 @@ func handleDeviceReadError(w http.ResponseWriter, req struct {
 		return
 	}
 	// Return valid partition data
-	if req.Service == "cmpart" && req.Call == "getSoftwareImage" {
+	if req.Service == "CMPart" && req.Call == "getSoftwareImage" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{"uuid": "11111111-1111-1111-1111-111111111111"})
@@ -591,7 +592,7 @@ func handleDeviceReadInvalidJSON(w http.ResponseWriter, req struct {
 		return
 	}
 	// Return valid partition to allow device creation
-	if req.Service == "cmpart" && req.Call == "getSoftwareImage" {
+	if req.Service == "CMPart" && req.Call == "getSoftwareImage" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{"uuid": "11111111-1111-1111-1111-111111111111"})
@@ -864,7 +865,7 @@ func TestAccCMDeviceDeviceResource_ErrorPartitionsInvalidJSON(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config:      testAccDeviceResourceConfigWithMockServer(mockServer.URL, deviceName),
-				ExpectError: regexp.MustCompile(`(?s)Error Querying Partitions.*failed to parse JSON response`),
+				ExpectError: regexp.MustCompile(`(?s)Error Parsing Partitions.*Could not parse partitions response`),
 			},
 		},
 	})
