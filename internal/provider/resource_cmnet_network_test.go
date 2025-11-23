@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 )
 
@@ -32,8 +33,18 @@ func TestAccCMNetNetwork_Basic(t *testing.T) {
 					resource.TestCheckResourceAttr("bcm_cmnet_network.test", "domain_name", "cluster.local"),
 				),
 			},
+			// Idempotency check after Create
+			{
+				Config: testAccCMNetNetworkConfigBasic(networkName),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
 			// ImportState testing
 			{
+				Config:            testAccCMNetNetworkConfigBasic(networkName),
 				ResourceName:      "bcm_cmnet_network.test",
 				ImportState:       true,
 				ImportStateVerify: true,
