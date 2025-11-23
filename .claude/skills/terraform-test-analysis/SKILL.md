@@ -1,11 +1,11 @@
 ---
-name: terraform-test-modernization
-description: Automate and guide modernization of Terraform provider tests to terraform-plugin-testing v1.13.3+ patterns. Use when (1) modernizing legacy test files with resource.TestCheckResourceAttr to statecheck.ExpectKnownValue, (2) adding missing tests (drift detection, import, idempotency), (3) analyzing test coverage gaps, (4) converting Check blocks to ConfigStateChecks, or (5) verifying test compilation after changes. Supports both automated gap analysis and guided pattern application with BCM-specific patterns.
+name: terraform-test-analysis
+description: Analyze and improve Terraform provider test coverage using terraform-plugin-testing v1.13.3+ patterns. Use when (1) analyzing test coverage gaps, (2) adding missing tests (drift detection, import, idempotency), (3) converting legacy patterns to modern state checks, (4) tracking optional field coverage, or (5) verifying test quality. Supports automated coverage analysis and guided pattern improvements with BCM-specific patterns.
 ---
 
-# Terraform Test Modernization
+# Terraform Test Analysis
 
-Systematic workflow for modernizing Terraform provider acceptance tests to modern patterns from terraform-plugin-testing v1.13.3+.
+Analyze test coverage and improve Terraform provider acceptance tests using modern patterns from terraform-plugin-testing v1.13.3+.
 
 ## Quick Start
 
