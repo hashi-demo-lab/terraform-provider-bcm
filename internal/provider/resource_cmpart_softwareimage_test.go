@@ -1232,7 +1232,6 @@ func TestAccCMPartSoftwareImageResource_SOLConfiguration(t *testing.T) {
 					imagePath,
 					"ttyS0",
 					true,
-					"/dev/bootfs",
 				),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
@@ -1245,11 +1244,6 @@ func TestAccCMPartSoftwareImageResource_SOLConfiguration(t *testing.T) {
 						tfjsonpath.New("sol_flow_control"),
 						knownvalue.Bool(true),
 					),
-					statecheck.ExpectKnownValue(
-						"bcm_cmpart_softwareimage.test",
-						tfjsonpath.New("bootfspart"),
-						knownvalue.StringExact("/dev/bootfs"),
-					),
 				},
 			},
 			// Update SOL configuration
@@ -1259,7 +1253,6 @@ func TestAccCMPartSoftwareImageResource_SOLConfiguration(t *testing.T) {
 					imagePath,
 					"ttyS1",
 					false,
-					"/dev/boot2",
 				),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
@@ -1272,11 +1265,6 @@ func TestAccCMPartSoftwareImageResource_SOLConfiguration(t *testing.T) {
 						tfjsonpath.New("sol_flow_control"),
 						knownvalue.Bool(false),
 					),
-					statecheck.ExpectKnownValue(
-						"bcm_cmpart_softwareimage.test",
-						tfjsonpath.New("bootfspart"),
-						knownvalue.StringExact("/dev/boot2"),
-					),
 				},
 			},
 			// Idempotency check
@@ -1286,7 +1274,6 @@ func TestAccCMPartSoftwareImageResource_SOLConfiguration(t *testing.T) {
 					imagePath,
 					"ttyS1",
 					false,
-					"/dev/boot2",
 				),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{
@@ -1298,7 +1285,7 @@ func TestAccCMPartSoftwareImageResource_SOLConfiguration(t *testing.T) {
 	})
 }
 
-func testAccCMPartSoftwareImageResourceConfig_SOLAdvanced(name, path, solPort string, solFlowControl bool, bootfsPart string) string {
+func testAccCMPartSoftwareImageResourceConfig_SOLAdvanced(name, path, solPort string, solFlowControl bool) string {
 	return fmt.Sprintf(`
 provider "bcm" {
   endpoint             = %[1]q
@@ -1312,7 +1299,6 @@ resource "bcm_cmpart_softwareimage" "test" {
   path             = %[5]q
   sol_port         = %[6]q
   sol_flow_control = %[7]t
-  bootfspart       = %[8]q
 }
 `,
 		os.Getenv("BCM_ENDPOINT"),
@@ -1322,7 +1308,6 @@ resource "bcm_cmpart_softwareimage" "test" {
 		path,
 		solPort,
 		solFlowControl,
-		bootfsPart,
 	)
 }
 

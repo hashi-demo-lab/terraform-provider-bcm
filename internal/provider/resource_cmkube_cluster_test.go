@@ -578,13 +578,16 @@ resource "bcm_cmkube_cluster" "test" {
 }
 
 func testAccCMKubeClusterResourceConfigWithWorkers(name, masterNodeUUID string, workerNodeUUIDs []string) string {
-	workersStr := ""
+	var workersStr string
 	if len(workerNodeUUIDs) > 0 {
 		workers := make([]string, len(workerNodeUUIDs))
 		for i, uuid := range workerNodeUUIDs {
 			workers[i] = fmt.Sprintf("%q", uuid)
 		}
 		workersStr = fmt.Sprintf("\n  worker_nodes = [%s]", strings.Join(workers, ", "))
+	} else {
+		// Explicitly set empty list when scaling down to 0 workers
+		workersStr = "\n  worker_nodes = []"
 	}
 
 	return fmt.Sprintf(`

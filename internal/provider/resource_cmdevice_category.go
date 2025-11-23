@@ -750,8 +750,10 @@ func (r *CMDeviceCategoryResource) Read(ctx context.Context, req resource.ReadRe
 		return
 	}
 
-	// Preserve original management_network from state for later comparison
+	// Preserve original management_network and force from state for later comparison
+	// These client-side parameters are not returned by BCM API
 	originalManagementNetwork := state.ManagementNetwork
+	originalForce := state.Force
 
 	// Fetch current state from BCM API with retry for eventual consistency
 	// BCM may not return all computed fields immediately after create/update
@@ -848,6 +850,19 @@ func (r *CMDeviceCategoryResource) Read(ctx context.Context, req resource.ReadRe
 			})
 			state.ManagementNetwork = originalManagementNetwork
 		}
+	}
+
+	// CRITICAL FIX: Preserve force parameter from state
+	// BCM API does not return force (client-side parameter only), but we need to preserve
+	// the user's configured value to avoid false drift detection.
+	if !originalForce.IsNull() && !originalForce.IsUnknown() {
+		state.Force = originalForce
+		tflog.Debug(ctx, "Preserved force parameter from state", map[string]interface{}{
+			"force": originalForce.ValueBool(),
+		})
+	} else {
+		// If force was never set, keep it as null (not false - that would be a config change)
+		state.Force = types.BoolNull()
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)

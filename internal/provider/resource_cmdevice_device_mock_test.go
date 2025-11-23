@@ -1013,14 +1013,14 @@ func TestAccCMDeviceDeviceResource_ErrorDeviceValidationFailed(t *testing.T) {
 	mockServer := createMockBCMServerForDeviceErrors(scenarioDeviceValidationFailure)
 	defer mockServer.Close()
 
-	deviceName := generateUniqueTestName("tftest-device-error-validation")
+	deviceName := generateShortTestName("err-val")
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
 				Config:      testAccDeviceResourceConfigWithMockServer(mockServer.URL, deviceName),
-				ExpectError: regexp.MustCompile(`(?is)Error Creating Device.*validation errors.*hostname.*already exists`),
+				ExpectError: regexp.MustCompile(`(?is)Error Creating Device.*validation.*errors.*hostname.*already.*exists`),
 			},
 		},
 	})
@@ -1044,7 +1044,7 @@ func TestAccCMDeviceDeviceResource_ErrorDeviceReadAfterCreateFailed(t *testing.T
 	mockServer := createMockBCMServerForDeviceErrors(scenarioDeviceReadError)
 	defer mockServer.Close()
 
-	deviceName := generateUniqueTestName("tftest-device-error-read-after-create")
+	deviceName := generateShortTestName("err-read")
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
