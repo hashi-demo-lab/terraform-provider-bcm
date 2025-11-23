@@ -21,6 +21,7 @@ import argparse
 from collections import defaultdict
 from pathlib import Path
 from typing import Dict, List, Tuple, Set
+from datetime import datetime
 
 
 class ResourceSchema:
@@ -728,9 +729,14 @@ def main():
 
     # Output
     if args.output:
-        with open(args.output, 'w') as f:
+        # Append timestamp to output filename
+        output_path = Path(args.output)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_with_timestamp = output_path.parent / f"{output_path.stem}_{timestamp}{output_path.suffix}"
+
+        with open(output_with_timestamp, 'w') as f:
             f.write(report)
-        print(f"✅ Gap analysis report written to: {args.output}")
+        print(f"✅ Gap analysis report written to: {output_with_timestamp}")
     else:
         print(report)
 
