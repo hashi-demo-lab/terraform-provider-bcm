@@ -49,6 +49,13 @@ type PartitionResourceModel struct {
 	RelayHost   types.String `tfsdk:"relay_host"`
 	NoZeroConf  types.Bool   `tfsdk:"no_zero_conf"`
 
+	// Required BCM fields
+	TimezoneSettings  types.String `tfsdk:"timezone_settings"`
+	PrimaryHeadNode   types.String `tfsdk:"primary_head_node"`
+	ExternalNetwork   types.String `tfsdk:"external_network"`
+	DefaultCategory   types.String `tfsdk:"default_category"`
+	ManagementNetwork types.String `tfsdk:"management_network"`
+
 	// Network configuration (list attributes)
 	AdminEmail    types.List `tfsdk:"admin_email"`
 	TimeServers   types.List `tfsdk:"time_servers"`
@@ -139,6 +146,26 @@ func (r *CMPartPartitionResource) Schema(ctx context.Context, req resource.Schem
 				Optional:            true,
 				Computed:            true,
 				MarkdownDescription: "Disable Zeroconf networking (default: false)",
+			},
+			"timezone_settings": schema.StringAttribute{
+				Required:            true,
+				MarkdownDescription: "Timezone configuration (e.g., 'UTC', 'America/New_York')",
+			},
+			"primary_head_node": schema.StringAttribute{
+				Required:            true,
+				MarkdownDescription: "Primary head node UUID reference",
+			},
+			"external_network": schema.StringAttribute{
+				Required:            true,
+				MarkdownDescription: "External network UUID reference",
+			},
+			"default_category": schema.StringAttribute{
+				Required:            true,
+				MarkdownDescription: "Default node category UUID reference",
+			},
+			"management_network": schema.StringAttribute{
+				Required:            true,
+				MarkdownDescription: "Management network UUID reference",
 			},
 			"admin_email": schema.ListAttribute{
 				ElementType:         types.StringType,
@@ -430,6 +457,13 @@ func (r *CMPartPartitionResource) readPartition(ctx context.Context, model *Part
 	model.RelayHost = getStringValue(data, "relayHost")
 	model.NoZeroConf = getBoolValue(data, "noZeroConf")
 
+	// Required BCM fields (camelCase mapping)
+	model.TimezoneSettings = getStringValue(data, "timeZoneSettings")
+	model.PrimaryHeadNode = getStringValue(data, "primaryHeadNode")
+	model.ExternalNetwork = getStringValue(data, "externalNetwork")
+	model.DefaultCategory = getStringValue(data, "defaultCategory")
+	model.ManagementNetwork = getStringValue(data, "managementNetwork")
+
 	// List attributes - unmarshal JSON arrays to types.List
 	model.AdminEmail = unmarshalListAttribute(data["adminEmail"])
 	model.TimeServers = unmarshalListAttribute(data["timeServers"])
@@ -481,6 +515,23 @@ func (r *CMPartPartitionResource) buildAPIEntity(model *PartitionResourceModel) 
 	}
 	if !model.NoZeroConf.IsNull() && !model.NoZeroConf.IsUnknown() {
 		entity["noZeroConf"] = model.NoZeroConf.ValueBool()
+	}
+
+	// Required BCM fields (snake_case → camelCase)
+	if !model.TimezoneSettings.IsNull() && !model.TimezoneSettings.IsUnknown() {
+		entity["timeZoneSettings"] = model.TimezoneSettings.ValueString()
+	}
+	if !model.PrimaryHeadNode.IsNull() && !model.PrimaryHeadNode.IsUnknown() {
+		entity["primaryHeadNode"] = model.PrimaryHeadNode.ValueString()
+	}
+	if !model.ExternalNetwork.IsNull() && !model.ExternalNetwork.IsUnknown() {
+		entity["externalNetwork"] = model.ExternalNetwork.ValueString()
+	}
+	if !model.DefaultCategory.IsNull() && !model.DefaultCategory.IsUnknown() {
+		entity["defaultCategory"] = model.DefaultCategory.ValueString()
+	}
+	if !model.ManagementNetwork.IsNull() && !model.ManagementNetwork.IsUnknown() {
+		entity["managementNetwork"] = model.ManagementNetwork.ValueString()
 	}
 
 	// List attributes - convert types.List to []string

@@ -5,10 +5,12 @@ package provider
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-testing/compare"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -225,6 +227,99 @@ func TestAccCMNetNetwork_Update(t *testing.T) {
 	})
 }
 
+// TestAccCMNetNetwork_DriftDetection verifies Terraform detects external modifications
+func TestAccCMNetNetwork_DriftDetection(t *testing.T) {
+	networkName := generateUniqueTestName("test-network-drift")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMNetNetworkDestroy,
+		Steps: []resource.TestStep{
+			// Step 1: Create network with initial notes
+			{
+				Config: testAccCMNetNetworkConfigWithNotes(networkName, "Initial notes"),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmnet_network.test",
+						tfjsonpath.New("notes"),
+						knownvalue.StringExact("Initial notes"),
+					),
+				},
+			},
+			// Step 2: Modify network externally via BCM API (drift simulation)
+			{
+				PreConfig: func() {
+					client := createTestBCMClient(t)
+					ctx := context.Background()
+
+					// Get network UUID by name
+					uuid := getResourceUUIDByName(t, "cmnet", "getNetwork", networkName)
+
+					// Fetch full network data
+					body, err := client.CallJSONRPC(ctx, "cmnet", "getNetwork", uuid)
+					if err != nil {
+						t.Fatalf("Failed to fetch network: %v", err)
+					}
+
+					var networkData map[string]interface{}
+					if err := json.Unmarshal(body, &networkData); err != nil {
+						t.Fatalf("Failed to unmarshal network data: %v", err)
+					}
+
+					// Modify notes field externally (this is the drift we're introducing)
+					networkData["notes"] = "Modified externally"
+
+					// Build BCM entity structure (required for updateNetwork)
+					entity := map[string]interface{}{
+						"baseType":      "Network",
+						"childType":     "",
+						"modified":      true,
+						"to_be_removed": false,
+						"revision":      networkData["revision"],
+						"uuid":          uuid,
+					}
+
+					// Copy all network fields
+					for k, v := range networkData {
+						if k != "uuid" {
+							entity[k] = v
+						}
+					}
+
+					// Update via BCM API
+					_, err = client.CallJSONRPC(ctx, "cmnet", "updateNetwork", entity, false)
+					if err != nil {
+						t.Fatalf("Failed to update network externally: %v", err)
+					}
+
+					// Wait for eventual consistency
+					time.Sleep(2 * time.Second)
+
+					t.Logf("[DEBUG] Modified notes externally to: %v", entity["notes"])
+				},
+				Config: testAccCMNetNetworkConfigWithNotes(networkName, "Initial notes"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectNonEmptyPlan(), // Drift should be detected!
+					},
+				},
+			},
+			// Step 3: Terraform restores desired state
+			{
+				Config: testAccCMNetNetworkConfigWithNotes(networkName, "Initial notes"),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmnet_network.test",
+						tfjsonpath.New("notes"),
+						knownvalue.StringExact("Initial notes"),
+					),
+				},
+			},
+		},
+	})
+}
+
 func testAccCheckCMNetNetworkDestroy(s *terraform.State) error {
 	client := createTestBCMClient(&testing.T{})
 	ctx := context.Background()
@@ -334,5 +429,28 @@ resource "bcm_cmnet_network" "test" {
 		os.Getenv("BCM_USERNAME"),
 		os.Getenv("BCM_PASSWORD"),
 		name,
+	)
+}
+
+func testAccCMNetNetworkConfigWithNotes(name, notes string) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+resource "bcm_cmnet_network" "test" {
+  name        = %[4]q
+  domain_name = "cluster.local"
+  notes       = %[5]q
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		name,
+		notes,
 	)
 }

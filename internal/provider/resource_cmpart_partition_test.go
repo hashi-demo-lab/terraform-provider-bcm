@@ -516,9 +516,9 @@ data "bcm_cmnet_networks" "all" {}
 data "bcm_cmdevice_categories" "all" {}
 
 resource "bcm_cmpart_partition" "test" {
-  name                = %[4]q
-  cluster_name        = %[5]q
-  timezone_settings   = "America/Los_Angeles"
+  name                = "base"
+  cluster_name        = %[4]q
+  timezone_settings   = "America/New_York"
   primary_head_node   = data.bcm_cmdevice_nodes.headnode.nodes[0].uuid
   external_network    = data.bcm_cmnet_networks.all.networks[0].uuid
   default_category    = data.bcm_cmdevice_categories.all.categories[0].uuid
@@ -528,7 +528,6 @@ resource "bcm_cmpart_partition" "test" {
 		os.Getenv("BCM_ENDPOINT"),
 		os.Getenv("BCM_USERNAME"),
 		os.Getenv("BCM_PASSWORD"),
-		name,
 		clusterName,
 	)
 }
@@ -557,20 +556,19 @@ data "bcm_cmnet_networks" "all" {}
 data "bcm_cmdevice_categories" "all" {}
 
 resource "bcm_cmpart_partition" "test" {
-  name                = %[4]q
+  name                = "base"
   cluster_name        = "Test Cluster"
-  timezone_settings   = "America/Los_Angeles"
+  timezone_settings   = "America/New_York"
   primary_head_node   = data.bcm_cmdevice_nodes.headnode.nodes[0].uuid
   external_network    = data.bcm_cmnet_networks.all.networks[0].uuid
   default_category    = data.bcm_cmdevice_categories.all.categories[0].uuid
   management_network  = length(data.bcm_cmnet_networks.all.networks) > 1 ? data.bcm_cmnet_networks.all.networks[1].uuid : data.bcm_cmnet_networks.all.networks[0].uuid
-  notes               = %[5]q
+  notes               = %[4]q
 }
 `,
 		os.Getenv("BCM_ENDPOINT"),
 		os.Getenv("BCM_USERNAME"),
 		os.Getenv("BCM_PASSWORD"),
-		name,
 		notes,
 	)
 }
@@ -604,24 +602,23 @@ data "bcm_cmnet_networks" "all" {}
 data "bcm_cmdevice_categories" "all" {}
 
 resource "bcm_cmpart_partition" "test" {
-  name                = %[4]q
+  name                = "base"
   cluster_name        = "Test Cluster"
-  timezone_settings   = "America/Los_Angeles"
+  timezone_settings   = "America/New_York"
   primary_head_node   = data.bcm_cmdevice_nodes.headnode.nodes[0].uuid
   external_network    = data.bcm_cmnet_networks.all.networks[0].uuid
   default_category    = data.bcm_cmdevice_categories.all.categories[0].uuid
   management_network  = length(data.bcm_cmnet_networks.all.networks) > 1 ? data.bcm_cmnet_networks.all.networks[1].uuid : data.bcm_cmnet_networks.all.networks[0].uuid
 
-  admin_email    = %[5]s
-  time_servers   = %[6]s
-  name_servers   = %[7]s
-  search_domains = %[8]s
+  admin_email    = %[4]s
+  time_servers   = %[5]s
+  name_servers   = %[6]s
+  search_domains = %[7]s
 }
 `,
 		os.Getenv("BCM_ENDPOINT"),
 		os.Getenv("BCM_USERNAME"),
 		os.Getenv("BCM_PASSWORD"),
-		name,
 		adminEmailsHCL,
 		timeServersHCL,
 		nameServersHCL,
@@ -653,22 +650,21 @@ data "bcm_cmnet_networks" "all" {}
 data "bcm_cmdevice_categories" "all" {}
 
 resource "bcm_cmpart_partition" "test" {
-  name                = %[4]q
-  cluster_name        = %[5]q
-  timezone_settings   = "America/Los_Angeles"
+  name                = "base"
+  cluster_name        = %[4]q
+  timezone_settings   = "America/New_York"
   primary_head_node   = data.bcm_cmdevice_nodes.headnode.nodes[0].uuid
   external_network    = data.bcm_cmnet_networks.all.networks[0].uuid
   default_category    = data.bcm_cmdevice_categories.all.categories[0].uuid
   management_network  = length(data.bcm_cmnet_networks.all.networks) > 1 ? data.bcm_cmnet_networks.all.networks[1].uuid : data.bcm_cmnet_networks.all.networks[0].uuid
-  slave_name          = %[6]q
-  slave_digits        = %[7]d
-  notes               = %[8]q
+  slave_name          = %[5]q
+  slave_digits        = %[6]d
+  notes               = %[7]q
 }
 `,
 		os.Getenv("BCM_ENDPOINT"),
 		os.Getenv("BCM_USERNAME"),
 		os.Getenv("BCM_PASSWORD"),
-		name,
 		clusterName,
 		slaveName,
 		slaveDigits,

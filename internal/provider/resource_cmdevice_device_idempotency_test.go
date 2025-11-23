@@ -4,9 +4,12 @@
 package provider
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
@@ -67,6 +70,55 @@ func TestAccCMDeviceDevice_Idempotency(t *testing.T) {
 				},
 			},
 			// Step 3: Another refresh to ensure stability
+			{
+				Config: testAccCMDeviceDeviceConfigIdempotency(deviceName, categoryName, imageName, imagePath),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+		},
+	})
+}
+
+func TestAccCMDeviceDevice_IdempotencyWithImport(t *testing.T) {
+	deviceName := generateUniqueTestName("citest-device-import")
+	categoryName := generateUniqueTestName("citest-category-import")
+	imageName := generateUniqueTestName("citest-image-import")
+	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceDeviceDestroy,
+		Steps: []resource.TestStep{
+			// Step 1: Create device
+			{
+				Config: testAccCMDeviceDeviceConfigIdempotency(deviceName, categoryName, imageName, imagePath),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("hostname"),
+						knownvalue.StringExact(deviceName),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+						knownvalue.NotNull(),
+					),
+				},
+			},
+			// Step 2: Import the device
+			{
+				ResourceName:      "bcm_cmdevice_device.test",
+				ImportState:       true,
+				ImportStateVerify: true,
+				ImportStateVerifyIgnore: []string{
+					"software_image_proxy",
+				},
+			},
+			// Step 3: Verify idempotency after import
 			{
 				Config: testAccCMDeviceDeviceConfigIdempotency(deviceName, categoryName, imageName, imagePath),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
@@ -174,6 +226,122 @@ func TestAccCMDeviceDevice_IdempotencyAfterUpdate(t *testing.T) {
 			// Step 4: Verify idempotency after update
 			{
 				Config: testAccCMDeviceDeviceConfigIdempotencyUpdate(deviceName, categoryName, imageName, imagePath, "Updated notes"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+		},
+	})
+}
+
+func TestAccCMDeviceDevice_IdempotencyDrift(t *testing.T) {
+	deviceName := generateUniqueTestName("citest-device-drift")
+	categoryName := generateUniqueTestName("citest-category-drift")
+	imageName := generateUniqueTestName("citest-image-drift")
+	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceDeviceDestroy,
+		Steps: []resource.TestStep{
+			// Step 1: Create device with initial notes
+			{
+				Config: testAccCMDeviceDeviceConfigIdempotencyUpdate(deviceName, categoryName, imageName, imagePath, "Initial notes"),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("hostname"),
+						knownvalue.StringExact(deviceName),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("notes"),
+						knownvalue.StringExact("Initial notes"),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+						knownvalue.NotNull(),
+					),
+				},
+			},
+			// Step 2: Modify notes externally to trigger drift detection
+			{
+				PreConfig: func() {
+					client := createTestBCMClient(t)
+					ctx := context.Background()
+
+					// Get device UUID by name
+					body, err := client.CallJSONRPC(ctx, "cmdevice", "getDevice", deviceName)
+					if err != nil {
+						t.Fatalf("Failed to get device: %v", err)
+					}
+
+					var deviceData map[string]interface{}
+					if err := json.Unmarshal(body, &deviceData); err != nil {
+						t.Fatalf("Failed to unmarshal device data: %v", err)
+					}
+
+					uuid, ok := deviceData["uuid"].(string)
+					if !ok {
+						t.Fatalf("Failed to extract device UUID")
+					}
+
+					// Modify notes field externally (snake_case → camelCase)
+					deviceData["notes"] = "Modified externally"
+
+					// Wrap in BCM API entity structure
+					entity := map[string]interface{}{
+						"baseType":      "Node",
+						"childType":     "",
+						"modified":      true,
+						"to_be_removed": false,
+						"revision":      "",
+						"uuid":          uuid,
+					}
+
+					// Copy all fields except uuid (already set)
+					for k, v := range deviceData {
+						if k != "uuid" {
+							entity[k] = v
+						}
+					}
+
+					// Update via BCM API
+					_, err = client.CallJSONRPC(ctx, "cmdevice", "setDevice", entity, false)
+					if err != nil {
+						t.Fatalf("Failed to update device: %v", err)
+					}
+
+					// Wait for eventual consistency
+					time.Sleep(2 * time.Second)
+
+					t.Logf("[DEBUG] Modified notes externally to: %v", entity["notes"])
+				},
+				Config: testAccCMDeviceDeviceConfigIdempotencyUpdate(deviceName, categoryName, imageName, imagePath, "Initial notes"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectNonEmptyPlan(),
+					},
+				},
+			},
+			// Step 3: Terraform restores desired state
+			{
+				Config: testAccCMDeviceDeviceConfigIdempotencyUpdate(deviceName, categoryName, imageName, imagePath, "Initial notes"),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("notes"),
+						knownvalue.StringExact("Initial notes"),
+					),
+				},
+			},
+			// Step 4: Verify idempotency after drift correction
+			{
+				Config: testAccCMDeviceDeviceConfigIdempotencyUpdate(deviceName, categoryName, imageName, imagePath, "Initial notes"),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),

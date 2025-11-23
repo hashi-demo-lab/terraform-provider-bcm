@@ -257,7 +257,7 @@ func TestAccCMKubeClusterResource_DriftDetection(t *testing.T) {
 		Steps: []resource.TestStep{
 			// Create cluster with version
 			{
-				Config: testAccCMKubeClusterResourceConfigWithVersion(clusterName, masterNodeUUID, "1.28.0"),				),
+				Config: testAccCMKubeClusterResourceConfigWithVersion(clusterName, masterNodeUUID, "1.28.0"),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmkube_cluster.test",
@@ -324,7 +324,7 @@ func TestAccCMKubeClusterResource_DriftDetection(t *testing.T) {
 			},
 			// Terraform restores desired state
 			{
-				Config: testAccCMKubeClusterResourceConfigWithVersion(clusterName, masterNodeUUID, "1.28.0"),				),
+				Config: testAccCMKubeClusterResourceConfigWithVersion(clusterName, masterNodeUUID, "1.28.0"),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmkube_cluster.test",
@@ -355,7 +355,7 @@ func TestAccCMKubeClusterResource_WorkerNodes(t *testing.T) {
 					clusterName,
 					masterNodeUUID,
 					[]string{workerNodeUUID1},
-				),				),
+				),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmkube_cluster.test",
@@ -370,7 +370,7 @@ func TestAccCMKubeClusterResource_WorkerNodes(t *testing.T) {
 					clusterName,
 					masterNodeUUID,
 					[]string{workerNodeUUID1, workerNodeUUID2},
-				),				),
+				),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmkube_cluster.test",
@@ -385,7 +385,7 @@ func TestAccCMKubeClusterResource_WorkerNodes(t *testing.T) {
 					clusterName,
 					masterNodeUUID,
 					[]string{},
-				),				),
+				),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmkube_cluster.test",
@@ -459,10 +459,6 @@ func TestAccCMKubeClusterResource_CompleteConfiguration(t *testing.T) {
 					workerNodeUUID,
 					managementNetworkUUID,
 					"1.28.0",
-				),					resource.TestCheckResourceAttr("bcm_cmkube_cluster.test", "master_nodes.#", "1"),
-					resource.TestCheckResourceAttr("bcm_cmkube_cluster.test", "worker_nodes.#", "1"),
-					resource.TestCheckResourceAttr("bcm_cmkube_cluster.test", "management_network", managementNetworkUUID),
-					resource.TestCheckResourceAttr("bcm_cmkube_cluster.test", "version", "1.28.0"),
 				),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
@@ -515,7 +511,6 @@ func TestAccCMKubeClusterResource_CompleteConfiguration(t *testing.T) {
 					workerNodeUUID,
 					managementNetworkUUID,
 					"1.29.0",
-				),					resource.TestCheckResourceAttr("bcm_cmkube_cluster.test", "version", "1.29.0"),
 				),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
@@ -654,9 +649,7 @@ func TestAccCMKubeClusterResource_P3AdvancedNetworking(t *testing.T) {
 		Steps: []resource.TestStep{
 			// Create with advanced networking features
 			{
-				Config: testAccCMKubeClusterResourceConfigP3Networking(clusterName, masterNodeUUID),					resource.TestCheckResourceAttr("bcm_cmkube_cluster.test", "cni_plugin", "calico"),
-					resource.TestCheckResourceAttr("bcm_cmkube_cluster.test", "dns_servers.#", "2"),
-				),
+				Config: testAccCMKubeClusterResourceConfigP3Networking(clusterName, masterNodeUUID),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmkube_cluster.test",
@@ -686,8 +679,7 @@ func TestAccCMKubeClusterResource_P3AdvancedNetworking(t *testing.T) {
 			},
 			// Update networking configuration
 			{
-				Config: testAccCMKubeClusterResourceConfigP3NetworkingUpdated(clusterName, masterNodeUUID),					resource.TestCheckResourceAttr("bcm_cmkube_cluster.test", "dns_servers.#", "1"),
-				),
+				Config: testAccCMKubeClusterResourceConfigP3NetworkingUpdated(clusterName, masterNodeUUID),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmkube_cluster.test",
@@ -717,9 +709,7 @@ func TestAccCMKubeClusterResource_P3StorageAndLoadBalancer(t *testing.T) {
 		Steps: []resource.TestStep{
 			// Create with storage classes and load balancer
 			{
-				Config: testAccCMKubeClusterResourceConfigP3Storage(clusterName, masterNodeUUID),					resource.TestCheckResourceAttr("bcm_cmkube_cluster.test", "load_balancer_mode", "metallb"),
-					resource.TestCheckResourceAttrSet("bcm_cmkube_cluster.test", "storage_classes"),
-				),
+				Config: testAccCMKubeClusterResourceConfigP3Storage(clusterName, masterNodeUUID),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmkube_cluster.test",
@@ -744,7 +734,7 @@ func TestAccCMKubeClusterResource_P3StorageAndLoadBalancer(t *testing.T) {
 			},
 			// Update storage configuration
 			{
-				Config: testAccCMKubeClusterResourceConfigP3StorageUpdated(clusterName, masterNodeUUID),				),
+				Config: testAccCMKubeClusterResourceConfigP3StorageUpdated(clusterName, masterNodeUUID),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmkube_cluster.test",
@@ -769,9 +759,7 @@ func TestAccCMKubeClusterResource_P3Addons(t *testing.T) {
 		Steps: []resource.TestStep{
 			// Create with addons and ingress controller
 			{
-				Config: testAccCMKubeClusterResourceConfigP3Addons(clusterName, masterNodeUUID),					resource.TestCheckResourceAttrSet("bcm_cmkube_cluster.test", "addons"),
-					resource.TestCheckResourceAttrSet("bcm_cmkube_cluster.test", "ingress_controller"),
-				),
+				Config: testAccCMKubeClusterResourceConfigP3Addons(clusterName, masterNodeUUID),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmkube_cluster.test",
@@ -796,8 +784,7 @@ func TestAccCMKubeClusterResource_P3Addons(t *testing.T) {
 			},
 			// Update addons configuration
 			{
-				Config: testAccCMKubeClusterResourceConfigP3AddonsUpdated(clusterName, masterNodeUUID),					resource.TestCheckResourceAttrSet("bcm_cmkube_cluster.test", "ingress_controller"),
-				),
+				Config: testAccCMKubeClusterResourceConfigP3AddonsUpdated(clusterName, masterNodeUUID),
 				ConfigStateChecks: []statecheck.StateCheck{
 					// Both should still be populated after update
 					statecheck.ExpectKnownValue(
@@ -828,14 +815,7 @@ func TestAccCMKubeClusterResource_P3FullStack(t *testing.T) {
 		Steps: []resource.TestStep{
 			// Create with all P3 fields
 			{
-				Config: testAccCMKubeClusterResourceConfigP3Full(clusterName, masterNodeUUID),					resource.TestCheckResourceAttr("bcm_cmkube_cluster.test", "cni_plugin", "calico"),
-					resource.TestCheckResourceAttr("bcm_cmkube_cluster.test", "dns_servers.#", "2"),
-					resource.TestCheckResourceAttr("bcm_cmkube_cluster.test", "load_balancer_mode", "metallb"),
-					resource.TestCheckResourceAttrSet("bcm_cmkube_cluster.test", "storage_classes"),
-					resource.TestCheckResourceAttrSet("bcm_cmkube_cluster.test", "addons"),
-					resource.TestCheckResourceAttrSet("bcm_cmkube_cluster.test", "ingress_controller"),
-					resource.TestCheckResourceAttrSet("bcm_cmkube_cluster.test", "overlay_network"),
-				),
+				Config: testAccCMKubeClusterResourceConfigP3Full(clusterName, masterNodeUUID),
 				ConfigStateChecks: []statecheck.StateCheck{
 					// Verify all P3 fields are set
 					statecheck.ExpectKnownValue(
