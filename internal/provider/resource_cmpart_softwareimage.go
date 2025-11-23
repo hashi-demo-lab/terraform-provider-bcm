@@ -128,7 +128,8 @@ func (r *CMPartSoftwareImageResource) Schema(ctx context.Context, req resource.S
 			},
 			"kernel_version": schema.StringAttribute{
 				Optional:            true,
-				MarkdownDescription: "Kernel version string (e.g., `5.15.0-58-generic`)",
+				Computed:            true,
+				MarkdownDescription: "Kernel version string (e.g., `5.15.0-58-generic`). When cloning an image, this value is inherited from the source image and becomes known after the clone completes.",
 			},
 			"kernel_parameters": schema.StringAttribute{
 				Optional:            true,

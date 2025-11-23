@@ -8,11 +8,40 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
+
+// ========================================
+// Environment Cleanup Helper
+// ========================================
+
+// clearBCMEnvVars clears BCM environment variables for mock server tests
+// This ensures the provider uses config values instead of environment
+func clearBCMEnvVars(t *testing.T) func() {
+	oldEndpoint := os.Getenv("BCM_ENDPOINT")
+	oldUsername := os.Getenv("BCM_USERNAME")
+	oldPassword := os.Getenv("BCM_PASSWORD")
+
+	os.Unsetenv("BCM_ENDPOINT")
+	os.Unsetenv("BCM_USERNAME")
+	os.Unsetenv("BCM_PASSWORD")
+
+	return func() {
+		if oldEndpoint != "" {
+			os.Setenv("BCM_ENDPOINT", oldEndpoint)
+		}
+		if oldUsername != "" {
+			os.Setenv("BCM_USERNAME", oldUsername)
+		}
+		if oldPassword != "" {
+			os.Setenv("BCM_PASSWORD", oldPassword)
+		}
+	}
+}
 
 // ========================================
 // Mock BCM Server Helpers
@@ -74,7 +103,7 @@ func createMockBCMServerForDeviceErrors(scenario mockBCMServerScenario) *httptes
 		if req.Service == "login" {
 			w.Header().Set("Set-Cookie", "cm-login-token=test-token; Path=/")
 			w.WriteHeader(http.StatusOK)
-			_ = json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
+			_ = json.NewEncoder(w).Encode(true)
 			return
 		}
 
@@ -161,27 +190,39 @@ func handleCategoryInvalidJSON(w http.ResponseWriter, req struct {
 	Call    string        `json:"call"`
 	Args    []interface{} `json:"args,omitempty"`
 }) {
-	// Return invalid JSON only for getCategory calls
+	// Return valid responses for prerequisite calls first
+	if req.Service == "cmdevice" && req.Call == "getCategories" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode([]map[string]interface{}{
+			{"uuid": "12345678-1234-1234-1234-123456789012", "name": "test-category"},
+		})
+		return
+	}
+	if req.Service == "cmnet" && req.Call == "getNetworks" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode([]map[string]interface{}{
+			{"uuid": "12345678-1234-1234-1234-123456789012", "name": "managementnet"},
+		})
+		return
+	}
+	if req.Service == "cmpart" && req.Call == "getPartitions" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode([]map[string]interface{}{
+			{"uuid": "11111111-1111-1111-1111-111111111111", "name": "base"},
+		})
+		return
+	}
+	// NOW inject the error for getCategory (singular - the actual error point)
 	if req.Service == "cmdevice" && req.Call == "getCategory" {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("invalid json {"))
 		return
 	}
 
-	// For other calls, return minimal valid responses
-	if req.Service == "cmnet" && req.Call == "getNetworks" {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode([]map[string]interface{}{
-			{
-				"uuid": "12345678-1234-1234-1234-123456789012",
-				"name": "managementnet",
-			},
-		})
-		return
-	}
-
-	// Default success response
+	// Default success response for any other calls
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
@@ -214,6 +255,32 @@ func handleCategoryProxyMissing(w http.ResponseWriter, req struct {
 	Call    string        `json:"call"`
 	Args    []interface{} `json:"args,omitempty"`
 }) {
+	// Return valid responses for prerequisite calls
+	if req.Service == "cmdevice" && req.Call == "getCategories" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode([]map[string]interface{}{
+			{"uuid": "12345678-1234-1234-1234-123456789012", "name": "test-category"},
+		})
+		return
+	}
+	if req.Service == "cmnet" && req.Call == "getNetworks" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode([]map[string]interface{}{
+			{"uuid": "12345678-1234-1234-1234-123456789012", "name": "managementnet"},
+		})
+		return
+	}
+	if req.Service == "cmpart" && req.Call == "getPartitions" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode([]map[string]interface{}{
+			{"uuid": "11111111-1111-1111-1111-111111111111", "name": "base"},
+		})
+		return
+	}
+	// NOW inject the error - softwareImageProxy missing parentSoftwareImage
 	if req.Service == "cmdevice" && req.Call == "getCategory" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -237,7 +304,7 @@ func handlePartitionsQueryError(w http.ResponseWriter, req struct {
 	Call    string        `json:"call"`
 	Args    []interface{} `json:"args,omitempty"`
 }) {
-	if req.Service == "CMPart" && req.Call == "getPartitions" {
+	if req.Service == "cmpart" && req.Call == "getPartitions" {
 		http.Error(w, "Failed to query partitions", http.StatusInternalServerError)
 		return
 	}
@@ -264,12 +331,7 @@ func handlePartitionsInvalidJSON(w http.ResponseWriter, req struct {
 	Call    string        `json:"call"`
 	Args    []interface{} `json:"args,omitempty"`
 }) {
-	if req.Service == "CMPart" && req.Call == "getPartitions" {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("not valid json ["))
-		return
-	}
-	// Return valid category with softwareImageProxy
+	// Return valid category with softwareImageProxy to trigger partition query
 	if req.Service == "cmdevice" && req.Call == "getCategory" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -282,6 +344,14 @@ func handlePartitionsInvalidJSON(w http.ResponseWriter, req struct {
 		})
 		return
 	}
+	// Return invalid JSON only for getPartitions (cmpart service)
+	if req.Service == "cmpart" && req.Call == "getPartitions" {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("not valid json ["))
+		return
+	}
+	// Default success for other calls
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
 }
@@ -292,7 +362,7 @@ func handlePartitionsNoBase(w http.ResponseWriter, req struct {
 	Call    string        `json:"call"`
 	Args    []interface{} `json:"args,omitempty"`
 }) {
-	if req.Service == "CMPart" && req.Call == "getPartitions" {
+	if req.Service == "cmpart" && req.Call == "getPartitions" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode([]map[string]interface{}{
@@ -339,7 +409,7 @@ func handlePartitionNotCommitted(w http.ResponseWriter, req struct {
 		return
 	}
 	// Always return error for getSoftwareImage to simulate partition not ready
-	if req.Service == "CMPart" && req.Call == "getSoftwareImage" {
+	if req.Service == "cmpart" && req.Call == "getSoftwareImage" {
 		http.Error(w, "Software image not found or not committed", http.StatusNotFound)
 		return
 	}
@@ -364,7 +434,7 @@ func handleDeviceCreateError(w http.ResponseWriter, req struct {
 		})
 		return
 	}
-	if req.Service == "CMPart" && req.Call == "getSoftwareImage" {
+	if req.Service == "cmpart" && req.Call == "getSoftwareImage" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{"uuid": "11111111-1111-1111-1111-111111111111"})
@@ -385,6 +455,7 @@ func handleDeviceCreateInvalidJSON(w http.ResponseWriter, req struct {
 	Call    string        `json:"call"`
 	Args    []interface{} `json:"args,omitempty"`
 }) {
+	// Return valid category with partition reference
 	if req.Service == "cmdevice" && req.Call == "getCategory" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -395,17 +466,21 @@ func handleDeviceCreateInvalidJSON(w http.ResponseWriter, req struct {
 		})
 		return
 	}
-	if req.Service == "CMPart" && req.Call == "getSoftwareImage" {
+	// Return valid partition data
+	if req.Service == "cmpart" && req.Call == "getSoftwareImage" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{"uuid": "11111111-1111-1111-1111-111111111111"})
 		return
 	}
+	// Return invalid JSON only for addDevice
 	if req.Service == "cmdevice" && req.Call == "addDevice" {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("invalid response {"))
 		return
 	}
+	// Default success for other calls
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
 }
@@ -426,7 +501,7 @@ func handleDeviceValidationFailure(w http.ResponseWriter, req struct {
 		})
 		return
 	}
-	if req.Service == "CMPart" && req.Call == "getSoftwareImage" {
+	if req.Service == "cmpart" && req.Call == "getSoftwareImage" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{"uuid": "11111111-1111-1111-1111-111111111111"})
@@ -460,10 +535,40 @@ func handleDeviceReadError(w http.ResponseWriter, req struct {
 	Call    string        `json:"call"`
 	Args    []interface{} `json:"args,omitempty"`
 }) {
+	// Return valid category data
+	if req.Service == "cmdevice" && req.Call == "getCategory" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"uuid":      "12345678-1234-1234-1234-123456789012",
+			"name":      "test-category",
+			"partition": "11111111-1111-1111-1111-111111111111",
+		})
+		return
+	}
+	// Return valid partition data
+	if req.Service == "cmpart" && req.Call == "getSoftwareImage" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"uuid": "11111111-1111-1111-1111-111111111111"})
+		return
+	}
+	// Allow device creation to succeed
+	if req.Service == "cmdevice" && req.Call == "addDevice" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": true,
+			"uuid":    "99999999-9999-9999-9999-999999999999",
+		})
+		return
+	}
+	// Fail on getDevice (read after create)
 	if req.Service == "cmdevice" && req.Call == "getDevice" {
 		http.Error(w, "Failed to read device", http.StatusInternalServerError)
 		return
 	}
+	// Default success for other calls
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
 }
@@ -474,6 +579,35 @@ func handleDeviceReadInvalidJSON(w http.ResponseWriter, req struct {
 	Call    string        `json:"call"`
 	Args    []interface{} `json:"args,omitempty"`
 }) {
+	// Return valid category to allow device creation
+	if req.Service == "cmdevice" && req.Call == "getCategory" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"uuid":      "12345678-1234-1234-1234-123456789012",
+			"name":      "test-category",
+			"partition": "11111111-1111-1111-1111-111111111111",
+		})
+		return
+	}
+	// Return valid partition to allow device creation
+	if req.Service == "cmpart" && req.Call == "getSoftwareImage" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"uuid": "11111111-1111-1111-1111-111111111111"})
+		return
+	}
+	// Return success for device creation
+	if req.Service == "cmdevice" && req.Call == "addDevice" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": true,
+			"uuid":    "test-device-uuid",
+		})
+		return
+	}
+	// Return invalid JSON for device read
 	if req.Service == "cmdevice" && req.Call == "getDevice" {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("not json {"))
@@ -561,6 +695,9 @@ func handleDeviceDeleteError(w http.ResponseWriter, req struct {
 // - Mock BCM API returns HTTP 404 error when calling getCategory.
 // - Provider should detect error and return "Error Querying Category" diagnostic.
 func TestAccCMDeviceDeviceResource_ErrorCategoryNotFound(t *testing.T) {
+	cleanup := clearBCMEnvVars(t)
+	defer cleanup()
+
 	// Create mock server that simulates category not found error.
 	mockServer := createMockBCMServerForDeviceErrors(scenarioCategoryNotFound)
 	defer mockServer.Close()
@@ -589,6 +726,9 @@ func TestAccCMDeviceDeviceResource_ErrorCategoryNotFound(t *testing.T) {
 // - Mock BCM API returns malformed JSON when calling getCategory.
 // - Provider should fail to unmarshal response and return "Error Parsing Category" diagnostic.
 func TestAccCMDeviceDeviceResource_ErrorCategoryInvalidJSON(t *testing.T) {
+	cleanup := clearBCMEnvVars(t)
+	defer cleanup()
+
 	// Create mock server that returns malformed JSON for category query
 	mockServer := createMockBCMServerForDeviceErrors(scenarioCategoryInvalidJSON)
 	defer mockServer.Close()
@@ -617,6 +757,9 @@ func TestAccCMDeviceDeviceResource_ErrorCategoryInvalidJSON(t *testing.T) {
 // - Mock BCM API returns category with neither partition nor softwareImageProxy fields.
 // - Provider should detect missing partition and return "Missing Partition" diagnostic.
 func TestAccCMDeviceDeviceResource_ErrorCategoryNoPartition(t *testing.T) {
+	cleanup := clearBCMEnvVars(t)
+	defer cleanup()
+
 	mockServer := createMockBCMServerForDeviceErrors(scenarioCategoryNoPartition)
 	defer mockServer.Close()
 
@@ -644,6 +787,9 @@ func TestAccCMDeviceDeviceResource_ErrorCategoryNoPartition(t *testing.T) {
 // - Mock category has softwareImageProxy but missing parentSoftwareImage field.
 // - Provider should return "Missing Partition" with proxy message.
 func TestAccCMDeviceDeviceResource_ErrorCategoryProxyMissingParent(t *testing.T) {
+	cleanup := clearBCMEnvVars(t)
+	defer cleanup()
+
 	mockServer := createMockBCMServerForDeviceErrors(scenarioCategoryProxyMissing)
 	defer mockServer.Close()
 
@@ -675,6 +821,9 @@ func TestAccCMDeviceDeviceResource_ErrorCategoryProxyMissingParent(t *testing.T)
 // - Mock BCM API returns HTTP 500 error when calling getPartitions.
 // - Provider should detect error and return "Error Querying Partitions" diagnostic.
 func TestAccCMDeviceDeviceResource_ErrorPartitionsQueryFailed(t *testing.T) {
+	cleanup := clearBCMEnvVars(t)
+	defer cleanup()
+
 	mockServer := createMockBCMServerForDeviceErrors(scenarioPartitionsQueryError)
 	defer mockServer.Close()
 
@@ -702,6 +851,9 @@ func TestAccCMDeviceDeviceResource_ErrorPartitionsQueryFailed(t *testing.T) {
 // - Mock BCM API returns malformed JSON when calling getPartitions.
 // - Provider should fail to unmarshal and return "Error Parsing Partitions" diagnostic.
 func TestAccCMDeviceDeviceResource_ErrorPartitionsInvalidJSON(t *testing.T) {
+	cleanup := clearBCMEnvVars(t)
+	defer cleanup()
+
 	mockServer := createMockBCMServerForDeviceErrors(scenarioPartitionsInvalidJSON)
 	defer mockServer.Close()
 
@@ -729,6 +881,9 @@ func TestAccCMDeviceDeviceResource_ErrorPartitionsInvalidJSON(t *testing.T) {
 // - Mock BCM API returns partitions list without "base" partition.
 // - Provider should return "Missing Base Partition" diagnostic.
 func TestAccCMDeviceDeviceResource_ErrorPartitionsNoBase(t *testing.T) {
+	cleanup := clearBCMEnvVars(t)
+	defer cleanup()
+
 	mockServer := createMockBCMServerForDeviceErrors(scenarioPartitionsNoBase)
 	defer mockServer.Close()
 
@@ -756,6 +911,9 @@ func TestAccCMDeviceDeviceResource_ErrorPartitionsNoBase(t *testing.T) {
 // - Mock BCM API always returns error for getSoftwareImage (partition never commits).
 // - Provider should retry with exponential backoff and return "Partition Not Ready" after 20 retries.
 func TestAccCMDeviceDeviceResource_ErrorPartitionNotCommitted(t *testing.T) {
+	cleanup := clearBCMEnvVars(t)
+	defer cleanup()
+
 	mockServer := createMockBCMServerForDeviceErrors(scenarioPartitionNotCommitted)
 	defer mockServer.Close()
 
@@ -787,6 +945,9 @@ func TestAccCMDeviceDeviceResource_ErrorPartitionNotCommitted(t *testing.T) {
 // - Mock BCM API returns HTTP 500 error when calling addDevice.
 // - Provider should detect error and return "Error Creating Device" diagnostic.
 func TestAccCMDeviceDeviceResource_ErrorDeviceCreateFailed(t *testing.T) {
+	cleanup := clearBCMEnvVars(t)
+	defer cleanup()
+
 	mockServer := createMockBCMServerForDeviceErrors(scenarioDeviceCreateError)
 	defer mockServer.Close()
 
@@ -804,16 +965,20 @@ func TestAccCMDeviceDeviceResource_ErrorDeviceCreateFailed(t *testing.T) {
 }
 
 // TestAccCMDeviceDeviceResource_ErrorDeviceCreateInvalidJSON tests create response parsing error.
-// References: resource_cmdevice_device.go:408
+// References: resource_cmdevice_device.go:393-398, bcm_client.go:225-227
 //
-// Error Path Tested: Lines 408-413 (Create operation)
-// Expected Diagnostic: "Error Parsing Create Response"
+// Error Path Tested: Lines 393-398 (Create) → bcm_client.go:225-227 (parseErrorResponse)
+// Expected Diagnostic: "Error Creating Device" with "failed to parse JSON response"
 //
 // Test Scenario:
 // - Create device with valid configuration.
 // - Mock BCM API returns malformed JSON from addDevice.
-// - Provider should fail to unmarshal and return "Error Parsing Create Response" diagnostic.
+// - bcm_client.parseErrorResponse detects invalid JSON and returns parse error.
+// - Provider returns "Error Creating Device" diagnostic with parse error details.
 func TestAccCMDeviceDeviceResource_ErrorDeviceCreateInvalidJSON(t *testing.T) {
+	cleanup := clearBCMEnvVars(t)
+	defer cleanup()
+
 	mockServer := createMockBCMServerForDeviceErrors(scenarioDeviceCreateInvalidJSON)
 	defer mockServer.Close()
 
@@ -824,7 +989,7 @@ func TestAccCMDeviceDeviceResource_ErrorDeviceCreateInvalidJSON(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config:      testAccDeviceResourceConfigWithMockServer(mockServer.URL, deviceName),
-				ExpectError: regexp.MustCompile(`Error Parsing Create Response`),
+				ExpectError: regexp.MustCompile(`(?s)Error Creating Device.*failed to parse.*JSON response`),
 			},
 		},
 	})
@@ -841,6 +1006,9 @@ func TestAccCMDeviceDeviceResource_ErrorDeviceCreateInvalidJSON(t *testing.T) {
 // - Mock BCM API returns success=false with validation array containing hostname and MAC errors.
 // - Provider should parse validation errors and return detailed error message.
 func TestAccCMDeviceDeviceResource_ErrorDeviceValidationFailed(t *testing.T) {
+	cleanup := clearBCMEnvVars(t)
+	defer cleanup()
+
 	mockServer := createMockBCMServerForDeviceErrors(scenarioDeviceValidationFailure)
 	defer mockServer.Close()
 
@@ -851,7 +1019,7 @@ func TestAccCMDeviceDeviceResource_ErrorDeviceValidationFailed(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config:      testAccDeviceResourceConfigWithMockServer(mockServer.URL, deviceName),
-				ExpectError: regexp.MustCompile(`Error Creating Device.*validation errors.*hostname.*already exists`),
+				ExpectError: regexp.MustCompile(`(?s)Error Creating Device.*validation errors.*hostname.*already exists`),
 			},
 		},
 	})
@@ -869,6 +1037,9 @@ func TestAccCMDeviceDeviceResource_ErrorDeviceValidationFailed(t *testing.T) {
 // - Provider should return "Error Reading Created Device" diagnostic.
 // - Note: This simulates eventual consistency issues where device created but not yet readable.
 func TestAccCMDeviceDeviceResource_ErrorDeviceReadAfterCreateFailed(t *testing.T) {
+	cleanup := clearBCMEnvVars(t)
+	defer cleanup()
+
 	mockServer := createMockBCMServerForDeviceErrors(scenarioDeviceReadError)
 	defer mockServer.Close()
 
@@ -886,15 +1057,20 @@ func TestAccCMDeviceDeviceResource_ErrorDeviceReadAfterCreateFailed(t *testing.T
 }
 
 // TestAccCMDeviceDeviceResource_ErrorDeviceReadInvalidJSON tests read response parsing error.
-// References: resource_cmdevice_device.go:454, line 591
+// References: resource_cmdevice_device.go:443, bcm_client.go:parseErrorResponse
 //
-// Error Path Tested: Lines 454-459, 591-596 (Create and standard Read operations)
-// Expected Diagnostic: "Error Parsing Device Data"
+// Error Path Tested: Lines 443-448 (Create operation, read after create)
+// Expected Diagnostic: "Error Reading Created Device" with "failed to parse JSON response"
 //
 // Test Scenario:
-// - Device read operation returns malformed JSON.
-// - Provider should fail to unmarshal and return "Error Parsing Device Data" diagnostic.
+// - Device creation succeeds (addDevice returns valid response).
+// - Device read operation returns malformed JSON (getDevice returns invalid JSON).
+// - BCM client's parseErrorResponse catches the JSON parsing error.
+// - Provider returns "Error Reading Created Device" diagnostic.
 func TestAccCMDeviceDeviceResource_ErrorDeviceReadInvalidJSON(t *testing.T) {
+	cleanup := clearBCMEnvVars(t)
+	defer cleanup()
+
 	mockServer := createMockBCMServerForDeviceErrors(scenarioDeviceReadInvalidJSON)
 	defer mockServer.Close()
 
@@ -905,7 +1081,7 @@ func TestAccCMDeviceDeviceResource_ErrorDeviceReadInvalidJSON(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config:      testAccDeviceResourceConfigWithMockServer(mockServer.URL, deviceName),
-				ExpectError: regexp.MustCompile(`Error Parsing Device Data`),
+				ExpectError: regexp.MustCompile(`(?s)Error Reading Created Device.*failed to parse JSON response`),
 			},
 		},
 	})
@@ -984,6 +1160,8 @@ func TestAccCMDeviceDeviceResource_ErrorDeviceDeleteFailed(t *testing.T) {
 // ========================================
 
 // testAccDeviceResourceConfigWithMockServer returns test config using mock server endpoint.
+// This config uses hardcoded UUIDs to avoid creating dependency resources (category, network).
+// The device resource will trigger category lookup which will fail in error scenarios.
 func testAccDeviceResourceConfigWithMockServer(mockEndpoint, hostname string) string {
 	return fmt.Sprintf(`
 provider "bcm" {
@@ -993,21 +1171,10 @@ provider "bcm" {
   insecure_skip_verify = true
 }
 
-data "bcm_cmnet_networks" "management" {
-  filter {
-    name_pattern = "managementnet"
-  }
-}
-
-resource "bcm_cmdevice_category" "test" {
-  name               = "test-category"
-  management_network = "12345678-1234-1234-1234-123456789012"
-}
-
 resource "bcm_cmdevice_device" "test" {
   hostname           = %[2]q
   mac                = "00:11:22:33:44:55"
-  category           = bcm_cmdevice_category.test.id
+  category           = "12345678-1234-1234-1234-123456789012"
   management_network = "12345678-1234-1234-1234-123456789012"
 }
 `,

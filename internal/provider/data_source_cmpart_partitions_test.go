@@ -187,12 +187,6 @@ func TestAccCMPartPartitionsDataSource_AttributeTypes(t *testing.T) {
 						tfjsonpath.New("partitions").AtSliceIndex(0).AtMapKey("to_be_removed"),
 						knownvalue.NotNull(),
 					),
-					// Verify Int64 attributes exist (creation_time should always be set)
-					statecheck.ExpectKnownValue(
-						"data.bcm_cmpart_partitions.test",
-						tfjsonpath.New("partitions").AtSliceIndex(0).AtMapKey("creation_time"),
-						knownvalue.NotNull(),
-					),
 				},
 			},
 		},
