@@ -1,6 +1,6 @@
 ---
 name: terraform-provider-tests
-description: Analyze and improve Terraform provider test coverage using terraform-plugin-testing v1.13.3+ patterns. Use when (1) analyzing test coverage gaps, (2) adding missing tests (drift detection, import, idempotency), (3) converting legacy patterns to modern state checks, (4) tracking optional field coverage, or (5) verifying test quality. Supports automated coverage analysis and guided pattern improvements.
+description: Analyze and improve Terraform provider test coverage using terraform-plugin-testing v1.13.3+ patterns. Use when (1) analyzing test coverage gaps, (2) adding missing tests (drift detection, import, idempotency), (3) converting legacy patterns to modern state checks, (4) tracking optional field coverage, (5) verifying test quality, or (6) validating example accuracy. Supports automated coverage analysis, guided pattern improvements, and example testing.
 ---
 
 # Terraform Provider Tests
@@ -22,6 +22,12 @@ python3 scripts/analyze_gap.py ./internal/provider/ --output tf_provider_tests_g
 **Verify compilation after changes**:
 ```bash
 ./scripts/verify_compilation.sh ./internal/provider/
+```
+
+**Validate all examples**:
+```bash
+export BCM_ENDPOINT="https://..." BCM_USERNAME="..." BCM_PASSWORD="..."
+./scripts/test-examples.sh
 ```
 
 ### Recommended Naming Convention
@@ -49,6 +55,9 @@ All gap analysis reports should use the `tf_provider_tests_*` naming pattern:
 
 **All changes complete?**
 → Complete [Testing](#phase-5-testing)
+
+**Need to validate examples?**
+→ Run [Example Testing](#phase-6-example-testing-automated)
 
 ## Phase 1: Gap Analysis (Automated)
 
@@ -257,6 +266,130 @@ TF_ACC=1 go test -v -timeout 30m ./internal/provider/ -run "^TestAccResource_Spe
 TF_ACC=1 go test -v -timeout 120m ./internal/provider/
 ```
 
+## Phase 6: Example Testing (Automated)
+
+**Tool**: `scripts/test-examples.sh`
+
+Validate all Terraform examples in the `examples/` directory by building the provider, executing examples, and cleaning up test resources.
+
+### Usage
+
+```bash
+# Run all examples (requires BCM credentials)
+export BCM_ENDPOINT="https://172.21.15.254:8081"
+export BCM_USERNAME="root"
+export BCM_PASSWORD="your-password"
+./scripts/test-examples.sh
+
+# Quick validation with existing provider build
+SKIP_BUILD=true ./scripts/test-examples.sh
+
+# Test only data sources (parallel, ~10s)
+./scripts/test-examples.sh --data-sources-only
+
+# Test only resources (sequential, ~19s)
+./scripts/test-examples.sh --resources-only
+
+# Debug a failing test
+./scripts/test-examples.sh --verbose --no-cleanup
+
+# Cleanup orphaned resources from failed tests
+./scripts/test-examples.sh --cleanup-only
+```
+
+### What It Validates
+
+- ✅ Examples compile and initialize successfully
+- ✅ Provider configuration is correct
+- ✅ Schema validation passes
+- ✅ Plan generation works (all examples)
+- ✅ Apply/destroy cycle succeeds (test-citest examples only)
+- ✅ Resources are properly cleaned up
+
+### Execution Strategy
+
+**Data Sources** (parallel):
+- Run up to 4 examples concurrently (configurable with `PARALLEL_LIMIT`)
+- Fast validation (init → validate → plan)
+- No actual resources created
+
+**Resources** (sequential):
+- Run one at a time (state-modifying operations)
+- Full lifecycle testing for test-citest examples (init → validate → plan → apply → destroy)
+- Plan-only validation for documentation examples
+
+### Test Phases
+
+1. **Environment validation** - Verify BCM credentials
+2. **Provider build** - Compile provider binary (skippable with `SKIP_BUILD=true`)
+3. **Example discovery** - Find all `.tf` files in `examples/data-sources/*/` and `examples/resources/*/`
+4. **Example testing** - Execute terraform commands on each example
+5. **Cleanup** - Remove test resources (citest-* prefix) with retry logic
+
+### Environment Variables
+
+**Required**:
+- `BCM_ENDPOINT` - BCM API endpoint
+- `BCM_USERNAME` - BCM authentication username
+- `BCM_PASSWORD` - BCM authentication password
+
+**Optional**:
+- `PROVIDER_VERSION` - Provider version (default: 0.1.0)
+- `SKIP_BUILD` - Skip build phase (default: false)
+- `PARALLEL_LIMIT` - Max parallel data source tests (default: 4)
+- `CLEANUP_RETRIES` - Max cleanup retry attempts (default: 4)
+- `VERBOSE` - Enable verbose logging (default: false)
+
+### Exit Codes
+
+- `0` - All tests passed, cleanup successful
+- `1` - One or more tests failed
+- `2` - Configuration error (missing env vars)
+- `3` - Provider build failed
+- `130` - Interrupted by user (Ctrl+C)
+
+### Best Practices
+
+**Example Naming**:
+- Use `citest-` prefix for resources that need cleanup
+- Examples in `test-citest/` directories undergo full apply/destroy
+- Other examples are validated with plan-only
+
+**Provider Configuration**:
+- Examples should NOT include provider blocks
+- Script automatically injects provider config with environment variables
+- Use `insecure_skip_verify = true` for self-signed certs
+
+**Resource Cleanup**:
+- Script automatically cleans up resources with `citest-` prefix
+- Uses exponential backoff retry for cleanup failures
+- Run `--cleanup-only` to manually cleanup orphaned resources
+
+### When to Use Example Testing
+
+Run example testing when:
+- Adding new examples to `examples/` directory
+- Modifying provider schema or behavior
+- Before releasing a new provider version
+- Debugging example-specific issues
+- Validating documentation accuracy
+
+### Integration with CI/CD
+
+Example testing complements acceptance tests:
+
+**Acceptance Tests** (`make testacc`):
+- Full CRUD operation validation
+- Import and drift detection
+- Comprehensive error handling
+- Run on every commit
+
+**Example Tests** (`./scripts/test-examples.sh`):
+- Documentation accuracy validation
+- End-user workflow verification
+- Multi-example compatibility
+- Run before releases
+
 ## Completion Criteria
 
 A fully modernized test file has:
@@ -267,6 +400,7 @@ A fully modernized test file has:
 - ✅ Drift detection test (resources only)
 - ✅ ID consistency tracking with `CompareValue`
 - ✅ All tests compile and pass
+- ✅ All examples validate successfully
 
 ## Common Pitfalls
 

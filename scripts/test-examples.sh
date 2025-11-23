@@ -2,10 +2,18 @@
 # Copyright (c) HashiCorp, Inc.
 # SPDX-License-Identifier: MPL-2.0
 
-
-# Terraform Example Test Suite (Minimal GREEN Phase Implementation)
-# Purpose: Validate all Terraform examples with automated testing
-# Usage: ./scripts/test-examples.sh [--help]
+#
+# Terraform Provider BCM - Example Test Suite
+#
+# This script is based on the generic template from:
+# .claude/skills/terraform-provider-tests/templates/test-examples-template.sh
+#
+# IMPORTANT: The cleanup_resources() function (lines 890-1041) is BCM-specific
+# and must remain in this project. The generic test framework does not include
+# provider-specific cleanup logic.
+#
+# See: .claude/skills/terraform-provider-tests/docs/example-testing-guide.md
+#
 
 set -euo pipefail
 
@@ -399,7 +407,7 @@ discover_examples() {
     local total_examples=$((${#data_source_examples[@]} + ${#resource_examples[@]}))
     if [ $total_examples -eq 0 ]; then
         log_error "No test examples found in $examples_dir"
-        log_error "Expected to find examples in: */test-citest/ directories"
+        log_error "Expected to find .tf files in: $examples_dir/data-sources/*/ and $examples_dir/resources/*/"
         exit "$EXIT_CONFIG_ERROR"
     fi
 
@@ -533,7 +541,7 @@ EOF
         log_fail "[FAIL] ✗ $example_name (${test_time}s)"
         log_error "       Context: Phase 3 - Sequential test execution"
         log_error "       Failed at: $failed_phase"
-        log_error "       Example: $example_dir"
+        log_error "       Example: $example_file"
         if [ "$VERBOSE" = true ]; then
             log_error "       Full output:"
             echo "$error_output" | while IFS= read -r line; do

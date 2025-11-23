@@ -72,7 +72,12 @@ output "engineering_partition_id" {
 ### Required
 
 - `cluster_name` (String) Cluster display name
+- `default_category` (String) Default node category UUID reference
+- `external_network` (String) External network UUID reference
+- `management_network` (String) Management network UUID reference
 - `name` (String) Partition name (must be unique within BCM cluster)
+- `primary_head_node` (String) Primary head node UUID reference
+- `timezone_settings` (String) Timezone configuration (e.g., 'UTC', 'America/New_York')
 
 ### Optional
 

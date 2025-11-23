@@ -248,3 +248,37 @@ func generateUniqueTestName(prefix string) string {
 	nanos := time.Now().Nanosecond()
 	return fmt.Sprintf("%s-%s-%d", prefix, timestamp, nanos)
 }
+
+// generateUniqueMAC creates a unique MAC address for testing
+//
+// This function generates a valid MAC address with a locally administered unicast prefix (02:00:00)
+// followed by unique bytes derived from the current time. This ensures:
+// - No conflicts with real hardware MAC addresses (locally administered bit set)
+// - Uniqueness across parallel test runs (nanosecond-based suffix)
+// - Valid MAC address format for BCM
+//
+// Returns:
+//
+//	Unique MAC address with format: 02:00:00:XX:YY:ZZ where XX:YY:ZZ are time-based
+//
+// Example Usage:
+//
+//	mac := generateUniqueMAC()
+//	// Returns: "02:00:00:12:34:56"
+func generateUniqueMAC() string {
+	now := time.Now()
+	// Use hour, minute, second, and millisecond to create unique MAC
+	// This gives us 24*60*60*1000 = 86,400,000 possible combinations per day
+	nanos := now.Nanosecond()
+	hour := now.Hour()
+	minute := now.Minute()
+	second := now.Second()
+
+	// Combine time components to create unique bytes
+	// Use modulo to ensure values fit in single bytes (0-255)
+	byte1 := uint8((hour*60 + minute) % 256)
+	byte2 := uint8((second*1000 + nanos/1000000) % 256)
+	byte3 := uint8((nanos / 1000) % 256)
+
+	return fmt.Sprintf("02:00:00:%02X:%02X:%02X", byte1, byte2, byte3)
+}

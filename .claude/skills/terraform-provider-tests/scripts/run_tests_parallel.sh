@@ -27,6 +27,12 @@
 #   # Run all acceptance tests with 4 concurrent files
 #   ./run_tests_parallel.sh
 #
+#   # Run all 21 test files in parallel (max concurrency)
+#   ./run_tests_parallel.sh -c 21 -t 30m 2>&1 | tail -100
+#
+#   # Run with full output logging to file
+#   ./run_tests_parallel.sh -c 21 2>&1 | tee test-results.log
+#
 #   # Run only resource tests with higher concurrency
 #   ./run_tests_parallel.sh --resources-only -c 8
 #
@@ -36,8 +42,24 @@
 #   # Run tests from specific file
 #   ./run_tests_parallel.sh -f resource_cmpart_softwareimage_test.go
 #
+# IMPORTANT: Always pipe output for visibility:
+#   - Use "| tail -100" to see last 100 lines of output
+#   - Use "| tee logfile.log" to see output AND save to file
+#   - DO NOT run in background - you need to see test progress
+#
+# RECOMMENDED: Auto-log and tail pattern:
+#   LOG_FILE=/tmp/test-results.log
+#   ./run_tests_parallel.sh -c 21 > "$LOG_FILE" 2>&1 &
+#   tail -f "$LOG_FILE"
+#
 
 set -euo pipefail
+
+# Auto-logging feature: if LOG_TO_FILE is set, redirect all output
+if [ -n "${LOG_TO_FILE:-}" ]; then
+    exec > >(tee "$LOG_TO_FILE") 2>&1
+    echo "Logging to: $LOG_TO_FILE"
+fi
 
 # Colors for output
 GREEN='\033[0;32m'
@@ -50,7 +72,7 @@ NC='\033[0m' # No Color
 # Default values
 TEST_DIR="./internal/provider"
 TEST_PATTERN="TestAcc"
-CONCURRENCY=4
+CONCURRENCY=30
 TIMEOUT="30m"
 SPECIFIC_FILE=""
 RESOURCES_ONLY=false

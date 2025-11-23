@@ -249,7 +249,7 @@ output "dpu_image_path" {
 - `enable_sol` (Boolean) Enable Serial Over LAN for remote console access. Defaults to `false`.
 - `kernel_output_console` (String) Kernel output console device. Defaults to `tty0`.
 - `kernel_parameters` (String) Kernel command-line parameters (e.g., `quiet splash`)
-- `kernel_version` (String) Kernel version string (e.g., `5.15.0-58-generic`)
+- `kernel_version` (String) Kernel version string (e.g., `5.15.0-58-generic`). When cloning an image, this value is inherited from the source image and becomes known after the clone completes.
 - `modules` (Attributes List) List of kernel modules to load at boot (see [below for nested schema](#nestedatt--modules))
 - `notes` (String) User notes or description for the software image
 - `original_image` (String) UUID of the original image to clone from. When set, BCM will copy the filesystem from the specified image. This is only used during resource creation.
