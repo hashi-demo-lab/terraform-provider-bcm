@@ -8,32 +8,45 @@
 - **0** legacy check calls (needs cleanup)
 - **7/7** acceptance test resources have drift detection tests
 - **7/7** acceptance test resources have import tests
-- **7/12** required fields have validation tests
-- **1** mock/unit test files (import/drift N/A)
+- **11/11** required fields have validation tests
+- **50/111** optional fields are tested
+
+**CRUD Coverage:**
+- Create: 7/7
+- Update: 7/7
+- Delete: 7/7
+
+**Average Quality Score:** 100/100
+
+**1** mock/unit test files (import/drift N/A)
 
 **Overall Grade: A**
 
 ## Resource Tests Analysis
 
 ### resource_cmpart_softwareimage_test.go
-- **Test functions:** 13
+- **Test functions:** 14
 - **Modern state checks:** 38
 - **Modern plan checks:** 8
 - **Has import test:** ✅
 - **Has drift test:** ✅
 - **Idempotency checks:** 6
-- **Validation tests:** 2
+- **Validation tests:** 4
+- **CRUD coverage:** Create, Update, Delete
+- **Quality score:** 100/100
 - **Legacy checks:** None ✅
 - **Status:** ✅ Fully modernized
 
 ### resource_cmpart_partition_test.go
-- **Test functions:** 7
+- **Test functions:** 8
 - **Modern state checks:** 23
 - **Modern plan checks:** 4
 - **Has import test:** ✅
 - **Has drift test:** ✅
 - **Idempotency checks:** 3
-- **Validation tests:** 1
+- **Validation tests:** 2
+- **CRUD coverage:** Create, Update, Delete
+- **Quality score:** 100/100
 - **Legacy checks:** None ✅
 - **Status:** ✅ Fully modernized
 
@@ -45,6 +58,8 @@
 - **Has drift test:** ✅
 - **Idempotency checks:** 4
 - **Validation tests:** 4
+- **CRUD coverage:** Create, Update, Delete
+- **Quality score:** 100/100
 - **Legacy checks:** None ✅
 - **Status:** ✅ Fully modernized
 
@@ -55,6 +70,8 @@
 - **Test type:** Mock/Unit tests (import/drift N/A)
 - **Idempotency checks:** 0
 - **Validation tests:** 17
+- **CRUD coverage:** Create, Update
+- **Quality score:** 40/100
 - **Legacy checks:** None ✅
 - **Status:** ✅ Mock/unit tests (error validation)
 
@@ -66,6 +83,8 @@
 - **Has drift test:** ✅
 - **Idempotency checks:** 4
 - **Validation tests:** 0
+- **CRUD coverage:** Create, Update, Delete
+- **Quality score:** 100/100
 - **Legacy checks:** None ✅
 - **Status:** ✅ Fully modernized
 
@@ -77,6 +96,8 @@
 - **Has drift test:** ✅
 - **Idempotency checks:** 7
 - **Validation tests:** 0
+- **CRUD coverage:** Create, Update, Delete
+- **Quality score:** 100/100
 - **Legacy checks:** None ✅
 - **Status:** ✅ Fully modernized
 
@@ -88,6 +109,8 @@
 - **Has drift test:** ✅
 - **Idempotency checks:** 7
 - **Validation tests:** 2
+- **CRUD coverage:** Create, Update, Delete
+- **Quality score:** 100/100
 - **Legacy checks:** None ✅
 - **Status:** ✅ Fully modernized
 
@@ -99,6 +122,8 @@
 - **Has drift test:** ✅
 - **Idempotency checks:** 2
 - **Validation tests:** 4
+- **CRUD coverage:** Create, Update, Delete
+- **Quality score:** 100/100
 - **Legacy checks:** None ✅
 - **Status:** ✅ Fully modernized
 
@@ -157,11 +182,15 @@
 
 ### HIGH PRIORITY ⚠️
 
-**Missing Validation Tests for Required Fields:**
-- **`cmpart_partition`**: name, cluster_name
-- **`cmpart_softwareimage`**: name, modules, name
+No high priority issues found! ✅
 
 ### MEDIUM PRIORITY 📋
+
+**Untested Optional Fields:**
+- **`cmdevice_category`**: revision_id, boot_loader_file, boot_loader_protocol, kernel_version, kernel_output_console (and 46 more)
+- **`cmkube_cluster`**: force
+- **`cmpart_partition`**: relay_host, no_zero_conf
+- **`cmpart_softwareimage`**: kernel_output_console, sol_port, sol_flow_control, bootfspart, revision_id (and 2 more)
 
 ## Modern Testing Patterns Quick Reference
 

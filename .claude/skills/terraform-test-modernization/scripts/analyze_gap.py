@@ -30,6 +30,7 @@ class ResourceSchema:
         self.path = path
         self.name = os.path.basename(path).replace('resource_', '').replace('.go', '')
         self.required_fields = []  # List of (field_name, has_validator)
+        self.optional_fields = []  # List of optional field names
         self.content = ""
 
     def load(self):
@@ -40,10 +41,31 @@ class ResourceSchema:
     def parse_schema(self):
         """Extract required fields and their validators from schema."""
         # Simple approach: find all field definitions, check for Required: true within next ~15 lines
+        # Skip nested fields (those inside NestedObject/NestedAttribute)
         lines = self.content.split('\n')
 
+        in_nested_object = False
+        nested_depth = 0
+
         for i, line in enumerate(lines):
-            # Look for field definitions
+            # Track when we enter/exit nested objects
+            if 'NestedObject:' in line or 'NestedAttributeObject' in line:
+                in_nested_object = True
+                nested_depth = 0
+
+            # Count braces to track nesting depth
+            if in_nested_object:
+                nested_depth += line.count('{') - line.count('}')
+                # Exit nested object when depth returns to 0
+                if nested_depth <= 0:
+                    in_nested_object = False
+                    continue
+
+            # Skip fields inside nested objects
+            if in_nested_object:
+                continue
+
+            # Look for field definitions at top level only
             field_match = re.match(r'\s*"(\w+)":\s*schema\.\w+Attribute\{', line)
             if not field_match:
                 continue
@@ -69,9 +91,19 @@ class ResourceSchema:
                 if j > i and check_line.strip() == '},':
                     break
 
+            # Check if field is optional
+            has_optional = False
+            for j in range(i, min(i + 15, len(lines))):
+                if 'Optional:' in lines[j] and 'true' in lines[j]:
+                    has_optional = True
+                    break
+
             # If field is required AND has validators, track it
             if has_required and has_validator:
                 self.required_fields.append((field_name, True))
+            # Track optional fields (for coverage analysis)
+            elif has_optional and not has_required:
+                self.optional_fields.append(field_name)
 
 
 class TestFile:
@@ -92,6 +124,18 @@ class TestFile:
         self.is_mock_test = '_mock_test.go' in self.name
         self.validation_tests = []  # List of validation test names
 
+        # CRUD operation coverage
+        self.has_create_test = False
+        self.has_update_test = False
+        self.has_delete_test = False
+
+        # Test quality metrics
+        self.uses_unique_names = False
+        self.uses_env_vars = False
+        self.has_precheck = False
+        self.has_check_destroy = False
+        self.quality_score = 0
+
     def load(self):
         """Load file content."""
         with open(self.path, 'r') as f:
@@ -106,6 +150,9 @@ class TestFile:
         self._find_drift_tests()
         self._find_idempotency_checks()
         self._find_validation_tests()
+        self._analyze_crud_coverage()
+        self._analyze_quality_metrics()
+        self._calculate_quality_score()
 
     def _find_test_functions(self):
         """Extract test function names."""
@@ -164,6 +211,70 @@ class TestFile:
         validation_pattern = r'func\s+(TestAcc\w*(?:Validation|Error|Invalid)\w*)\s*\('
         self.validation_tests = re.findall(validation_pattern, self.content)
 
+    def _analyze_crud_coverage(self):
+        """Detect CRUD operation test coverage."""
+        # Create: Tests typically have initial Config step
+        self.has_create_test = bool(re.search(r'Steps:\s*\[\]resource\.TestStep\{', self.content))
+
+        # Update: Tests with multiple Config steps with different values
+        config_steps = len(re.findall(r'Config:\s+\w+', self.content))
+        self.has_update_test = config_steps >= 2
+
+        # Delete: Tests with CheckDestroy
+        self.has_delete_test = 'CheckDestroy:' in self.content
+
+    def _analyze_quality_metrics(self):
+        """Analyze test quality indicators."""
+        # Uses generateUniqueTestName for unique resource names
+        self.uses_unique_names = 'generateUniqueTestName' in self.content
+
+        # Uses environment variables instead of hardcoded values
+        self.uses_env_vars = 'os.Getenv' in self.content
+
+        # Has PreCheck function
+        self.has_precheck = 'PreCheck:' in self.content
+
+        # Has CheckDestroy for cleanup verification
+        self.has_check_destroy = 'CheckDestroy:' in self.content
+
+    def _calculate_quality_score(self):
+        """Calculate overall quality score (0-100)."""
+        score = 0
+
+        # Modern patterns (40 points)
+        if self.modern_state_checks > 0:
+            score += 20
+        if self.modern_plan_checks > 0:
+            score += 10
+        if len(self.legacy_checks) == 0:
+            score += 10
+
+        # CRUD coverage (20 points)
+        if self.has_create_test:
+            score += 5
+        if self.has_update_test:
+            score += 5
+        if self.has_delete_test:
+            score += 10
+
+        # Test completeness (20 points)
+        if self.has_import_test:
+            score += 10
+        if self.has_drift_test or self.is_mock_test:
+            score += 10
+
+        # Quality practices (20 points)
+        if self.uses_unique_names:
+            score += 5
+        if self.uses_env_vars:
+            score += 5
+        if self.has_precheck:
+            score += 5
+        if self.has_check_destroy:
+            score += 5
+
+        self.quality_score = score
+
 
 class GapAnalyzer:
     """Analyzes test directory for modernization gaps."""
@@ -175,6 +286,7 @@ class GapAnalyzer:
         self.other_tests: List[TestFile] = []
         self.resource_schemas: Dict[str, ResourceSchema] = {}  # resource_name -> schema
         self.validation_coverage: Dict[str, List[str]] = {}  # resource_name -> missing required fields
+        self.optional_field_coverage: Dict[str, List[str]] = {}  # resource_name -> untested optional fields
 
     def scan(self):
         """Scan directory for test files and resource schemas."""
@@ -211,6 +323,61 @@ class GapAnalyzer:
 
         # Analyze validation coverage
         self._analyze_validation_coverage()
+        self._analyze_optional_field_coverage()
+
+    def _analyze_optional_field_coverage(self):
+        """Check which optional fields are never tested."""
+        for schema_name, schema in self.resource_schemas.items():
+            if not schema.optional_fields:
+                continue
+
+            # Find matching test files
+            matching_tests = [t for t in self.resource_tests
+                            if schema_name in t.name.replace('_test.go', '')]
+
+            if not matching_tests:
+                # No tests for this resource
+                self.optional_field_coverage[schema_name] = schema.optional_fields
+                continue
+
+            # Collect all test content
+            all_test_content = '\n'.join(t.content for t in matching_tests)
+
+            # Check which optional fields never appear in any test config
+            # Improved detection: look for field names in test configs (more precise than global search)
+            untested_fields = []
+            for field_name in schema.optional_fields:
+                # Look for field in test content
+                # Strategy: Check if field appears in typical config patterns
+                # 1. Direct TF config: "field_name = "
+                # 2. JSON encode patterns: field_name:
+                # 3. State check paths: New("field_name")
+
+                field_lower = field_name.lower()
+                field_no_underscore = field_lower.replace('_', '')
+                test_content_lower = all_test_content.lower()
+                test_content_no_underscore = test_content_lower.replace('_', '')
+
+                # Check multiple patterns
+                config_pattern_match = (
+                    f'{field_lower} =' in test_content_lower or
+                    f'{field_lower}:' in test_content_lower or
+                    f'"{field_lower}"' in test_content_lower or
+                    f'({field_lower})' in test_content_lower
+                )
+
+                # Also check without underscores (camelCase variants)
+                no_underscore_match = (
+                    field_no_underscore in test_content_no_underscore
+                )
+
+                field_tested = config_pattern_match or no_underscore_match
+
+                if not field_tested:
+                    untested_fields.append(field_name)
+
+            if untested_fields:
+                self.optional_field_coverage[schema_name] = untested_fields
 
     def _analyze_validation_coverage(self):
         """Cross-reference required fields with validation tests."""
@@ -278,6 +445,19 @@ class GapAnalyzer:
         missing_validation_count = sum(len(fields) for fields in self.validation_coverage.values())
         covered_validation_count = total_required_fields - missing_validation_count
 
+        # CRUD coverage statistics
+        resources_with_create = sum(1 for t in real_resources if t.has_create_test)
+        resources_with_update = sum(1 for t in real_resources if t.has_update_test)
+        resources_with_delete = sum(1 for t in real_resources if t.has_delete_test)
+
+        # Quality metrics
+        avg_quality_score = sum(t.quality_score for t in real_resources) / len(real_resources) if real_resources else 0
+
+        # Optional field coverage
+        total_optional_fields = sum(len(schema.optional_fields) for schema in self.resource_schemas.values())
+        untested_optional_count = sum(len(fields) for fields in self.optional_field_coverage.values())
+        tested_optional_count = total_optional_fields - untested_optional_count
+
         report.append(f"- **{total_modern_state}** modern state checks (`statecheck.ExpectKnownValue`)\n")
         report.append(f"- **{total_modern_plan}** modern plan checks (`plancheck.Expect*`)\n")
         report.append(f"- **{total_legacy}** legacy check calls (needs cleanup)\n")
@@ -285,8 +465,15 @@ class GapAnalyzer:
         report.append(f"- **{resources_with_import}/{len(real_resources)}** acceptance test resources have import tests\n")
         if total_required_fields > 0:
             report.append(f"- **{covered_validation_count}/{total_required_fields}** required fields have validation tests\n")
+        if total_optional_fields > 0:
+            report.append(f"- **{tested_optional_count}/{total_optional_fields}** optional fields are tested\n")
+        report.append(f"\n**CRUD Coverage:**\n")
+        report.append(f"- Create: {resources_with_create}/{len(real_resources)}\n")
+        report.append(f"- Update: {resources_with_update}/{len(real_resources)}\n")
+        report.append(f"- Delete: {resources_with_delete}/{len(real_resources)}\n")
+        report.append(f"\n**Average Quality Score:** {avg_quality_score:.0f}/100\n")
         if mock_resources:
-            report.append(f"- **{len(mock_resources)}** mock/unit test files (import/drift N/A)\n")
+            report.append(f"\n**{len(mock_resources)}** mock/unit test files (import/drift N/A)\n")
 
         # Overall grade
         if total_legacy == 0 and resources_with_drift == len(real_resources):
@@ -336,6 +523,19 @@ class GapAnalyzer:
                 lines.append(f"- **Idempotency checks:** {test.idempotency_checks}\n")
                 lines.append(f"- **Validation tests:** {len(test.validation_tests)}\n")
 
+                # CRUD coverage
+                crud_ops = []
+                if test.has_create_test:
+                    crud_ops.append("Create")
+                if test.has_update_test:
+                    crud_ops.append("Update")
+                if test.has_delete_test:
+                    crud_ops.append("Delete")
+                lines.append(f"- **CRUD coverage:** {', '.join(crud_ops) if crud_ops else 'None'}\n")
+
+                # Quality score
+                lines.append(f"- **Quality score:** {test.quality_score}/100\n")
+
             if test.legacy_checks:
                 lines.append(f"- **Legacy checks:** {len(test.legacy_checks)} ⚠️\n")
                 lines.append(f"  - Lines: {', '.join(str(line) for line, _ in test.legacy_checks[:5])}")
@@ -381,11 +581,17 @@ class GapAnalyzer:
         # High priority
         lines.append("\n### HIGH PRIORITY ⚠️\n")
 
+        has_high_priority = False
+
         # Missing validation tests for required fields
         if self.validation_coverage:
+            has_high_priority = True
             lines.append("\n**Missing Validation Tests for Required Fields:**\n")
             for resource_name, missing_fields in sorted(self.validation_coverage.items()):
                 lines.append(f"- **`{resource_name}`**: {', '.join(missing_fields)}\n")
+
+        if not has_high_priority:
+            lines.append("\nNo high priority issues found! ✅\n")
 
         # Resources missing drift tests (exclude mock tests)
         missing_drift = [t for t in self.resource_tests if not t.has_drift_test and not t.is_mock_test]
@@ -419,6 +625,32 @@ class GapAnalyzer:
             lines.append("\n**Missing Idempotency Checks:**\n")
             for test in missing_idempotency:
                 lines.append(f"- `{test.name}`\n")
+
+        # Untested optional fields
+        if self.optional_field_coverage:
+            lines.append("\n**Untested Optional Fields:**\n")
+            for resource_name, untested_fields in sorted(self.optional_field_coverage.items()):
+                if len(untested_fields) > 5:
+                    # Show first 5 and count
+                    lines.append(f"- **`{resource_name}`**: {', '.join(untested_fields[:5])} (and {len(untested_fields) - 5} more)\n")
+                else:
+                    lines.append(f"- **`{resource_name}`**: {', '.join(untested_fields)}\n")
+
+        # Low quality scores (below 70)
+        low_quality = [t for t in self.resource_tests if t.quality_score < 70 and not t.is_mock_test]
+        if low_quality:
+            lines.append("\n**Tests with Low Quality Scores (<70/100):**\n")
+            for test in sorted(low_quality, key=lambda x: x.quality_score):
+                improvements = []
+                if not test.uses_unique_names:
+                    improvements.append("add unique names")
+                if not test.uses_env_vars:
+                    improvements.append("use env vars")
+                if not test.has_precheck:
+                    improvements.append("add PreCheck")
+                if not test.has_check_destroy:
+                    improvements.append("add CheckDestroy")
+                lines.append(f"- `{test.name}` ({test.quality_score}/100) - Improve: {', '.join(improvements)}\n")
 
         return ''.join(lines)
 

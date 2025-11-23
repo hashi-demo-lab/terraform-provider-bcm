@@ -329,7 +329,7 @@ func TestAccCMPartSoftwareImageResource_UpdateSOL(t *testing.T) {
 	})
 }
 
-func TestAccCMPartSoftwareImageResource_MissingRequired(t *testing.T) {
+func TestAccCMPartSoftwareImageResource_ValidationInvalidName(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -415,6 +415,46 @@ resource "bcm_cmpart_softwareimage" "test" {
 					imageName,
 				),
 				ExpectError: regexp.MustCompile(`path must match format: \/cm\/images\/name`),
+			},
+		},
+	})
+}
+
+func TestAccCMPartSoftwareImageResource_InvalidModules(t *testing.T) {
+	imageName := generateUniqueTestName("test-invalid-modules")
+	imagePath := fmt.Sprintf("/cm/images/%s", imageName)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+resource "bcm_cmpart_softwareimage" "test" {
+  name = %[4]q
+  path = %[5]q
+
+  modules = [
+    {
+      name = ""  # Empty module name should fail validation
+    }
+  ]
+}
+`,
+					os.Getenv("BCM_ENDPOINT"),
+					os.Getenv("BCM_USERNAME"),
+					os.Getenv("BCM_PASSWORD"),
+					imageName,
+					imagePath,
+				),
+				ExpectError: regexp.MustCompile(`Attribute modules\[0\]\.name string length must be at least 1`),
 			},
 		},
 	})
@@ -1171,4 +1211,117 @@ func testAccCMPartSoftwareImagePreCheck(t *testing.T, imageNames ...string) {
 			t.Logf("[DEBUG] PreCheck cleaned up existing image: %s", imageName)
 		}
 	}
+}
+
+// TestAccCMPartSoftwareImageResource_SOLConfiguration tests Serial Over LAN advanced settings
+func TestAccCMPartSoftwareImageResource_SOLConfiguration(t *testing.T) {
+	imageName := generateUniqueTestName("test-sol-config")
+	imagePath := fmt.Sprintf("/cm/images/%s", imageName)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccCMPartSoftwareImagePreCheck(t, imageName)
+		},
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMPartSoftwareImageDestroy,
+		Steps: []resource.TestStep{
+			// Create with SOL advanced configuration
+			{
+				Config: testAccCMPartSoftwareImageResourceConfig_SOLAdvanced(
+					imageName,
+					imagePath,
+					"ttyS0",
+					true,
+					"/dev/bootfs",
+				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("sol_port"),
+						knownvalue.StringExact("ttyS0"),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("sol_flow_control"),
+						knownvalue.Bool(true),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("bootfspart"),
+						knownvalue.StringExact("/dev/bootfs"),
+					),
+				},
+			},
+			// Update SOL configuration
+			{
+				Config: testAccCMPartSoftwareImageResourceConfig_SOLAdvanced(
+					imageName,
+					imagePath,
+					"ttyS1",
+					false,
+					"/dev/boot2",
+				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("sol_port"),
+						knownvalue.StringExact("ttyS1"),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("sol_flow_control"),
+						knownvalue.Bool(false),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("bootfspart"),
+						knownvalue.StringExact("/dev/boot2"),
+					),
+				},
+			},
+			// Idempotency check
+			{
+				Config: testAccCMPartSoftwareImageResourceConfig_SOLAdvanced(
+					imageName,
+					imagePath,
+					"ttyS1",
+					false,
+					"/dev/boot2",
+				),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+		},
+	})
+}
+
+func testAccCMPartSoftwareImageResourceConfig_SOLAdvanced(name, path, solPort string, solFlowControl bool, bootfsPart string) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+resource "bcm_cmpart_softwareimage" "test" {
+  name             = %[4]q
+  path             = %[5]q
+  sol_port         = %[6]q
+  sol_flow_control = %[7]t
+  bootfspart       = %[8]q
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		name,
+		path,
+		solPort,
+		solFlowControl,
+		bootfsPart,
+	)
 }

@@ -1138,3 +1138,77 @@ resource "bcm_cmkube_cluster" "test" {
 		masterNodeUUID,
 	)
 }
+
+// TestAccCMKubeClusterResource_ForceOption tests the force parameter
+func TestAccCMKubeClusterResource_ForceOption(t *testing.T) {
+	clusterName := generateUniqueTestName("test-cluster-force")
+	masterNodeUUID := getTestMasterNodeUUID(t)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheckCMKubeCluster(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMKubeClusterDestroy,
+		Steps: []resource.TestStep{
+			// Create with force = false (default)
+			{
+				Config: testAccCMKubeClusterResourceConfigWithForce(clusterName, masterNodeUUID, false),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmkube_cluster.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(clusterName),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmkube_cluster.test",
+						tfjsonpath.New("force"),
+						knownvalue.Bool(false),
+					),
+				},
+			},
+			// Update force to true
+			{
+				Config: testAccCMKubeClusterResourceConfigWithForce(clusterName, masterNodeUUID, true),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmkube_cluster.test",
+						tfjsonpath.New("force"),
+						knownvalue.Bool(true),
+					),
+				},
+			},
+			// Idempotency check
+			{
+				Config: testAccCMKubeClusterResourceConfigWithForce(clusterName, masterNodeUUID, true),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+		},
+	})
+}
+
+func testAccCMKubeClusterResourceConfigWithForce(name, masterNodeUUID string, force bool) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+resource "bcm_cmkube_cluster" "test" {
+  name         = %[4]q
+  master_nodes = [%[5]q]
+  force        = %[6]t
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		name,
+		masterNodeUUID,
+		force,
+	)
+}
