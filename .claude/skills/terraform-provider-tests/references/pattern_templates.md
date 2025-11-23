@@ -264,10 +264,10 @@ func TestAccResourceName_DriftDetection(t *testing.T) {
                     ),
                 },
             },
-            // Step 2: Modify resource externally via BCM API
+            // Step 2: Modify resource externally via provider API
             {
                 PreConfig: func() {
-                    client := createTestBCMClient(t)
+                    client := createTestAPIClient(t)
                     ctx := context.Background()
 
                     // Get resource UUID by name
@@ -287,7 +287,7 @@ func TestAccResourceName_DriftDetection(t *testing.T) {
                     // Modify field externally (NOTE: snake_case → camelCase!)
                     resourceData["camelCaseField"] = "modified-value"
 
-                    // Wrap in BCM API entity structure
+                    // Wrap in provider API entity structure
                     entity := map[string]interface{}{
                         "baseType":      "ResourceType",
                         "childType":     "",
@@ -304,7 +304,7 @@ func TestAccResourceName_DriftDetection(t *testing.T) {
                         }
                     }
 
-                    // Update via BCM API
+                    // Update via provider API
                     _, err = client.CallJSONRPC(ctx, "service", "updateMethod", entity, false)
                     if err != nil {
                         t.Fatalf("Failed to update resource: %v", err)
@@ -340,7 +340,7 @@ func TestAccResourceName_DriftDetection(t *testing.T) {
 // Helper function for config with field
 func testAccResourceConfigWithField(name, fieldValue string) string {
     return fmt.Sprintf(`
-provider "bcm" {
+provider "example" {
   endpoint             = %[1]q
   username             = %[2]q
   password             = %[3]q
@@ -352,9 +352,9 @@ resource "example_resource" "test" {
   field = %[5]q
 }
 `,
-        os.Getenv("BCM_ENDPOINT"),
-        os.Getenv("BCM_USERNAME"),
-        os.Getenv("BCM_PASSWORD"),
+        os.Getenv("PROVIDER_ENDPOINT"),
+        os.Getenv("PROVIDER_USERNAME"),
+        os.Getenv("PROVIDER_PASSWORD"),
         name,
         fieldValue,
     )
@@ -362,11 +362,11 @@ resource "example_resource" "test" {
 ```
 
 **Key Points**:
-- Use `createTestBCMClient(t)` helper
+- Use `createTestAPIClient(t)` helper
 - Use `getResourceUUIDByName(t, service, method, name)` helper
-- Map Terraform snake_case → BCM camelCase (e.g., `kernel_parameters` → `kernelParameters`)
-- Include full BCM entity structure (baseType, childType, modified, etc.)
-- Wait 2 seconds after BCM update for consistency
+- Map Terraform snake_case → Provider camelCase (e.g., `kernel_parameters` → `kernelParameters`)
+- Include full Provider entity structure (baseType, childType, modified, etc.)
+- Wait 2 seconds after Provider update for consistency
 - Verify `ExpectNonEmptyPlan()` detects drift
 - Verify Terraform restores desired state
 
@@ -429,9 +429,9 @@ func TestAccResourceName_IDConsistency(t *testing.T) {
 
 ## knownvalue Type Matchers
 
-Complete reference for BCM attribute types:
+Complete reference for Provider attribute types:
 
-| BCM Attribute | Terraform Type | knownvalue Matcher | Example |
+| Provider Attribute | Terraform Type | knownvalue Matcher | Example |
 |---------------|----------------|-------------------|---------|
 | name, path, notes | String | `knownvalue.StringExact()` | `knownvalue.StringExact("test-name")` |
 | enabled, dhcp_enabled | Bool | `knownvalue.Bool()` | `knownvalue.Bool(true)` |

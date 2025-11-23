@@ -59,7 +59,7 @@ For each file, apply patterns in this order:
 1. See `pattern_templates.md` → "Drift Detection Test"
 2. Choose field(s) to test for drift
 3. Implement three-step pattern: Create → Modify Externally → Verify Drift → Restore
-4. Use BCM API helpers: `createTestBCMClient()`, `getResourceUUIDByName()`
+4. Use provider API helpers: `createTestAPIClient()`, `getResourceUUIDByName()`
 
 **If missing import test**:
 1. See `pattern_templates.md` → "Import Test Step"
@@ -130,8 +130,8 @@ import (
 ```
 
 Add additional imports if using:
-- BCM API: `"encoding/json"`, `"time"`, `"context"`
-- Drift tests: All BCM API imports
+- provider API: `"encoding/json"`, `"time"`, `"context"`
+- Drift tests: All provider API imports
 
 ## Phase 4: Verification (Automated)
 
@@ -192,7 +192,7 @@ TF_ACC=1 go test -v -timeout 120m ./internal/provider/
 3. **Update project documentation** if needed:
    - CLAUDE.md patterns section
    - Test helper documentation
-   - BCM-specific quirks discovered
+   - Provider-specific quirks discovered
 
 ## Common Pitfalls
 
@@ -202,7 +202,7 @@ TF_ACC=1 go test -v -timeout 120m ./internal/provider/
 
 ### 2. Wrong knownvalue Matcher
 **Symptom**: Type mismatch errors in tests
-**Fix**: Match BCM attribute types (see `pattern_templates.md`)
+**Fix**: Match Provider attribute types (see `pattern_templates.md`)
 
 ### 3. Missing ConfigStateChecks Block
 **Symptom**: Empty test step with no validation
@@ -212,7 +212,7 @@ TF_ACC=1 go test -v -timeout 120m ./internal/provider/
 **Symptom**: Same assertion in both `Check` and `ConfigStateChecks`
 **Fix**: Remove `Check` block entirely, keep only `ConfigStateChecks`
 
-### 5. Incorrect BCM Field Mapping
+### 5. Incorrect Provider Field Mapping
 **Symptom**: Drift test doesn't detect changes
 **Fix**: Use snake_case → camelCase mapping (see `example_specifics.md`)
 
