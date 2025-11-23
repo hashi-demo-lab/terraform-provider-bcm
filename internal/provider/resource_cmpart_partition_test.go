@@ -541,8 +541,8 @@ data "bcm_cmnet_networks" "all" {}
 data "bcm_cmdevice_categories" "all" {}
 
 resource "bcm_cmpart_partition" "test" {
-  name                = "base"
-  cluster_name        = %[4]q
+  name                = %[4]q
+  cluster_name        = %[5]q
   timezone_settings   = "America/New_York"
   primary_head_node   = data.bcm_cmdevice_nodes.headnode.nodes[0].uuid
   external_network    = data.bcm_cmnet_networks.all.networks[0].uuid
@@ -553,6 +553,7 @@ resource "bcm_cmpart_partition" "test" {
 		os.Getenv("BCM_ENDPOINT"),
 		os.Getenv("BCM_USERNAME"),
 		os.Getenv("BCM_PASSWORD"),
+		name,
 		clusterName,
 	)
 }
