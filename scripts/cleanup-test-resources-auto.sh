@@ -74,7 +74,7 @@ delete_resources() {
     fi
 
     echo "  Found $COUNT ${resource_type} to delete:"
-    echo "$MATCH" | jq -r ".[] | \"    - .\($name_field) [.uuid]\""
+    echo "$MATCH" | jq -r --arg field "$name_field" '.[] | "    - \(.[$field]) [\(.uuid)]"'
 
     # Extract names or UUIDs for deletion
     if [ "$remove_method" == "removeSoftwareImages" ]; then
