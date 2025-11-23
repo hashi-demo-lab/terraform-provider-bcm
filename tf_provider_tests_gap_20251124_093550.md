@@ -1,0 +1,275 @@
+# Terraform Provider Test Modernization Gap Analysis
+**Analysis Date:** 2025-11-24
+**Test Directory:** `/workspace/internal/provider`
+
+## Executive Summary
+- **245** modern state checks (`statecheck.ExpectKnownValue`)
+- **41** modern plan checks (`plancheck.Expect*`)
+- **0** legacy check calls (needs cleanup)
+- **6/6** acceptance test resources have drift detection tests
+- **6/6** acceptance test resources have import tests
+- **9/9** required fields have validation tests
+- **46/98** optional fields are tested
+
+**CRUD Coverage:**
+- Create: 6/6
+- Update: 6/6
+- Delete: 6/6
+
+**Cleanup Analysis:**
+- **6/6** resources have robust cleanup verification
+- **No cleanup issues detected** ✅
+
+**Naming Uniqueness:**
+- **All tests use unique name generation** ✅
+
+**Average Quality Score:** 100/100
+
+**1** mock/unit test files (1 error-only, import/drift N/A)
+
+**Overall Grade: A**
+
+## Resource Tests Analysis
+
+### resource_cmpart_softwareimage_test.go
+- **Test functions:** 17
+- **Modern state checks:** 47
+- **Modern plan checks:** 10
+- **Has import test:** ✅
+- **Has drift test:** ✅
+- **Idempotency checks:** 8
+- **Validation tests:** 4
+- **CRUD coverage:** Create, Update, Delete
+- **Quality score:** 100/100
+- **Cleanup:** ✅ Robust
+- **Legacy checks:** None ✅
+- **Status:** ✅ Fully modernized
+
+### resource_cmdevice_category_test.go
+- **Test functions:** 10
+- **Modern state checks:** 28
+- **Modern plan checks:** 5
+- **Has import test:** ✅
+- **Has drift test:** ✅
+- **Idempotency checks:** 4
+- **Validation tests:** 4
+- **CRUD coverage:** Create, Update, Delete
+- **Quality score:** 100/100
+- **Cleanup:** ✅ Robust
+- **Legacy checks:** None ✅
+- **Status:** ✅ Fully modernized
+
+### resource_cmdevice_device_mock_test.go
+- **Test functions:** 17
+- **Modern state checks:** 0
+- **Modern plan checks:** 0
+- **Test type:** Error-only tests (uses httptest mock servers)
+- **Idempotency checks:** 0
+- **Validation tests:** 17
+- **CRUD coverage:** Create, Update
+- **Quality score:** 90/100
+- **Legacy checks:** None ✅
+- **Status:** ✅ Error path coverage (httptest mocks)
+
+### resource_cmnet_network_test.go
+- **Test functions:** 4
+- **Modern state checks:** 20
+- **Modern plan checks:** 5
+- **Has import test:** ✅
+- **Has drift test:** ✅
+- **Idempotency checks:** 4
+- **Validation tests:** 0
+- **CRUD coverage:** Create, Update, Delete
+- **Quality score:** 100/100
+- **Cleanup:** ✅ Robust
+- **Legacy checks:** None ✅
+- **Status:** ✅ Fully modernized
+
+### resource_cmdevice_device_idempotency_test.go
+- **Test functions:** 5
+- **Modern state checks:** 17
+- **Modern plan checks:** 8
+- **Has import test:** ✅
+- **Has drift test:** ✅
+- **Idempotency checks:** 7
+- **Validation tests:** 0
+- **CRUD coverage:** Create, Update, Delete
+- **Quality score:** 100/100
+- **Cleanup:** ✅ Robust
+- **Legacy checks:** None ✅
+- **Status:** ✅ Fully modernized
+
+### resource_cmkube_cluster_test.go
+- **Test functions:** 12
+- **Modern state checks:** 38
+- **Modern plan checks:** 9
+- **Has import test:** ✅
+- **Has drift test:** ✅
+- **Idempotency checks:** 8
+- **Validation tests:** 2
+- **CRUD coverage:** Create, Update, Delete
+- **Quality score:** 100/100
+- **Cleanup:** ✅ Robust
+- **Legacy checks:** None ✅
+- **Status:** ✅ Fully modernized
+
+### resource_cmdevice_device_test.go
+- **Test functions:** 10
+- **Modern state checks:** 14
+- **Modern plan checks:** 4
+- **Has import test:** ✅
+- **Has drift test:** ✅
+- **Idempotency checks:** 2
+- **Validation tests:** 4
+- **CRUD coverage:** Create, Update, Delete
+- **Quality score:** 100/100
+- **Cleanup:** ✅ Robust
+- **Legacy checks:** None ✅
+- **Status:** ✅ Fully modernized
+
+## Data Source Tests Analysis
+
+### data_source_cmpart_partitions_test.go
+- **Test functions:** 9
+- **Modern state checks:** 26
+- **Modern plan checks:** 0
+- **Legacy checks:** None ✅
+- **Status:** ✅ Fully modernized
+
+### data_source_cmnet_networks_test.go
+- **Test functions:** 4
+- **Modern state checks:** 12
+- **Modern plan checks:** 0
+- **Legacy checks:** None ✅
+- **Status:** ✅ Fully modernized
+
+### data_source_cmdevice_nodes_test.go
+- **Test functions:** 4
+- **Modern state checks:** 10
+- **Modern plan checks:** 0
+- **Legacy checks:** None ✅
+- **Status:** ✅ Fully modernized
+
+### data_source_cmuser_users_test.go
+- **Test functions:** 6
+- **Modern state checks:** 15
+- **Modern plan checks:** 0
+- **Legacy checks:** None ✅
+- **Status:** ✅ Fully modernized
+
+### data_source_cmkube_clusters_test.go
+- **Test functions:** 7
+- **Modern state checks:** 7
+- **Modern plan checks:** 0
+- **Legacy checks:** None ✅
+- **Status:** ✅ Fully modernized
+
+### data_source_cmdevice_categories_test.go
+- **Test functions:** 4
+- **Modern state checks:** 5
+- **Modern plan checks:** 0
+- **Legacy checks:** None ✅
+- **Status:** ✅ Fully modernized
+
+### data_source_cmpart_softwareimages_test.go
+- **Test functions:** 7
+- **Modern state checks:** 6
+- **Modern plan checks:** 0
+- **Legacy checks:** None ✅
+- **Status:** ✅ Fully modernized
+
+## Gaps and Recommendations
+
+### HIGH PRIORITY ⚠️
+
+No high priority issues found! ✅
+
+### MEDIUM PRIORITY 📋
+
+**Untested Optional Fields:**
+- **`cmdevice_category`**: revision_id, boot_loader_file, boot_loader_protocol, kernel_version, kernel_output_console (and 46 more)
+- **`cmpart_softwareimage`**: bootfspart
+
+## Modern Testing Patterns Quick Reference
+
+### Required Imports
+```go
+import (
+    "github.com/hashicorp/terraform-plugin-testing/helper/resource"
+    "github.com/hashicorp/terraform-plugin-testing/plancheck"
+    "github.com/hashicorp/terraform-plugin-testing/statecheck"
+    "github.com/hashicorp/terraform-plugin-testing/knownvalue"
+    "github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
+    "github.com/hashicorp/terraform-plugin-testing/compare"
+)
+```
+
+### Modern State Check
+```go
+ConfigStateChecks: []statecheck.StateCheck{
+    statecheck.ExpectKnownValue(
+        "example_resource.test",
+        tfjsonpath.New("name"),
+        knownvalue.StringExact("expected-value"),
+    ),
+}
+```
+
+### Idempotency Check
+```go
+ConfigPlanChecks: resource.ConfigPlanChecks{
+    PreApply: []plancheck.PlanCheck{
+        plancheck.ExpectEmptyPlan(),
+    },
+}
+```
+
+### ID Consistency Tracking
+```go
+compareID := statecheck.CompareValue(compare.ValuesSame())
+
+ConfigStateChecks: []statecheck.StateCheck{
+    compareID.AddStateValue("example_resource.test", tfjsonpath.New("id")),
+}
+```
+
+### Robust CheckDestroy Pattern
+```go
+func testAccCheckResourceDestroy(s *terraform.State) error {
+    client := createTestBCMClient(&testing.T{})
+
+    for _, rs := range s.RootModule().Resources {
+        if rs.Type != "example_resource" {
+            continue
+        }
+
+        // Verify resource deleted with retry logic
+        deleted, err := verifyResourceDeleted(
+            context.Background(),
+            client,
+            "Service",
+            "getMethod",
+            rs.Primary.ID,
+            4, // retry count
+        )
+
+        if !deleted || err != nil {
+            return fmt.Errorf("resource still exists after destroy: %s", rs.Primary.ID)
+        }
+    }
+
+    return nil
+}
+```
+
+### Cleanup-Friendly Naming
+```go
+// Use unique names for easy cleanup (recommended: tftest- prefix)
+resourceName := generateUniqueTestName("tftest-resource")
+
+// Alternative: citest prefix for CI/CD examples
+resourceName := generateUniqueTestName("citest-resource")
+
+// Manual timestamp-based naming
+resourceName := fmt.Sprintf("tftest-%s-%d", "resource", time.Now().Unix())
+```

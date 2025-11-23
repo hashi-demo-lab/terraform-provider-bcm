@@ -118,6 +118,8 @@ func TestAccCMDeviceDevice_IdempotencyWithImport(t *testing.T) {
 				ImportStateVerify: true,
 				ImportStateVerifyIgnore: []string{
 					"software_image_proxy",
+					"boot_loader",          // BCM returns "CATEGORY" when not explicitly set
+					"boot_loader_protocol", // BCM returns "CATEGORY" when not explicitly set
 				},
 			},
 			// Step 3: Verify idempotency after import

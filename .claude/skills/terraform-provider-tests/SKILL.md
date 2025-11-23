@@ -7,13 +7,30 @@ description: Analyze and improve Terraform provider test coverage using terrafor
 
 Analyze test coverage and improve Terraform provider acceptance tests using modern patterns from terraform-plugin-testing v1.13.3+.
 
+## Summary & Next Steps
+
+**When invoked, I will:**
+1. Run gap analysis: `python3 scripts/analyze_gap.py ./internal/provider/ --output ./ai_reports/tf_provider_tests_gap_$(date +%Y%m%d_%H%M%S).md`
+2. Generate timestamped report in `./ai_reports/`
+3. Provide **succinct summary** with:
+   - Overall grade (A/B/C)
+   - Top 3 findings
+   - Recommended next action
+
+**Priority levels:**
+- **P1 (Critical)**: Missing drift/import tests, heavy legacy usage (>20 calls)
+- **P2 (Important)**: Missing idempotency, moderate legacy (5-20 calls)
+- **P3 (Cleanup)**: Light legacy (<5 calls)
+
+**Communication style**: Be succinct. Provide summary + single recommended next step.
+
 ## Quick Start
 
 ### Common Usage Scenarios
 
 **Analyze test modernization gaps**:
 ```bash
-python3 scripts/analyze_gap.py ./internal/provider/ --output tf_provider_tests_gap_$(date +%Y%m%d_%H%M%S).md
+python3 scripts/analyze_gap.py ./internal/provider/ --output ./ai_reports/tf_provider_tests_gap_$(date +%Y%m%d_%H%M%S).md
 ```
 
 **Analyze a specific test file**:
@@ -32,13 +49,13 @@ export BCM_ENDPOINT="https://..." BCM_USERNAME="..." BCM_PASSWORD="..."
 
 ### Recommended Naming Convention
 
-All gap analysis reports should use the `tf_provider_tests_*` naming pattern:
+All gap analysis reports should use the `tf_provider_tests_*` naming pattern in the `./ai_reports/` directory:
 
 | Report Type | Filename Pattern | Example |
 |-------------|------------------|---------|
-| Initial gap analysis | `tf_provider_tests_gap_YYYYMMDD_HHMMSS.md` | `tf_provider_tests_gap_20251123_225128.md` |
-| Final analysis | `tf_provider_tests_final_YYYYMMDD_HHMMSS.md` | `tf_provider_tests_final_20251123_230145.md` |
-| One-time analysis | `tf_provider_tests_gap.md` | `tf_provider_tests_gap.md` |
+| Initial gap analysis | `./ai_reports/tf_provider_tests_gap_YYYYMMDD_HHMMSS.md` | `./ai_reports/tf_provider_tests_gap_20251123_225128.md` |
+| Final analysis | `./ai_reports/tf_provider_tests_final_YYYYMMDD_HHMMSS.md` | `./ai_reports/tf_provider_tests_final_20251123_230145.md` |
+| One-time analysis | `./ai_reports/tf_provider_tests_gap.md` | `./ai_reports/tf_provider_tests_gap.md` |
 
 **Timestamp format**: `$(date +%Y%m%d_%H%M%S)` generates `YYYYMMDD_HHMMSS`
 
@@ -73,12 +90,12 @@ python3 scripts/analyze_gap.py <test_directory> [--output report.md]
 
 **Example** (recommended naming pattern):
 ```bash
-python3 scripts/analyze_gap.py ./internal/provider/ --output tf_provider_tests_gap_$(date +%Y%m%d_%H%M%S).md
+python3 scripts/analyze_gap.py ./internal/provider/ --output ./ai_reports/tf_provider_tests_gap_$(date +%Y%m%d_%H%M%S).md
 ```
 
 **Simple filename** (for one-time analysis):
 ```bash
-python3 scripts/analyze_gap.py ./internal/provider/ --output tf_provider_tests_gap.md
+python3 scripts/analyze_gap.py ./internal/provider/ --output ./ai_reports/tf_provider_tests_gap.md
 ```
 
 ### What It Detects

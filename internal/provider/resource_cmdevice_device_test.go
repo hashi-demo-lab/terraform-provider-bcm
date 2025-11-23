@@ -215,7 +215,7 @@ func TestAccCMDeviceDeviceResource_Basic(t *testing.T) {
 	deviceName := generateUniqueTestName("tftest-device")
 	categoryName := generateUniqueTestName("tftest-category-basic")
 	imageName := generateUniqueTestName("tftest-image-basic")
-	imagePath := "/cm/images/ubuntu-22.04-server-amd64-basic.iso"
+	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 
 	// ID consistency tracking across all CRUD operations.
 	compareID := statecheck.CompareValue(compare.ValuesSame())
@@ -390,7 +390,7 @@ func TestAccCMDeviceDevice_DriftNotes(t *testing.T) {
 	deviceName := generateUniqueTestName("tftest-device-drift")
 	categoryName := generateUniqueTestName("tftest-category-drift")
 	imageName := generateUniqueTestName("tftest-image-drift")
-	imagePath := "/cm/images/ubuntu-22.04-server-amd64-drift-notes.iso"
+	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -854,7 +854,7 @@ func TestAccCMDeviceDevice_Drift(t *testing.T) {
 	driftedHostname := generateUniqueTestName("tftest-drifted-device")
 	categoryName := generateUniqueTestName("tftest-category-drift-hostname")
 	imageName := generateUniqueTestName("tftest-image-drift-hostname")
-	imagePath := "/cm/images/ubuntu-22.04-server-amd64-drift-hostname.iso"
+	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {

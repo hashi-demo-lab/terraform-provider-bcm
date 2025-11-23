@@ -16,10 +16,10 @@ python3 analyze_gap.py <test_directory> [--output report.md]
 **Examples**:
 ```bash
 # Analyze provider tests with timestamped report
-python3 analyze_gap.py ./internal/provider/ --output tf_provider_tests_gap_$(date +%Y%m%d_%H%M%S).md
+python3 analyze_gap.py ./internal/provider/ --output ./ai_reports/tf_provider_tests_gap_$(date +%Y%m%d_%H%M%S).md
 
 # Quick analysis with simple filename
-python3 analyze_gap.py ./internal/provider/ --output tf_provider_tests_gap.md
+python3 analyze_gap.py ./internal/provider/ --output ./ai_reports/tf_provider_tests_gap.md
 ```
 
 **What It Detects**:
