@@ -34,7 +34,6 @@ func TestAccCMNetNetwork_Basic(t *testing.T) {
 			},
 			// ImportState testing
 			{
-				Config:            testAccCMNetNetworkConfigBasic(networkName),
 				ResourceName:      "bcm_cmnet_network.test",
 				ImportState:       true,
 				ImportStateVerify: true,
