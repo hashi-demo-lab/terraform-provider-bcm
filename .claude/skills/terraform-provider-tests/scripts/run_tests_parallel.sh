@@ -140,12 +140,16 @@ export GOPATH="${GOPATH:-/workspace/.go}"
 RESULTS_DIR=$(mktemp -d)
 trap "rm -rf $RESULTS_DIR" EXIT
 
-echo "===== Terraform Provider Parallel Test Execution ====="
-echo "Test Directory: $TEST_DIR"
-echo "Test Pattern: $TEST_PATTERN"
-echo "Concurrency: $CONCURRENCY"
-echo "Timeout: $TIMEOUT"
-echo ""
+# Create output log file
+OUTPUT_LOG="${RESULTS_DIR}/parallel_test_output.log"
+
+echo "===== Terraform Provider Parallel Test Execution =====" | tee "$OUTPUT_LOG"
+echo "Test Directory: $TEST_DIR" | tee -a "$OUTPUT_LOG"
+echo "Test Pattern: $TEST_PATTERN" | tee -a "$OUTPUT_LOG"
+echo "Concurrency: $CONCURRENCY" | tee -a "$OUTPUT_LOG"
+echo "Timeout: $TIMEOUT" | tee -a "$OUTPUT_LOG"
+echo "Output Log: $OUTPUT_LOG" | tee -a "$OUTPUT_LOG"
+echo "" | tee -a "$OUTPUT_LOG"
 
 # Find test files
 TEST_FILES=()
@@ -169,8 +173,8 @@ if [ ${#TEST_FILES[@]} -eq 0 ]; then
     exit 1
 fi
 
-echo "Found ${#TEST_FILES[@]} test file(s)"
-echo ""
+echo "Found ${#TEST_FILES[@]} test file(s)" | tee -a "$OUTPUT_LOG"
+echo "" | tee -a "$OUTPUT_LOG"
 
 # Function to run tests from a single file
 run_test_file() {
@@ -180,20 +184,22 @@ run_test_file() {
     local output_file="$RESULTS_DIR/${file_base}.output"
     local start_time=$(date +%s)
 
-    echo -e "${CYAN}[START]${NC} $file_base"
+    echo -e "${CYAN}[START]${NC} $file_base" | tee -a "$OUTPUT_LOG"
 
     # Extract test function names from the file
     # This allows us to run only tests from this specific file
     local test_functions=$(grep -o "^func Test[A-Za-z0-9_]*" "$file" | sed 's/^func //' | paste -sd "|" -)
 
     if [ -z "$test_functions" ]; then
-        echo -e "${YELLOW}[SKIP]${NC} $file_base (no test functions found)"
+        echo -e "${YELLOW}[SKIP]${NC} $file_base (no test functions found)" | tee -a "$OUTPUT_LOG"
         echo "0|0|0|0|0" > "$result_file"
         return 0
     fi
 
-    # Combine test pattern with file-specific test names
-    local combined_pattern="${TEST_PATTERN}(${test_functions})"
+    # Use file-specific test names as pattern
+    # If TEST_PATTERN is "TestAcc", just use the extracted function names directly
+    # since they already start with Test/TestAcc
+    local combined_pattern="^(${test_functions})$"
 
     # Run the test
     if [ "$VERBOSE" = true ]; then
@@ -218,15 +224,15 @@ run_test_file() {
     echo "$exit_code|$passed|$failed|$skipped|$duration" > "$result_file"
 
     if [ $exit_code -eq 0 ]; then
-        echo -e "${GREEN}[PASS]${NC} $file_base (${duration}s, passed: $passed)"
+        echo -e "${GREEN}[PASS]${NC} $file_base (${duration}s, passed: $passed)" | tee -a "$OUTPUT_LOG"
     else
-        echo -e "${RED}[FAIL]${NC} $file_base (${duration}s, passed: $passed, failed: $failed)"
+        echo -e "${RED}[FAIL]${NC} $file_base (${duration}s, passed: $passed, failed: $failed)" | tee -a "$OUTPUT_LOG"
 
         # Show failures if not verbose
         if [ "$VERBOSE" = false ]; then
-            echo -e "${YELLOW}Failures in $file_base:${NC}"
-            grep -A 5 "^--- FAIL:" "$output_file" | head -n 30
-            echo ""
+            echo -e "${YELLOW}Failures in $file_base:${NC}" | tee -a "$OUTPUT_LOG"
+            grep -A 5 "^--- FAIL:" "$output_file" | head -n 30 | tee -a "$OUTPUT_LOG"
+            echo "" | tee -a "$OUTPUT_LOG"
         fi
     fi
 
@@ -234,7 +240,7 @@ run_test_file() {
 }
 
 export -f run_test_file
-export RESULTS_DIR TEST_DIR TEST_PATTERN TIMEOUT VERBOSE
+export RESULTS_DIR TEST_DIR TEST_PATTERN TIMEOUT VERBOSE OUTPUT_LOG
 export GREEN RED YELLOW BLUE CYAN NC
 
 # Run tests in parallel using GNU parallel or xargs
