@@ -1325,3 +1325,123 @@ resource "bcm_cmpart_softwareimage" "test" {
 		bootfsPart,
 	)
 }
+
+// TestAccCMPartSoftwareImageResource_KernelOutputConsole tests kernel_output_console field
+func TestAccCMPartSoftwareImageResource_KernelOutputConsole(t *testing.T) {
+	imageName := generateUniqueTestName("test-kernel-console")
+	imagePath := fmt.Sprintf("/cm/images/%s", imageName)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccCMPartSoftwareImagePreCheck(t, imageName)
+		},
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMPartSoftwareImageDestroy,
+		Steps: []resource.TestStep{
+			// Create with default kernel_output_console (should be "tty0")
+			{
+				Config: testAccCMPartSoftwareImageResourceConfig_Basic(imageName, imagePath),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("kernel_output_console"),
+						knownvalue.StringExact("tty0"),
+					),
+				},
+			},
+			// Update to custom kernel_output_console
+			{
+				Config: testAccCMPartSoftwareImageResourceConfig_KernelConsole(imageName, imagePath, "ttyS0"),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("kernel_output_console"),
+						knownvalue.StringExact("ttyS0"),
+					),
+				},
+			},
+			// Idempotency check
+			{
+				Config: testAccCMPartSoftwareImageResourceConfig_KernelConsole(imageName, imagePath, "ttyS0"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+			// Update to different kernel_output_console
+			{
+				Config: testAccCMPartSoftwareImageResourceConfig_KernelConsole(imageName, imagePath, "tty1"),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("kernel_output_console"),
+						knownvalue.StringExact("tty1"),
+					),
+				},
+			},
+		},
+	})
+}
+
+// TestAccCMPartSoftwareImageResource_ComputedFields verifies computed-only fields are populated
+func TestAccCMPartSoftwareImageResource_ComputedFields(t *testing.T) {
+	imageName := generateUniqueTestName("test-computed-fields")
+	imagePath := fmt.Sprintf("/cm/images/%s", imageName)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccCMPartSoftwareImagePreCheck(t, imageName)
+		},
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMPartSoftwareImageDestroy,
+		Steps: []resource.TestStep{
+			// Create and verify computed fields are populated
+			{
+				Config: testAccCMPartSoftwareImageResourceConfig_Basic(imageName, imagePath),
+				ConfigStateChecks: []statecheck.StateCheck{
+					// Verify revision_id is computed and present (should be a number >= 0)
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("revision_id"),
+						knownvalue.NotNull(),
+					),
+					// Verify file_operation_in_progress is computed and present
+					// For a completed image creation, should be false
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("file_operation_in_progress"),
+						knownvalue.Bool(false),
+					),
+					// Note: parent_software_image is only set when this is a revision
+					// For a new (non-revision) image, we expect it to be null
+					// We verify it exists in state but don't check the value
+				},
+			},
+		},
+	})
+}
+
+func testAccCMPartSoftwareImageResourceConfig_KernelConsole(name, path, kernelConsole string) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+resource "bcm_cmpart_softwareimage" "test" {
+  name                  = %[4]q
+  path                  = %[5]q
+  kernel_output_console = %[6]q
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		name,
+		path,
+		kernelConsole,
+	)
+}

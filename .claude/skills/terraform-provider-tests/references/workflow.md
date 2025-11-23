@@ -16,7 +16,7 @@ Modernization follows a systematic approach:
 **Tool**: `scripts/analyze_gap.py`
 
 ```bash
-python scripts/analyze_gap.py ./internal/provider/ --output gap_analysis.md
+python3 scripts/analyze_gap.py ./internal/provider/ --output tf_provider_tests_gap_$(date +%Y%m%d_%H%M%S).md
 ```
 
 **Output**:
@@ -160,15 +160,58 @@ Add additional imports if using:
 go test -c ./internal/provider/ -o /tmp/provider_tests
 ```
 
-### Single Test (Medium)
+### Parallel Test Execution (Fast - Recommended)
+
+**Tool**: `scripts/run_tests_parallel.sh`
+
+Run tests concurrently per file for significantly faster execution.
+
+```bash
+# Run all tests with default concurrency (4 files)
+./scripts/run_tests_parallel.sh
+
+# Run only resource tests with higher concurrency
+./scripts/run_tests_parallel.sh --resources-only -c 8
+
+# Run specific file's tests
+./scripts/run_tests_parallel.sh -f resource_cmpart_softwareimage_test.go
+
+# Verbose mode with detailed output
+./scripts/run_tests_parallel.sh --verbose
+```
+
+**Key Benefits**:
+- ⚡ 4x-8x faster than sequential execution
+- 📊 Real-time progress per file
+- 🎯 Aggregated pass/fail summary
+- 🔍 Automatic failure highlighting
+
+**Output Example**:
+```
+[START] resource_cmpart_softwareimage_test.go
+[PASS] resource_cmpart_softwareimage_test.go (45s, passed: 15)
+[START] resource_cmdevice_category_test.go
+[PASS] resource_cmdevice_category_test.go (38s, passed: 10)
+
+===== Test Summary =====
+Test Files: 8
+Total Passed: 72
+Total Failed: 0
+Total Skipped: 0
+Total Duration: 180s
+
+✅ All tests passed!
+```
+
+### Single Test (Medium - Sequential)
 ```bash
 # Run specific modernized test
 TF_ACC=1 go test -v -timeout 30m ./internal/provider/ -run "^TestAccResource_Specific$"
 ```
 
-### Full Test Suite (Slow)
+### Full Test Suite (Slow - Sequential)
 ```bash
-# Run all tests
+# Run all tests sequentially (slower but simpler)
 TF_ACC=1 go test -v -timeout 120m ./internal/provider/
 ```
 
@@ -181,7 +224,7 @@ TF_ACC=1 go test -v -timeout 120m ./internal/provider/
 
 1. **Re-run gap analysis** to verify progress:
    ```bash
-   python scripts/analyze_gap.py ./internal/provider/ --output final_analysis.md
+   python3 scripts/analyze_gap.py ./internal/provider/ --output tf_provider_tests_final_$(date +%Y%m%d_%H%M%S).md
    ```
 
 2. **Compare before/after**:

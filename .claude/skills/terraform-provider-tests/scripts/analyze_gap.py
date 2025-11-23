@@ -12,7 +12,10 @@ Detects:
 - Optional field coverage
 
 Usage:
-    python analyze_gap.py <test_directory> [--output report.md]
+    python3 analyze_gap.py <test_directory> [--output report.md]
+
+Example:
+    python3 analyze_gap.py ./internal/provider/ --output tf_provider_tests_gap_$(date +%Y%m%d_%H%M%S).md
 """
 
 import os
@@ -730,14 +733,11 @@ def main():
 
     # Output
     if args.output:
-        # Append timestamp to output filename
         output_path = Path(args.output)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_with_timestamp = output_path.parent / f"{output_path.stem}_{timestamp}{output_path.suffix}"
 
-        with open(output_with_timestamp, 'w') as f:
+        with open(output_path, 'w') as f:
             f.write(report)
-        print(f"✅ Gap analysis report written to: {output_with_timestamp}")
+        print(f"✅ Gap analysis report written to: {output_path}")
     else:
         print(report)
 

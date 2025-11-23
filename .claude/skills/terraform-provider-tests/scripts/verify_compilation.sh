@@ -58,7 +58,7 @@ if go test -c "$TEST_DIR" -o "$TEMP_OUTPUT" 2>&1 | tee /tmp/compile_log.txt; the
     echo ""
 
     # Show statistics
-    TEST_COUNT=$(grep -c "^func TestAcc" "$TEST_DIR"/*.go 2>/dev/null || echo "0")
+    TEST_COUNT=$(grep -h "^func TestAcc" "$TEST_DIR"/*_test.go 2>/dev/null | wc -l)
     FILE_COUNT=$(ls -1 "$TEST_DIR"/*_test.go 2>/dev/null | wc -l)
 
     echo "Statistics:"

@@ -13,7 +13,7 @@ Analyze test coverage and improve Terraform provider acceptance tests using mode
 
 **Analyze test modernization gaps**:
 ```bash
-python scripts/analyze_gap.py ./internal/provider/ --output gap_analysis.md
+python3 scripts/analyze_gap.py ./internal/provider/ --output tf_provider_tests_gap_$(date +%Y%m%d_%H%M%S).md
 ```
 
 **Analyze a specific test file**:
@@ -23,6 +23,18 @@ python scripts/analyze_gap.py ./internal/provider/ --output gap_analysis.md
 ```bash
 ./scripts/verify_compilation.sh ./internal/provider/
 ```
+
+### Recommended Naming Convention
+
+All gap analysis reports should use the `tf_provider_tests_*` naming pattern:
+
+| Report Type | Filename Pattern | Example |
+|-------------|------------------|---------|
+| Initial gap analysis | `tf_provider_tests_gap_YYYYMMDD_HHMMSS.md` | `tf_provider_tests_gap_20251123_225128.md` |
+| Final analysis | `tf_provider_tests_final_YYYYMMDD_HHMMSS.md` | `tf_provider_tests_final_20251123_230145.md` |
+| One-time analysis | `tf_provider_tests_gap.md` | `tf_provider_tests_gap.md` |
+
+**Timestamp format**: `$(date +%Y%m%d_%H%M%S)` generates `YYYYMMDD_HHMMSS`
 
 ## Workflow Decision Tree
 
@@ -47,12 +59,17 @@ Automatically scan test files and generate comprehensive gap analysis report.
 ### Usage
 
 ```bash
-python scripts/analyze_gap.py <test_directory> [--output report.md]
+python3 scripts/analyze_gap.py <test_directory> [--output report.md]
 ```
 
-**Example**:
+**Example** (recommended naming pattern):
 ```bash
-python scripts/analyze_gap.py ./internal/provider/ --output gap_analysis.md
+python3 scripts/analyze_gap.py ./internal/provider/ --output tf_provider_tests_gap_$(date +%Y%m%d_%H%M%S).md
+```
+
+**Simple filename** (for one-time analysis):
+```bash
+python3 scripts/analyze_gap.py ./internal/provider/ --output tf_provider_tests_gap.md
 ```
 
 ### What It Detects
@@ -186,12 +203,56 @@ Quick compilation check without running tests.
 go test -c ./internal/provider/ -o /tmp/provider_tests
 ```
 
-### Single Test
+### Parallel Test Execution (Recommended)
+
+**Tool**: `scripts/run_tests_parallel.sh`
+
+Run acceptance tests concurrently per file for faster execution.
+
+**Usage**:
+```bash
+# Run all acceptance tests with 4 concurrent files
+./scripts/run_tests_parallel.sh
+
+# Run only resource tests with higher concurrency
+./scripts/run_tests_parallel.sh --resources-only -c 8
+
+# Run only data source tests
+./scripts/run_tests_parallel.sh --data-sources-only
+
+# Run tests matching specific pattern
+./scripts/run_tests_parallel.sh -p "TestAccCMPartSoftwareImage"
+
+# Run tests from specific file
+./scripts/run_tests_parallel.sh -f resource_cmpart_softwareimage_test.go
+
+# Verbose output with detailed test logs
+./scripts/run_tests_parallel.sh --verbose
+```
+
+**Options**:
+- `-d, --dir DIR` - Test directory (default: ./internal/provider)
+- `-p, --pattern PATTERN` - Test pattern to match (default: TestAcc)
+- `-c, --concurrency N` - Max concurrent test files (default: 4)
+- `-t, --timeout DURATION` - Timeout per test file (default: 30m)
+- `-f, --file FILE` - Run only tests from specific file
+- `--resources-only` - Run only resource tests
+- `--data-sources-only` - Run only data source tests
+- `--verbose` - Show detailed test output
+- `--no-color` - Disable colored output
+
+**Benefits**:
+- ⚡ Faster execution (4x-8x speedup with proper concurrency)
+- 📊 Per-file progress tracking
+- 🎯 Aggregated summary with pass/fail counts
+- 🔍 Automatic failure highlighting
+
+### Single Test (Sequential)
 ```bash
 TF_ACC=1 go test -v -timeout 30m ./internal/provider/ -run "^TestAccResource_Specific$"
 ```
 
-### Full Suite
+### Full Suite (Sequential)
 ```bash
 TF_ACC=1 go test -v -timeout 120m ./internal/provider/
 ```
