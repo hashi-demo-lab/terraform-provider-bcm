@@ -186,6 +186,7 @@ func (p *BCMProvider) DataSources(ctx context.Context) []func() datasource.DataS
 		NewCMNetNetworksDataSource,
 		NewCMPartPartitionsDataSource,
 		NewCMPartSoftwareImagesDataSource,
+		NewCMUserUsersDataSource,
 	}
 }
 
