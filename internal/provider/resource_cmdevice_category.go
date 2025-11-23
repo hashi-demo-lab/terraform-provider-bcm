@@ -750,6 +750,9 @@ func (r *CMDeviceCategoryResource) Read(ctx context.Context, req resource.ReadRe
 		return
 	}
 
+	// Preserve original management_network from state for later comparison
+	originalManagementNetwork := state.ManagementNetwork
+
 	// Fetch current state from BCM API with retry for eventual consistency
 	// BCM may not return all computed fields immediately after create/update
 	maxRetries := 5
@@ -830,6 +833,20 @@ func (r *CMDeviceCategoryResource) Read(ctx context.Context, req resource.ReadRe
 				"base_type_unknown": state.BaseType.IsUnknown(),
 				"last_error":        lastReadErr,
 			})
+		}
+	}
+
+	// CRITICAL FIX: BCM may return different management_network UUID during refresh
+	// This happens when BCM reassigns the network internally. Preserve the original
+	// configured value to avoid drift detection during destroy operations.
+	if !originalManagementNetwork.IsNull() && !originalManagementNetwork.IsUnknown() {
+		// If BCM returned a different UUID, preserve the original from state
+		if !state.ManagementNetwork.Equal(originalManagementNetwork) {
+			tflog.Debug(ctx, "Management network changed in BCM, preserving original value", map[string]interface{}{
+				"original": originalManagementNetwork.ValueString(),
+				"bcm_returned": state.ManagementNetwork.ValueString(),
+			})
+			state.ManagementNetwork = originalManagementNetwork
 		}
 	}
 

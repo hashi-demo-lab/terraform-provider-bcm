@@ -13,6 +13,13 @@ Detects:
 - Missing idempotency checks
 - Modern pattern usage statistics
 - Optional field coverage
+- Test cleanup issues and verification
+
+Cleanup Analysis:
+- Robust CheckDestroy verification
+- Cleanup-friendly naming patterns (citest prefix, unique names)
+- External resource cleanup
+- Hardcoded vs dynamic resource names
 
 Usage:
     python3 analyze_gap.py <test_directory> [--output report.md]
@@ -130,6 +137,8 @@ class TestFile:
         self.compare_value_usage = 0
         self.test_functions = []
         self.is_mock_test = '_mock_test.go' in self.name
+        self.is_error_only_test = False  # Tests that only test error paths
+        self.uses_httptest = False  # Uses httptest.Server for mocking
         self.validation_tests = []  # List of validation test names
 
         # CRUD operation coverage
@@ -144,6 +153,11 @@ class TestFile:
         self.has_check_destroy = False
         self.quality_score = 0
 
+        # Cleanup metrics
+        self.has_robust_check_destroy = False  # CheckDestroy with actual verification logic
+        self.uses_cleanup_names = False  # Uses cleanup-friendly naming (e.g., "citest")
+        self.cleanup_issues = []  # List of cleanup concerns
+
     def load(self):
         """Load file content."""
         with open(self.path, 'r') as f:
@@ -152,6 +166,7 @@ class TestFile:
     def analyze(self):
         """Analyze file for patterns."""
         self._find_test_functions()
+        self._detect_mock_and_error_tests()
         self._find_legacy_checks()
         self._find_modern_patterns()
         self._find_import_tests()
@@ -160,12 +175,45 @@ class TestFile:
         self._find_validation_tests()
         self._analyze_crud_coverage()
         self._analyze_quality_metrics()
+        self._analyze_cleanup_patterns()
         self._calculate_quality_score()
 
     def _find_test_functions(self):
         """Extract test function names."""
         pattern = r'func\s+(TestAcc\w+)\s*\('
         self.test_functions = re.findall(pattern, self.content)
+
+    def _detect_mock_and_error_tests(self):
+        """Detect if this is a mock server or error-only test file."""
+        # Check for httptest.Server usage (mock server tests)
+        self.uses_httptest = bool(re.search(r'httptest\.(?:New)?Server', self.content))
+
+        # Check if ALL test steps use ExpectError (error-only tests)
+        # Count total test steps
+        test_steps = re.findall(r'Steps:\s*\[\]resource\.TestStep\{', self.content)
+
+        if test_steps:
+            # Count ExpectError usage
+            expect_errors = len(re.findall(r'ExpectError:\s*regexp\.MustCompile', self.content))
+
+            # Count non-error test steps (Check blocks or ConfigStateChecks without ExpectError)
+            # This is approximate - we look for Config: without nearby ExpectError
+            config_steps = len(re.findall(r'^\s*Config:\s+\w+', self.content, re.MULTILINE))
+
+            # If we have ExpectError calls and they roughly match the number of test functions,
+            # and we use httptest, this is likely an error-only test file
+            if expect_errors >= len(self.test_functions) * 0.8 and self.uses_httptest:
+                self.is_error_only_test = True
+
+            # Alternative detection: Check for error scenario constants
+            if re.search(r'type\s+\w+Scenario\s+string', self.content):
+                if re.search(r'scenario\w+Error', self.content) or re.search(r'scenario\w+Failed', self.content):
+                    self.is_error_only_test = True
+
+        # Update is_mock_test flag only for error-only tests
+        # Note: Just using httptest doesn't make it a mock - some real tests use httptest for specific validation
+        if self.is_error_only_test:
+            self.is_mock_test = True
 
     def _find_legacy_checks(self):
         """Find legacy Check blocks."""
@@ -245,8 +293,77 @@ class TestFile:
         # Has CheckDestroy for cleanup verification
         self.has_check_destroy = 'CheckDestroy:' in self.content
 
+    def _analyze_cleanup_patterns(self):
+        """Analyze test cleanup patterns and identify issues."""
+        # 1. Check for robust CheckDestroy (not just empty/nil)
+        if self.has_check_destroy:
+            # Look for CheckDestroy function with actual verification logic
+            check_destroy_patterns = [
+                r'CheckDestroy:\s*testAccCheck\w+Destroy',  # Named function
+                r'verifyResourceDeleted\(',  # Uses helper
+                r'client\.CallJSONRPC.*remove',  # API cleanup call
+                r'if\s+.*still\s+exists',  # Verification logic
+            ]
+
+            self.has_robust_check_destroy = any(
+                re.search(pattern, self.content)
+                for pattern in check_destroy_patterns
+            )
+
+            # Check if CheckDestroy is just nil or empty
+            if re.search(r'CheckDestroy:\s*nil', self.content):
+                self.cleanup_issues.append("CheckDestroy is nil (no cleanup verification)")
+            elif not self.has_robust_check_destroy and self.has_check_destroy:
+                self.cleanup_issues.append("CheckDestroy present but may lack verification logic")
+
+        # 2. Check for cleanup-friendly naming patterns
+        cleanup_name_patterns = [
+            r'generateUniqueTestName\(',  # Uses unique name generator
+            r'citest[-_]',  # Uses citest prefix
+            r'tftest[-_]',  # Uses tftest prefix
+            r'test-\w+-\d+',  # Uses timestamped names
+            r'fmt\.Sprintf.*%d.*time\.',  # Uses timestamp in name
+        ]
+
+        self.uses_cleanup_names = any(
+            re.search(pattern, self.content)
+            for pattern in cleanup_name_patterns
+        )
+
+        # 3. Detect potential cleanup issues
+        # Resources created but no CheckDestroy (skip for error-only tests)
+        if self.has_create_test and not self.has_check_destroy and not self.is_error_only_test:
+            self.cleanup_issues.append("Creates resources but missing CheckDestroy")
+
+        # Uses hardcoded names (harder to clean up)
+        if not self.uses_cleanup_names and not self.uses_unique_names:
+            # Check for hardcoded test names (not generated)
+            if re.search(r'name.*=.*"test-.*"', self.content, re.IGNORECASE):
+                self.cleanup_issues.append("Uses hardcoded resource names (harder to clean up)")
+
+        # Creates external resources via API but may not clean up
+        if 'createTestBCMClient' in self.content:
+            # Test uses BCM client directly (creates external resources)
+            if not self.has_robust_check_destroy:
+                self.cleanup_issues.append("Creates external resources via API but cleanup verification unclear")
+
     def _calculate_quality_score(self):
         """Calculate overall quality score (0-100)."""
+        # Error-only tests have different scoring criteria
+        if self.is_error_only_test:
+            score = 0
+            # Award points for error path coverage
+            if len(self.test_functions) > 0:
+                score += 40  # Good error coverage
+            if self.uses_httptest:
+                score += 30  # Uses proper mocking
+            if len(self.legacy_checks) == 0:
+                score += 20  # No legacy patterns
+            if self.has_precheck:
+                score += 10  # Has PreCheck
+            self.quality_score = score
+            return
+
         score = 0
 
         # Modern patterns (40 points)
@@ -272,14 +389,21 @@ class TestFile:
             score += 10
 
         # Quality practices (20 points)
-        if self.uses_unique_names:
+        if self.uses_unique_names or self.uses_cleanup_names:
             score += 5
         if self.uses_env_vars:
             score += 5
         if self.has_precheck:
             score += 5
-        if self.has_check_destroy:
+        if self.has_robust_check_destroy:
             score += 5
+        elif self.has_check_destroy:
+            score += 2  # Partial credit for having CheckDestroy without robust verification
+
+        # Penalty for cleanup issues (not applied to mock/error tests)
+        if not self.is_mock_test:
+            cleanup_penalty = min(len(self.cleanup_issues) * 3, 15)  # Max -15 points
+            score = max(0, score - cleanup_penalty)
 
         self.quality_score = score
 
@@ -461,6 +585,12 @@ class GapAnalyzer:
         # Quality metrics
         avg_quality_score = sum(t.quality_score for t in real_resources) / len(real_resources) if real_resources else 0
 
+        # Cleanup metrics (exclude error-only tests)
+        real_resources_non_error = [t for t in real_resources if not t.is_error_only_test]
+        resources_with_robust_cleanup = sum(1 for t in real_resources_non_error if t.has_robust_check_destroy)
+        resources_with_cleanup_issues = sum(1 for t in real_resources_non_error if t.cleanup_issues)
+        total_cleanup_issues = sum(len(t.cleanup_issues) for t in real_resources_non_error)
+
         # Optional field coverage
         total_optional_fields = sum(len(schema.optional_fields) for schema in self.resource_schemas.values())
         untested_optional_count = sum(len(fields) for fields in self.optional_field_coverage.values())
@@ -479,9 +609,22 @@ class GapAnalyzer:
         report.append(f"- Create: {resources_with_create}/{len(real_resources)}\n")
         report.append(f"- Update: {resources_with_update}/{len(real_resources)}\n")
         report.append(f"- Delete: {resources_with_delete}/{len(real_resources)}\n")
+        report.append(f"\n**Cleanup Analysis:**\n")
+        if len(real_resources_non_error) > 0:
+            report.append(f"- **{resources_with_robust_cleanup}/{len(real_resources_non_error)}** resources have robust cleanup verification\n")
+            if resources_with_cleanup_issues > 0:
+                report.append(f"- **{resources_with_cleanup_issues}/{len(real_resources_non_error)}** resources have cleanup issues ({total_cleanup_issues} total issues) ⚠️\n")
+            else:
+                report.append(f"- **No cleanup issues detected** ✅\n")
+        else:
+            report.append(f"- **All tests are error-only/mock tests** (cleanup verification N/A)\n")
         report.append(f"\n**Average Quality Score:** {avg_quality_score:.0f}/100\n")
         if mock_resources:
-            report.append(f"\n**{len(mock_resources)}** mock/unit test files (import/drift N/A)\n")
+            error_only_count = sum(1 for t in mock_resources if t.is_error_only_test)
+            if error_only_count > 0:
+                report.append(f"\n**{len(mock_resources)}** mock/unit test files ({error_only_count} error-only, import/drift N/A)\n")
+            else:
+                report.append(f"\n**{len(mock_resources)}** mock/unit test files (import/drift N/A)\n")
 
         # Overall grade
         if total_legacy == 0 and resources_with_drift == len(real_resources):
@@ -523,7 +666,9 @@ class GapAnalyzer:
             lines.append(f"- **Modern plan checks:** {test.modern_plan_checks}\n")
 
             if category == "Resource":
-                if test.is_mock_test:
+                if test.is_error_only_test:
+                    lines.append(f"- **Test type:** Error-only tests (uses httptest mock servers)\n")
+                elif test.is_mock_test:
                     lines.append(f"- **Test type:** Mock/Unit tests (import/drift N/A)\n")
                 else:
                     lines.append(f"- **Has import test:** {'✅' if test.has_import_test else '❌'}\n")
@@ -544,6 +689,16 @@ class GapAnalyzer:
                 # Quality score
                 lines.append(f"- **Quality score:** {test.quality_score}/100\n")
 
+                # Cleanup status
+                if test.cleanup_issues:
+                    lines.append(f"- **Cleanup issues:** {len(test.cleanup_issues)} ⚠️\n")
+                    for issue in test.cleanup_issues:
+                        lines.append(f"  - {issue}\n")
+                else:
+                    cleanup_status = "✅ Robust" if test.has_robust_check_destroy else "✅ Basic"
+                    if test.has_check_destroy:
+                        lines.append(f"- **Cleanup:** {cleanup_status}\n")
+
             if test.legacy_checks:
                 lines.append(f"- **Legacy checks:** {len(test.legacy_checks)} ⚠️\n")
                 lines.append(f"  - Lines: {', '.join(str(line) for line, _ in test.legacy_checks[:5])}")
@@ -563,6 +718,10 @@ class GapAnalyzer:
         """Determine file modernization status."""
         if test.legacy_checks:
             return f"🟡 Needs cleanup ({len(test.legacy_checks)} legacy checks)"
+
+        # Error-only tests have different requirements
+        if test.is_error_only_test:
+            return "✅ Error path coverage (httptest mocks)"
 
         # Mock/unit tests don't need import/drift tests
         if is_resource and not test.is_mock_test:
@@ -590,6 +749,16 @@ class GapAnalyzer:
         lines.append("\n### HIGH PRIORITY ⚠️\n")
 
         has_high_priority = False
+
+        # Cleanup issues across all tests (exclude error-only tests)
+        tests_with_cleanup_issues = [t for t in self.resource_tests if t.cleanup_issues and not t.is_error_only_test]
+        if tests_with_cleanup_issues:
+            has_high_priority = True
+            lines.append("\n**Test Cleanup Issues:**\n")
+            for test in sorted(tests_with_cleanup_issues, key=lambda x: len(x.cleanup_issues), reverse=True):
+                lines.append(f"- **`{test.name}`**:\n")
+                for issue in test.cleanup_issues:
+                    lines.append(f"  - {issue}\n")
 
         # Missing validation tests for required fields
         if self.validation_coverage:
@@ -650,14 +819,19 @@ class GapAnalyzer:
             lines.append("\n**Tests with Low Quality Scores (<70/100):**\n")
             for test in sorted(low_quality, key=lambda x: x.quality_score):
                 improvements = []
-                if not test.uses_unique_names:
-                    improvements.append("add unique names")
+                if not test.uses_unique_names and not test.uses_cleanup_names:
+                    improvements.append("add unique/cleanup-friendly names")
                 if not test.uses_env_vars:
                     improvements.append("use env vars")
                 if not test.has_precheck:
                     improvements.append("add PreCheck")
-                if not test.has_check_destroy:
-                    improvements.append("add CheckDestroy")
+                if not test.has_robust_check_destroy:
+                    if test.has_check_destroy:
+                        improvements.append("strengthen CheckDestroy verification")
+                    else:
+                        improvements.append("add CheckDestroy")
+                if test.cleanup_issues:
+                    improvements.append(f"fix {len(test.cleanup_issues)} cleanup issue(s)")
                 lines.append(f"- `{test.name}` ({test.quality_score}/100) - Improve: {', '.join(improvements)}\n")
 
         return ''.join(lines)
@@ -704,6 +878,47 @@ compareID := statecheck.CompareValue(compare.ValuesSame())
 ConfigStateChecks: []statecheck.StateCheck{
     compareID.AddStateValue("example_resource.test", tfjsonpath.New("id")),
 }
+```
+
+### Robust CheckDestroy Pattern
+```go
+func testAccCheckResourceDestroy(s *terraform.State) error {
+    client := createTestBCMClient(&testing.T{})
+
+    for _, rs := range s.RootModule().Resources {
+        if rs.Type != "example_resource" {
+            continue
+        }
+
+        // Verify resource deleted with retry logic
+        deleted, err := verifyResourceDeleted(
+            context.Background(),
+            client,
+            "Service",
+            "getMethod",
+            rs.Primary.ID,
+            4, // retry count
+        )
+
+        if !deleted || err != nil {
+            return fmt.Errorf("resource still exists after destroy: %s", rs.Primary.ID)
+        }
+    }
+
+    return nil
+}
+```
+
+### Cleanup-Friendly Naming
+```go
+// Use unique names for easy cleanup (recommended: tftest- prefix)
+resourceName := generateUniqueTestName("tftest-resource")
+
+// Alternative: citest prefix for CI/CD examples
+resourceName := generateUniqueTestName("citest-resource")
+
+// Manual timestamp-based naming
+resourceName := fmt.Sprintf("tftest-%s-%d", "resource", time.Now().Unix())
 ```
 """
 

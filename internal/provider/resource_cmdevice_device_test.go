@@ -212,9 +212,9 @@ resource "bcm_cmdevice_device" "test" {
 
 // TestAccCMDeviceDeviceResource_Basic tests full CRUD lifecycle.
 func TestAccCMDeviceDeviceResource_Basic(t *testing.T) {
-	deviceName := generateUniqueTestName("test-device")
-	categoryName := generateUniqueTestName("citest-category-basic")
-	imageName := generateUniqueTestName("citest-image-basic")
+	deviceName := generateUniqueTestName("tftest-device")
+	categoryName := generateUniqueTestName("tftest-category-basic")
+	imageName := generateUniqueTestName("tftest-image-basic")
 	imagePath := "/cm/images/ubuntu-22.04-server-amd64-basic.iso"
 
 	// ID consistency tracking across all CRUD operations.
@@ -387,9 +387,9 @@ resource "bcm_cmdevice_device" "test" {
 
 // TestAccCMDeviceDevice_DriftNotes tests drift detection for notes field.
 func TestAccCMDeviceDevice_DriftNotes(t *testing.T) {
-	deviceName := generateUniqueTestName("test-device-drift")
-	categoryName := generateUniqueTestName("citest-category-drift")
-	imageName := generateUniqueTestName("citest-image-drift")
+	deviceName := generateUniqueTestName("tftest-device-drift")
+	categoryName := generateUniqueTestName("tftest-category-drift")
+	imageName := generateUniqueTestName("tftest-image-drift")
 	imagePath := "/cm/images/ubuntu-22.04-server-amd64-drift-notes.iso"
 
 	resource.Test(t, resource.TestCase{
@@ -482,8 +482,8 @@ func TestAccCMDeviceDevice_DriftNotes(t *testing.T) {
 
 // TestAccCMDeviceDevice_ValidationInvalidHostname tests hostname validation.
 func TestAccCMDeviceDevice_ValidationInvalidHostname(t *testing.T) {
-	categoryName := generateUniqueTestName("citest-category-validation")
-	imageName := generateUniqueTestName("citest-image-validation")
+	categoryName := generateUniqueTestName("tftest-category-validation")
+	imageName := generateUniqueTestName("tftest-image-validation")
 	imagePath := "/cm/images/ubuntu-22.04-server-amd64-validation.iso"
 
 	resource.Test(t, resource.TestCase{
@@ -546,9 +546,9 @@ func TestAccCMDeviceDevice_PartitionCommitTimeout(t *testing.T) {
 	// Note: To run this test manually, remove the t.Skip() line above and execute:
 	// TF_ACC=1 go test -v -timeout 10m ./internal/provider/ -run TestAccCMDeviceDevice_PartitionCommitTimeout
 
-	deviceName := generateUniqueTestName("test-device-timeout")
-	categoryName := generateUniqueTestName("citest-category-timeout")
-	imageName := generateUniqueTestName("citest-image-timeout")
+	deviceName := generateUniqueTestName("tftest-device-timeout")
+	categoryName := generateUniqueTestName("tftest-category-timeout")
+	imageName := generateUniqueTestName("tftest-image-timeout")
 	imagePath := "/cm/images/ubuntu-22.04-server-amd64-timeout.iso"
 
 	// Track retry attempts for validation.
@@ -821,7 +821,7 @@ resource "bcm_cmdevice_device" "test" {
 
 // TestAccCMDeviceDevice_ValidationInvalidMAC tests MAC address validation.
 func TestAccCMDeviceDevice_ValidationInvalidMAC(t *testing.T) {
-	deviceName := generateUniqueTestName("test-device")
+	deviceName := generateUniqueTestName("tftest-device")
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -850,10 +850,10 @@ func TestAccCMDeviceDevice_ValidationInvalidMAC(t *testing.T) {
 // TestAccCMDeviceDevice_Drift tests drift detection for hostname attribute.
 // This test verifies the provider correctly detects when a device's hostname is modified externally via BCM API.
 func TestAccCMDeviceDevice_Drift(t *testing.T) {
-	initialHostname := generateUniqueTestName("test-device-drift")
-	driftedHostname := generateUniqueTestName("drifted-device")
-	categoryName := generateUniqueTestName("citest-category-drift-hostname")
-	imageName := generateUniqueTestName("citest-image-drift-hostname")
+	initialHostname := generateUniqueTestName("tftest-device-drift")
+	driftedHostname := generateUniqueTestName("tftest-drifted-device")
+	categoryName := generateUniqueTestName("tftest-category-drift-hostname")
+	imageName := generateUniqueTestName("tftest-image-drift-hostname")
 	imagePath := "/cm/images/ubuntu-22.04-server-amd64-drift-hostname.iso"
 
 	resource.Test(t, resource.TestCase{

@@ -4,7 +4,9 @@
       "WebFetch(domain:developer.hashicorp.com)",
       "Bash(python3:*)",
       "Bash(.claude/skills/terraform-test-modernization/scripts/verify_compilation.sh:*)",
-      "Bash(pip3 install:*)"
+      "Bash(pip3 install:*)",
+      "Skill(terraform-provider-tests)",
+      "Bash(done)"
     ],
     "deny": [],
     "ask": []

@@ -703,7 +703,7 @@ func TestAccCMDeviceDeviceResource_ErrorCategoryNotFound(t *testing.T) {
 	mockServer := createMockBCMServerForDeviceErrors(scenarioCategoryNotFound)
 	defer mockServer.Close()
 
-	deviceName := generateUniqueTestName("test-device-error-cat-notfound")
+	deviceName := generateUniqueTestName("tftest-device-error-cat-notfound")
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -734,7 +734,7 @@ func TestAccCMDeviceDeviceResource_ErrorCategoryInvalidJSON(t *testing.T) {
 	mockServer := createMockBCMServerForDeviceErrors(scenarioCategoryInvalidJSON)
 	defer mockServer.Close()
 
-	deviceName := generateUniqueTestName("test-device-error-cat-badjson")
+	deviceName := generateUniqueTestName("tftest-device-error-cat-badjson")
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -764,7 +764,7 @@ func TestAccCMDeviceDeviceResource_ErrorCategoryNoPartition(t *testing.T) {
 	mockServer := createMockBCMServerForDeviceErrors(scenarioCategoryNoPartition)
 	defer mockServer.Close()
 
-	deviceName := generateUniqueTestName("test-device-error-no-partition")
+	deviceName := generateUniqueTestName("tftest-device-error-no-partition")
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -794,7 +794,7 @@ func TestAccCMDeviceDeviceResource_ErrorCategoryProxyMissingParent(t *testing.T)
 	mockServer := createMockBCMServerForDeviceErrors(scenarioCategoryProxyMissing)
 	defer mockServer.Close()
 
-	deviceName := generateUniqueTestName("test-device-error-proxy-missing")
+	deviceName := generateUniqueTestName("tftest-device-error-proxy-missing")
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -828,7 +828,7 @@ func TestAccCMDeviceDeviceResource_ErrorPartitionsQueryFailed(t *testing.T) {
 	mockServer := createMockBCMServerForDeviceErrors(scenarioPartitionsQueryError)
 	defer mockServer.Close()
 
-	deviceName := generateUniqueTestName("test-device-error-partitions-query")
+	deviceName := generateUniqueTestName("tftest-device-error-partitions-query")
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -858,7 +858,7 @@ func TestAccCMDeviceDeviceResource_ErrorPartitionsInvalidJSON(t *testing.T) {
 	mockServer := createMockBCMServerForDeviceErrors(scenarioPartitionsInvalidJSON)
 	defer mockServer.Close()
 
-	deviceName := generateUniqueTestName("test-device-error-partitions-json")
+	deviceName := generateUniqueTestName("tftest-device-error-partitions-json")
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -888,7 +888,7 @@ func TestAccCMDeviceDeviceResource_ErrorPartitionsNoBase(t *testing.T) {
 	mockServer := createMockBCMServerForDeviceErrors(scenarioPartitionsNoBase)
 	defer mockServer.Close()
 
-	deviceName := generateUniqueTestName("test-device-error-no-base")
+	deviceName := generateUniqueTestName("tftest-device-error-no-base")
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -918,7 +918,7 @@ func TestAccCMDeviceDeviceResource_ErrorPartitionNotCommitted(t *testing.T) {
 	mockServer := createMockBCMServerForDeviceErrors(scenarioPartitionNotCommitted)
 	defer mockServer.Close()
 
-	deviceName := generateUniqueTestName("test-device-error-partition-timeout")
+	deviceName := generateUniqueTestName("tftest-device-error-partition-timeout")
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -952,7 +952,7 @@ func TestAccCMDeviceDeviceResource_ErrorDeviceCreateFailed(t *testing.T) {
 	mockServer := createMockBCMServerForDeviceErrors(scenarioDeviceCreateError)
 	defer mockServer.Close()
 
-	deviceName := generateUniqueTestName("test-device-error-create")
+	deviceName := generateUniqueTestName("tftest-device-error-create")
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -983,7 +983,7 @@ func TestAccCMDeviceDeviceResource_ErrorDeviceCreateInvalidJSON(t *testing.T) {
 	mockServer := createMockBCMServerForDeviceErrors(scenarioDeviceCreateInvalidJSON)
 	defer mockServer.Close()
 
-	deviceName := generateUniqueTestName("test-device-error-create-json")
+	deviceName := generateUniqueTestName("tftest-device-error-create-json")
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -1013,7 +1013,7 @@ func TestAccCMDeviceDeviceResource_ErrorDeviceValidationFailed(t *testing.T) {
 	mockServer := createMockBCMServerForDeviceErrors(scenarioDeviceValidationFailure)
 	defer mockServer.Close()
 
-	deviceName := generateUniqueTestName("test-device-error-validation")
+	deviceName := generateUniqueTestName("tftest-device-error-validation")
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -1044,7 +1044,7 @@ func TestAccCMDeviceDeviceResource_ErrorDeviceReadAfterCreateFailed(t *testing.T
 	mockServer := createMockBCMServerForDeviceErrors(scenarioDeviceReadError)
 	defer mockServer.Close()
 
-	deviceName := generateUniqueTestName("test-device-error-read-after-create")
+	deviceName := generateUniqueTestName("tftest-device-error-read-after-create")
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -1075,7 +1075,7 @@ func TestAccCMDeviceDeviceResource_ErrorDeviceReadInvalidJSON(t *testing.T) {
 	mockServer := createMockBCMServerForDeviceErrors(scenarioDeviceReadInvalidJSON)
 	defer mockServer.Close()
 
-	deviceName := generateUniqueTestName("test-device-error-read-json")
+	deviceName := generateUniqueTestName("tftest-device-error-read-json")
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,

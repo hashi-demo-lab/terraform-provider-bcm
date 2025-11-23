@@ -21,7 +21,7 @@ import (
 )
 
 func TestAccCMPartSoftwareImageResource_Basic(t *testing.T) {
-	imageName := generateUniqueTestName("test-image")
+	imageName := generateUniqueTestName("tftest-image")
 	imagePath := fmt.Sprintf("/cm/images/%s", imageName)
 
 	// ID consistency tracking across all CRUD operations
@@ -124,7 +124,7 @@ func TestAccCMPartSoftwareImageResource_Basic(t *testing.T) {
 }
 
 func TestAccCMPartSoftwareImageResource_FullConfig(t *testing.T) {
-	imageName := generateUniqueTestName("test-full")
+	imageName := generateUniqueTestName("tftest-full")
 	imagePath := fmt.Sprintf("/cm/images/%s", imageName)
 
 	resource.Test(t, resource.TestCase{
@@ -188,7 +188,7 @@ func TestAccCMPartSoftwareImageResource_FullConfig(t *testing.T) {
 }
 
 func TestAccCMPartSoftwareImageResource_UpdateKernelConfig(t *testing.T) {
-	imageName := generateUniqueTestName("test-kernel-update")
+	imageName := generateUniqueTestName("tftest-kernel-update")
 	imagePath := fmt.Sprintf("/cm/images/%s", imageName)
 
 	resource.Test(t, resource.TestCase{
@@ -232,7 +232,7 @@ func TestAccCMPartSoftwareImageResource_UpdateKernelConfig(t *testing.T) {
 }
 
 func TestAccCMPartSoftwareImageResource_UpdateModules(t *testing.T) {
-	imageName := generateUniqueTestName("test-modules-update")
+	imageName := generateUniqueTestName("tftest-modules-update")
 	imagePath := fmt.Sprintf("/cm/images/%s", imageName)
 
 	resource.Test(t, resource.TestCase{
@@ -276,7 +276,7 @@ func TestAccCMPartSoftwareImageResource_UpdateModules(t *testing.T) {
 }
 
 func TestAccCMPartSoftwareImageResource_UpdateSOL(t *testing.T) {
-	imageName := generateUniqueTestName("test-sol-update")
+	imageName := generateUniqueTestName("tftest-sol-update")
 	imagePath := fmt.Sprintf("/cm/images/%s", imageName)
 
 	resource.Test(t, resource.TestCase{
@@ -354,7 +354,7 @@ resource "bcm_cmpart_softwareimage" "test" {
 }
 
 func TestAccCMPartSoftwareImageResource_InvalidSOLSpeed(t *testing.T) {
-	imageName := generateUniqueTestName("test-invalid-sol")
+	imageName := generateUniqueTestName("tftest-invalid-sol")
 	imagePath := fmt.Sprintf("/cm/images/%s", imageName)
 
 	resource.Test(t, resource.TestCase{
@@ -389,7 +389,7 @@ resource "bcm_cmpart_softwareimage" "test" {
 }
 
 func TestAccCMPartSoftwareImageResource_InvalidPath(t *testing.T) {
-	imageName := generateUniqueTestName("test-invalid-path")
+	imageName := generateUniqueTestName("tftest-invalid-path")
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -421,7 +421,7 @@ resource "bcm_cmpart_softwareimage" "test" {
 }
 
 func TestAccCMPartSoftwareImageResource_InvalidModules(t *testing.T) {
-	imageName := generateUniqueTestName("test-invalid-modules")
+	imageName := generateUniqueTestName("tftest-invalid-modules")
 	imagePath := fmt.Sprintf("/cm/images/%s", imageName)
 
 	resource.Test(t, resource.TestCase{
@@ -461,9 +461,9 @@ resource "bcm_cmpart_softwareimage" "test" {
 }
 
 func TestAccCMPartSoftwareImageResource_UnknownValue(t *testing.T) {
-	imageName1 := generateUniqueTestName("test-base-image")
+	imageName1 := generateUniqueTestName("tftest-base-image")
 	imagePath1 := fmt.Sprintf("/cm/images/%s", imageName1)
-	imageName2 := generateUniqueTestName("test-cloned-image")
+	imageName2 := generateUniqueTestName("tftest-cloned-image")
 	imagePath2 := fmt.Sprintf("/cm/images/%s", imageName2)
 
 	resource.Test(t, resource.TestCase{
@@ -562,7 +562,7 @@ resource "bcm_cmpart_softwareimage" "cloned" {
 // TestAccCMPartSoftwareImage_DriftKernelParameters tests drift detection for kernel_parameters attribute
 // Phase 3 - Task T011 (RED): This test should FAIL initially (no PreConfig implementation yet)
 func TestAccCMPartSoftwareImage_DriftKernelParameters(t *testing.T) {
-	imageName := generateUniqueTestName("test-drift-kernel")
+	imageName := generateUniqueTestName("tftest-drift-kernel")
 	imagePath := fmt.Sprintf("/cm/images/%s", imageName)
 
 	resource.Test(t, resource.TestCase{
@@ -672,7 +672,7 @@ func TestAccCMPartSoftwareImage_DriftKernelParameters(t *testing.T) {
 // This test verifies that Terraform can detect and correct configuration drift
 // when the notes field is modified externally via the BCM API
 func TestAccCMPartSoftwareImage_Drift(t *testing.T) {
-	imageName := generateUniqueTestName("test-drift-notes")
+	imageName := generateUniqueTestName("tftest-drift-notes")
 	imagePath := fmt.Sprintf("/cm/images/%s", imageName)
 
 	resource.Test(t, resource.TestCase{
@@ -784,7 +784,7 @@ func TestAccCMPartSoftwareImage_Drift(t *testing.T) {
 // TestAccCMPartSoftwareImage_DestroyIdempotent verifies destroy is idempotent
 // Phase 4 - Task T019 (RED): This test should FAIL initially (need graceful handling of already-deleted resources)
 func TestAccCMPartSoftwareImage_DestroyIdempotent(t *testing.T) {
-	imageName := generateUniqueTestName("test-destroy-idempotent")
+	imageName := generateUniqueTestName("tftest-destroy-idempotent")
 	imagePath := fmt.Sprintf("/cm/images/%s", imageName)
 
 	resource.Test(t, resource.TestCase{
@@ -851,7 +851,7 @@ func TestAccCMPartSoftwareImage_DestroyIdempotent(t *testing.T) {
 // TestAccCMPartSoftwareImage_DestroyExternalDelete verifies destroy handles externally deleted resources
 // Phase 4 - Task T022: Create resource, delete via BCM API, verify Terraform destroy succeeds
 func TestAccCMPartSoftwareImage_DestroyExternalDelete(t *testing.T) {
-	imageName := generateUniqueTestName("test-destroy-external")
+	imageName := generateUniqueTestName("tftest-destroy-external")
 	imagePath := fmt.Sprintf("/cm/images/%s", imageName)
 
 	resource.Test(t, resource.TestCase{
@@ -1215,7 +1215,7 @@ func testAccCMPartSoftwareImagePreCheck(t *testing.T, imageNames ...string) {
 
 // TestAccCMPartSoftwareImageResource_SOLConfiguration tests Serial Over LAN advanced settings
 func TestAccCMPartSoftwareImageResource_SOLConfiguration(t *testing.T) {
-	imageName := generateUniqueTestName("test-sol-config")
+	imageName := generateUniqueTestName("tftest-sol-config")
 	imagePath := fmt.Sprintf("/cm/images/%s", imageName)
 
 	resource.Test(t, resource.TestCase{
@@ -1328,7 +1328,7 @@ resource "bcm_cmpart_softwareimage" "test" {
 
 // TestAccCMPartSoftwareImageResource_KernelOutputConsole tests kernel_output_console field
 func TestAccCMPartSoftwareImageResource_KernelOutputConsole(t *testing.T) {
-	imageName := generateUniqueTestName("test-kernel-console")
+	imageName := generateUniqueTestName("tftest-kernel-console")
 	imagePath := fmt.Sprintf("/cm/images/%s", imageName)
 
 	resource.Test(t, resource.TestCase{
@@ -1386,7 +1386,7 @@ func TestAccCMPartSoftwareImageResource_KernelOutputConsole(t *testing.T) {
 
 // TestAccCMPartSoftwareImageResource_ComputedFields verifies computed-only fields are populated
 func TestAccCMPartSoftwareImageResource_ComputedFields(t *testing.T) {
-	imageName := generateUniqueTestName("test-computed-fields")
+	imageName := generateUniqueTestName("tftest-computed-fields")
 	imagePath := fmt.Sprintf("/cm/images/%s", imageName)
 
 	resource.Test(t, resource.TestCase{

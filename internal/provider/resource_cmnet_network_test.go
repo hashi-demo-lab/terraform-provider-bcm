@@ -22,7 +22,7 @@ import (
 )
 
 func TestAccCMNetNetwork_Basic(t *testing.T) {
-	networkName := generateUniqueTestName("test-network")
+	networkName := generateUniqueTestName("tftest-network")
 
 	// Initialize ID tracker for consistency verification across operations
 	compareID := statecheck.CompareValue(compare.ValuesSame())
@@ -89,7 +89,7 @@ func TestAccCMNetNetwork_Basic(t *testing.T) {
 }
 
 func TestAccCMNetNetwork_Complete(t *testing.T) {
-	networkName := generateUniqueTestName("test-network")
+	networkName := generateUniqueTestName("tftest-network")
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -166,7 +166,7 @@ func TestAccCMNetNetwork_Complete(t *testing.T) {
 }
 
 func TestAccCMNetNetwork_Update(t *testing.T) {
-	networkName := generateUniqueTestName("test-network")
+	networkName := generateUniqueTestName("tftest-network")
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -229,7 +229,7 @@ func TestAccCMNetNetwork_Update(t *testing.T) {
 
 // TestAccCMNetNetwork_DriftDetection verifies Terraform detects external modifications
 func TestAccCMNetNetwork_DriftDetection(t *testing.T) {
-	networkName := generateUniqueTestName("test-network-drift")
+	networkName := generateUniqueTestName("tftest-network-drift")
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },

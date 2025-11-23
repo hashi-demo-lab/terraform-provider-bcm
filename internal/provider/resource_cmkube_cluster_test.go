@@ -158,8 +158,8 @@ func getTestManagementNetworkUUID(t *testing.T) string {
 
 // TestAccCMKubeClusterResource_Basic tests complete CRUD lifecycle.
 func TestAccCMKubeClusterResource_Basic(t *testing.T) {
-	clusterName := generateUniqueTestName("test-cluster")
-	clusterNameUpdated := generateUniqueTestName("test-cluster-updated")
+	clusterName := generateUniqueTestName("tftest-cluster")
+	clusterNameUpdated := generateUniqueTestName("tftest-cluster-updated")
 
 	// Get available node UUIDs from test environment
 	masterNodeUUID := getTestMasterNodeUUID(t)
@@ -247,7 +247,7 @@ func TestAccCMKubeClusterResource_Basic(t *testing.T) {
 
 // TestAccCMKubeClusterResource_DriftDetection tests external modification detection.
 func TestAccCMKubeClusterResource_DriftDetection(t *testing.T) {
-	clusterName := generateUniqueTestName("test-cluster-drift")
+	clusterName := generateUniqueTestName("tftest-cluster-drift")
 	masterNodeUUID := getTestMasterNodeUUID(t)
 
 	resource.Test(t, resource.TestCase{
@@ -339,7 +339,7 @@ func TestAccCMKubeClusterResource_DriftDetection(t *testing.T) {
 
 // TestAccCMKubeClusterResource_WorkerNodes tests worker node scaling.
 func TestAccCMKubeClusterResource_WorkerNodes(t *testing.T) {
-	clusterName := generateUniqueTestName("test-cluster-workers")
+	clusterName := generateUniqueTestName("tftest-cluster-workers")
 	masterNodeUUID := getTestMasterNodeUUID(t)
 	workerNodeUUID1 := getTestWorkerNodeUUID(t, 0)
 	workerNodeUUID2 := getTestWorkerNodeUUID(t, 1)
@@ -416,7 +416,7 @@ func TestAccCMKubeClusterResource_ValidationInvalidName(t *testing.T) {
 
 // TestAccCMKubeClusterResource_ValidationInvalidVersion tests invalid version format.
 func TestAccCMKubeClusterResource_ValidationInvalidVersion(t *testing.T) {
-	clusterName := generateUniqueTestName("test-cluster")
+	clusterName := generateUniqueTestName("tftest-cluster")
 	masterNodeUUID := getTestMasterNodeUUID(t)
 
 	resource.Test(t, resource.TestCase{
@@ -437,8 +437,8 @@ func TestAccCMKubeClusterResource_ValidationInvalidVersion(t *testing.T) {
 
 // TestAccCMKubeClusterResource_CompleteConfiguration tests all optional fields.
 func TestAccCMKubeClusterResource_CompleteConfiguration(t *testing.T) {
-	clusterName := generateUniqueTestName("test-cluster-complete")
-	clusterNameUpdated := generateUniqueTestName("test-cluster-complete-updated")
+	clusterName := generateUniqueTestName("tftest-cluster-complete")
+	clusterNameUpdated := generateUniqueTestName("tftest-cluster-complete-updated")
 	masterNodeUUID := getTestMasterNodeUUID(t)
 	workerNodeUUID := getTestWorkerNodeUUID(t, 0)
 
@@ -639,7 +639,7 @@ resource "bcm_cmkube_cluster" "test" {
 
 // TestAccCMKubeClusterResource_P3AdvancedNetworking tests P3 networking features.
 func TestAccCMKubeClusterResource_P3AdvancedNetworking(t *testing.T) {
-	clusterName := generateUniqueTestName("test-cluster-p3-network")
+	clusterName := generateUniqueTestName("tftest-cluster-p3-network")
 	masterNodeUUID := getTestMasterNodeUUID(t)
 
 	resource.Test(t, resource.TestCase{
@@ -699,7 +699,7 @@ func TestAccCMKubeClusterResource_P3AdvancedNetworking(t *testing.T) {
 
 // TestAccCMKubeClusterResource_P3StorageAndLoadBalancer tests P3 storage and LB features.
 func TestAccCMKubeClusterResource_P3StorageAndLoadBalancer(t *testing.T) {
-	clusterName := generateUniqueTestName("test-cluster-p3-storage")
+	clusterName := generateUniqueTestName("tftest-cluster-p3-storage")
 	masterNodeUUID := getTestMasterNodeUUID(t)
 
 	resource.Test(t, resource.TestCase{
@@ -749,7 +749,7 @@ func TestAccCMKubeClusterResource_P3StorageAndLoadBalancer(t *testing.T) {
 
 // TestAccCMKubeClusterResource_P3Addons tests P3 cluster addons.
 func TestAccCMKubeClusterResource_P3Addons(t *testing.T) {
-	clusterName := generateUniqueTestName("test-cluster-p3-addons")
+	clusterName := generateUniqueTestName("tftest-cluster-p3-addons")
 	masterNodeUUID := getTestMasterNodeUUID(t)
 
 	resource.Test(t, resource.TestCase{
@@ -805,7 +805,7 @@ func TestAccCMKubeClusterResource_P3Addons(t *testing.T) {
 
 // TestAccCMKubeClusterResource_P3FullStack tests all P3 fields together.
 func TestAccCMKubeClusterResource_P3FullStack(t *testing.T) {
-	clusterName := generateUniqueTestName("test-cluster-p3-full")
+	clusterName := generateUniqueTestName("tftest-cluster-p3-full")
 	masterNodeUUID := getTestMasterNodeUUID(t)
 
 	resource.Test(t, resource.TestCase{
@@ -1141,7 +1141,7 @@ resource "bcm_cmkube_cluster" "test" {
 
 // TestAccCMKubeClusterResource_ForceOption tests the force parameter
 func TestAccCMKubeClusterResource_ForceOption(t *testing.T) {
-	clusterName := generateUniqueTestName("test-cluster-force")
+	clusterName := generateUniqueTestName("tftest-cluster-force")
 	masterNodeUUID := getTestMasterNodeUUID(t)
 
 	resource.Test(t, resource.TestCase{

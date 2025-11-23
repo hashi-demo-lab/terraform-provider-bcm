@@ -19,9 +19,9 @@ import (
 )
 
 func TestAccCMDeviceDevice_Idempotency(t *testing.T) {
-	deviceName := generateUniqueTestName("citest-device-idempotent")
-	categoryName := generateUniqueTestName("citest-category-idempotent")
-	imageName := generateUniqueTestName("citest-image-idempotent")
+	deviceName := generateUniqueTestName("tftest-device-idempotent")
+	categoryName := generateUniqueTestName("tftest-category-idempotent")
+	imageName := generateUniqueTestName("tftest-image-idempotent")
 	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 	mac := generateUniqueMAC()
 
@@ -84,9 +84,9 @@ func TestAccCMDeviceDevice_Idempotency(t *testing.T) {
 }
 
 func TestAccCMDeviceDevice_IdempotencyWithImport(t *testing.T) {
-	deviceName := generateUniqueTestName("citest-device-import")
-	categoryName := generateUniqueTestName("citest-category-import")
-	imageName := generateUniqueTestName("citest-image-import")
+	deviceName := generateUniqueTestName("tftest-device-import")
+	categoryName := generateUniqueTestName("tftest-category-import")
+	imageName := generateUniqueTestName("tftest-image-import")
 	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 	mac := generateUniqueMAC()
 
@@ -134,9 +134,9 @@ func TestAccCMDeviceDevice_IdempotencyWithImport(t *testing.T) {
 }
 
 func TestAccCMDeviceDevice_IdempotencyWithOptionalFields(t *testing.T) {
-	deviceName := generateUniqueTestName("citest-device-optional")
-	categoryName := generateUniqueTestName("citest-category-optional")
-	imageName := generateUniqueTestName("citest-image-optional")
+	deviceName := generateUniqueTestName("tftest-device-optional")
+	categoryName := generateUniqueTestName("tftest-category-optional")
+	imageName := generateUniqueTestName("tftest-image-optional")
 	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 	mac := generateUniqueMAC()
 
@@ -185,9 +185,9 @@ func TestAccCMDeviceDevice_IdempotencyWithOptionalFields(t *testing.T) {
 }
 
 func TestAccCMDeviceDevice_IdempotencyAfterUpdate(t *testing.T) {
-	deviceName := generateUniqueTestName("citest-device-update")
-	categoryName := generateUniqueTestName("citest-category-update")
-	imageName := generateUniqueTestName("citest-image-update")
+	deviceName := generateUniqueTestName("tftest-device-update")
+	categoryName := generateUniqueTestName("tftest-category-update")
+	imageName := generateUniqueTestName("tftest-image-update")
 	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 	mac := generateUniqueMAC()
 
@@ -241,9 +241,9 @@ func TestAccCMDeviceDevice_IdempotencyAfterUpdate(t *testing.T) {
 }
 
 func TestAccCMDeviceDevice_IdempotencyDrift(t *testing.T) {
-	deviceName := generateUniqueTestName("citest-device-drift")
-	categoryName := generateUniqueTestName("citest-category-drift")
-	imageName := generateUniqueTestName("citest-image-drift")
+	deviceName := generateUniqueTestName("tftest-device-drift")
+	categoryName := generateUniqueTestName("tftest-category-drift")
+	imageName := generateUniqueTestName("tftest-image-drift")
 	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 	mac := generateUniqueMAC()
 
