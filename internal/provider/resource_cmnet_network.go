@@ -295,14 +295,30 @@ func (r *CMNetNetworkResource) Read(ctx context.Context, req resource.ReadReques
 		return
 	}
 
+	// Get UUID for lookup - use ID if UUID not set (happens during import)
+	lookupID := state.UUID.ValueString()
+	if lookupID == "" {
+		lookupID = state.ID.ValueString()
+	}
+
 	// Call BCM API to get network by UUID (efficient direct lookup)
-	body, err := r.client.CallJSONRPC(ctx, "cmnet", "getNetwork", state.UUID.ValueString())
+	body, err := r.client.CallJSONRPC(ctx, "cmnet", "getNetwork", lookupID)
 	if err != nil {
-		// Network not found = removed outside Terraform (drift detection)
-		tflog.Debug(ctx, "Network not found, removing from state", map[string]interface{}{
-			"uuid": state.UUID.ValueString(),
-		})
-		resp.State.RemoveResource(ctx)
+		errorMsg := err.Error()
+		if containsAny(errorMsg, []string{"not found", "does not exist", "Unable to use map_key_to_string"}) {
+			// Network was deleted outside Terraform - remove from state
+			tflog.Info(ctx, "Network not found during refresh - removing from state", map[string]interface{}{
+				"uuid": state.UUID.ValueString(),
+				"name": state.Name.ValueString(),
+			})
+			resp.State.RemoveResource(ctx)
+			return
+		}
+		// Other errors should be reported to the user
+		resp.Diagnostics.AddError(
+			"Network Read Failed",
+			fmt.Sprintf("Failed to read network '%s' (UUID: %s): %s", state.Name.ValueString(), state.UUID.ValueString(), err.Error()),
+		)
 		return
 	}
 
@@ -536,8 +552,20 @@ func mapNetworkAPIResponseToState(ctx context.Context, apiData map[string]interf
 		data.MTU = types.Int64Null()
 	}
 
-	data.DomainName = getStringValue(apiData, "domainName")
-	data.Notes = getStringValue(apiData, "notes")
+	// Domain name and notes - preserve plan values if BCM returns empty
+	domainName := getStringValue(apiData, "domainName")
+	if !domainName.IsNull() && domainName.ValueString() != "" {
+		data.DomainName = domainName
+	} else if data.DomainName.IsNull() {
+		data.DomainName = types.StringNull()
+	}
+
+	notes := getStringValue(apiData, "notes")
+	if !notes.IsNull() && notes.ValueString() != "" {
+		data.Notes = notes
+	} else if data.Notes.IsNull() {
+		data.Notes = types.StringNull()
+	}
 
 	// Computed BCM fields
 	data.NetworkType = getStringValue(apiData, "type")
