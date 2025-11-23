@@ -740,7 +740,7 @@ func TestAccCMDeviceDeviceResource_ErrorCategoryInvalidJSON(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config:      testAccDeviceResourceConfigWithMockServer(mockServer.URL, deviceName),
-				ExpectError: regexp.MustCompile(`Error Parsing Category`),
+				ExpectError: regexp.MustCompile(`Error Querying Category.*failed to parse JSON response`),
 			},
 		},
 	})
@@ -800,7 +800,7 @@ func TestAccCMDeviceDeviceResource_ErrorCategoryProxyMissingParent(t *testing.T)
 		Steps: []resource.TestStep{
 			{
 				Config:      testAccDeviceResourceConfigWithMockServer(mockServer.URL, deviceName),
-				ExpectError: regexp.MustCompile(`Missing Partition.*parentSoftwareImage`),
+				ExpectError: regexp.MustCompile(`Missing Partition.*softwareImageProxy.*parentSoftwareImage`),
 			},
 		},
 	})
@@ -864,7 +864,7 @@ func TestAccCMDeviceDeviceResource_ErrorPartitionsInvalidJSON(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config:      testAccDeviceResourceConfigWithMockServer(mockServer.URL, deviceName),
-				ExpectError: regexp.MustCompile(`Error Parsing Partitions`),
+				ExpectError: regexp.MustCompile(`Error Querying Partitions.*failed to parse JSON response`),
 			},
 		},
 	})
@@ -924,7 +924,7 @@ func TestAccCMDeviceDeviceResource_ErrorPartitionNotCommitted(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config:      testAccDeviceResourceConfigWithMockServer(mockServer.URL, deviceName),
-				ExpectError: regexp.MustCompile(`Partition Not Ready.*not committed`),
+				ExpectError: regexp.MustCompile(`(?s)Partition Not Ready.*not committed`),
 			},
 		},
 	})
@@ -989,7 +989,7 @@ func TestAccCMDeviceDeviceResource_ErrorDeviceCreateInvalidJSON(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config:      testAccDeviceResourceConfigWithMockServer(mockServer.URL, deviceName),
-				ExpectError: regexp.MustCompile(`(?s)Error Creating Device.*failed to parse.*JSON response`),
+				ExpectError: regexp.MustCompile(`Error Creating Device.*failed to parse.*JSON`),
 			},
 		},
 	})
@@ -1019,7 +1019,7 @@ func TestAccCMDeviceDeviceResource_ErrorDeviceValidationFailed(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config:      testAccDeviceResourceConfigWithMockServer(mockServer.URL, deviceName),
-				ExpectError: regexp.MustCompile(`(?s)Error Creating Device.*validation errors.*hostname.*already exists`),
+				ExpectError: regexp.MustCompile(`(?i)Error Creating Device.*validation errors.*hostname.*already exists`),
 			},
 		},
 	})

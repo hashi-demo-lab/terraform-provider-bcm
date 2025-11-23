@@ -24,7 +24,7 @@ import (
 
 // TestAccCMPartPartition_Basic tests Create, Read, Import, and basic CRUD workflow
 func TestAccCMPartPartition_Basic(t *testing.T) {
-	partitionName := generateUniqueTestName("test-partition")
+	partitionName := "base" // BCM constraint: partition name must be "base"
 	compareID := statecheck.CompareValue(compare.ValuesSame())
 
 	resource.Test(t, resource.TestCase{
@@ -35,17 +35,11 @@ func TestAccCMPartPartition_Basic(t *testing.T) {
 			// Step 1: Create and Read
 			{
 				Config: testAccPartitionConfigBasic(partitionName, "HPC Cluster"),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmpart_partition.test", "name", partitionName),
-					resource.TestCheckResourceAttr("bcm_cmpart_partition.test", "cluster_name", "HPC Cluster"),
-					resource.TestCheckResourceAttrSet("bcm_cmpart_partition.test", "uuid"),
-					resource.TestCheckResourceAttrSet("bcm_cmpart_partition.test", "id"),
-				),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmpart_partition.test",
 						tfjsonpath.New("name"),
-						knownvalue.StringExact(partitionName),
+						knownvalue.StringExact("base"),
 					),
 					statecheck.ExpectKnownValue(
 						"bcm_cmpart_partition.test",
@@ -106,11 +100,6 @@ func TestAccCMPartPartition_Update(t *testing.T) {
 			// Create with initial values
 			{
 				Config: testAccPartitionConfigComplete(partitionName, "Cluster A", "node", 3, "Initial notes"),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmpart_partition.test", "cluster_name", "Cluster A"),
-					resource.TestCheckResourceAttr("bcm_cmpart_partition.test", "slave_name", "node"),
-					resource.TestCheckResourceAttr("bcm_cmpart_partition.test", "notes", "Initial notes"),
-				),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmpart_partition.test",
@@ -132,9 +121,6 @@ func TestAccCMPartPartition_Update(t *testing.T) {
 			// Update cluster_name
 			{
 				Config: testAccPartitionConfigComplete(partitionName, "Cluster B", "node", 3, "Initial notes"),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmpart_partition.test", "cluster_name", "Cluster B"),
-				),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmpart_partition.test",
@@ -155,9 +141,6 @@ func TestAccCMPartPartition_Update(t *testing.T) {
 			// Update slave_name and slave_digits
 			{
 				Config: testAccPartitionConfigComplete(partitionName, "Cluster B", "compute", 4, "Initial notes"),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmpart_partition.test", "slave_name", "compute"),
-				),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmpart_partition.test",
@@ -183,9 +166,6 @@ func TestAccCMPartPartition_Update(t *testing.T) {
 			// Update notes field
 			{
 				Config: testAccPartitionConfigComplete(partitionName, "Cluster B", "compute", 4, "Updated notes"),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmpart_partition.test", "notes", "Updated notes"),
-				),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmpart_partition.test",
@@ -277,9 +257,6 @@ func TestAccCMPartPartition_DriftDetection(t *testing.T) {
 			// Step 1: Create partition with initial notes
 			{
 				Config: testAccPartitionConfigWithNotes(partitionName, "Initial notes"),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmpart_partition.test", "notes", "Initial notes"),
-				),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmpart_partition.test",
@@ -349,9 +326,6 @@ func TestAccCMPartPartition_DriftDetection(t *testing.T) {
 			// Step 3: Terraform restores desired state
 			{
 				Config: testAccPartitionConfigWithNotes(partitionName, "Initial notes"),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmpart_partition.test", "notes", "Initial notes"),
-				),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmpart_partition.test",
@@ -528,9 +502,27 @@ provider "bcm" {
   insecure_skip_verify = true
 }
 
+# Lookup existing BCM resources
+data "bcm_cmdevice_nodes" "headnode" {
+  filter {
+    child_type = "HeadNode"
+  }
+}
+
+data "bcm_cmnet_networks" "all" {}
+
+
+
+data "bcm_cmdevice_categories" "all" {}
+
 resource "bcm_cmpart_partition" "test" {
-  name         = %[4]q
-  cluster_name = %[5]q
+  name                = %[4]q
+  cluster_name        = %[5]q
+  timezone_settings   = "America/Los_Angeles"
+  primary_head_node   = data.bcm_cmdevice_nodes.headnode.nodes[0].uuid
+  external_network    = data.bcm_cmnet_networks.all.networks[0].uuid
+  default_category    = data.bcm_cmdevice_categories.all.categories[0].uuid
+  management_network  = length(data.bcm_cmnet_networks.all.networks) > 1 ? data.bcm_cmnet_networks.all.networks[1].uuid : data.bcm_cmnet_networks.all.networks[0].uuid
 }
 `,
 		os.Getenv("BCM_ENDPOINT"),
@@ -551,10 +543,28 @@ provider "bcm" {
   insecure_skip_verify = true
 }
 
+# Lookup existing BCM resources
+data "bcm_cmdevice_nodes" "headnode" {
+  filter {
+    child_type = "HeadNode"
+  }
+}
+
+data "bcm_cmnet_networks" "all" {}
+
+
+
+data "bcm_cmdevice_categories" "all" {}
+
 resource "bcm_cmpart_partition" "test" {
-  name         = %[4]q
-  cluster_name = "Test Cluster"
-  notes        = %[5]q
+  name                = %[4]q
+  cluster_name        = "Test Cluster"
+  timezone_settings   = "America/Los_Angeles"
+  primary_head_node   = data.bcm_cmdevice_nodes.headnode.nodes[0].uuid
+  external_network    = data.bcm_cmnet_networks.all.networks[0].uuid
+  default_category    = data.bcm_cmdevice_categories.all.categories[0].uuid
+  management_network  = length(data.bcm_cmnet_networks.all.networks) > 1 ? data.bcm_cmnet_networks.all.networks[1].uuid : data.bcm_cmnet_networks.all.networks[0].uuid
+  notes               = %[5]q
 }
 `,
 		os.Getenv("BCM_ENDPOINT"),
@@ -580,9 +590,27 @@ provider "bcm" {
   insecure_skip_verify = true
 }
 
+# Lookup existing BCM resources
+data "bcm_cmdevice_nodes" "headnode" {
+  filter {
+    child_type = "HeadNode"
+  }
+}
+
+data "bcm_cmnet_networks" "all" {}
+
+
+
+data "bcm_cmdevice_categories" "all" {}
+
 resource "bcm_cmpart_partition" "test" {
-  name         = %[4]q
-  cluster_name = "Test Cluster"
+  name                = %[4]q
+  cluster_name        = "Test Cluster"
+  timezone_settings   = "America/Los_Angeles"
+  primary_head_node   = data.bcm_cmdevice_nodes.headnode.nodes[0].uuid
+  external_network    = data.bcm_cmnet_networks.all.networks[0].uuid
+  default_category    = data.bcm_cmdevice_categories.all.categories[0].uuid
+  management_network  = length(data.bcm_cmnet_networks.all.networks) > 1 ? data.bcm_cmnet_networks.all.networks[1].uuid : data.bcm_cmnet_networks.all.networks[0].uuid
 
   admin_email    = %[5]s
   time_servers   = %[6]s
@@ -611,12 +639,30 @@ provider "bcm" {
   insecure_skip_verify = true
 }
 
+# Lookup existing BCM resources
+data "bcm_cmdevice_nodes" "headnode" {
+  filter {
+    child_type = "HeadNode"
+  }
+}
+
+data "bcm_cmnet_networks" "all" {}
+
+
+
+data "bcm_cmdevice_categories" "all" {}
+
 resource "bcm_cmpart_partition" "test" {
-  name         = %[4]q
-  cluster_name = %[5]q
-  slave_name   = %[6]q
-  slave_digits = %[7]d
-  notes        = %[8]q
+  name                = %[4]q
+  cluster_name        = %[5]q
+  timezone_settings   = "America/Los_Angeles"
+  primary_head_node   = data.bcm_cmdevice_nodes.headnode.nodes[0].uuid
+  external_network    = data.bcm_cmnet_networks.all.networks[0].uuid
+  default_category    = data.bcm_cmdevice_categories.all.categories[0].uuid
+  management_network  = length(data.bcm_cmnet_networks.all.networks) > 1 ? data.bcm_cmnet_networks.all.networks[1].uuid : data.bcm_cmnet_networks.all.networks[0].uuid
+  slave_name          = %[6]q
+  slave_digits        = %[7]d
+  notes               = %[8]q
 }
 `,
 		os.Getenv("BCM_ENDPOINT"),
