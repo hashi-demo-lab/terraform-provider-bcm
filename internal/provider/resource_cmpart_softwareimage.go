@@ -10,7 +10,6 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -261,13 +260,8 @@ func (r *CMPartSoftwareImageResource) Create(ctx context.Context, req resource.C
 	}
 
 	// Build API entity from plan
-	// If cloning (originalImage set), generate a UUID for the new image
-	var entityUUID string
-	if !plan.OriginalImage.IsNull() {
-		// Generate UUID for cloned image
-		entityUUID = uuid.New().String()
-	}
-	entity := r.buildAPIEntity(&plan, entityUUID)
+	// UUID will be generated automatically by buildAPIEntity for new resources
+	entity := r.buildAPIEntity(&plan, "")
 
 	// NOTE: Pre-flight validation skipped for creation - validateSoftwareImage requires existing UUID
 	// Validation will occur server-side during addSoftwareImage call
@@ -746,9 +740,13 @@ func (r *CMPartSoftwareImageResource) buildAPIEntity(model *CMPartSoftwareImageR
 		"revision":      "",
 	}
 
-	// Include UUID if provided (for updates)
+	// BCM REQUIRES a UUID for software images (like categories and networks)
+	// For create: generate new UUID, for update: use existing UUID
 	if uuid != "" {
 		entity["uuid"] = uuid
+	} else {
+		// Generate UUID for new software image
+		entity["uuid"] = generateUUID()
 	}
 
 	// Identity fields
