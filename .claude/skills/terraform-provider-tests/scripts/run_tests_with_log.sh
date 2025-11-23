@@ -15,12 +15,24 @@
 #
 # All OPTIONS are passed to run_tests_parallel.sh
 #
+# Common Options:
+#   -c, --concurrency N     Max concurrent test files (default: 4)
+#   -t, --timeout DURATION  Timeout per test file (default: 30m)
+#   -C, --cleanup           Run cleanup before tests (requires BCM credentials)
+#   --resources-only        Run only resource tests
+#   --data-sources-only     Run only data source tests
+#   --verbose               Show detailed test output
+#   -h, --help              Show all options
+#
 # Examples:
 #   # Run all tests with max concurrency
 #   ./run_tests_with_log.sh -c 21 -t 30m
 #
-#   # Run only resource tests
-#   ./run_tests_with_log.sh --resources-only -c 8
+#   # Run with cleanup before tests
+#   ./run_tests_with_log.sh --cleanup -c 21
+#
+#   # Run only resource tests with cleanup
+#   ./run_tests_with_log.sh --resources-only -c 8 --cleanup
 #
 
 set -euo pipefail

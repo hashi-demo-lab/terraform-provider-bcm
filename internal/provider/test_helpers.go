@@ -225,6 +225,112 @@ func getResourceUUIDByName(t *testing.T, service, method, name string) string {
 	return uuid
 }
 
+// ============================================================================
+// RFC 1123 DNS Label Requirements for Test Hostname Generation Functions
+// ============================================================================
+//
+// RFC 1123 specifies strict requirements for DNS labels used as hostnames.
+// Test hostname generation functions in this file MUST comply with these rules
+// to ensure test resources are compatible with real-world Terraform provider
+// use cases and BCM API hostname validation.
+//
+// RFC 1123 DNS Label Specification:
+//
+//   Length: 1-63 characters maximum
+//   Characters: Lowercase letters (a-z), digits (0-9), and hyphens (-)
+//   Start: MUST begin with alphanumeric character (a-z or 0-9)
+//   End: MUST end with alphanumeric character (a-z or 0-9)
+//   Pattern: ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$
+//
+// Why This Matters for Error Tests:
+//
+// Validation tests (e.g., TestAccCMDeviceDevice_ValidationInvalidHostname) must
+// deliberately use INVALID hostnames to test error handling. Meanwhile, setup,
+// cleanup, and prerequisite steps need VALID RFC 1123 hostnames.
+//
+// Invalid Test Cases (should trigger validation errors):
+//   - "UPPERCASE" (uppercase not allowed, must be lowercase)
+//   - "-leadinghyphen" (must start with alphanumeric)
+//   - "trailing-" (must end with alphanumeric)
+//   - "x" * 70 (exceeds 63 character maximum)
+//   - "test_name" (underscores not allowed)
+//   - "test.name" (dots not allowed in single labels)
+//
+// Valid Test Cases (RFC 1123 compliant):
+//   - "tftest-device-20251124-150405-123456789-1234" (full unique name)
+//   - "tftest-img-2511240714-a3f9" (short RFC 1123 compliant)
+//   - "node1", "web-server", "app-test-01" (simple examples)
+//
+// Two Hostname Generation Functions:
+//
+// 1. generateUniqueTestName(prefix):
+//    - Format: "prefix-YYYYMMDD-HHMMSS-nanoseconds-pid"
+//    - Length: 44-60+ characters (may exceed 63 char limit)
+//    - Purpose: General resource naming where length isn't a constraint
+//    - Use for: Resource names that aren't hostnames (device IDs, image names, etc.)
+//    - WARNING: May violate RFC 1123 63-char limit with long prefixes
+//
+// 2. generateShortTestName(prefix):
+//    - Format: "tftest-{prefix}-{YYMMDDHHmm}-{4hex}"
+//    - Length: Always 28-35 characters (always under 63 char limit)
+//    - Purpose: RFC 1123 compliant hostname generation
+//    - Use for: Actual hostnames and DNS-compatible test resource names
+//    - Guarantees: Always valid RFC 1123 DNS labels
+//
+// Recommended Format Breakdown for generateShortTestName():
+//
+//   Component               Chars   Example      Purpose
+//   ─────────────────       ─────   ─────────    ─────────────────────────
+//   "tftest-" constant      7       tftest-      Marks name as test resource
+//   User prefix             1-10    img, dev     Short descriptive label
+//   "-" separator           1       -            Separator
+//   Timestamp (YYMMDDHHmm)  10      2511240714   Minute precision timestamp
+//   "-" separator           1       -            Separator
+//   Hex suffix (4 chars)    4       a3f9         65536 combinations per minute
+//   ─────────────────────────────────────────────────────────────────────
+//   TOTAL:                  28-35   tftest-img-2511240714-a3f9
+//
+// Examples of Good vs Bad Test Hostname Names:
+//
+//   GOOD - RFC 1123 Compliant:
+//   ✓ "tftest-device-20251124-150405-123456789-1234" (unique, timestamp-based)
+//   ✓ "tftest-img-2511240714-a3f9" (short, hex-suffixed)
+//   ✓ "tftest-err-cat-nf-2511240714-3f9a" (error test: category not found)
+//   ✓ "node1", "web-server", "app-test-01" (human-readable)
+//
+//   BAD - RFC 1123 Violations:
+//   ✗ "UPPERCASE-HOSTNAME" (uppercase not allowed)
+//   ✗ "-leadinghyphen" (starts with hyphen)
+//   ✗ "trailing-hyphen-" (ends with hyphen)
+//   ✗ "double--hyphen" (consecutive hyphens poor practice)
+//   ✗ "x" * 70 (exceeds 63 char maximum)
+//   ✗ "test_name_with_underscores" (underscores not allowed)
+//   ✗ "test.name.with.dots" (dots only allowed in FQDN, not single labels)
+//
+// Length Accounting Examples:
+//
+//   generateUniqueTestName("tftest-device"):
+//   "tftest-device-20251124-150405-123456789-1234" = 45 chars (OK)
+//   "tftest-very-long-prefix-error-scenario-20251124-150405-123456789-1234" = 70 chars (TOO LONG!)
+//
+//   generateShortTestName("img"):
+//   "tftest-img-2511240714-a3f9" = 28 chars (always under 63)
+//
+//   generateShortTestName("err-cat-nf"):
+//   "tftest-err-cat-nf-2511240714-3f9a" = 35 chars (always under 63)
+//
+// Prefix Abbreviation Recommendations:
+//
+//   For generateShortTestName(), use short prefixes (max 10 chars):
+//   - "img" for software images
+//   - "cat" for categories
+//   - "net" for networks
+//   - "dev" for devices
+//   - "clust" for clusters
+//   - "err-cat-nf" for error test: category not found
+//   - "err-img-ex" for error test: image already exists
+//   - "err-net-dupe" for error test: network duplicate
+
 // generateUniqueTestName creates a unique test resource name with timestamp and nanosecond suffix
 //
 // This function ensures test resources have unique names to avoid conflicts when running
@@ -243,10 +349,94 @@ func getResourceUUIDByName(t *testing.T, service, method, name string) string {
 //
 //	name := generateUniqueTestName("test-image")
 //	// Returns: "test-image-20250121-143052-123456789"
+//
+// generateUniqueTestName creates a unique test resource name with multiple uniqueness factors.
+//
+// Uniqueness strategy:
+// - Date/time: 20060102-150405 (second precision)
+// - Nanoseconds: 0-999999999 (nanosecond within current second)
+// - Process ID: Helps with parallel test execution across processes
+//
+// This ensures uniqueness even when:
+// - Multiple tests run in parallel (different PIDs)
+// - Tests run in rapid succession (nanosecond precision)
+// - Tests run across multiple days (date component)
+//
+// Example output: tftest-image-20251124-150405-123456789-12345
+//
+// Returns: "prefix-YYYYMMDD-HHMMSS-nanoseconds-pid"
+//
+// WARNING: This function may generate names longer than 63 characters, which violates
+// RFC 1123 DNS label requirements. For hostnames and DNS-compatible names, use
+// generateShortTestName() instead.
 func generateUniqueTestName(prefix string) string {
 	timestamp := time.Now().Format("20060102-150405")
 	nanos := time.Now().Nanosecond()
-	return fmt.Sprintf("%s-%s-%d", prefix, timestamp, nanos)
+	pid := os.Getpid()
+	return fmt.Sprintf("%s-%s-%d-%d", prefix, timestamp, nanos, pid)
+}
+
+// generateShortTestName creates a unique test resource name compliant with RFC 1123 DNS labels.
+//
+// RFC 1123 DNS Label Requirements:
+// - Maximum length: 63 characters
+// - Must start with alphanumeric character
+// - Can contain alphanumeric characters and hyphens
+// - Must end with alphanumeric character
+//
+// Uniqueness strategy:
+// - Short prefix: Descriptive abbreviation (max 10 chars recommended)
+// - Compact timestamp: YYMMDDHHmm (10 digits, minute precision)
+// - Hex suffix: 4-character hex from nanoseconds (65536 combinations per minute)
+//
+// Format: "tftest-{prefix}-{YYMMDDHHmm}-{4hex}"
+// Example: "tftest-img-2511240714-a3f9" (28 characters)
+// Example: "tftest-err-cat-nf-2511240714-3f9a" (35 characters with longer prefix)
+//
+// Max length calculation:
+// - "tftest-" prefix: 7 characters
+// - User prefix: up to 10 characters (recommended)
+// - Separators: 2 hyphens = 2 characters
+// - Timestamp: 10 characters (YYMMDDHHmm)
+// - Hex suffix: 4 characters
+// - Total: 7 + 10 + 2 + 10 + 4 = 33 characters (well under 63 limit)
+//
+// Suggested prefix abbreviations:
+// - "img" for software images
+// - "cat" for categories
+// - "net" for networks
+// - "dev" for devices
+// - "clust" for clusters
+// - "err-cat-nf" for error test: category not found
+// - "err-img-ex" for error test: image already exists
+//
+// This function replaces the previous implementation which could generate names
+// exceeding 63 characters (e.g., "err-cat-nf-150405-123456789" = ~28 chars base,
+// but "tftest-device-error-category-notfound-150405-123456789" = ~60+ chars).
+//
+// Parameters:
+//
+//	prefix - Short descriptive prefix (max 10 chars recommended, e.g., "img", "cat", "err-cat-nf")
+//
+// Returns:
+//
+//	RFC 1123 compliant unique name with format: tftest-prefix-YYMMDDHHmm-4hex
+//
+// Example Usage:
+//
+//	name := generateShortTestName("img")
+//	// Returns: "tftest-img-2511240714-a3f9" (28 chars)
+//
+//	name := generateShortTestName("err-cat-nf")
+//	// Returns: "tftest-err-cat-nf-2511240714-3f9a" (35 chars)
+func generateShortTestName(prefix string) string {
+	now := time.Now()
+	// Compact timestamp: YYMMDDHHmm (minute precision)
+	timestamp := now.Format("0601021504")
+	// 4-character hex from nanoseconds (0x0000 to 0xFFFF range)
+	// Use nanoseconds modulo 65536 to get 4-hex-digit value
+	hexSuffix := fmt.Sprintf("%04x", now.Nanosecond()%65536)
+	return fmt.Sprintf("tftest-%s-%s-%s", prefix, timestamp, hexSuffix)
 }
 
 // generateUniqueMAC creates a unique MAC address for testing

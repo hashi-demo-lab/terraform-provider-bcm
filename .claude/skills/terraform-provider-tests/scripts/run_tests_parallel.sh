@@ -17,6 +17,7 @@
 #   -c, --concurrency N     Max concurrent test files (default: 4)
 #   -t, --timeout DURATION  Timeout per test file (default: 30m)
 #   -f, --file FILE         Run only tests from specific file
+#   -C, --cleanup           Run cleanup before tests (requires BCM credentials)
 #   --resources-only        Run only resource tests
 #   --data-sources-only     Run only data source tests
 #   --verbose               Show detailed test output
@@ -27,14 +28,17 @@
 #   # Run all acceptance tests with 4 concurrent files
 #   ./run_tests_parallel.sh
 #
+#   # Run with cleanup before tests (requires BCM credentials)
+#   ./run_tests_parallel.sh --cleanup
+#
 #   # Run all 21 test files in parallel (max concurrency)
 #   ./run_tests_parallel.sh -c 21 -t 30m 2>&1 | tail -100
 #
 #   # Run with full output logging to file
 #   ./run_tests_parallel.sh -c 21 2>&1 | tee test-results.log
 #
-#   # Run only resource tests with higher concurrency
-#   ./run_tests_parallel.sh --resources-only -c 8
+#   # Run only resource tests with higher concurrency and cleanup
+#   ./run_tests_parallel.sh --resources-only -c 8 --cleanup
 #
 #   # Run tests matching specific pattern
 #   ./run_tests_parallel.sh -p "TestAccCMPartSoftwareImage"
@@ -75,6 +79,7 @@ TEST_PATTERN="TestAcc"
 CONCURRENCY=30
 TIMEOUT="30m"
 SPECIFIC_FILE=""
+CLEANUP=false
 RESOURCES_ONLY=false
 DATA_SOURCES_ONLY=false
 VERBOSE=false
@@ -103,6 +108,10 @@ while [[ $# -gt 0 ]]; do
             SPECIFIC_FILE="$2"
             shift 2
             ;;
+        -C|--cleanup)
+            CLEANUP=true
+            shift
+            ;;
         --resources-only)
             RESOURCES_ONLY=true
             shift
@@ -120,7 +129,7 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         -h|--help)
-            sed -n '3,39p' "$0" | sed 's/^# \?//'
+            sed -n '3,44p' "$0" | sed 's/^# \?//'
             exit 0
             ;;
         *)
@@ -139,6 +148,45 @@ if [ "$NO_COLOR" = true ]; then
     BLUE=''
     CYAN=''
     NC=''
+fi
+
+# Run cleanup if requested
+if [ "$CLEANUP" = true ]; then
+    echo -e "${BLUE}===== Pre-Test Cleanup =====${NC}"
+    echo ""
+
+    # Check if BCM credentials are set
+    if [ -z "${BCM_ENDPOINT:-}" ] || [ -z "${BCM_USERNAME:-}" ] || [ -z "${BCM_PASSWORD:-}" ]; then
+        echo -e "${YELLOW}Warning: BCM credentials not set. Skipping cleanup.${NC}"
+        echo "Set BCM_ENDPOINT, BCM_USERNAME, and BCM_PASSWORD to enable cleanup."
+        echo ""
+    else
+        # Determine cleanup script location
+        CLEANUP_SCRIPT="/workspace/scripts/cleanup-test-resources-auto.sh"
+
+        if [ ! -f "$CLEANUP_SCRIPT" ]; then
+            echo -e "${YELLOW}Warning: Cleanup script not found at $CLEANUP_SCRIPT${NC}"
+            echo "Skipping cleanup step."
+            echo ""
+        else
+            echo "Running cleanup script: $CLEANUP_SCRIPT"
+            echo ""
+
+            # Run cleanup script (continue even if it has warnings)
+            if bash "$CLEANUP_SCRIPT"; then
+                echo -e "${GREEN}✅ Cleanup completed successfully${NC}"
+            else
+                cleanup_exit=$?
+                if [ $cleanup_exit -eq 0 ]; then
+                    echo -e "${GREEN}✅ Cleanup completed${NC}"
+                else
+                    echo -e "${YELLOW}⚠️  Cleanup completed with warnings (exit code: $cleanup_exit)${NC}"
+                    echo "Continuing with tests..."
+                fi
+            fi
+            echo ""
+        fi
+    fi
 fi
 
 # Validate directory

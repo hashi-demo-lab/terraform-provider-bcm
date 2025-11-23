@@ -483,10 +483,12 @@ func (r *CMKubeClusterResource) readCluster(ctx context.Context, model *CMKubeCl
 		}
 		model.WorkerNodes, _ = types.ListValue(types.StringType, elements)
 	} else {
-		// Preserve plan value if BCM returns empty/null
-		// If plan has null/unknown, keep as null; if plan has empty list, keep as empty list
+		// CRITICAL FIX: Preserve null vs empty list distinction
+		// - If model currently has null/unknown, keep it null (don't convert to empty list)
+		// - If model currently has empty list, preserve it as empty list
+		// - This prevents "Provider produced inconsistent result after apply" errors
 		if model.WorkerNodes.IsNull() || model.WorkerNodes.IsUnknown() {
-			model.WorkerNodes, _ = types.ListValue(types.StringType, []attr.Value{})
+			model.WorkerNodes = types.ListNull(types.StringType)
 		}
 		// else: preserve existing plan value (which might be an empty list)
 	}
