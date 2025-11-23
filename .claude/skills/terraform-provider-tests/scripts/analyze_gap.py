@@ -675,7 +675,7 @@ import (
 ```go
 ConfigStateChecks: []statecheck.StateCheck{
     statecheck.ExpectKnownValue(
-        "bcm_resource.test",
+        "example_resource.test",
         tfjsonpath.New("name"),
         knownvalue.StringExact("expected-value"),
     ),
@@ -696,7 +696,7 @@ ConfigPlanChecks: resource.ConfigPlanChecks{
 compareID := statecheck.CompareValue(compare.ValuesSame())
 
 ConfigStateChecks: []statecheck.StateCheck{
-    compareID.AddStateValue("bcm_resource.test", tfjsonpath.New("id")),
+    compareID.AddStateValue("example_resource.test", tfjsonpath.New("id")),
 }
 ```
 """

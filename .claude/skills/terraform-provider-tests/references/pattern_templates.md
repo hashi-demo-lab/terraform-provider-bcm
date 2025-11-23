@@ -49,7 +49,7 @@ import (
 **Legacy**:
 ```go
 Check: resource.ComposeAggregateTestCheckFunc(
-    resource.TestCheckResourceAttr("bcm_resource.test", "name", "expected-value"),
+    resource.TestCheckResourceAttr("example_resource.test", "name", "expected-value"),
 ),
 ```
 
@@ -57,7 +57,7 @@ Check: resource.ComposeAggregateTestCheckFunc(
 ```go
 ConfigStateChecks: []statecheck.StateCheck{
     statecheck.ExpectKnownValue(
-        "bcm_resource.test",
+        "example_resource.test",
         tfjsonpath.New("name"),
         knownvalue.StringExact("expected-value"),
     ),
@@ -68,13 +68,13 @@ ConfigStateChecks: []statecheck.StateCheck{
 
 **Legacy**:
 ```go
-resource.TestCheckResourceAttr("bcm_resource.test", "enabled", "true"),
+resource.TestCheckResourceAttr("example_resource.test", "enabled", "true"),
 ```
 
 **Modern**:
 ```go
 statecheck.ExpectKnownValue(
-    "bcm_resource.test",
+    "example_resource.test",
     tfjsonpath.New("enabled"),
     knownvalue.Bool(true),
 ),
@@ -84,13 +84,13 @@ statecheck.ExpectKnownValue(
 
 **Legacy**:
 ```go
-resource.TestCheckResourceAttr("bcm_resource.test", "port", "8080"),
+resource.TestCheckResourceAttr("example_resource.test", "port", "8080"),
 ```
 
 **Modern**:
 ```go
 statecheck.ExpectKnownValue(
-    "bcm_resource.test",
+    "example_resource.test",
     tfjsonpath.New("port"),
     knownvalue.Int64Exact(8080),
 ),
@@ -100,19 +100,19 @@ statecheck.ExpectKnownValue(
 
 **Legacy**:
 ```go
-resource.TestCheckResourceAttrSet("bcm_resource.test", "uuid"),
-resource.TestCheckResourceAttrSet("bcm_resource.test", "id"),
+resource.TestCheckResourceAttrSet("example_resource.test", "uuid"),
+resource.TestCheckResourceAttrSet("example_resource.test", "id"),
 ```
 
 **Modern**:
 ```go
 statecheck.ExpectKnownValue(
-    "bcm_resource.test",
+    "example_resource.test",
     tfjsonpath.New("uuid"),
     knownvalue.NotNull(),
 ),
 statecheck.ExpectKnownValue(
-    "bcm_resource.test",
+    "example_resource.test",
     tfjsonpath.New("id"),
     knownvalue.NotNull(),
 ),
@@ -122,13 +122,13 @@ statecheck.ExpectKnownValue(
 
 **Legacy**:
 ```go
-resource.TestCheckResourceAttr("bcm_resource.test", "items.#", "3"),
+resource.TestCheckResourceAttr("example_resource.test", "items.#", "3"),
 ```
 
 **Modern**:
 ```go
 statecheck.ExpectKnownValue(
-    "bcm_resource.test",
+    "example_resource.test",
     tfjsonpath.New("items"),
     knownvalue.ListSizeExact(3),
 ),
@@ -148,7 +148,7 @@ statecheck.ExpectKnownValue(
     Config: testAccResourceConfig(name, "value"),
     ConfigStateChecks: []statecheck.StateCheck{
         statecheck.ExpectKnownValue(
-            "bcm_resource.test",
+            "example_resource.test",
             tfjsonpath.New("name"),
             knownvalue.StringExact(name),
         ),
@@ -172,7 +172,7 @@ statecheck.ExpectKnownValue(
     Config: testAccResourceConfig(name, "updated-value"),
     ConfigStateChecks: []statecheck.StateCheck{
         statecheck.ExpectKnownValue(
-            "bcm_resource.test",
+            "example_resource.test",
             tfjsonpath.New("field"),
             knownvalue.StringExact("updated-value"),
         ),
@@ -207,26 +207,26 @@ Steps: []resource.TestStep{
         Config: testAccResourceConfig(name),
         ConfigStateChecks: []statecheck.StateCheck{
             statecheck.ExpectKnownValue(
-                "bcm_resource.test",
+                "example_resource.test",
                 tfjsonpath.New("name"),
                 knownvalue.StringExact(name),
             ),
             // Capture ID after create
             compareID.AddStateValue(
-                "bcm_resource.test",
+                "example_resource.test",
                 tfjsonpath.New("id"),
             ),
         },
     },
     // Import step
     {
-        ResourceName:      "bcm_resource.test",
+        ResourceName:      "example_resource.test",
         ImportState:       true,
         ImportStateVerify: true,
         ConfigStateChecks: []statecheck.StateCheck{
             // Verify ID unchanged after import
             compareID.AddStateValue(
-                "bcm_resource.test",
+                "example_resource.test",
                 tfjsonpath.New("id"),
             ),
         },
@@ -258,7 +258,7 @@ func TestAccResourceName_DriftDetection(t *testing.T) {
                 Config: testAccResourceConfigWithField(resourceName, "initial-value"),
                 ConfigStateChecks: []statecheck.StateCheck{
                     statecheck.ExpectKnownValue(
-                        "bcm_resource.test",
+                        "example_resource.test",
                         tfjsonpath.New("field"),
                         knownvalue.StringExact("initial-value"),
                     ),
@@ -327,7 +327,7 @@ func TestAccResourceName_DriftDetection(t *testing.T) {
                 Config: testAccResourceConfigWithField(resourceName, "initial-value"),
                 ConfigStateChecks: []statecheck.StateCheck{
                     statecheck.ExpectKnownValue(
-                        "bcm_resource.test",
+                        "example_resource.test",
                         tfjsonpath.New("field"),
                         knownvalue.StringExact("initial-value"),
                     ),
@@ -347,7 +347,7 @@ provider "bcm" {
   insecure_skip_verify = true
 }
 
-resource "bcm_resource" "test" {
+resource "example_resource" "test" {
   name  = %[4]q
   field = %[5]q
 }
@@ -393,19 +393,19 @@ func TestAccResourceName_IDConsistency(t *testing.T) {
                 Config: testAccResourceConfig(resourceName),
                 ConfigStateChecks: []statecheck.StateCheck{
                     compareID.AddStateValue(
-                        "bcm_resource.test",
+                        "example_resource.test",
                         tfjsonpath.New("id"),
                     ),
                 },
             },
             // Import
             {
-                ResourceName:      "bcm_resource.test",
+                ResourceName:      "example_resource.test",
                 ImportState:       true,
                 ImportStateVerify: true,
                 ConfigStateChecks: []statecheck.StateCheck{
                     compareID.AddStateValue(
-                        "bcm_resource.test",
+                        "example_resource.test",
                         tfjsonpath.New("id"),
                     ),
                 },
@@ -415,7 +415,7 @@ func TestAccResourceName_IDConsistency(t *testing.T) {
                 Config: testAccResourceConfigUpdated(resourceName),
                 ConfigStateChecks: []statecheck.StateCheck{
                     compareID.AddStateValue(
-                        "bcm_resource.test",
+                        "example_resource.test",
                         tfjsonpath.New("id"),
                     ),
                 },
@@ -487,27 +487,27 @@ func TestAccCMResourceExample_Complete(t *testing.T) {
                 Config: testAccCMResourceConfig(resourceName, "initial"),
                 ConfigStateChecks: []statecheck.StateCheck{
                     statecheck.ExpectKnownValue(
-                        "bcm_cmresource.test",
+                        "example_cmresource.test",
                         tfjsonpath.New("name"),
                         knownvalue.StringExact(resourceName),
                     ),
                     statecheck.ExpectKnownValue(
-                        "bcm_cmresource.test",
+                        "example_cmresource.test",
                         tfjsonpath.New("field"),
                         knownvalue.StringExact("initial"),
                     ),
                     statecheck.ExpectKnownValue(
-                        "bcm_cmresource.test",
+                        "example_cmresource.test",
                         tfjsonpath.New("enabled"),
                         knownvalue.Bool(true),
                     ),
                     statecheck.ExpectKnownValue(
-                        "bcm_cmresource.test",
+                        "example_cmresource.test",
                         tfjsonpath.New("uuid"),
                         knownvalue.NotNull(),
                     ),
                     compareID.AddStateValue(
-                        "bcm_cmresource.test",
+                        "example_cmresource.test",
                         tfjsonpath.New("id"),
                     ),
                 },
@@ -523,12 +523,12 @@ func TestAccCMResourceExample_Complete(t *testing.T) {
             },
             // Import with ID tracking
             {
-                ResourceName:      "bcm_cmresource.test",
+                ResourceName:      "example_cmresource.test",
                 ImportState:       true,
                 ImportStateVerify: true,
                 ConfigStateChecks: []statecheck.StateCheck{
                     compareID.AddStateValue(
-                        "bcm_cmresource.test",
+                        "example_cmresource.test",
                         tfjsonpath.New("id"),
                     ),
                 },
@@ -538,12 +538,12 @@ func TestAccCMResourceExample_Complete(t *testing.T) {
                 Config: testAccCMResourceConfig(resourceName, "updated"),
                 ConfigStateChecks: []statecheck.StateCheck{
                     statecheck.ExpectKnownValue(
-                        "bcm_cmresource.test",
+                        "example_cmresource.test",
                         tfjsonpath.New("field"),
                         knownvalue.StringExact("updated"),
                     ),
                     compareID.AddStateValue(
-                        "bcm_cmresource.test",
+                        "example_cmresource.test",
                         tfjsonpath.New("id"),
                     ),
                 },

@@ -87,7 +87,7 @@ Config: testAccResourceConfig(name),
 ```go
 ConfigStateChecks: []statecheck.StateCheck{
     statecheck.ExpectKnownValue(
-        "bcm_resource.test",
+        "example_resource.test",
         tfjsonpath.New("name"),
         knownvalue.StringExact("expected"),
     ),
@@ -134,7 +134,7 @@ ConfigStateChecks: []statecheck.StateCheck{
 
 ```go
 {
-    ResourceName:      "bcm_resource.test",
+    ResourceName:      "example_resource.test",
     ImportState:       true,
     ImportStateVerify: true,
 },
@@ -164,7 +164,7 @@ Asserts attribute has specified type and value.
 
 ```go
 statecheck.ExpectKnownValue(
-    "bcm_resource.test",           // Resource address
+    "example_resource.test",           // Resource address
     tfjsonpath.New("attribute"),   // Attribute path
     knownvalue.StringExact("val"), // Expected value
 )
@@ -189,7 +189,7 @@ compareID := statecheck.CompareValue(compare.ValuesSame())
 // Add value in each step
 ConfigStateChecks: []statecheck.StateCheck{
     compareID.AddStateValue(
-        "bcm_resource.test",
+        "example_resource.test",
         tfjsonpath.New("id"),
     ),
 }
@@ -205,7 +205,7 @@ Compare collection items with another attribute.
 
 ```go
 statecheck.CompareValueCollection(
-    "bcm_resource.test",
+    "example_resource.test",
     tfjsonpath.New("items"),
     tfjsonpath.New("count"),
     compare.ValuesSame(),
@@ -218,7 +218,7 @@ Compare paired attribute values.
 
 ```go
 statecheck.CompareValuePairs(
-    "bcm_resource.test",
+    "example_resource.test",
     tfjsonpath.New("input"),
     tfjsonpath.New("output"),
     compare.ValuesSame(),
@@ -231,7 +231,7 @@ Asserts attribute is marked sensitive (Terraform 1.4.6+).
 
 ```go
 statecheck.ExpectSensitiveValue(
-    "bcm_resource.test",
+    "example_resource.test",
     tfjsonpath.New("password"),
 )
 ```
@@ -282,7 +282,7 @@ Asserts planned attribute value.
 
 ```go
 plancheck.ExpectKnownValue(
-    "bcm_resource.test",
+    "example_resource.test",
     tfjsonpath.New("name"),
     knownvalue.StringExact("expected"),
 )
@@ -294,7 +294,7 @@ Asserts resource has specific planned operation.
 
 ```go
 plancheck.ExpectResourceAction(
-    "bcm_resource.test",
+    "example_resource.test",
     plancheck.ResourceActionUpdate,
 )
 ```
@@ -313,7 +313,7 @@ Asserts attribute value is unknown (computed).
 
 ```go
 plancheck.ExpectUnknownValue(
-    "bcm_resource.test",
+    "example_resource.test",
     tfjsonpath.New("uuid"),
 )
 ```
@@ -324,7 +324,7 @@ Asserts planned attribute is sensitive.
 
 ```go
 plancheck.ExpectSensitiveValue(
-    "bcm_resource.test",
+    "example_resource.test",
     tfjsonpath.New("password"),
 )
 ```
@@ -394,7 +394,7 @@ Verify that importing existing infrastructure produces identical state to creati
 
 ```go
 {
-    ResourceName:      "bcm_resource.test",
+    ResourceName:      "example_resource.test",
     ImportState:       true,
     ImportStateVerify: true,
 }
@@ -418,7 +418,7 @@ Steps: []resource.TestStep{
     },
     // Import and verify
     {
-        ResourceName:      "bcm_resource.test",
+        ResourceName:      "example_resource.test",
         ImportState:       true,
         ImportStateVerify: true,
     },
@@ -442,7 +442,7 @@ Verify resource creation with expected attributes.
     Config: testAccResourceConfig(),
     ConfigStateChecks: []statecheck.StateCheck{
         statecheck.ExpectKnownValue(
-            "bcm_resource.test",
+            "example_resource.test",
             tfjsonpath.New("name"),
             knownvalue.StringExact("expected"),
         ),
@@ -465,7 +465,7 @@ Steps: []resource.TestStep{
         Config: testAccResourceConfig("initial"),
         ConfigStateChecks: []statecheck.StateCheck{
             statecheck.ExpectKnownValue(
-                "bcm_resource.test",
+                "example_resource.test",
                 tfjsonpath.New("field"),
                 knownvalue.StringExact("initial"),
             ),
@@ -475,7 +475,7 @@ Steps: []resource.TestStep{
         Config: testAccResourceConfig("updated"),
         ConfigStateChecks: []statecheck.StateCheck{
             statecheck.ExpectKnownValue(
-                "bcm_resource.test",
+                "example_resource.test",
                 tfjsonpath.New("field"),
                 knownvalue.StringExact("updated"),
             ),
@@ -496,7 +496,7 @@ Steps: []resource.TestStep{
         Config: testAccResourceConfig(),
     },
     {
-        ResourceName:      "bcm_resource.test",
+        ResourceName:      "example_resource.test",
         ImportState:       true,
         ImportStateVerify: true,
     },

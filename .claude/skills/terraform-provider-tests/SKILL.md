@@ -1,6 +1,6 @@
 ---
 name: terraform-provider-tests
-description: Analyze and improve Terraform provider test coverage using terraform-plugin-testing v1.13.3+ patterns. Use when (1) analyzing test coverage gaps, (2) adding missing tests (drift detection, import, idempotency), (3) converting legacy patterns to modern state checks, (4) tracking optional field coverage, or (5) verifying test quality. Supports automated coverage analysis and guided pattern improvements with BCM-specific patterns.
+description: Analyze and improve Terraform provider test coverage using terraform-plugin-testing v1.13.3+ patterns. Use when (1) analyzing test coverage gaps, (2) adding missing tests (drift detection, import, idempotency), (3) converting legacy patterns to modern state checks, (4) tracking optional field coverage, or (5) verifying test quality. Supports automated coverage analysis and guided pattern improvements.
 ---
 
 # Terraform Provider Tests
@@ -16,8 +16,8 @@ Analyze test coverage and improve Terraform provider acceptance tests using mode
 python scripts/analyze_gap.py ./internal/provider/ --output gap_analysis.md
 ```
 
-**Modernize a specific test file**:
-"Modernize resource_cmpart_softwareimage_test.go to use modern patterns"
+**Analyze a specific test file**:
+"Analyze resource_example_test.go for coverage gaps"
 
 **Verify compilation after changes**:
 ```bash
@@ -117,7 +117,7 @@ Replace `Check: resource.ComposeAggregateTestCheckFunc()` with `ConfigStateCheck
 **Before**:
 ```go
 Check: resource.ComposeAggregateTestCheckFunc(
-    resource.TestCheckResourceAttr("bcm_resource.test", "name", "expected"),
+    resource.TestCheckResourceAttr("example_resource.test", "name", "expected"),
 ),
 ```
 
@@ -125,7 +125,7 @@ Check: resource.ComposeAggregateTestCheckFunc(
 ```go
 ConfigStateChecks: []statecheck.StateCheck{
     statecheck.ExpectKnownValue(
-        "bcm_resource.test",
+        "example_resource.test",
         tfjsonpath.New("name"),
         knownvalue.StringExact("expected"),
     ),
@@ -196,21 +196,6 @@ TF_ACC=1 go test -v -timeout 30m ./internal/provider/ -run "^TestAccResource_Spe
 TF_ACC=1 go test -v -timeout 120m ./internal/provider/
 ```
 
-## BCM-Specific Patterns
-
-**Critical**: BCM uses camelCase, Terraform uses snake_case.
-
-**Field mapping examples**:
-- `kernel_parameters` → `kernelParameters`
-- `enable_sol` → `enableSol`
-- `dhcp_enabled` → `dhcpEnabled`
-
-**See [references/bcm_specifics.md](#references) for**:
-- Complete field name mapping table
-- BCM API entity structure
-- Test helpers usage
-- Drift detection examples
-
 ## Completion Criteria
 
 A fully modernized test file has:
@@ -228,13 +213,10 @@ A fully modernized test file has:
 → Add all required imports from Phase 3, Step 3
 
 **Wrong knownvalue matcher**
-→ Match BCM types: String→StringExact, Bool→Bool, Int64→Int64Exact
+→ Match types correctly: String→StringExact, Bool→Bool, Int64→Int64Exact
 
 **Duplicate validation**
 → Remove `Check` block, keep only `ConfigStateChecks`
-
-**Wrong BCM field name**
-→ Use camelCase in API calls, snake_case in Terraform
 
 ## References
 
@@ -256,16 +238,6 @@ Ready-to-use code templates for all modern patterns:
 - Complete test examples
 
 **When to read**: When applying specific patterns to code.
-
-### references/bcm_specifics.md
-BCM-specific testing patterns and quirks:
-- Field name mapping (snake_case ↔ camelCase)
-- BCM API entity structure
-- Test helper functions
-- Eventual consistency patterns
-- Complete drift detection example
-
-**When to read**: When working with BCM provider tests or encountering BCM-specific errors.
 
 ### references/hashicorp_official.md
 Consolidated HashiCorp official documentation:
@@ -296,7 +268,7 @@ This skill uses a **hybrid approach**:
 
 **Guided assistance** for:
 - ✅ Code changes (apply patterns with context)
-- ✅ Complex operations (drift tests, BCM API calls)
-- ✅ Decision making (prioritization, field mapping)
+- ✅ Complex operations (drift tests, API integration)
+- ✅ Decision making (prioritization, test design)
 
 This balance maintains control while automating tedious tasks.

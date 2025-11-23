@@ -82,8 +82,8 @@ For each file, apply patterns in this order:
 {
     Config: testAccResourceConfig(name),
     Check: resource.ComposeAggregateTestCheckFunc(
-        resource.TestCheckResourceAttr("bcm_resource.test", "name", "expected"),
-        resource.TestCheckResourceAttr("bcm_resource.test", "enabled", "true"),
+        resource.TestCheckResourceAttr("example_resource.test", "name", "expected"),
+        resource.TestCheckResourceAttr("example_resource.test", "enabled", "true"),
     ),
 }
 ```
@@ -94,12 +94,12 @@ For each file, apply patterns in this order:
     Config: testAccResourceConfig(name),
     ConfigStateChecks: []statecheck.StateCheck{
         statecheck.ExpectKnownValue(
-            "bcm_resource.test",
+            "example_resource.test",
             tfjsonpath.New("name"),
             knownvalue.StringExact("expected"),
         ),
         statecheck.ExpectKnownValue(
-            "bcm_resource.test",
+            "example_resource.test",
             tfjsonpath.New("enabled"),
             knownvalue.Bool(true),
         ),
@@ -214,7 +214,7 @@ TF_ACC=1 go test -v -timeout 120m ./internal/provider/
 
 ### 5. Incorrect BCM Field Mapping
 **Symptom**: Drift test doesn't detect changes
-**Fix**: Use snake_case → camelCase mapping (see `bcm_specifics.md`)
+**Fix**: Use snake_case → camelCase mapping (see `example_specifics.md`)
 
 ## Completion Criteria
 
