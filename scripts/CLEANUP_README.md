@@ -2,11 +2,38 @@
 
 ## Overview
 
-Two scripts for cleaning up orphaned test resources from BCM cluster:
-- **Interactive cleanup** - Manual review and confirmation
+Three scripts for managing test resources and ensuring name uniqueness:
+- **Pre-test cleanup** - Remove orphaned resources before tests (guarantees uniqueness)
+- **Interactive cleanup** - Manual review and confirmation after tests
 - **Automated cleanup** - CI/CD integration (no prompts)
 
 Both scripts clean up resources with `citest-*` or `tftest-*` prefixes.
+
+## Test Name Uniqueness Guarantee
+
+### Multi-Layer Uniqueness Strategy
+
+**1. Enhanced Name Generation** (`generateUniqueTestName`):
+```go
+// Components: prefix-YYYYMMDD-HHMMSS-nanoseconds-pid
+tftest-image-20251124-150405-123456789-12345
+
+// Uniqueness factors:
+// - Date/time: Second precision (YYYYMMDD-HHMMSS)
+// - Nanoseconds: 0-999,999,999 within current second
+// - Process ID: Different for parallel test processes
+```
+
+**2. Pre-Test Cleanup** (removes orphaned resources):
+```bash
+./scripts/cleanup-before-tests.sh
+```
+
+This combination ensures **guaranteed uniqueness** even when:
+- ✅ Tests run in parallel across multiple processes
+- ✅ Tests run in rapid succession
+- ✅ Previous test runs failed and left resources behind
+- ✅ Multiple developers run tests on shared cluster
 
 ## Resource Types Cleaned
 
@@ -17,6 +44,58 @@ Both scripts clean up resources with `citest-*` or `tftest-*` prefixes.
 | Devices | CMDevice | hostname | Depends on categories |
 | Kubernetes Clusters | CMKube | name | None |
 | Networks | CMNet | name | None |
+
+## Pre-Test Cleanup (Recommended for CI/CD)
+
+**Use for**: Ensuring test name uniqueness before running tests
+
+```bash
+# Set credentials
+export BCM_ENDPOINT="https://172.21.15.254:8081"
+export BCM_USERNAME="root"
+export BCM_PASSWORD="your-password"
+
+# Run pre-test cleanup (silent, automatic)
+./scripts/cleanup-before-tests.sh
+
+# Now run your tests with guaranteed uniqueness
+TF_ACC=1 go test -v -timeout 120m ./internal/provider/
+```
+
+**Features**:
+- Removes orphaned resources from previous failed tests
+- Runs silently (no prompts)
+- Fast execution (only cleans test-prefixed resources)
+- Guarantees name uniqueness for upcoming tests
+
+**Example output**:
+```
+==========================================
+Pre-Test Cleanup: Removing orphaned test resources
+==========================================
+
+→ Logging in to BCM...
+✓ Logged in
+
+→ Checking for orphaned resources...
+  ✓ No orphaned devices
+  ⚠ Found 3 orphaned software images - cleaning up...
+  ✓ Deleted 3 software images
+  ✓ No orphaned categories
+  ✓ No orphaned Kubernetes clusters
+  ✓ No orphaned networks
+
+==========================================
+✓ Pre-test cleanup complete
+  Tests can now run with guaranteed name uniqueness
+==========================================
+```
+
+**When to use**:
+- ✅ Before every test run (recommended)
+- ✅ In CI/CD pipelines (prevents name conflicts)
+- ✅ When multiple developers share a test cluster
+- ✅ After interrupted test runs
 
 ## Interactive Cleanup (Manual)
 
@@ -123,18 +202,48 @@ categoryName := generateUniqueTestName("tftest-category")
 - ✅ Test failed mid-execution
 - ✅ CheckDestroy never ran
 
-**Automated cleanup integration**:
+**Complete CI/CD integration** (recommended):
 ```yaml
 # GitHub Actions example
-- name: Cleanup test resources
-  if: always()  # Run even if tests fail
-  env:
-    BCM_ENDPOINT: ${{ secrets.BCM_ENDPOINT }}
-    BCM_USERNAME: ${{ secrets.BCM_USERNAME }}
-    BCM_PASSWORD: ${{ secrets.BCM_PASSWORD }}
-    AUTO_CLEANUP: 1
-  run: ./scripts/cleanup-test-resources-auto.sh
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      # Pre-test cleanup (ensures uniqueness)
+      - name: Pre-test cleanup
+        env:
+          BCM_ENDPOINT: ${{ secrets.BCM_ENDPOINT }}
+          BCM_USERNAME: ${{ secrets.BCM_USERNAME }}
+          BCM_PASSWORD: ${{ secrets.BCM_PASSWORD }}
+        run: ./scripts/cleanup-before-tests.sh
+
+      # Run tests
+      - name: Run acceptance tests
+        env:
+          TF_ACC: 1
+          BCM_ENDPOINT: ${{ secrets.BCM_ENDPOINT }}
+          BCM_USERNAME: ${{ secrets.BCM_USERNAME }}
+          BCM_PASSWORD: ${{ secrets.BCM_PASSWORD }}
+        run: go test -v -timeout 120m ./internal/provider/
+
+      # Post-test cleanup (even if tests fail)
+      - name: Post-test cleanup
+        if: always()
+        env:
+          BCM_ENDPOINT: ${{ secrets.BCM_ENDPOINT }}
+          BCM_USERNAME: ${{ secrets.BCM_USERNAME }}
+          BCM_PASSWORD: ${{ secrets.BCM_PASSWORD }}
+          AUTO_CLEANUP: 1
+        run: ./scripts/cleanup-test-resources-auto.sh
 ```
+
+**Benefits of this approach**:
+- ✅ Pre-cleanup ensures no name conflicts
+- ✅ Tests run with guaranteed uniqueness
+- ✅ Post-cleanup removes resources even if tests fail
+- ✅ Cluster stays clean between runs
 
 ## Safety Features
 

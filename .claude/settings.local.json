@@ -6,7 +6,8 @@
       "Bash(.claude/skills/terraform-test-modernization/scripts/verify_compilation.sh:*)",
       "Bash(pip3 install:*)",
       "Skill(terraform-provider-tests)",
-      "Bash(done)"
+      "Bash(done)",
+      "Bash(chmod:*)"
     ],
     "deny": [],
     "ask": []
