@@ -11,13 +11,15 @@ Modernize 3 test files using legacy `terraform-plugin-sdk` testing patterns to m
 
 ## Target Files
 
-| Priority | File | Current State | Legacy Checks | Target |
-|----------|------|---------------|---------------|--------|
-| **P1** | `internal/provider/resource_cmnet_network_test.go` | 5% modern | 18 legacy | 100% modern |
-| **P2** | `internal/provider/resource_cmkube_cluster_test.go` | 53% modern | 38 legacy | 100% modern |
-| **P3** | `internal/provider/data_source_cmpart_partitions_test.go` | 73% modern | 10 legacy | 100% modern |
+| Priority | File | Test Functions | Legacy Checks | Target |
+|----------|------|----------------|---------------|--------|
+| **P1** | `internal/provider/resource_cmnet_network_test.go` | 3 functions | 18 legacy | 100% modern |
+| **P2** | `internal/provider/resource_cmkube_cluster_test.go` | 10 functions (6 modern, 4 legacy) | 38 legacy | 100% modern |
+| **P3** | `internal/provider/data_source_cmpart_partitions_test.go` | 8 functions (mixed patterns) | 10 legacy | 100% modern |
 
-**Total**: 66 legacy assertions to modernize
+**Total**: 21 test functions, 66 legacy assertions to modernize
+
+**Scope Decision**: All test functions in all 3 files will be modernized to ensure 100% pattern consistency, even those currently using modern patterns (to add missing idempotency checks and ID tracking).
 
 ## User Scenarios & Testing
 
@@ -128,6 +130,26 @@ Modernize 3 test files using legacy `terraform-plugin-sdk` testing patterns to m
 - BCM clusters have minimal viable configuration
 - Test environment variables properly configured
 - Existing test coverage adequate
+
+## Clarifications (from /speckit.clarify)
+
+### Test Function Scope
+**Decision**: Modernize **all test functions** in all 3 files, including those already partially modern, to ensure 100% pattern consistency and add missing idempotency checks and ID tracking.
+
+### List/Slice Assertions
+**Decision**: Mix both approaches based on context:
+- Use `knownvalue.ListSizeExact(n)` for test-created resources with known counts
+- Use `knownvalue.NotNull()` for environment-dependent data sources
+- This provides precision where possible while maintaining environment portability
+
+### Import Step State Checks
+**Decision**: Follow best practice - add ID tracking (`compareID.AddStateValue()`) to all Import steps for resources to ensure ID consistency is verified during import operations.
+
+### CheckDestroy Functions
+**Decision**: Verify they follow the enhanced pattern in CLAUDE.md with detailed error messages and test helper usage. Update if needed to match the standard pattern.
+
+### Numeric Type Handling
+**Decision**: Test empirically - start with `knownvalue.Int64Exact()` (since Terraform framework uses int64), adjust to `Float64Exact()` only if tests fail with type errors. This pragmatic approach handles BCM API variations without upfront schema analysis.
 
 ## Dependencies
 
