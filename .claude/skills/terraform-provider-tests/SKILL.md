@@ -1,9 +1,9 @@
 ---
-name: terraform-test-analysis
+name: terraform-provider-tests
 description: Analyze and improve Terraform provider test coverage using terraform-plugin-testing v1.13.3+ patterns. Use when (1) analyzing test coverage gaps, (2) adding missing tests (drift detection, import, idempotency), (3) converting legacy patterns to modern state checks, (4) tracking optional field coverage, or (5) verifying test quality. Supports automated coverage analysis and guided pattern improvements with BCM-specific patterns.
 ---
 
-# Terraform Test Analysis
+# Terraform Provider Tests
 
 Analyze test coverage and improve Terraform provider acceptance tests using modern patterns from terraform-plugin-testing v1.13.3+.
 

@@ -865,7 +865,7 @@ func TestAccCMDeviceDeviceResource_ErrorPartitionsInvalidJSON(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config:      testAccDeviceResourceConfigWithMockServer(mockServer.URL, deviceName),
-				ExpectError: regexp.MustCompile(`(?s)Error Parsing Partitions.*Could not parse partitions response`),
+				ExpectError: regexp.MustCompile(`(?s)Error Querying Partitions.*failed to parse JSON response`),
 			},
 		},
 	})
