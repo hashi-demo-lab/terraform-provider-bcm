@@ -16,7 +16,7 @@ Modernization follows a systematic approach:
 **Tool**: `scripts/analyze_gap.py`
 
 ```bash
-python3 scripts/analyze_gap.py ./internal/provider/ --output tf_provider_tests_gap_$(date +%Y%m%d_%H%M%S).md
+python3 scripts/analyze_gap.py ./internal/provider/ --output ./ai_reports/tf_provider_tests_gap_$(date +%Y%m%d_%H%M%S).md
 ```
 
 **Output**:
