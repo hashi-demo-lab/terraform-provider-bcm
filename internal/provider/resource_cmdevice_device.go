@@ -602,48 +602,68 @@ func (r *CMDeviceDeviceResource) Read(ctx context.Context, req resource.ReadRequ
 	// Preserve write-only fields that BCM doesn't return
 	newState.Force = state.Force
 
-	// BCM returns nil UUID for management_network - preserve the configured value
-	// when BCM returns "00000000-0000-0000-0000-000000000000"
-	if !state.ManagementNetwork.IsNull() && !state.ManagementNetwork.IsUnknown() {
-		if newState.ManagementNetwork.IsNull() || newState.ManagementNetwork.ValueString() == "00000000-0000-0000-0000-000000000000" {
-			newState.ManagementNetwork = state.ManagementNetwork
+	// CRITICAL FIX FOR IMPORT: Handle optional+computed fields differently for import vs normal Read
+	// During import (state is empty), we should NOT preserve null values - instead use what BCM returns
+	// During normal Read (state has values), preserve null if user didn't explicitly set the field
+
+	isImport := state.ManagementNetwork.IsNull() && state.BootLoader.IsNull() && state.BootLoaderProtocol.IsNull()
+
+	if !isImport {
+		// Normal Read path: Preserve null values from state to avoid drift
+
+		// BCM returns nil UUID for management_network - preserve the configured value
+		// when BCM returns "00000000-0000-0000-0000-000000000000"
+		if !state.ManagementNetwork.IsNull() && !state.ManagementNetwork.IsUnknown() {
+			if newState.ManagementNetwork.IsNull() || newState.ManagementNetwork.ValueString() == "00000000-0000-0000-0000-000000000000" {
+				newState.ManagementNetwork = state.ManagementNetwork
+			}
 		}
-	}
 
-	// BCM returns "CATEGORY" for boot_loader/boot_loader_protocol when inheriting from category
-	// Preserve null/empty plan values to avoid drift
-	if state.BootLoader.IsNull() && newState.BootLoader.ValueString() == "CATEGORY" {
-		newState.BootLoader = types.StringNull()
-	}
-	if state.BootLoaderProtocol.IsNull() && newState.BootLoaderProtocol.ValueString() == "CATEGORY" {
-		newState.BootLoaderProtocol = types.StringNull()
-	}
+		// BCM returns "CATEGORY" for boot_loader/boot_loader_protocol when inheriting from category
+		// Preserve null/empty plan values to avoid drift
+		if state.BootLoader.IsNull() && newState.BootLoader.ValueString() == "CATEGORY" {
+			newState.BootLoader = types.StringNull()
+		}
+		if state.BootLoaderProtocol.IsNull() && newState.BootLoaderProtocol.ValueString() == "CATEGORY" {
+			newState.BootLoaderProtocol = types.StringNull()
+		}
 
-	// BCM may add partition if not explicitly set - preserve null from plan to avoid drift
-	if state.Partition.IsNull() && !newState.Partition.IsNull() {
-		newState.Partition = types.StringNull()
-	}
+		// BCM may add partition if not explicitly set - preserve null from plan to avoid drift
+		if state.Partition.IsNull() && !newState.Partition.IsNull() {
+			newState.Partition = types.StringNull()
+		}
 
-	// BCM returns default values for Optional+Computed fields when not explicitly set
-	// Preserve null from plan to avoid drift
-	if state.PowerControl.IsNull() && !newState.PowerControl.IsNull() {
-		newState.PowerControl = types.StringNull()
-	}
+		// BCM returns default values for Optional+Computed fields when not explicitly set
+		// Preserve null from plan to avoid drift
+		if state.PowerControl.IsNull() && !newState.PowerControl.IsNull() {
+			newState.PowerControl = types.StringNull()
+		}
 
-	if state.DefaultGateway.IsNull() && !newState.DefaultGateway.IsNull() {
-		newState.DefaultGateway = types.StringNull()
-	}
+		if state.DefaultGateway.IsNull() && !newState.DefaultGateway.IsNull() {
+			newState.DefaultGateway = types.StringNull()
+		}
 
-	if state.DefaultGatewayMetric.IsNull() && !newState.DefaultGatewayMetric.IsNull() {
-		newState.DefaultGatewayMetric = types.Int64Null()
-	}
+		if state.DefaultGatewayMetric.IsNull() && !newState.DefaultGatewayMetric.IsNull() {
+			newState.DefaultGatewayMetric = types.Int64Null()
+		}
 
-	if state.SerialNumber.IsNull() && !newState.SerialNumber.IsNull() {
-		newState.SerialNumber = types.StringNull()
-	}
+		if state.SerialNumber.IsNull() && !newState.SerialNumber.IsNull() {
+			newState.SerialNumber = types.StringNull()
+		}
 
-	if state.PartNumber.IsNull() && !newState.PartNumber.IsNull() {
-		newState.PartNumber = types.StringNull()
+		if state.PartNumber.IsNull() && !newState.PartNumber.IsNull() {
+			newState.PartNumber = types.StringNull()
+		}
+	} else {
+		// Import path: Use all values from BCM, don't set to null
+		// BCM returns "CATEGORY" for fields inheriting from category - this is valid during import
+		tflog.Debug(ctx, "Import detected - using all BCM values", map[string]interface{}{
+			"management_network":     newState.ManagementNetwork.ValueString(),
+			"boot_loader":            newState.BootLoader.ValueString(),
+			"boot_loader_protocol":   newState.BootLoaderProtocol.ValueString(),
+			"partition":              newState.Partition.ValueString(),
+			"default_gateway_metric": newState.DefaultGatewayMetric.ValueInt64(),
+		})
 	}
 
 	// Set state - use what BCM returns (with preserved fields)

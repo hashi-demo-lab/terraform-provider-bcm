@@ -104,7 +104,7 @@ func testAccCMDeviceCategoryPreCheck(t *testing.T, names ...string) {
 func TestAccCMDeviceCategoryResource_Basic(t *testing.T) {
 	// Generate unique test name to avoid conflicts
 	// Note: We use the SAME name for create and update to avoid BCM category name immutability issues
-	categoryName := generateUniqueTestName("test-category")
+	categoryName := generateUniqueTestName("tftest-category")
 
 	// Clean up any leftover categories before running test
 	testAccCMDeviceCategoryPreCheck(t, categoryName)
@@ -305,7 +305,7 @@ resource "bcm_cmdevice_category" "test" {
 
 // T031-T032: Import acceptance test with ImportState step.
 func TestAccCMDeviceCategoryResource_Import(t *testing.T) {
-	categoryName := generateUniqueTestName("test-import-category")
+	categoryName := generateUniqueTestName("tftest-import-category")
 
 	// Cleanup any leftover test categories
 	testAccCMDeviceCategoryPreCheck(t, categoryName)
@@ -361,7 +361,7 @@ func TestAccCMDeviceCategoryResource_Import(t *testing.T) {
 // T039-T041: Force parameter acceptance test
 // This test validates that the force parameter is accepted and processed correctly.
 func TestAccCMDeviceCategoryResource_ForceParameter(t *testing.T) {
-	categoryName := generateUniqueTestName("test-force-param")
+	categoryName := generateUniqueTestName("tftest-force-param")
 
 	// Cleanup any leftover test categories
 	testAccCMDeviceCategoryPreCheck(t, categoryName)
@@ -482,7 +482,7 @@ resource "bcm_cmdevice_category" "test" {
 // TestAccCMDeviceCategory_DriftNotes tests drift detection for notes attribute
 // Phase 3 - Task T012 (RED): This test should FAIL initially (no PreConfig implementation yet).
 func TestAccCMDeviceCategory_DriftNotes(t *testing.T) {
-	categoryName := generateUniqueTestName("test-drift-notes")
+	categoryName := generateUniqueTestName("tftest-drift-notes")
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -595,7 +595,7 @@ func TestAccCMDeviceCategory_DriftNotes(t *testing.T) {
 // TestAccCMDeviceCategory_DestroyWithForce verifies destroy with force=true
 // Phase 4 - Task T020 (RED): This test should PASS (force already implemented, but verify).
 func TestAccCMDeviceCategory_DestroyWithForce(t *testing.T) {
-	categoryName := generateUniqueTestName("test-destroy-force")
+	categoryName := generateUniqueTestName("tftest-destroy-force")
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -636,7 +636,7 @@ func TestAccCMDeviceCategory_DestroyWithForce(t *testing.T) {
 // TestAccCMDeviceCategory_DestroyExternalDelete verifies destroy handles externally deleted resources
 // Phase 4 - Task T023: Create resource, delete via BCM API, verify Terraform destroy succeeds.
 func TestAccCMDeviceCategory_DestroyExternalDelete(t *testing.T) {
-	categoryName := generateUniqueTestName("test-destroy-external")
+	categoryName := generateUniqueTestName("tftest-destroy-external")
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -755,7 +755,7 @@ func TestAccCMDeviceCategory_ValidationInvalidName(t *testing.T) {
 
 // TestAccCMDeviceCategory_ValidationInvalidManagementNetwork tests UUID format validation.
 func TestAccCMDeviceCategory_ValidationInvalidManagementNetwork(t *testing.T) {
-	categoryName := generateUniqueTestName("test-invalid-uuid")
+	categoryName := generateUniqueTestName("tftest-invalid-uuid")
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -777,7 +777,7 @@ func TestAccCMDeviceCategory_ValidationInvalidManagementNetwork(t *testing.T) {
 
 // TestAccCMDeviceCategory_ValidationInvalidBootLoader tests boot_loader enum validation.
 func TestAccCMDeviceCategory_ValidationInvalidBootLoader(t *testing.T) {
-	categoryName := generateUniqueTestName("test-invalid-bootloader")
+	categoryName := generateUniqueTestName("tftest-invalid-bootloader")
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -794,7 +794,7 @@ func TestAccCMDeviceCategory_ValidationInvalidBootLoader(t *testing.T) {
 
 // TestAccCMDeviceCategory_ValidationInvalidFIPS tests fips enum validation.
 func TestAccCMDeviceCategory_ValidationInvalidFIPS(t *testing.T) {
-	categoryName := generateUniqueTestName("test-invalid-fips")
+	categoryName := generateUniqueTestName("tftest-invalid-fips")
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },

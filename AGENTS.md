@@ -11,6 +11,7 @@
 **Stack**: Terraform Plugin Framework v1.16+ | Go 1.24+ | terraform-plugin-testing
 
 Use `terraform-provider-design` skill for design principles and best practices.
+if you need to geenrate a report and don't have a given path then use /workspace/ai_reports/
 
 ## Parallel Execution Pattern
 
@@ -107,10 +108,12 @@ Steps: []resource.TestStep{
 **Location**: `/workspace/scripts/test-examples.sh`
 
 **Execution Strategy**:
+
 - Data sources: Parallel (4 concurrent, ~10s for 10 examples)
 - Resources: Sequential (~19s for 7 examples)
 
 **Run Tests**:
+
 ```bash
 BCM_ENDPOINT="https://..." BCM_USERNAME="..." BCM_PASSWORD="..." \
 SKIP_BUILD=true ./scripts/test-examples.sh
@@ -152,6 +155,7 @@ TF_LOG=TRACE               # Max verbosity
 ## Test Recommendations
 
 Provider-defined functions should test:
+
 - Known values return expected results
 - Null values for collection elements/object attributes
 - `AllowNullValue` parameters handle nulls

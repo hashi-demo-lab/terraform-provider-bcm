@@ -38,7 +38,7 @@ func TestAccCMDeviceCategoriesDataSource_Basic(t *testing.T) {
 
 func TestAccCMDeviceCategoriesDataSource_FilterByName(t *testing.T) {
 	// Create a unique test category to avoid hardcoded "default" assumption
-	categoryName := generateUniqueTestName("test-category")
+	categoryName := generateUniqueTestName("tftest-category")
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {

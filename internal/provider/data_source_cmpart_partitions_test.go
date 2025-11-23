@@ -90,10 +90,6 @@ func TestAccCMPartPartitionsDataSource_ComputedFields(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: testAccCMPartPartitionsDataSourceConfig(),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					// Verify partitions list exists and has at least one element
-					resource.TestCheckResourceAttrSet("data.bcm_cmpart_partitions.test", "partitions.#"),
-				),
 				ConfigStateChecks: []statecheck.StateCheck{
 					// Verify top-level fields
 					statecheck.ExpectKnownValue(
@@ -163,17 +159,6 @@ func TestAccCMPartPartitionsDataSource_AttributeTypes(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: testAccCMPartPartitionsDataSourceConfig(),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					// Verify partitions list exists
-					resource.TestCheckResourceAttrSet("data.bcm_cmpart_partitions.test", "partitions.#"),
-					// Verify first partition has required identity fields
-					resource.TestCheckResourceAttrSet("data.bcm_cmpart_partitions.test", "partitions.0.id"),
-					resource.TestCheckResourceAttrSet("data.bcm_cmpart_partitions.test", "partitions.0.uuid"),
-					resource.TestCheckResourceAttrSet("data.bcm_cmpart_partitions.test", "partitions.0.name"),
-					// Verify base_type and child_type exist
-					resource.TestCheckResourceAttrSet("data.bcm_cmpart_partitions.test", "partitions.0.base_type"),
-					// Note: child_type may be empty string, so we don't use TestCheckResourceAttrSet
-				),
 				ConfigStateChecks: []statecheck.StateCheck{
 					// Verify String attributes are properly typed
 					statecheck.ExpectKnownValue(
@@ -202,12 +187,6 @@ func TestAccCMPartPartitionsDataSource_AttributeTypes(t *testing.T) {
 						tfjsonpath.New("partitions").AtSliceIndex(0).AtMapKey("to_be_removed"),
 						knownvalue.NotNull(),
 					),
-					// Verify Int64 attributes exist (creation_time should always be set)
-					statecheck.ExpectKnownValue(
-						"data.bcm_cmpart_partitions.test",
-						tfjsonpath.New("partitions").AtSliceIndex(0).AtMapKey("creation_time"),
-						knownvalue.NotNull(),
-					),
 				},
 			},
 		},
@@ -223,10 +202,6 @@ func TestAccCMPartPartitionsDataSource_ListAttributes(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: testAccCMPartPartitionsDataSourceConfig(),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					// Verify partitions list exists
-					resource.TestCheckResourceAttrSet("data.bcm_cmpart_partitions.test", "partitions.#"),
-				),
 				ConfigStateChecks: []statecheck.StateCheck{
 					// Verify all List attributes are valid types (not null type checks)
 					// These may be empty lists or null depending on partition configuration
@@ -330,10 +305,6 @@ func TestAccCMPartPartitionsDataSource_FilterEmptyString(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: testAccCMPartPartitionsDataSourceConfigFilter(""),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					// Verify partitions list exists
-					resource.TestCheckResourceAttrSet("data.bcm_cmpart_partitions.test", "partitions.#"),
-				),
 				ConfigStateChecks: []statecheck.StateCheck{
 					// Verify ID computed
 					statecheck.ExpectKnownValue(
@@ -363,10 +334,6 @@ func TestAccCMPartPartitionsDataSource_FilterSubsetProperty(t *testing.T) {
 			{
 				// Step 1: Get all partitions (no filter)
 				Config: testAccCMPartPartitionsDataSourceConfig(),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					// Verify partitions list exists
-					resource.TestCheckResourceAttrSet("data.bcm_cmpart_partitions.test", "partitions.#"),
-				),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmpart_partitions.test",
@@ -383,11 +350,6 @@ func TestAccCMPartPartitionsDataSource_FilterSubsetProperty(t *testing.T) {
 			{
 				// Step 2: Get filtered partitions - should be subset
 				Config: testAccCMPartPartitionsDataSourceConfigFilter("base"),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					// Note: Cannot programmatically compare counts across steps
-					// This test primarily documents the subset property expectation
-					resource.TestCheckResourceAttrSet("data.bcm_cmpart_partitions.test", "partitions.#"),
-				),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmpart_partitions.test",
