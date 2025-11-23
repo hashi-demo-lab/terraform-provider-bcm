@@ -79,6 +79,7 @@ func TestAccCMPartPartition_Basic(t *testing.T) {
 			},
 			// Step 3: Import by UUID
 			{
+				Config:            testAccPartitionConfigBasic(partitionName, "HPC Cluster"),
 				ResourceName:      "bcm_cmpart_partition.test",
 				ImportState:       true,
 				ImportStateVerify: true,
@@ -436,6 +437,7 @@ func TestAccCMPartPartition_IDConsistency(t *testing.T) {
 			},
 			// Import - verify ID unchanged
 			{
+				Config:            testAccPartitionConfigBasic(partitionName, "Test Cluster"),
 				ResourceName:      "bcm_cmpart_partition.test",
 				ImportState:       true,
 				ImportStateVerify: true,
