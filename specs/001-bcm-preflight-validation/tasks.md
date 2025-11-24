@@ -27,8 +27,9 @@ description: "Task list for BCM Pre-flight Validation Feature"
 - [ ] T001 Verify checkout of branch `001-bcm-preflight-validation` from main
 - [ ] T002 Run baseline acceptance tests to confirm no regressions: `make testacc`
 - [ ] T003 [P] Export test environment variables (BCM_ENDPOINT, BCM_USERNAME, BCM_PASSWORD)
+- [ ] T003a Verify integration point line numbers by searching for "addSoftwareImage", "updateSoftwareImage", "addCategory", "updateCategory", "addDevice", "updateDevice", "addKubeCluster", "updateKubeCluster" in resource files and update Service Name Reference table with actual line numbers
 
-**Checkpoint**: Branch ready, baseline established
+**Checkpoint**: Branch ready, baseline established, integration points verified
 
 ---
 
@@ -221,7 +222,7 @@ description: "Task list for BCM Pre-flight Validation Feature"
 **Purpose**: Verify performance targets and edge case handling
 
 - [ ] T069 [P] Add performance logging to measure validation overhead (log duration of ValidateEntity calls)
-- [ ] T070 [P] Run acceptance tests with TF_LOG=TRACE and verify validation adds <200ms overhead
+- [ ] T070 [P] Run acceptance tests with TF_LOG=TRACE, manually review logs for validation call duration, verify each ValidateEntity call completes within 200ms threshold (manual verification - BCM API response times vary by environment)
 - [ ] T071 [P] Add TestValidateEntity_UnknownSeverity unit test to verify unknown severity treated as ERROR
 - [ ] T072 [P] Add TestValidateEntity_EmptyResponse unit test to verify empty array handled correctly
 - [ ] T073 [P] Add TestValidateEntity_MultipleErrors unit test to verify multiple validation errors displayed
