@@ -96,14 +96,15 @@ RUN sh -c "$(wget -O- https://github.com/deluan/zsh-in-docker/releases/download/
         -p git \
         -a "export PROMPT_COMMAND='history -a' && export HISTFILE=/commandhistory/.bash_history" \
         -x && \
-    npm install -g @anthropic-ai/claude-code && \
+    npm install -g @anthropic-ai/claude-code ccstatusline && \
     curl -LsSf https://astral.sh/uv/install.sh | sh && \
     echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc && \
     ~/.local/bin/uv tool install pre-commit --with pre-commit-uv && \
     ~/.local/bin/uv tool install specify-cli --from git+https://github.com/github/spec-kit.git
 
 # Configure ccstatusline with Powerline enabled
-RUN echo '{\
+RUN mkdir -p /home/node/.config/ccstatusline && \
+    echo '{\
   "version": 3,\
   "lines": [\
     [\
@@ -162,8 +163,7 @@ RUN echo '{\
     "theme": "gruvbox"\
   },\
   "defaultPadding": "     "\
-}' > /home/node/.config/ccstatusline/settings.json && \
-    chown node:node /home/node/.config/ccstatusline/settings.json
+}' > /home/node/.config/ccstatusline/settings.json
 
 # Add clauded alias for claude -dangerously-skip-permissions
 RUN echo 'alias clauded="claude -dangerously-skip-permissions"' >> /home/node/.zshrc && \
