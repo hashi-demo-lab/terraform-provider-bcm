@@ -1001,10 +1001,67 @@ func (r *CMDeviceCategoryResource) Delete(ctx context.Context, req resource.Dele
 		"force": force,
 	})
 
+	// PROACTIVE DEPENDENCY CHECK: Check for dependent devices before deletion (unless force=true)
+	if !force {
+		tflog.Debug(ctx, "Performing dependency check for category deletion", map[string]interface{}{
+			"category_uuid": state.UUID.ValueString(),
+			"category_name": state.Name.ValueString(),
+		})
+
+		result, err := CheckDevicesInCategory(ctx, r.client, state.UUID.ValueString())
+		if err != nil {
+			// Dependency check failed - log warning but allow user to proceed with force
+			resp.Diagnostics.AddWarning(
+				"Dependency Check Failed",
+				fmt.Sprintf(
+					"Unable to verify dependencies for category '%s': %s\n\n"+
+						"You can proceed with deletion by setting 'force = true', "+
+						"but this may create orphaned references if dependencies exist.",
+					state.Name.ValueString(),
+					err.Error(),
+				),
+			)
+			return
+		}
+
+		if result.HasDependencies {
+			// Dependencies exist - block deletion with detailed error message
+			tflog.Info(ctx, "Category deletion blocked due to dependencies", map[string]interface{}{
+				"category_uuid":    state.UUID.ValueString(),
+				"category_name":    state.Name.ValueString(),
+				"dependent_count":  result.DependentCount,
+				"dependent_type":   result.DependentType,
+			})
+
+			resp.Diagnostics.AddError(
+				"Category In Use - Cannot Delete",
+				BuildDependencyError(
+					"Category",
+					state.Name.ValueString(),
+					"device",
+					result.Identifiers,
+				),
+			)
+			return
+		}
+
+		tflog.Debug(ctx, "No dependencies found - proceeding with deletion", map[string]interface{}{
+			"category_uuid": state.UUID.ValueString(),
+			"category_name": state.Name.ValueString(),
+		})
+	} else {
+		// Force deletion - log warning about potential orphaned references
+		tflog.Warn(ctx, BuildForceDeleteionWarning("Category", state.Name.ValueString()), map[string]interface{}{
+			"category_uuid": state.UUID.ValueString(),
+			"category_name": state.Name.ValueString(),
+			"force":         true,
+		})
+	}
+
 	// Call removeCategory API
 	_, err := r.client.CallJSONRPC(ctx, "cmdevice", "removeCategory", state.UUID.ValueString(), force)
 	if err != nil {
-		// T042: Enhanced error handling - Parse error to check if it's a "category in use" error
+		// Enhanced error handling - Parse error to check if already deleted (idempotent)
 		errStr := err.Error()
 
 		// Check if category was already deleted externally (idempotent delete)
@@ -1016,30 +1073,7 @@ func (r *CMDeviceCategoryResource) Delete(ctx context.Context, req resource.Dele
 			return
 		}
 
-		if !force && (containsAny(errStr, []string{"in use", "assigned", "nodes", "cannot be deleted"})) {
-			// Category has nodes assigned - provide clear guidance
-			resp.Diagnostics.AddError(
-				"Category Deletion Failed: Category In Use",
-				fmt.Sprintf("Category '%s' cannot be deleted because it has nodes assigned.\n\n"+
-					"To delete the category anyway (nodes will remain but lose category reference), "+
-					"set force=true in the resource configuration:\n\n"+
-					"resource \"bcm_cmdevice_category\" \"%s\" {\n"+
-					"  name  = \"%s\"\n"+
-					"  force = true\n"+
-					"  ...\n"+
-					"}\n\n"+
-					"Then run 'terraform apply' again to delete with force.\n\n"+
-					"Original error: %s",
-					state.Name.ValueString(),
-					state.Name.ValueString(),
-					state.Name.ValueString(),
-					err.Error(),
-				),
-			)
-			return
-		}
-
-		// T043: Other deletion errors (not related to nodes in use)
+		// Other deletion errors
 		resp.Diagnostics.AddError(
 			"Category Deletion Failed",
 			fmt.Sprintf("Could not delete category '%s' (UUID: %s): %s",
@@ -1049,8 +1083,9 @@ func (r *CMDeviceCategoryResource) Delete(ctx context.Context, req resource.Dele
 	}
 
 	tflog.Info(ctx, "Deleted category resource", map[string]interface{}{
-		"name": state.Name.ValueString(),
-		"uuid": state.UUID.ValueString(),
+		"name":  state.Name.ValueString(),
+		"uuid":  state.UUID.ValueString(),
+		"force": force,
 	})
 }
 

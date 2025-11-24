@@ -69,6 +69,9 @@ type CMPartSoftwareImageResourceModel struct {
 	FileOperationInProgress types.Bool   `tfsdk:"file_operation_in_progress"`
 	OriginalImage           types.String `tfsdk:"original_image"`
 	ParentSoftwareImage     types.String `tfsdk:"parent_software_image"`
+
+	// Force parameter
+	Force types.Bool `tfsdk:"force"` // Optional, default: false
 }
 
 // KernelModuleResourceModel describes a kernel module nested object.
@@ -229,6 +232,12 @@ func (r *CMPartSoftwareImageResource) Schema(ctx context.Context, req resource.S
 						},
 					},
 				},
+			},
+			"force": schema.BoolAttribute{
+				Optional:            true,
+				Computed:            true,
+				Default:             booldefault.StaticBool(false),
+				MarkdownDescription: "Force deletion even if categories reference this software image. **WARNING**: Force deletion may create orphaned references in the BCM database. Use with caution.",
 			},
 		},
 	}
@@ -515,15 +524,91 @@ func (r *CMPartSoftwareImageResource) Delete(ctx context.Context, req resource.D
 		return
 	}
 
+	// Get force parameter from state (default to false)
+	force := false
+	if !state.Force.IsNull() {
+		force = state.Force.ValueBool()
+	}
+
 	tflog.Debug(ctx, "Deleting software image via BCM API", map[string]interface{}{
-		"name": state.Name.ValueString(),
-		"uuid": state.UUID.ValueString(),
+		"name":  state.Name.ValueString(),
+		"uuid":  state.UUID.ValueString(),
+		"force": force,
 	})
 
-	// Call removeSoftwareImage with UUID, removeData=false, removeAll=false, force=false
-	_, err := r.client.CallJSONRPC(ctx, "CMPart", "removeSoftwareImage", state.UUID.ValueString(), false, false, false)
+	// PROACTIVE DEPENDENCY CHECK: Check for dependent categories before deletion (unless force=true)
+	if !force {
+		tflog.Debug(ctx, "Performing dependency check for software image deletion", map[string]interface{}{
+			"image_name": state.Name.ValueString(),
+			"image_uuid": state.UUID.ValueString(),
+		})
+
+		result, err := CheckCategoriesUsingImage(ctx, r.client, state.Name.ValueString())
+		if err != nil {
+			// Dependency check failed - log warning but allow user to proceed with force
+			resp.Diagnostics.AddWarning(
+				"Dependency Check Failed",
+				fmt.Sprintf(
+					"Unable to verify dependencies for software image '%s': %s\n\n"+
+						"You can proceed with deletion by setting 'force = true', "+
+						"but this may create orphaned references if dependencies exist.",
+					state.Name.ValueString(),
+					err.Error(),
+				),
+			)
+			return
+		}
+
+		if result.HasDependencies {
+			// Dependencies exist - block deletion with detailed error message
+			tflog.Info(ctx, "Software image deletion blocked due to dependencies", map[string]interface{}{
+				"image_name":      state.Name.ValueString(),
+				"image_uuid":      state.UUID.ValueString(),
+				"dependent_count": result.DependentCount,
+				"dependent_type":  result.DependentType,
+			})
+
+			resp.Diagnostics.AddError(
+				"Software Image In Use - Cannot Delete",
+				BuildDependencyError(
+					"Software Image",
+					state.Name.ValueString(),
+					"category",
+					result.Identifiers,
+				),
+			)
+			return
+		}
+
+		tflog.Debug(ctx, "No dependencies found - proceeding with deletion", map[string]interface{}{
+			"image_name": state.Name.ValueString(),
+			"image_uuid": state.UUID.ValueString(),
+		})
+	} else {
+		// Force deletion - log warning about potential orphaned references
+		tflog.Warn(ctx, BuildForceDeleteionWarning("Software Image", state.Name.ValueString()), map[string]interface{}{
+			"image_name": state.Name.ValueString(),
+			"image_uuid": state.UUID.ValueString(),
+			"force":      true,
+		})
+	}
+
+	// Call removeSoftwareImage with UUID, removeData=false, removeAll=false, force parameter
+	_, err := r.client.CallJSONRPC(ctx, "CMPart", "removeSoftwareImage", state.UUID.ValueString(), false, false, force)
 	if err != nil {
-		// Check if error is "not found" - that's OK (already deleted)
+		// Enhanced error handling - check if already deleted (idempotent)
+		errStr := err.Error()
+
+		// Check if image was already deleted externally (idempotent delete)
+		if containsAny(errStr, []string{"not found", "does not exist", "No such"}) {
+			tflog.Info(ctx, "Software image already deleted (idempotent)", map[string]interface{}{
+				"name": state.Name.ValueString(),
+				"uuid": state.UUID.ValueString(),
+			})
+			return
+		}
+
+		// Other deletion errors
 		resp.Diagnostics.AddError(
 			"Software Image Deletion Failed",
 			fmt.Sprintf("Failed to delete software image '%s': %s", state.Name.ValueString(), err.Error()),
@@ -532,8 +617,9 @@ func (r *CMPartSoftwareImageResource) Delete(ctx context.Context, req resource.D
 	}
 
 	tflog.Info(ctx, "Deleted software image resource", map[string]interface{}{
-		"name": state.Name.ValueString(),
-		"uuid": state.UUID.ValueString(),
+		"name":  state.Name.ValueString(),
+		"uuid":  state.UUID.ValueString(),
+		"force": force,
 	})
 }
 
@@ -832,4 +918,6 @@ func (r *CMPartSoftwareImageResource) buildAPIEntity(model *CMPartSoftwareImageR
 	return entity
 }
 
-// Helper functions getStringValue, getBoolValue, getInt64Value are defined in data_source_cmpart_softwareimages.go
+// Helper functions:
+// - getStringValue, getBoolValue, getInt64Value are defined in data_source_cmpart_softwareimages.go
+// - containsAny is defined in resource_cmdevice_category.go (shared helper)
