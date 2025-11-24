@@ -274,8 +274,37 @@ func (r *CMPartSoftwareImageResource) Create(ctx context.Context, req resource.C
 	// UUID will be generated automatically by buildAPIEntity for new resources
 	entity := r.buildAPIEntity(&plan, "")
 
-	// NOTE: Pre-flight validation skipped for creation - validateSoftwareImage requires existing UUID
-	// Validation will occur server-side during addSoftwareImage call
+	// Pre-flight validation: Call validateSoftwareImage before CREATE
+	validationErrors, err := r.client.ValidateEntity(ctx, "CMPart", "validateSoftwareImage", entity, true)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Validation API Error",
+			fmt.Sprintf("Could not validate software image '%s': %s", plan.Name.ValueString(), err.Error()),
+		)
+		return
+	}
+
+	// Process validation results
+	hasErrors := false
+	for _, valErr := range validationErrors {
+		if valErr.IsError() {
+			resp.Diagnostics.AddError(
+				fmt.Sprintf("Validation Error: %s", valErr.Field),
+				valErr.Message,
+			)
+			hasErrors = true
+		} else if valErr.IsWarning() {
+			resp.Diagnostics.AddWarning(
+				fmt.Sprintf("Validation Warning: %s", valErr.Field),
+				valErr.Message,
+			)
+		}
+	}
+
+	// Halt if validation errors found
+	if hasErrors {
+		return
+	}
 
 	// Log the complete request entity for debugging
 	entityJSON, _ := json.MarshalIndent(entity, "", "  ")
@@ -469,8 +498,37 @@ func (r *CMPartSoftwareImageResource) Update(ctx context.Context, req resource.U
 	// Build updated entity from plan (include UUID for update)
 	entity := r.buildAPIEntity(&plan, plan.UUID.ValueString())
 
-	// NOTE: Pre-flight validation skipped - will rely on server-side validation
-	// Optional enhancement: Add validateSoftwareImage call here for better error messages
+	// Pre-flight validation: Call validateSoftwareImage before UPDATE
+	validationErrors, err := r.client.ValidateEntity(ctx, "CMPart", "validateSoftwareImage", entity, false)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Validation API Error",
+			fmt.Sprintf("Could not validate software image '%s': %s", plan.Name.ValueString(), err.Error()),
+		)
+		return
+	}
+
+	// Process validation results
+	hasErrors := false
+	for _, valErr := range validationErrors {
+		if valErr.IsError() {
+			resp.Diagnostics.AddError(
+				fmt.Sprintf("Validation Error: %s", valErr.Field),
+				valErr.Message,
+			)
+			hasErrors = true
+		} else if valErr.IsWarning() {
+			resp.Diagnostics.AddWarning(
+				fmt.Sprintf("Validation Warning: %s", valErr.Field),
+				valErr.Message,
+			)
+		}
+	}
+
+	// Halt if validation errors found
+	if hasErrors {
+		return
+	}
 
 	// Log the complete update entity for debugging
 	entityJSON, _ := json.MarshalIndent(entity, "", "  ")
@@ -480,7 +538,7 @@ func (r *CMPartSoftwareImageResource) Update(ctx context.Context, req resource.U
 		"entity": string(entityJSON),
 	})
 
-	_, err := r.client.CallJSONRPC(ctx, "CMPart", "updateSoftwareImage", entity, false)
+	_, err = r.client.CallJSONRPC(ctx, "CMPart", "updateSoftwareImage", entity, false)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Software Image Update Failed",
