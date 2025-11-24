@@ -383,6 +383,38 @@ func (r *CMDeviceDeviceResource) Create(ctx context.Context, req resource.Create
 	// Partition field is always included as BCM requires it
 	deviceEntity := r.buildDeviceAPIEntity(plan, newUUID, partitionUUID)
 
+	// Pre-flight validation: Call validateDevice before CREATE
+	validationErrors, err := r.client.ValidateEntity(ctx, "CMDevice", "validateDevice", deviceEntity, true)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Validation API Error",
+			fmt.Sprintf("Could not validate device '%s': %s", plan.Hostname.ValueString(), err.Error()),
+		)
+		return
+	}
+
+	// Process validation results
+	hasErrors := false
+	for _, valErr := range validationErrors {
+		if valErr.IsError() {
+			resp.Diagnostics.AddError(
+				fmt.Sprintf("Validation Error: %s", valErr.Field),
+				valErr.Message,
+			)
+			hasErrors = true
+		} else if valErr.IsWarning() {
+			resp.Diagnostics.AddWarning(
+				fmt.Sprintf("Validation Warning: %s", valErr.Field),
+				valErr.Message,
+			)
+		}
+	}
+
+	// Halt if validation errors found
+	if hasErrors {
+		return
+	}
+
 	// Get force parameter value
 	forceValue := false
 	if !plan.Force.IsNull() {
@@ -773,6 +805,38 @@ func (r *CMDeviceDeviceResource) Update(ctx context.Context, req resource.Update
 	// Partition field is always included as BCM requires it
 	deviceEntity := r.buildDeviceAPIEntity(plan, state.UUID.ValueString(), partitionUUID)
 
+	// Pre-flight validation: Call validateDevice before UPDATE
+	validationErrors, err := r.client.ValidateEntity(ctx, "CMDevice", "validateDevice", deviceEntity, false)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Validation API Error",
+			fmt.Sprintf("Could not validate device '%s': %s", plan.Hostname.ValueString(), err.Error()),
+		)
+		return
+	}
+
+	// Process validation results
+	hasErrors := false
+	for _, valErr := range validationErrors {
+		if valErr.IsError() {
+			resp.Diagnostics.AddError(
+				fmt.Sprintf("Validation Error: %s", valErr.Field),
+				valErr.Message,
+			)
+			hasErrors = true
+		} else if valErr.IsWarning() {
+			resp.Diagnostics.AddWarning(
+				fmt.Sprintf("Validation Warning: %s", valErr.Field),
+				valErr.Message,
+			)
+		}
+	}
+
+	// Halt if validation errors found
+	if hasErrors {
+		return
+	}
+
 	// Get force parameter value
 	forceValue := false
 	if !plan.Force.IsNull() {
@@ -780,7 +844,7 @@ func (r *CMDeviceDeviceResource) Update(ctx context.Context, req resource.Update
 	}
 
 	// Call BCM API to update device
-	_, err := r.client.CallJSONRPC(ctx, "cmdevice", "updateDevice", deviceEntity, forceValue)
+	_, err = r.client.CallJSONRPC(ctx, "cmdevice", "updateDevice", deviceEntity, forceValue)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Updating Device",

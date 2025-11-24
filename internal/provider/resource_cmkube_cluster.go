@@ -264,6 +264,39 @@ func (r *CMKubeClusterResource) Create(ctx context.Context, req resource.CreateR
 		return
 	}
 
+	// Pre-flight validation: Call validateKubeCluster before CREATE
+	// Note: Service name is "cmkube" (lowercase) - exception to CamelCase pattern
+	validationErrors, err := r.client.ValidateEntity(ctx, "cmkube", "validateKubeCluster", entity, true)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Validation API Error",
+			fmt.Sprintf("Could not validate cluster '%s': %s", plan.Name.ValueString(), err.Error()),
+		)
+		return
+	}
+
+	// Process validation results
+	hasErrors := false
+	for _, valErr := range validationErrors {
+		if valErr.IsError() {
+			resp.Diagnostics.AddError(
+				fmt.Sprintf("Validation Error: %s", valErr.Field),
+				valErr.Message,
+			)
+			hasErrors = true
+		} else if valErr.IsWarning() {
+			resp.Diagnostics.AddWarning(
+				fmt.Sprintf("Validation Warning: %s", valErr.Field),
+				valErr.Message,
+			)
+		}
+	}
+
+	// Halt if validation errors found
+	if hasErrors {
+		return
+	}
+
 	// Call BCM API to create cluster
 	tflog.Debug(ctx, "Creating Kubernetes cluster via BCM API", map[string]interface{}{
 		"name": plan.Name.ValueString(),
@@ -560,13 +593,46 @@ func (r *CMKubeClusterResource) Update(ctx context.Context, req resource.UpdateR
 		return
 	}
 
+	// Pre-flight validation: Call validateKubeCluster before UPDATE
+	// Note: Service name is "cmkube" (lowercase) - exception to CamelCase pattern
+	validationErrors, err := r.client.ValidateEntity(ctx, "cmkube", "validateKubeCluster", entity, false)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Validation API Error",
+			fmt.Sprintf("Could not validate cluster '%s': %s", plan.Name.ValueString(), err.Error()),
+		)
+		return
+	}
+
+	// Process validation results
+	hasErrors := false
+	for _, valErr := range validationErrors {
+		if valErr.IsError() {
+			resp.Diagnostics.AddError(
+				fmt.Sprintf("Validation Error: %s", valErr.Field),
+				valErr.Message,
+			)
+			hasErrors = true
+		} else if valErr.IsWarning() {
+			resp.Diagnostics.AddWarning(
+				fmt.Sprintf("Validation Warning: %s", valErr.Field),
+				valErr.Message,
+			)
+		}
+	}
+
+	// Halt if validation errors found
+	if hasErrors {
+		return
+	}
+
 	// Call BCM API to update cluster
 	tflog.Debug(ctx, "Updating Kubernetes cluster via BCM API", map[string]interface{}{
 		"uuid": state.UUID.ValueString(),
 		"name": plan.Name.ValueString(),
 	})
 
-	_, err := r.client.CallJSONRPC(ctx, "cmkube", "updateKubeCluster", entity, plan.Force.ValueBool())
+	_, err = r.client.CallJSONRPC(ctx, "cmkube", "updateKubeCluster", entity, plan.Force.ValueBool())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Updating Kubernetes Cluster",

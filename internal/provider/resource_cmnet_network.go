@@ -209,6 +209,38 @@ func (r *CMNetNetworkResource) Create(ctx context.Context, req resource.CreateRe
 	// Capture the generated UUID from the entity (Networks require UUID even for create)
 	generatedUUID := entity["uuid"].(string)
 
+	// Pre-flight validation: Call validateNetwork before CREATE
+	validationErrors, err := r.client.ValidateEntity(ctx, "CMNet", "validateNetwork", entity, true)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Validation API Error",
+			fmt.Sprintf("Could not validate network '%s': %s", plan.Name.ValueString(), err.Error()),
+		)
+		return
+	}
+
+	// Process validation results
+	hasErrors := false
+	for _, valErr := range validationErrors {
+		if valErr.IsError() {
+			resp.Diagnostics.AddError(
+				fmt.Sprintf("Validation Error: %s", valErr.Field),
+				valErr.Message,
+			)
+			hasErrors = true
+		} else if valErr.IsWarning() {
+			resp.Diagnostics.AddWarning(
+				fmt.Sprintf("Validation Warning: %s", valErr.Field),
+				valErr.Message,
+			)
+		}
+	}
+
+	// Halt if validation errors found
+	if hasErrors {
+		return
+	}
+
 	tflog.Debug(ctx, "Creating network via BCM API", map[string]interface{}{
 		"name": plan.Name.ValueString(),
 		"uuid": generatedUUID,
@@ -355,6 +387,38 @@ func (r *CMNetNetworkResource) Update(ctx context.Context, req resource.UpdateRe
 
 	// Include revision from state for concurrency control
 	entity["revision"] = plan.Revision.ValueString()
+
+	// Pre-flight validation: Call validateNetwork before UPDATE
+	validationErrors, err := r.client.ValidateEntity(ctx, "CMNet", "validateNetwork", entity, false)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Validation API Error",
+			fmt.Sprintf("Could not validate network '%s': %s", plan.Name.ValueString(), err.Error()),
+		)
+		return
+	}
+
+	// Process validation results
+	hasErrors := false
+	for _, valErr := range validationErrors {
+		if valErr.IsError() {
+			resp.Diagnostics.AddError(
+				fmt.Sprintf("Validation Error: %s", valErr.Field),
+				valErr.Message,
+			)
+			hasErrors = true
+		} else if valErr.IsWarning() {
+			resp.Diagnostics.AddWarning(
+				fmt.Sprintf("Validation Warning: %s", valErr.Field),
+				valErr.Message,
+			)
+		}
+	}
+
+	// Halt if validation errors found
+	if hasErrors {
+		return
+	}
 
 	tflog.Debug(ctx, "Updating network via BCM API", map[string]interface{}{
 		"uuid": plan.UUID.ValueString(),

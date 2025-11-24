@@ -599,6 +599,38 @@ func (r *CMDeviceCategoryResource) Create(ctx context.Context, req resource.Crea
 	// Build API entity from plan
 	entity := r.buildAPIEntity(ctx, &plan, "")
 
+	// Pre-flight validation: Call validateCategory before CREATE
+	validationErrors, err := r.client.ValidateEntity(ctx, "CMDevice", "validateCategory", entity, true)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Validation API Error",
+			fmt.Sprintf("Could not validate category '%s': %s", plan.Name.ValueString(), err.Error()),
+		)
+		return
+	}
+
+	// Process validation results
+	hasErrors := false
+	for _, valErr := range validationErrors {
+		if valErr.IsError() {
+			resp.Diagnostics.AddError(
+				fmt.Sprintf("Validation Error: %s", valErr.Field),
+				valErr.Message,
+			)
+			hasErrors = true
+		} else if valErr.IsWarning() {
+			resp.Diagnostics.AddWarning(
+				fmt.Sprintf("Validation Warning: %s", valErr.Field),
+				valErr.Message,
+			)
+		}
+	}
+
+	// Halt if validation errors found
+	if hasErrors {
+		return
+	}
+
 	// Get force parameter from plan (default to false)
 	force := false
 	if !plan.Force.IsNull() {
@@ -882,6 +914,38 @@ func (r *CMDeviceCategoryResource) Update(ctx context.Context, req resource.Upda
 	// UUID must come from state, not plan, since it's a computed attribute
 	entity := r.buildAPIEntity(ctx, &plan, state.UUID.ValueString())
 
+	// Pre-flight validation: Call validateCategory before UPDATE
+	validationErrors, err := r.client.ValidateEntity(ctx, "CMDevice", "validateCategory", entity, false)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Validation API Error",
+			fmt.Sprintf("Could not validate category '%s': %s", plan.Name.ValueString(), err.Error()),
+		)
+		return
+	}
+
+	// Process validation results
+	hasErrors := false
+	for _, valErr := range validationErrors {
+		if valErr.IsError() {
+			resp.Diagnostics.AddError(
+				fmt.Sprintf("Validation Error: %s", valErr.Field),
+				valErr.Message,
+			)
+			hasErrors = true
+		} else if valErr.IsWarning() {
+			resp.Diagnostics.AddWarning(
+				fmt.Sprintf("Validation Warning: %s", valErr.Field),
+				valErr.Message,
+			)
+		}
+	}
+
+	// Halt if validation errors found
+	if hasErrors {
+		return
+	}
+
 	// Get force parameter from plan
 	// IMPORTANT: BCM's updateCategory sometimes requires force=true to bypass validation quirks
 	// when updating certain fields even if the name hasn't changed. For safety, we always use force=true
@@ -901,7 +965,7 @@ func (r *CMDeviceCategoryResource) Update(ctx context.Context, req resource.Upda
 	})
 
 	// Call updateCategory API
-	_, err := r.client.CallJSONRPC(ctx, "cmdevice", "updateCategory", entity, force)
+	_, err = r.client.CallJSONRPC(ctx, "cmdevice", "updateCategory", entity, force)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Category Update Failed",

@@ -749,6 +749,72 @@ See `./AGENTS.md` for comprehensive Terraform Provider TDD patterns, parallel ex
 **Self-signed certs:**
 - `insecure_skip_verify = true` required for local dev
 
+**Pre-flight Validation:**
+- All resources call `ValidateEntity()` before CREATE and UPDATE operations
+- Service names: CMPart, CMDevice, CMNet, **cmkube** (lowercase exception)
+- Validation methods: validate[ResourceType] (e.g., validateSoftwareImage, validateCategory)
+- ERROR severity halts operation, WARNING displays advisory but continues
+- Zero UUID errors automatically filtered for CREATE operations
+
+### Validation Pattern
+
+BCM provides server-side validation through validate* API methods. The provider calls these before CREATE/UPDATE to provide immediate feedback with field-specific error messages.
+
+**Integration Pattern:**
+
+```go
+// Build API entity first
+entity := buildResourceAPIEntity(ctx, &plan, uuid)
+
+// Pre-flight validation
+validationErrors, err := r.client.ValidateEntity(ctx, "ServiceName", "validateMethod", entity, isCreate)
+if err != nil {
+    resp.Diagnostics.AddError("Validation API Error", err.Error())
+    return
+}
+
+// Process validation results
+hasErrors := false
+for _, valErr := range validationErrors {
+    if valErr.IsError() {
+        resp.Diagnostics.AddError(
+            fmt.Sprintf("Validation Error: %s", valErr.Field),
+            valErr.Message,
+        )
+        hasErrors = true
+    } else if valErr.IsWarning() {
+        resp.Diagnostics.AddWarning(
+            fmt.Sprintf("Validation Warning: %s", valErr.Field),
+            valErr.Message,
+        )
+    }
+}
+
+// Halt if errors found
+if hasErrors {
+    return
+}
+
+// Continue with CREATE/UPDATE operation...
+```
+
+**Service Name and Method Reference:**
+
+| Resource Type | Service Name | Validation Method | isCreate (CREATE) | isCreate (UPDATE) |
+|---------------|--------------|-------------------|-------------------|-------------------|
+| Software Images | CMPart | validateSoftwareImage | true | false |
+| Categories | CMDevice | validateCategory | true | false |
+| Devices | CMDevice | validateDevice | true | false |
+| Networks | CMNet | validateNetwork | true | false |
+| Kubernetes Clusters | **cmkube** | validateKubeCluster | true | false |
+
+**Important Notes:**
+- `cmkube` uses **lowercase** service name (exception to CamelCase pattern)
+- `isCreate=true` filters Zero UUID errors (expected during CREATE)
+- `isCreate=false` preserves all validation errors (UPDATE operations)
+- ERROR severity: Operation halts, user must fix configuration
+- WARNING severity: Advisory displayed, operation continues
+
 ### Common Development Patterns
 
 **Adding a New Data Source:**
