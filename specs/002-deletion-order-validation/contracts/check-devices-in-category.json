@@ -1,0 +1,84 @@
+{
+  "description": "Check for devices assigned to a specific category (dependency check)",
+  "purpose": "Validate that a category can be safely deleted by checking for dependent devices",
+  "request": {
+    "service": "CMDevice",
+    "call": "getNodes",
+    "args": [],
+    "notes": "BCM API does not support filtering by category - must query all and filter client-side"
+  },
+  "response_structure": {
+    "type": "array",
+    "items": {
+      "uuid": "string (device UUID)",
+      "hostname": "string (device hostname)",
+      "category": "string (category UUID) - FILTER ON THIS",
+      "ipAddress": "string",
+      "macAddress": "string",
+      "status": "string"
+    }
+  },
+  "filtering_logic": {
+    "field": "category",
+    "match_type": "exact",
+    "match_value": "<category-uuid-to-check>",
+    "extract_fields": [
+      "uuid",
+      "hostname"
+    ]
+  },
+  "example_request": {
+    "curl_command": "curl -k -s -b $COOKIE_FILE -X POST ${BCM_ENDPOINT}/json -H 'Content-Type: application/json' -d '{\"service\":\"CMDevice\",\"call\":\"getNodes\"}'",
+    "json_body": {
+      "service": "CMDevice",
+      "call": "getNodes"
+    }
+  },
+  "example_response": [
+    {
+      "uuid": "device-uuid-1",
+      "hostname": "node01",
+      "category": "category-uuid-to-check",
+      "ipAddress": "10.0.0.101",
+      "macAddress": "00:11:22:33:44:55"
+    },
+    {
+      "uuid": "device-uuid-2",
+      "hostname": "node02",
+      "category": "different-category-uuid",
+      "ipAddress": "10.0.0.102",
+      "macAddress": "00:11:22:33:44:66"
+    }
+  ],
+  "filtered_result": [
+    {
+      "uuid": "device-uuid-1",
+      "hostname": "node01"
+    }
+  ],
+  "dependency_check_result": {
+    "has_dependencies": true,
+    "dependent_count": 1,
+    "dependent_type": "devices",
+    "identifiers": [
+      {
+        "uuid": "device-uuid-1",
+        "name": "node01",
+        "type": "device"
+      }
+    ]
+  },
+  "error_message_format": "Category '{categoryName}' cannot be deleted because it has {count} device(s) assigned.\n\nDependent devices:\n  - {hostname} (uuid: {uuid})\n\nResolution options:\n  1. Reassign devices to another category before deleting\n  2. Delete the dependent devices first\n  3. Set 'force = true' to delete anyway (WARNING: will orphan device references)",
+  "performance": {
+    "typical_response_time": "< 1 second",
+    "max_response_time": "< 5 seconds (large clusters)",
+    "recommended_timeout": "5 seconds"
+  },
+  "implementation_notes": [
+    "Always query all devices - BCM API does not support server-side filtering",
+    "Filter client-side by comparing device.category === targetCategoryUUID",
+    "Use 5-second timeout for large clusters (1000+ devices)",
+    "Cache results if checking multiple categories in same transaction",
+    "Empty array means no dependencies - safe to delete"
+  ]
+}

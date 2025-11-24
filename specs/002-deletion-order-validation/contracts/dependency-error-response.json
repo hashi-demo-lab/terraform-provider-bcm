@@ -1,0 +1,86 @@
+{
+  "description": "Error message format for dependency validation failures",
+  "purpose": "Provide clear, actionable error messages when deletion is blocked due to dependencies",
+  "error_types": {
+    "category_with_devices": {
+      "title": "Category In Use - Cannot Delete",
+      "detail_template": "Category '{categoryName}' cannot be deleted because it has {count} device(s) assigned.\n\nDependent devices:\n  - {hostname1} (uuid: {uuid1})\n  - {hostname2} (uuid: {uuid2})\n  ... (showing first 10 of {total})\n\nResolution options:\n  1. Reassign devices to another category before deleting\n  2. Delete the dependent devices first\n  3. Set 'force = true' to delete anyway (WARNING: will orphan device references)",
+      "diagnostic_severity": "Error",
+      "example": {
+        "title": "Category In Use - Cannot Delete",
+        "detail": "Category 'default' cannot be deleted because it has 3 device(s) assigned.\n\nDependent devices:\n  - node01 (uuid: abc-123)\n  - node02 (uuid: def-456)\n  - node03 (uuid: ghi-789)\n\nResolution options:\n  1. Reassign devices to another category before deleting\n  2. Delete the dependent devices first\n  3. Set 'force = true' to delete anyway (WARNING: will orphan device references)"
+      }
+    },
+    "image_with_categories": {
+      "title": "Software Image In Use - Cannot Delete",
+      "detail_template": "Software Image '{imageName}' cannot be deleted because it has {count} categor(ies) assigned.\n\nDependent categories:\n  - {name1} (uuid: {uuid1})\n  - {name2} (uuid: {uuid2})\n  ... (showing first 10 of {total})\n\nResolution options:\n  1. Update categories to use a different software image before deleting\n  2. Delete the dependent categories first (after removing their devices)\n  3. Set 'force = true' to delete anyway (WARNING: will orphan category references)",
+      "diagnostic_severity": "Error",
+      "example": {
+        "title": "Software Image In Use - Cannot Delete",
+        "detail": "Software Image 'Rocky-8.10-NVIDIA-GPU-545' cannot be deleted because it has 2 categor(ies) assigned.\n\nDependent categories:\n  - default (uuid: abc-123)\n  - compute (uuid: def-456)\n\nResolution options:\n  1. Update categories to use a different software image before deleting\n  2. Delete the dependent categories first (after removing their devices)\n  3. Set 'force = true' to delete anyway (WARNING: will orphan category references)"
+      }
+    }
+  },
+  "warning_types": {
+    "force_deletion_category": {
+      "title": "Force Deletion Warning",
+      "detail_template": "Category '{categoryName}' is being deleted with force=true. This may create orphaned references in dependent resources.\n\nPotential Impact:\n  - Devices assigned to this category will have invalid category references\n  - Device provisioning may fail until devices are reassigned to a valid category\n\nThis operation cannot be undone.",
+      "diagnostic_severity": "Warning",
+      "example": {
+        "title": "Force Deletion Warning",
+        "detail": "Category 'default' is being deleted with force=true. This may create orphaned references in dependent resources.\n\nPotential Impact:\n  - Devices assigned to this category will have invalid category references\n  - Device provisioning may fail until devices are reassigned to a valid category\n\nThis operation cannot be undone."
+      }
+    },
+    "force_deletion_image": {
+      "title": "Force Deletion Warning",
+      "detail_template": "Software Image '{imageName}' is being deleted with force=true. This may create orphaned references in dependent resources.\n\nPotential Impact:\n  - Categories using this image will have invalid software image references\n  - Device provisioning may fail for affected categories\n\nThis operation cannot be undone.",
+      "diagnostic_severity": "Warning",
+      "example": {
+        "title": "Force Deletion Warning",
+        "detail": "Software Image 'Rocky-8.10' is being deleted with force=true. This may create orphaned references in dependent resources.\n\nPotential Impact:\n  - Categories using this image will have invalid software image references\n  - Device provisioning may fail for affected categories\n\nThis operation cannot be undone."
+      }
+    },
+    "dependency_check_failed": {
+      "title": "Dependency Check Failed",
+      "detail_template": "Unable to verify dependencies for {resourceType} '{resourceName}' due to API error: {errorMessage}\n\nYou can proceed with deletion by setting 'force = true', but this may create orphaned references if dependencies exist.",
+      "diagnostic_severity": "Warning",
+      "example": {
+        "title": "Dependency Check Failed",
+        "detail": "Unable to verify dependencies for Category 'default' due to API error: request timeout after 5 seconds\n\nYou can proceed with deletion by setting 'force = true', but this may create orphaned references if dependencies exist."
+      }
+    }
+  },
+  "terraform_diagnostic_format": {
+    "description": "Error format for Terraform provider diagnostics",
+    "structure": {
+      "severity": "Error or Warning",
+      "summary": "Brief title (e.g., 'Category In Use - Cannot Delete')",
+      "detail": "Full error message with context and resolution options"
+    },
+    "example_usage": {
+      "go_code": "resp.Diagnostics.AddError(\n    \"Category In Use - Cannot Delete\",\n    fmt.Sprintf(\n        \"Category '%s' cannot be deleted because it has %d device(s) assigned.\\n\\n\" +\n        \"Dependent devices:\\n%s\\n\\n\" +\n        \"Resolution options:\\n\" +\n        \"  1. Reassign devices to another category before deleting\\n\" +\n        \"  2. Delete the dependent devices first\\n\" +\n        \"  3. Set 'force = true' to delete anyway (WARNING: will orphan device references)\",\n        categoryName,\n        len(devices),\n        formatDeviceList(devices),\n    ),\n)"
+    }
+  },
+  "message_formatting_rules": {
+    "max_dependent_list_length": 10,
+    "truncation_message": "... (showing first {shown} of {total})",
+    "identifier_format": "  - {name} (uuid: {uuid})",
+    "resolution_options_required": true,
+    "warning_emphasis": "WARNING: will orphan {dependentType} references",
+    "line_length_target": 80,
+    "use_consistent_terminology": [
+      "device(s)" not "node(s)",
+      "categor(ies)" not "category(s)",
+      "uuid:" not "UUID:" or "id:"
+    ]
+  },
+  "implementation_notes": [
+    "Always include resource name and count in error messages",
+    "List dependent resource identifiers (max 10, then truncate)",
+    "Provide 3 resolution options: reassign, delete dependencies, or force delete",
+    "Use Warning severity for force deletion (not Error)",
+    "Use Error severity for blocked deletion due to dependencies",
+    "Include 'This operation cannot be undone' for force deletions",
+    "Format consistently: title on first line, blank line, detail with sections"
+  ]
+}

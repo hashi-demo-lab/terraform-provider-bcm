@@ -1,0 +1,101 @@
+{
+  "description": "Check for categories using a specific software image (dependency check)",
+  "purpose": "Validate that a software image can be safely deleted by checking for dependent categories",
+  "request": {
+    "service": "CMDevice",
+    "call": "getCategories",
+    "args": [],
+    "notes": "BCM API does not support filtering by image - must query all and filter client-side"
+  },
+  "response_structure": {
+    "type": "array",
+    "items": {
+      "uuid": "string (category UUID)",
+      "name": "string (category name)",
+      "softwareimage": "string (image NAME, not UUID) - FILTER ON THIS",
+      "managementNetwork": "string (network UUID)",
+      "description": "string"
+    }
+  },
+  "filtering_logic": {
+    "field": "softwareimage",
+    "match_type": "exact",
+    "match_value": "<image-name-to-check>",
+    "extract_fields": [
+      "uuid",
+      "name"
+    ],
+    "notes": "softwareimage field contains IMAGE NAME (e.g., 'Rocky-8.10'), not UUID"
+  },
+  "example_request": {
+    "curl_command": "curl -k -s -b $COOKIE_FILE -X POST ${BCM_ENDPOINT}/json -H 'Content-Type: application/json' -d '{\"service\":\"CMDevice\",\"call\":\"getCategories\"}'",
+    "json_body": {
+      "service": "CMDevice",
+      "call": "getCategories"
+    }
+  },
+  "example_response": [
+    {
+      "uuid": "category-uuid-1",
+      "name": "default",
+      "softwareimage": "Rocky-8.10-NVIDIA-GPU-545",
+      "managementNetwork": "network-uuid-1",
+      "description": "Default category"
+    },
+    {
+      "uuid": "category-uuid-2",
+      "name": "compute",
+      "softwareimage": "Rocky-8.10-NVIDIA-GPU-545",
+      "managementNetwork": "network-uuid-1",
+      "description": "Compute nodes"
+    },
+    {
+      "uuid": "category-uuid-3",
+      "name": "storage",
+      "softwareimage": "Ubuntu-22.04",
+      "managementNetwork": "network-uuid-2",
+      "description": "Storage nodes"
+    }
+  ],
+  "filtered_result": [
+    {
+      "uuid": "category-uuid-1",
+      "name": "default"
+    },
+    {
+      "uuid": "category-uuid-2",
+      "name": "compute"
+    }
+  ],
+  "dependency_check_result": {
+    "has_dependencies": true,
+    "dependent_count": 2,
+    "dependent_type": "categories",
+    "identifiers": [
+      {
+        "uuid": "category-uuid-1",
+        "name": "default",
+        "type": "category"
+      },
+      {
+        "uuid": "category-uuid-2",
+        "name": "compute",
+        "type": "category"
+      }
+    ]
+  },
+  "error_message_format": "Software Image '{imageName}' cannot be deleted because it has {count} categor(ies) assigned.\n\nDependent categories:\n  - {name} (uuid: {uuid})\n\nResolution options:\n  1. Update categories to use a different software image before deleting\n  2. Delete the dependent categories first (after removing their devices)\n  3. Set 'force = true' to delete anyway (WARNING: will orphan category references)",
+  "performance": {
+    "typical_response_time": "< 1 second",
+    "max_response_time": "< 2 seconds (large clusters)",
+    "recommended_timeout": "3 seconds"
+  },
+  "implementation_notes": [
+    "Always query all categories - BCM API does not support server-side filtering",
+    "Filter client-side by comparing category.softwareimage === targetImageName",
+    "IMPORTANT: softwareimage field is NAME (string), not UUID",
+    "Use image NAME from provider state, not UUID",
+    "Categories are typically small (< 100), so performance is not a concern",
+    "Empty array means no dependencies - safe to delete"
+  ]
+}
