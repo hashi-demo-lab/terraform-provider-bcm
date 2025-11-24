@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"strings"
 	"testing"
 	"time"
 
@@ -321,41 +320,35 @@ func TestAccCMNetNetwork_DriftDetection(t *testing.T) {
 }
 
 func testAccCheckCMNetNetworkDestroy(s *terraform.State) error {
+	// Create BCM client using shared helper
 	client := createTestBCMClient(&testing.T{})
-	ctx := context.Background()
 
-	var errors []string
-	resourceCount := 0
-
+	resourcesChecked := 0
 	for _, rs := range s.RootModule().Resources {
 		if rs.Type != "bcm_cmnet_network" {
 			continue
 		}
 
-		resourceCount++
-		id := rs.Primary.ID
+		resourcesChecked++
+		name := rs.Primary.Attributes["name"]
+		uuid := rs.Primary.Attributes["uuid"]
 
-		// Verify network deleted with exponential backoff
-		deleted := verifyResourceDeleted(
-			ctx,
-			client,
-			"cmnet",
-			"getNetwork",
-			id,
-			4, // retry count
-		)
+		// Add 10s timeout context per API call
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
 
-		if !deleted {
-			errors = append(errors, fmt.Sprintf(
-				"Network still exists after destroy. Type: %s, ID: %s, Retries: 4",
-				rs.Type,
-				id,
-			))
+		// Attempt to read the network
+		body, err := client.CallJSONRPC(ctx, "cmnet", "getNetwork", name)
+
+		// If no error and response contains data, resource still exists
+		if err == nil {
+			var networkData map[string]interface{}
+			if json.Unmarshal(body, &networkData) == nil && len(networkData) > 0 {
+				return fmt.Errorf("network still exists after destroy: name=%s uuid=%s response=%s",
+					name, uuid, string(body))
+			}
 		}
-	}
-
-	if len(errors) > 0 {
-		return fmt.Errorf("CheckDestroy failures:\n  - %s", strings.Join(errors, "\n  - "))
+		// If error or empty response, resource is gone (expected)
 	}
 
 	return nil

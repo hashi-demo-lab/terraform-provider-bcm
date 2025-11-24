@@ -735,6 +735,769 @@ resource "bcm_cmdevice_category" "test" {
 }
 
 // ========================================
+// Network and Partition Configuration Tests (Priority Group 3)
+// ========================================
+
+// TestAccCMDeviceCategory_NetworkConfiguration tests network-related optional fields
+func TestAccCMDeviceCategory_NetworkConfiguration(t *testing.T) {
+	categoryName := generateUniqueTestName("tftest-network-config")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccCMDeviceCategoryPreCheck(t, categoryName)
+		},
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceCategoryDestroy,
+		Steps: []resource.TestStep{
+			// Step 1: Create with network configuration
+			{
+				Config: testAccCMDeviceCategoryResourceConfig_NetworkConfig(categoryName),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(categoryName),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("default_gateway"),
+						knownvalue.StringExact("192.168.1.1"),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("default_gateway_metric"),
+						knownvalue.Int64Exact(100),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("allow_networking_restart"),
+						knownvalue.Bool(true),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("uuid"),
+						knownvalue.NotNull(),
+					),
+				},
+			},
+			// Step 2: Idempotency check
+			{
+				Config: testAccCMDeviceCategoryResourceConfig_NetworkConfig(categoryName),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+			// Step 3: Update network configuration
+			{
+				Config: testAccCMDeviceCategoryResourceConfig_NetworkConfigUpdated(categoryName),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(categoryName),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("default_gateway"),
+						knownvalue.StringExact("192.168.1.254"),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("default_gateway_metric"),
+						knownvalue.Int64Exact(200),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("allow_networking_restart"),
+						knownvalue.Bool(false),
+					),
+				},
+			},
+			// Step 4: Idempotency check after update
+			{
+				Config: testAccCMDeviceCategoryResourceConfig_NetworkConfigUpdated(categoryName),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+		},
+	})
+}
+
+// TestAccCMDeviceCategory_PartitionConfiguration tests partition/disk-related optional fields
+//
+// NOTE: This test is currently BLOCKED by BCM XML schema validation requirements.
+// See: https://github.com/hashi-demo-lab/terraform-provider-bcm/issues/48
+// Status: Requires BCM XSD files for disksetup and raidconf fields
+func TestAccCMDeviceCategory_PartitionConfiguration(t *testing.T) {
+	t.Skip("BLOCKED: Requires BCM XSD files for disksetup/raidconf validation. See issue #48")
+
+	categoryName := generateUniqueTestName("tftest-partition-config")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccCMDeviceCategoryPreCheck(t, categoryName)
+		},
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceCategoryDestroy,
+		Steps: []resource.TestStep{
+			// Step 1: Create with partition configuration
+			{
+				Config: testAccCMDeviceCategoryResourceConfig_PartitionConfig(categoryName),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(categoryName),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("disksetup"),
+						knownvalue.NotNull(),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("raidconf"),
+						knownvalue.StringExact("raid1"),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("uuid"),
+						knownvalue.NotNull(),
+					),
+				},
+			},
+			// Step 2: Idempotency check
+			{
+				Config: testAccCMDeviceCategoryResourceConfig_PartitionConfig(categoryName),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+			// Step 3: Update partition configuration
+			{
+				Config: testAccCMDeviceCategoryResourceConfig_PartitionConfigUpdated(categoryName),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(categoryName),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("disksetup"),
+						knownvalue.NotNull(),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("raidconf"),
+						knownvalue.StringExact("raid5"),
+					),
+				},
+			},
+			// Step 4: Idempotency check after update
+			{
+				Config: testAccCMDeviceCategoryResourceConfig_PartitionConfigUpdated(categoryName),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+		},
+	})
+}
+
+// ========================================
+// Network and Partition Test Config Helpers
+// ========================================
+
+// testAccCMDeviceCategoryResourceConfig_NetworkConfig creates config with network settings
+func testAccCMDeviceCategoryResourceConfig_NetworkConfig(name string) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmdevice_categories" "all" {}
+data "bcm_cmpart_softwareimages" "all" {}
+
+locals {
+  management_network_uuid = length(data.bcm_cmdevice_categories.all.categories) > 0 ? data.bcm_cmdevice_categories.all.categories[0].management_network_id : "00000000-0000-0000-0000-000000000000"
+  software_image_uuid = length(data.bcm_cmpart_softwareimages.all.images) > 0 ? data.bcm_cmpart_softwareimages.all.images[0].uuid : "00000000-0000-0000-0000-000000000000"
+}
+
+resource "bcm_cmdevice_category" "test" {
+  name                       = %[4]q
+  management_network         = local.management_network_uuid
+  notes                      = "Network configuration test"
+
+  # Network configuration fields
+  default_gateway            = "192.168.1.1"
+  default_gateway_metric     = 100
+  allow_networking_restart   = true
+
+  software_image_proxy = {
+    parent_software_image = local.software_image_uuid
+  }
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		name,
+	)
+}
+
+// testAccCMDeviceCategoryResourceConfig_NetworkConfigUpdated creates updated network config
+func testAccCMDeviceCategoryResourceConfig_NetworkConfigUpdated(name string) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmdevice_categories" "all" {}
+data "bcm_cmpart_softwareimages" "all" {}
+
+locals {
+  management_network_uuid = length(data.bcm_cmdevice_categories.all.categories) > 0 ? data.bcm_cmdevice_categories.all.categories[0].management_network_id : "00000000-0000-0000-0000-000000000000"
+  software_image_uuid = length(data.bcm_cmpart_softwareimages.all.images) > 0 ? data.bcm_cmpart_softwareimages.all.images[0].uuid : "00000000-0000-0000-0000-000000000000"
+}
+
+resource "bcm_cmdevice_category" "test" {
+  name                       = %[4]q
+  management_network         = local.management_network_uuid
+  notes                      = "Network configuration test - updated"
+
+  # Updated network configuration fields
+  default_gateway            = "192.168.1.254"
+  default_gateway_metric     = 200
+  allow_networking_restart   = false
+
+  software_image_proxy = {
+    parent_software_image = local.software_image_uuid
+  }
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		name,
+	)
+}
+
+// testAccCMDeviceCategoryResourceConfig_PartitionConfig creates config with partition settings
+func testAccCMDeviceCategoryResourceConfig_PartitionConfig(name string) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmdevice_categories" "all" {}
+data "bcm_cmpart_softwareimages" "all" {}
+
+locals {
+  management_network_uuid = length(data.bcm_cmdevice_categories.all.categories) > 0 ? data.bcm_cmdevice_categories.all.categories[0].management_network_id : "00000000-0000-0000-0000-000000000000"
+  software_image_uuid = length(data.bcm_cmpart_softwareimages.all.images) > 0 ? data.bcm_cmpart_softwareimages.all.images[0].uuid : "00000000-0000-0000-0000-000000000000"
+}
+
+resource "bcm_cmdevice_category" "test" {
+  name                       = %[4]q
+  management_network         = local.management_network_uuid
+  notes                      = "Partition configuration test"
+
+  # Partition/disk configuration fields
+  disksetup                  = <<-EOT
+<disksetup>
+  <disk device="/dev/sda">
+    <partition number="1" size="50GB" type="ext4" mountpoint="/"/>
+    <partition number="2" size="remaining" type="ext4" mountpoint="/home"/>
+  </disk>
+</disksetup>
+EOT
+  raidconf                   = "raid1"
+
+  software_image_proxy = {
+    parent_software_image = local.software_image_uuid
+  }
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		name,
+	)
+}
+
+// testAccCMDeviceCategoryResourceConfig_PartitionConfigUpdated creates updated partition config
+func testAccCMDeviceCategoryResourceConfig_PartitionConfigUpdated(name string) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmdevice_categories" "all" {}
+data "bcm_cmpart_softwareimages" "all" {}
+
+locals {
+  management_network_uuid = length(data.bcm_cmdevice_categories.all.categories) > 0 ? data.bcm_cmdevice_categories.all.categories[0].management_network_id : "00000000-0000-0000-0000-000000000000"
+  software_image_uuid = length(data.bcm_cmpart_softwareimages.all.images) > 0 ? data.bcm_cmpart_softwareimages.all.images[0].uuid : "00000000-0000-0000-0000-000000000000"
+}
+
+resource "bcm_cmdevice_category" "test" {
+  name                       = %[4]q
+  management_network         = local.management_network_uuid
+  notes                      = "Partition configuration test - updated"
+
+  # Updated partition/disk configuration fields
+  disksetup                  = <<-EOT
+<disksetup>
+  <disk device="/dev/sda">
+    <partition number="1" size="100GB" type="ext4" mountpoint="/"/>
+  </disk>
+  <disk device="/dev/sdb">
+    <partition number="1" size="remaining" type="xfs" mountpoint="/data"/>
+  </disk>
+</disksetup>
+EOT
+  raidconf                   = "raid5"
+
+  software_image_proxy = {
+    parent_software_image = local.software_image_uuid
+  }
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		name,
+	)
+}
+
+// ========================================
+// Disk Setup Advanced Tests (Priority Group 2)
+// ========================================
+
+// TestAccCMDeviceCategoryResource_DiskSetupAdvanced tests comprehensive disk setup configuration
+// including disksetup, raidconf, install_boot_record, and revision_id from software_image_proxy.
+//
+// NOTE: This test is currently BLOCKED by BCM XML schema validation requirements.
+// See: https://github.com/hashi-demo-lab/terraform-provider-bcm/issues/48
+// Status: Requires BCM XSD files for disksetup and raidconf fields
+func TestAccCMDeviceCategoryResource_DiskSetupAdvanced(t *testing.T) {
+	t.Skip("BLOCKED: Requires BCM XSD files for disksetup/raidconf validation. See issue #48")
+	categoryName := generateUniqueTestName("tftest-disksetup-advanced")
+
+	// Cleanup any leftover test categories
+	testAccCMDeviceCategoryPreCheck(t, categoryName)
+
+	// ID consistency tracking across operations
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
+	// Sample disk setup XML configuration
+	diskSetupXML := `<disksetup>
+  <disk device="/dev/sda">
+    <partition number="1" size="500M" type="ext4" mountpoint="/boot"/>
+    <partition number="2" size="remaining" type="ext4" mountpoint="/"/>
+  </disk>
+</disksetup>`
+
+	updatedDiskSetupXML := `<disksetup>
+  <disk device="/dev/sda">
+    <partition number="1" size="1G" type="ext4" mountpoint="/boot"/>
+    <partition number="2" size="remaining" type="xfs" mountpoint="/"/>
+  </disk>
+</disksetup>`
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceCategoryDestroy,
+		Steps: []resource.TestStep{
+			// Step 1: Create with disk setup fields (install_boot_record=true)
+			{
+				Config: testAccCMDeviceCategoryResourceConfig_DiskSetup(categoryName, diskSetupXML, "raid1", true),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(categoryName),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("disksetup"),
+						knownvalue.StringExact(diskSetupXML),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("raidconf"),
+						knownvalue.NotNull(),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("install_boot_record"),
+						knownvalue.Bool(true),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("uuid"),
+						knownvalue.NotNull(),
+					),
+					// Verify software_image_proxy.revision_id is computed
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("software_image_proxy"),
+						knownvalue.NotNull(),
+					),
+					// Track ID consistency
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+			// Step 2: Idempotency check after Create
+			{
+				Config: testAccCMDeviceCategoryResourceConfig_DiskSetup(categoryName, diskSetupXML, "raid1", true),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+			// Step 3: Update disk setup fields (change disksetup, raidconf, and install_boot_record)
+			{
+				Config: testAccCMDeviceCategoryResourceConfig_DiskSetup(categoryName, updatedDiskSetupXML, "raid5", false),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(categoryName),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("disksetup"),
+						knownvalue.StringExact(updatedDiskSetupXML),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("raidconf"),
+						knownvalue.NotNull(),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("install_boot_record"),
+						knownvalue.Bool(false),
+					),
+					// Verify ID unchanged after update
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+			// Step 4: Idempotency check after Update
+			{
+				Config: testAccCMDeviceCategoryResourceConfig_DiskSetup(categoryName, updatedDiskSetupXML, "raid5", false),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+			// Step 5: Import and verify all disk setup fields
+			{
+				Config:            testAccCMDeviceCategoryResourceConfig_DiskSetup(categoryName, updatedDiskSetupXML, "raid5", false),
+				ResourceName:      "bcm_cmdevice_category.test",
+				ImportState:       true,
+				ImportStateVerify: true,
+				// Ignore force parameter as it's not persisted
+				ImportStateVerifyIgnore: []string{"force"},
+				ConfigStateChecks: []statecheck.StateCheck{
+					// Verify ID consistency across import
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+			// Step 6: Test removing disk setup fields (set to empty/null)
+			{
+				Config: testAccCMDeviceCategoryResourceConfig_DiskSetupMinimal(categoryName),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(categoryName),
+					),
+					// Verify ID unchanged after removing optional fields
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+		},
+	})
+}
+
+// TestAccCMDeviceCategoryResource_DiskSetupOptionalCombinations tests different combinations
+// of optional disk setup fields to ensure they can be used independently.
+func TestAccCMDeviceCategoryResource_DiskSetupOptionalCombinations(t *testing.T) {
+	categoryName := generateUniqueTestName("tftest-disksetup-combos")
+
+	// Cleanup any leftover test categories
+	testAccCMDeviceCategoryPreCheck(t, categoryName)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceCategoryDestroy,
+		Steps: []resource.TestStep{
+			// Only disksetup (no raidconf, no install_boot_record)
+			{
+				Config: testAccCMDeviceCategoryResourceConfig_DiskSetupOnly(categoryName, "<disksetup><disk/></disksetup>"),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("disksetup"),
+						knownvalue.StringExact("<disksetup><disk/></disksetup>"),
+					),
+				},
+			},
+			// Only raidconf (no disksetup, no install_boot_record)
+			{
+				Config: testAccCMDeviceCategoryResourceConfig_RaidConfOnly(categoryName, "raid0"),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("raidconf"),
+						knownvalue.StringExact("raid0"),
+					),
+				},
+			},
+			// Only install_boot_record (no disksetup, no raidconf)
+			{
+				Config: testAccCMDeviceCategoryResourceConfig_InstallBootRecordOnly(categoryName, true),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("install_boot_record"),
+						knownvalue.Bool(true),
+					),
+				},
+			},
+		},
+	})
+}
+
+// ========================================
+// Disk Setup Test Config Helpers
+// ========================================
+
+// testAccCMDeviceCategoryResourceConfig_DiskSetup creates config with all disk setup fields.
+func testAccCMDeviceCategoryResourceConfig_DiskSetup(name, disksetup, raidconf string, installBootRecord bool) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmdevice_categories" "all" {}
+data "bcm_cmpart_softwareimages" "all" {}
+
+locals {
+  management_network_uuid = length(data.bcm_cmdevice_categories.all.categories) > 0 ? data.bcm_cmdevice_categories.all.categories[0].management_network_id : "00000000-0000-0000-0000-000000000000"
+  software_image_uuid = length(data.bcm_cmpart_softwareimages.all.images) > 0 ? data.bcm_cmpart_softwareimages.all.images[0].uuid : "00000000-0000-0000-0000-000000000000"
+}
+
+resource "bcm_cmdevice_category" "test" {
+  name                = %[4]q
+  management_network  = local.management_network_uuid
+  notes               = "Disk setup configuration test"
+  disksetup           = %[5]q
+  raidconf            = %[6]q
+  install_boot_record = %[7]t
+
+  software_image_proxy = {
+    parent_software_image = local.software_image_uuid
+  }
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		name,
+		disksetup,
+		raidconf,
+		installBootRecord,
+	)
+}
+
+// testAccCMDeviceCategoryResourceConfig_DiskSetupMinimal creates config without disk setup fields.
+func testAccCMDeviceCategoryResourceConfig_DiskSetupMinimal(name string) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmdevice_categories" "all" {}
+data "bcm_cmpart_softwareimages" "all" {}
+
+locals {
+  management_network_uuid = length(data.bcm_cmdevice_categories.all.categories) > 0 ? data.bcm_cmdevice_categories.all.categories[0].management_network_id : "00000000-0000-0000-0000-000000000000"
+  software_image_uuid = length(data.bcm_cmpart_softwareimages.all.images) > 0 ? data.bcm_cmpart_softwareimages.all.images[0].uuid : "00000000-0000-0000-0000-000000000000"
+}
+
+resource "bcm_cmdevice_category" "test" {
+  name               = %[4]q
+  management_network = local.management_network_uuid
+  notes              = "Minimal disk setup test"
+
+  software_image_proxy = {
+    parent_software_image = local.software_image_uuid
+  }
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		name,
+	)
+}
+
+// testAccCMDeviceCategoryResourceConfig_DiskSetupOnly creates config with only disksetup field.
+func testAccCMDeviceCategoryResourceConfig_DiskSetupOnly(name, disksetup string) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmdevice_categories" "all" {}
+data "bcm_cmpart_softwareimages" "all" {}
+
+locals {
+  management_network_uuid = length(data.bcm_cmdevice_categories.all.categories) > 0 ? data.bcm_cmdevice_categories.all.categories[0].management_network_id : "00000000-0000-0000-0000-000000000000"
+  software_image_uuid = length(data.bcm_cmpart_softwareimages.all.images) > 0 ? data.bcm_cmpart_softwareimages.all.images[0].uuid : "00000000-0000-0000-0000-000000000000"
+}
+
+resource "bcm_cmdevice_category" "test" {
+  name               = %[4]q
+  management_network = local.management_network_uuid
+  disksetup          = %[5]q
+
+  software_image_proxy = {
+    parent_software_image = local.software_image_uuid
+  }
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		name,
+		disksetup,
+	)
+}
+
+// testAccCMDeviceCategoryResourceConfig_RaidConfOnly creates config with only raidconf field.
+func testAccCMDeviceCategoryResourceConfig_RaidConfOnly(name, raidconf string) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmdevice_categories" "all" {}
+data "bcm_cmpart_softwareimages" "all" {}
+
+locals {
+  management_network_uuid = length(data.bcm_cmdevice_categories.all.categories) > 0 ? data.bcm_cmdevice_categories.all.categories[0].management_network_id : "00000000-0000-0000-0000-000000000000"
+  software_image_uuid = length(data.bcm_cmpart_softwareimages.all.images) > 0 ? data.bcm_cmpart_softwareimages.all.images[0].uuid : "00000000-0000-0000-0000-000000000000"
+}
+
+resource "bcm_cmdevice_category" "test" {
+  name               = %[4]q
+  management_network = local.management_network_uuid
+  raidconf           = %[5]q
+
+  software_image_proxy = {
+    parent_software_image = local.software_image_uuid
+  }
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		name,
+		raidconf,
+	)
+}
+
+// testAccCMDeviceCategoryResourceConfig_InstallBootRecordOnly creates config with only install_boot_record field.
+func testAccCMDeviceCategoryResourceConfig_InstallBootRecordOnly(name string, installBootRecord bool) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmdevice_categories" "all" {}
+data "bcm_cmpart_softwareimages" "all" {}
+
+locals {
+  management_network_uuid = length(data.bcm_cmdevice_categories.all.categories) > 0 ? data.bcm_cmdevice_categories.all.categories[0].management_network_id : "00000000-0000-0000-0000-000000000000"
+  software_image_uuid = length(data.bcm_cmpart_softwareimages.all.images) > 0 ? data.bcm_cmpart_softwareimages.all.images[0].uuid : "00000000-0000-0000-0000-000000000000"
+}
+
+resource "bcm_cmdevice_category" "test" {
+  name                = %[4]q
+  management_network  = local.management_network_uuid
+  install_boot_record = %[5]t
+
+  software_image_proxy = {
+    parent_software_image = local.software_image_uuid
+  }
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		name,
+		installBootRecord,
+	)
+}
+
+// ========================================
 // Validation Tests
 // ========================================
 
@@ -954,5 +1717,192 @@ resource "bcm_cmdevice_category" "test" {
 		os.Getenv("BCM_PASSWORD"),
 		name,
 		fips,
+	)
+}
+
+// ========================================
+// Optional Field Coverage Tests
+// ========================================
+
+// TestAccCMDeviceCategoryResource_BootLoaderFields tests boot loader related optional fields
+// Covers: boot_loader_file, boot_loader_protocol, kernel_output_console
+// Note: kernel_version is omitted as it requires a valid kernel path from the actual software image
+func TestAccCMDeviceCategoryResource_BootLoaderFields(t *testing.T) {
+	categoryName := generateUniqueTestName("tftest-bootloader")
+
+	// Clean up any leftover categories
+	testAccCMDeviceCategoryPreCheck(t, categoryName)
+
+	// ID consistency tracking
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceCategoryDestroy,
+		Steps: []resource.TestStep{
+			// Create with boot loader fields set
+			{
+				Config: testAccCMDeviceCategoryResourceConfig_BootLoaderFields(
+					categoryName,
+					"/pxelinux.0",
+					"TFTP",
+					"ttyS0,115200",
+				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					// Verify name and UUID
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(categoryName),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("uuid"),
+						knownvalue.NotNull(),
+					),
+					// Verify boot loader fields
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("boot_loader_file"),
+						knownvalue.StringExact("/pxelinux.0"),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("boot_loader_protocol"),
+						knownvalue.StringExact("TFTP"),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("kernel_output_console"),
+						knownvalue.StringExact("ttyS0,115200"),
+					),
+					// Track ID for consistency
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+			// Idempotency check after Create
+			{
+				Config: testAccCMDeviceCategoryResourceConfig_BootLoaderFields(
+					categoryName,
+					"/pxelinux.0",
+					"TFTP",
+					"ttyS0,115200",
+				),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+			// Update boot loader fields
+			{
+				Config: testAccCMDeviceCategoryResourceConfig_BootLoaderFields(
+					categoryName,
+					"/grub/grubx64.efi",
+					"HTTP",
+					"tty0",
+				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					// Verify updated values
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("boot_loader_file"),
+						knownvalue.StringExact("/grub/grubx64.efi"),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("boot_loader_protocol"),
+						knownvalue.StringExact("HTTP"),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("kernel_output_console"),
+						knownvalue.StringExact("tty0"),
+					),
+					// Verify ID unchanged after update
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+			// Idempotency check after Update
+			{
+				Config: testAccCMDeviceCategoryResourceConfig_BootLoaderFields(
+					categoryName,
+					"/grub/grubx64.efi",
+					"HTTP",
+					"tty0",
+				),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+			// Import to verify all fields are preserved
+			{
+				ResourceName:      "bcm_cmdevice_category.test",
+				ImportState:       true,
+				ImportStateVerify: true,
+				// Ignore force parameter (not persisted in BCM)
+				ImportStateVerifyIgnore: []string{"force"},
+			},
+		},
+	})
+}
+
+// testAccCMDeviceCategoryResourceConfig_BootLoaderFields creates config with boot loader fields
+func testAccCMDeviceCategoryResourceConfig_BootLoaderFields(name, bootLoaderFile, bootLoaderProtocol, kernelOutputConsole string) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+# Lookup existing categories to get a management network UUID
+data "bcm_cmdevice_categories" "all" {}
+
+# Lookup existing software images
+data "bcm_cmpart_softwareimages" "all" {}
+
+locals {
+  # Get management network from first existing category
+  management_network_uuid = length(data.bcm_cmdevice_categories.all.categories) > 0 ? data.bcm_cmdevice_categories.all.categories[0].management_network_id : "00000000-0000-0000-0000-000000000000"
+
+  # Get UUID of first available software image
+  software_image_uuid = length(data.bcm_cmpart_softwareimages.all.images) > 0 ? data.bcm_cmpart_softwareimages.all.images[0].uuid : "00000000-0000-0000-0000-000000000000"
+}
+
+resource "bcm_cmdevice_category" "test" {
+  name                   = %[4]q
+  management_network     = local.management_network_uuid
+  notes                  = "Boot loader fields test category"
+
+  # Boot loader configuration
+  boot_loader_file       = %[5]q
+  boot_loader_protocol   = %[6]q
+
+  # Kernel configuration (kernel_version omitted - requires valid path from actual software image)
+  kernel_output_console  = %[7]q
+
+  software_image_proxy = {
+    parent_software_image = local.software_image_uuid
+  }
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		name,
+		bootLoaderFile,
+		bootLoaderProtocol,
+		kernelOutputConsole,
 	)
 }
