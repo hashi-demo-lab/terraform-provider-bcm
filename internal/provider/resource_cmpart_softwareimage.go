@@ -206,6 +206,7 @@ func (r *CMPartSoftwareImageResource) Schema(ctx context.Context, req resource.S
 				Computed:            true,
 				MarkdownDescription: "UUID of the original image to clone from. When set, BCM will copy the filesystem from the specified image. This is only used during resource creation.",
 				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
@@ -818,7 +819,6 @@ func (r *CMPartSoftwareImageResource) readSoftwareImage(ctx context.Context, mod
 // buildAPIEntity constructs BCM API entity from Terraform model
 // If uuid is provided, this is an update operation, otherwise it's a create.
 func (r *CMPartSoftwareImageResource) buildAPIEntity(model *CMPartSoftwareImageResourceModel, uuid string) map[string]interface{} {
-	isUpdate := uuid != ""
 	entity := map[string]interface{}{
 		"baseType":      "SoftwareImage",
 		"childType":     "",
@@ -877,9 +877,15 @@ func (r *CMPartSoftwareImageResource) buildAPIEntity(model *CMPartSoftwareImageR
 		entity["notes"] = model.Notes.ValueString()
 	}
 
-	// Original image (for cloning) - ONLY used during CREATE, not UPDATE
-	if !isUpdate && !model.OriginalImage.IsNull() {
+	// Original image (for cloning) - primarily used during CREATE
+	// BCM API requires this field to be present with a valid UUID format
+	// If not set or empty, use zero UUID; otherwise use the provided value
+	if !model.OriginalImage.IsNull() && model.OriginalImage.ValueString() != "" {
 		entity["originalImage"] = model.OriginalImage.ValueString()
+	} else {
+		// Use zero UUID when originalImage is null or empty
+		// This satisfies BCM's validation requirement for UUID format
+		entity["originalImage"] = "00000000-0000-0000-0000-000000000000"
 	}
 
 	// Build modules list from types.List
