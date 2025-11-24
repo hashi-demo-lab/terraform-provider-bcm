@@ -1407,6 +1407,135 @@ func TestAccCMPartSoftwareImageResource_ComputedFields(t *testing.T) {
 	})
 }
 
+// TestAccCMPartSoftwareImageResource_ForceParameter tests the force parameter
+func TestAccCMPartSoftwareImageResource_ForceParameter(t *testing.T) {
+	imageName := generateUniqueTestName("tftest-force-param")
+	imagePath := fmt.Sprintf("/cm/images/%s", imageName)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccCMPartSoftwareImagePreCheck(t, imageName)
+		},
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMPartSoftwareImageDestroy,
+		Steps: []resource.TestStep{
+			// Create with force = false (default)
+			{
+				Config: testAccCMPartSoftwareImageResourceConfig_ForceParameter(imageName, imagePath, false),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(imageName),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("force"),
+						knownvalue.Bool(false),
+					),
+				},
+			},
+			// Idempotency check with force = false
+			{
+				Config: testAccCMPartSoftwareImageResourceConfig_ForceParameter(imageName, imagePath, false),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+			// Update to force = true
+			{
+				Config: testAccCMPartSoftwareImageResourceConfig_ForceParameter(imageName, imagePath, true),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("force"),
+						knownvalue.Bool(true),
+					),
+				},
+			},
+			// Idempotency check with force = true
+			{
+				Config: testAccCMPartSoftwareImageResourceConfig_ForceParameter(imageName, imagePath, true),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+			// Update back to force = false
+			{
+				Config: testAccCMPartSoftwareImageResourceConfig_ForceParameter(imageName, imagePath, false),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("force"),
+						knownvalue.Bool(false),
+					),
+				},
+			},
+		},
+	})
+}
+
+// TestAccCMPartSoftwareImageResource_ForceParameterDefault tests that force defaults to false
+func TestAccCMPartSoftwareImageResource_ForceParameterDefault(t *testing.T) {
+	imageName := generateUniqueTestName("tftest-force-default")
+	imagePath := fmt.Sprintf("/cm/images/%s", imageName)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccCMPartSoftwareImagePreCheck(t, imageName)
+		},
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMPartSoftwareImageDestroy,
+		Steps: []resource.TestStep{
+			// Create without specifying force (should default to false)
+			{
+				Config: testAccCMPartSoftwareImageResourceConfig_Basic(imageName, imagePath),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(imageName),
+					),
+					// Verify force defaults to false when not specified
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("force"),
+						knownvalue.Bool(false),
+					),
+				},
+			},
+		},
+	})
+}
+
+func testAccCMPartSoftwareImageResourceConfig_ForceParameter(name, path string, force bool) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+resource "bcm_cmpart_softwareimage" "test" {
+  name  = %[4]q
+  path  = %[5]q
+  force = %[6]t
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		name,
+		path,
+		force,
+	)
+}
+
 func testAccCMPartSoftwareImageResourceConfig_KernelConsole(name, path, kernelConsole string) string {
 	return fmt.Sprintf(`
 provider "bcm" {
