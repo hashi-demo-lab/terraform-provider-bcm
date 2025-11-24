@@ -845,7 +845,7 @@ func (r *CMDeviceCategoryResource) Read(ctx context.Context, req resource.ReadRe
 		// If BCM returned a different UUID, preserve the original from state
 		if !state.ManagementNetwork.Equal(originalManagementNetwork) {
 			tflog.Debug(ctx, "Management network changed in BCM, preserving original value", map[string]interface{}{
-				"original": originalManagementNetwork.ValueString(),
+				"original":     originalManagementNetwork.ValueString(),
 				"bcm_returned": state.ManagementNetwork.ValueString(),
 			})
 			state.ManagementNetwork = originalManagementNetwork
@@ -1027,10 +1027,10 @@ func (r *CMDeviceCategoryResource) Delete(ctx context.Context, req resource.Dele
 		if result.HasDependencies {
 			// Dependencies exist - block deletion with detailed error message
 			tflog.Info(ctx, "Category deletion blocked due to dependencies", map[string]interface{}{
-				"category_uuid":    state.UUID.ValueString(),
-				"category_name":    state.Name.ValueString(),
-				"dependent_count":  result.DependentCount,
-				"dependent_type":   result.DependentType,
+				"category_uuid":   state.UUID.ValueString(),
+				"category_name":   state.Name.ValueString(),
+				"dependent_count": result.DependentCount,
+				"dependent_type":  result.DependentType,
 			})
 
 			resp.Diagnostics.AddError(

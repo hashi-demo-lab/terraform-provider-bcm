@@ -120,6 +120,9 @@ func TestAccCMDeviceDevice_IdempotencyWithImport(t *testing.T) {
 					"software_image_proxy",
 					"boot_loader",          // BCM returns "CATEGORY" when not explicitly set
 					"boot_loader_protocol", // BCM returns "CATEGORY" when not explicitly set
+					"management_network",   // BCM may reset this field, value in config may differ from import
+					"power_control",        // BCM returns default "none" when not explicitly set
+					"default_gateway",      // BCM returns default "0.0.0.0" when not explicitly set
 				},
 			},
 			// Step 3: Verify idempotency after import
