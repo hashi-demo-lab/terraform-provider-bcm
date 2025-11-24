@@ -72,27 +72,27 @@ type CMDeviceCategoryResourceModel struct {
 	AuthenticationService types.String `tfsdk:"authentication_service"` // Optional
 
 	// Network configuration
-	DefaultGateway         types.String  `tfsdk:"default_gateway"`          // Optional, IP address
-	DefaultGatewayMetric   types.Int64   `tfsdk:"default_gateway_metric"`   // Optional
-	NameServers            types.List    `tfsdk:"name_servers"`             // Optional, list of strings
-	SearchDomains          types.List    `tfsdk:"search_domains"`           // Optional, list of strings
-	TimeServers            types.List    `tfsdk:"time_servers"`             // Optional, list of strings
-	StaticRoutes           types.Dynamic `tfsdk:"static_routes"`            // Optional, dynamic type (TODO: define proper schema)
-	AllowNetworkingRestart types.Bool    `tfsdk:"allow_networking_restart"` // Optional
+	DefaultGateway         types.String `tfsdk:"default_gateway"`          // Optional, IP address
+	DefaultGatewayMetric   types.Int64  `tfsdk:"default_gateway_metric"`   // Optional
+	NameServers            types.List   `tfsdk:"name_servers"`             // Optional, list of strings
+	SearchDomains          types.List   `tfsdk:"search_domains"`           // Optional, list of strings
+	TimeServers            types.List   `tfsdk:"time_servers"`             // Optional, list of strings
+	StaticRoutes           types.List   `tfsdk:"static_routes"`            // Optional, list of StaticRouteModel
+	AllowNetworkingRestart types.Bool   `tfsdk:"allow_networking_restart"` // Optional
 
 	// Filesystem configuration
-	FSMounts  types.List    `tfsdk:"fsmounts"`  // Optional, list of FSMountModel
-	FSExports types.Dynamic `tfsdk:"fsexports"` // Optional, dynamic type (TODO: define proper schema)
+	FSMounts  types.List `tfsdk:"fsmounts"`  // Optional, list of FSMountModel
+	FSExports types.List `tfsdk:"fsexports"` // Optional, list of FSExportModel
 
 	// Role and service assignments
-	Roles    types.Dynamic `tfsdk:"roles"`    // Optional, dynamic type (TODO: define proper schema)
-	Services types.Dynamic `tfsdk:"services"` // Optional, dynamic type (TODO: define proper schema)
+	Roles    types.List `tfsdk:"roles"`    // Optional, list of RoleModel
+	Services types.List `tfsdk:"services"` // Optional, list of ServiceModel
 
 	// Hardware-specific settings
-	BMCSettings types.Object  `tfsdk:"bmc_settings"` // Optional, nested BMCSettingsModel
-	BiosSetup   types.Object  `tfsdk:"bios_setup"`   // Optional, nested object
-	DPUSettings types.Object  `tfsdk:"dpu_settings"` // Optional, nested object
-	GPUSettings types.Dynamic `tfsdk:"gpu_settings"` // Optional, dynamic type (TODO: define proper schema)
+	BMCSettings types.Object `tfsdk:"bmc_settings"` // Optional, nested BMCSettingsModel
+	BiosSetup   types.Object `tfsdk:"bios_setup"`   // Optional, nested object
+	DPUSettings types.Object `tfsdk:"dpu_settings"` // Optional, nested object
+	GPUSettings types.List   `tfsdk:"gpu_settings"` // Optional, list of GPUSettingModel
 
 	// Security and access
 	AccessSettings   types.Object `tfsdk:"access_settings"`   // Optional, nested object
@@ -167,6 +167,44 @@ type FSMountModel struct {
 type KernelModuleCategoryModel struct {
 	Name       types.String `tfsdk:"name"`       // Required
 	Parameters types.String `tfsdk:"parameters"` // Optional
+}
+
+// StaticRouteModel describes a static route nested object.
+type StaticRouteModel struct {
+	Destination types.String `tfsdk:"destination"` // Required, CIDR notation
+	Gateway     types.String `tfsdk:"gateway"`     // Required, IPv4 address
+	Metric      types.Int64  `tfsdk:"metric"`      // Optional, route priority
+}
+
+// FSExportModel describes an NFS filesystem export nested object.
+type FSExportModel struct {
+	Path       types.String `tfsdk:"path"`        // Required, export path
+	Network    types.String `tfsdk:"network"`     // Required, network UUID reference
+	AllowWrite types.Bool   `tfsdk:"allow_write"` // Optional, write access
+	RootSquash types.Bool   `tfsdk:"root_squash"` // Optional, root squash security
+	Async      types.Bool   `tfsdk:"async"`       // Optional, async mode
+}
+
+// RoleModel describes a service role assignment nested object.
+type RoleModel struct {
+	Name        types.String `tfsdk:"name"`         // Required, role name
+	ChildType   types.String `tfsdk:"child_type"`   // Required, role type
+	UUID        types.String `tfsdk:"uuid"`         // Computed, BCM-assigned
+	AddServices types.Bool   `tfsdk:"add_services"` // Optional, add role services
+}
+
+// GPUSettingModel describes a GPU hardware configuration nested object.
+type GPUSettingModel struct {
+	DeviceID    types.String `tfsdk:"device_id"`    // Required, GPU device ID
+	Model       types.String `tfsdk:"model"`        // Optional, GPU model name
+	ComputeMode types.String `tfsdk:"compute_mode"` // Optional, compute mode
+}
+
+// ServiceModel describes a service configuration nested object.
+// Structure based on BCM API - currently empty array in default category.
+type ServiceModel struct {
+	// TODO: Define fields based on actual BCM API usage
+	// Marked as POST-MVP until actual service structure is documented
 }
 
 // NewCMDeviceCategoryResource creates a new resource instance.
@@ -344,9 +382,37 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 				ElementType:         types.StringType,
 				MarkdownDescription: "NTP time servers",
 			},
-			"static_routes": schema.DynamicAttribute{
+			"static_routes": schema.ListNestedAttribute{
 				Optional:            true,
-				MarkdownDescription: "Static network routes (dynamic type - TODO: define proper schema)",
+				MarkdownDescription: "Static network routes for nodes in this category",
+				NestedObject: schema.NestedAttributeObject{
+					Attributes: map[string]schema.Attribute{
+						"destination": schema.StringAttribute{
+							Required:            true,
+							MarkdownDescription: "Destination network in CIDR notation (e.g., 192.168.1.0/24)",
+							Validators: []validator.String{
+								stringvalidator.RegexMatches(
+									regexp.MustCompile(`^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$`),
+									"must be valid CIDR notation (e.g., 192.168.1.0/24)",
+								),
+							},
+						},
+						"gateway": schema.StringAttribute{
+							Required:            true,
+							MarkdownDescription: "Gateway IP address (e.g., 10.0.0.1)",
+							Validators: []validator.String{
+								stringvalidator.RegexMatches(
+									regexp.MustCompile(`^([0-9]{1,3}\.){3}[0-9]{1,3}$`),
+									"must be valid IPv4 address",
+								),
+							},
+						},
+						"metric": schema.Int64Attribute{
+							Optional:            true,
+							MarkdownDescription: "Route metric (priority, lower is preferred)",
+						},
+					},
+				},
 			},
 			"allow_networking_restart": schema.BoolAttribute{
 				Optional:            true,
@@ -392,17 +458,73 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 					},
 				},
 			},
-			"fsexports": schema.DynamicAttribute{
+			"fsexports": schema.ListNestedAttribute{
 				Optional:            true,
-				MarkdownDescription: "Filesystem exports (dynamic type - TODO: define proper schema)",
+				MarkdownDescription: "NFS filesystem exports for nodes in this category",
+				NestedObject: schema.NestedAttributeObject{
+					Attributes: map[string]schema.Attribute{
+						"path": schema.StringAttribute{
+							Required:            true,
+							MarkdownDescription: "Export path (e.g., /home, /shared)",
+						},
+						"network": schema.StringAttribute{
+							Required:            true,
+							MarkdownDescription: "Network UUID reference for export access",
+							Validators: []validator.String{
+								stringvalidator.RegexMatches(
+									regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`),
+									"must be valid RFC 4122 UUID",
+								),
+							},
+						},
+						"allow_write": schema.BoolAttribute{
+							Optional:            true,
+							MarkdownDescription: "Allow write access (default: false)",
+						},
+						"root_squash": schema.BoolAttribute{
+							Optional:            true,
+							MarkdownDescription: "Enable root squash security (default: false)",
+						},
+						"async": schema.BoolAttribute{
+							Optional:            true,
+							MarkdownDescription: "Use async mode for writes (default: false)",
+						},
+					},
+				},
 			},
-			"roles": schema.DynamicAttribute{
+			"roles": schema.ListNestedAttribute{
 				Optional:            true,
-				MarkdownDescription: "Role assignments (dynamic type - TODO: define proper schema)",
+				MarkdownDescription: "Service role assignments for nodes in this category",
+				NestedObject: schema.NestedAttributeObject{
+					Attributes: map[string]schema.Attribute{
+						"name": schema.StringAttribute{
+							Required:            true,
+							MarkdownDescription: "Role name (e.g., headnode, storage, compute)",
+						},
+						"child_type": schema.StringAttribute{
+							Required:            true,
+							MarkdownDescription: "Role type (e.g., HeadNodeRole, StorageRole, BackupRole)",
+						},
+						"uuid": schema.StringAttribute{
+							Computed:            true,
+							MarkdownDescription: "Role UUID (assigned by BCM)",
+						},
+						"add_services": schema.BoolAttribute{
+							Optional:            true,
+							MarkdownDescription: "Automatically add role services (default: false)",
+						},
+					},
+				},
 			},
-			"services": schema.DynamicAttribute{
+			"services": schema.ListNestedAttribute{
 				Optional:            true,
-				MarkdownDescription: "Service assignments (dynamic type - TODO: define proper schema)",
+				MarkdownDescription: "Service configurations for nodes in this category (structure TBD - marked as POST-MVP)",
+				NestedObject: schema.NestedAttributeObject{
+					Attributes: map[string]schema.Attribute{
+						// TODO: Define service fields based on actual BCM API usage
+						// Placeholder for now - services field structure needs investigation
+					},
+				},
 			},
 			"bmc_settings": schema.SingleNestedAttribute{
 				Optional:            true,
@@ -457,9 +579,25 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 				MarkdownDescription: "DPU settings",
 				Attributes:          map[string]schema.Attribute{},
 			},
-			"gpu_settings": schema.DynamicAttribute{
+			"gpu_settings": schema.ListNestedAttribute{
 				Optional:            true,
-				MarkdownDescription: "GPU settings (dynamic type - TODO: define proper schema)",
+				MarkdownDescription: "GPU hardware configuration for nodes in this category",
+				NestedObject: schema.NestedAttributeObject{
+					Attributes: map[string]schema.Attribute{
+						"device_id": schema.StringAttribute{
+							Required:            true,
+							MarkdownDescription: "GPU device ID (e.g., 0, 1, 2)",
+						},
+						"model": schema.StringAttribute{
+							Optional:            true,
+							MarkdownDescription: "GPU model name (e.g., Tesla V100, A100)",
+						},
+						"compute_mode": schema.StringAttribute{
+							Optional:            true,
+							MarkdownDescription: "Compute mode (default, exclusive, prohibited)",
+						},
+					},
+				},
 			},
 			"access_settings": schema.SingleNestedAttribute{
 				Optional:            true,
