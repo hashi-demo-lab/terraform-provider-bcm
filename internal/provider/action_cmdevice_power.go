@@ -5,6 +5,7 @@ package provider
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
@@ -141,6 +142,46 @@ func (a *CMDevicePowerAction) Invoke(ctx context.Context, req action.InvokeReque
 		return
 	}
 
+	// SAFETY CHECK: Prevent power operations on head nodes
+	// Head nodes manage the cluster and should not be power cycled
+	resp.SendProgress(action.InvokeProgressEvent{
+		Message: fmt.Sprintf("Checking device type for %s...", deviceID),
+	})
+
+	nodeData, err := a.client.CallJSONRPC(ctx, "cmdevice", "getNode", deviceID)
+	if err == nil {
+		var node map[string]interface{}
+		if json.Unmarshal(nodeData, &node) == nil {
+			childType, _ := node["childType"].(string)
+			hostname, _ := node["hostname"].(string)
+
+			tflog.Debug(ctx, "Device type check", map[string]interface{}{
+				"device_id":  deviceID,
+				"hostname":   hostname,
+				"child_type": childType,
+			})
+
+			if childType == "HeadNode" {
+				resp.Diagnostics.AddError(
+					"Safety Check Failed",
+					fmt.Sprintf("Cannot execute power operations on HeadNode devices.\n\n"+
+						"Device: %s (UUID: %s)\n"+
+						"Type: %s\n\n"+
+						"Head nodes manage the BCM cluster and should not be power cycled. "+
+						"This operation has been blocked to prevent cluster disruption.",
+						hostname, deviceID, childType),
+				)
+				return
+			}
+		}
+	} else {
+		// Log warning but continue - device might be identified by hostname
+		tflog.Warn(ctx, "Could not verify device type", map[string]interface{}{
+			"device_id": deviceID,
+			"error":     err.Error(),
+		})
+	}
+
 	// Report progress - starting operation
 	resp.SendProgress(action.InvokeProgressEvent{
 		Message: fmt.Sprintf("Executing %s on device %s...", powerAction, deviceID),
@@ -155,7 +196,7 @@ func (a *CMDevicePowerAction) Invoke(ctx context.Context, req action.InvokeReque
 	// Execute power operation via BCM API
 	// NOTE: BCM power methods (reboot, etc.) use "arg" (single value) format,
 	// not "args" (array) format used by other methods like getNode.
-	_, err := a.client.CallJSONRPCArg(ctx, "cmdevice", bcmMethod, deviceID)
+	_, err = a.client.CallJSONRPCArg(ctx, "cmdevice", bcmMethod, deviceID)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Power Operation Failed",
