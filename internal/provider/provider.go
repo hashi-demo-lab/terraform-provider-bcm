@@ -7,6 +7,7 @@ import (
 	"context"
 	"os"
 
+	"github.com/hashicorp/terraform-plugin-framework/action"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/ephemeral"
 	"github.com/hashicorp/terraform-plugin-framework/function"
@@ -20,6 +21,7 @@ import (
 var _ provider.Provider = &BCMProvider{}
 var _ provider.ProviderWithFunctions = &BCMProvider{}
 var _ provider.ProviderWithEphemeralResources = &BCMProvider{}
+var _ provider.ProviderWithActions = &BCMProvider{}
 
 // BCMProvider defines the provider implementation.
 type BCMProvider struct {
@@ -157,9 +159,10 @@ func (p *BCMProvider) Configure(ctx context.Context, req provider.ConfigureReque
 		return
 	}
 
-	// Make client available to data sources and resources
+	// Make client available to data sources, resources, and actions
 	resp.DataSourceData = client
 	resp.ResourceData = client
+	resp.ActionData = client
 }
 
 func (p *BCMProvider) Resources(ctx context.Context) []func() resource.Resource {
@@ -194,6 +197,12 @@ func (p *BCMProvider) DataSources(ctx context.Context) []func() datasource.DataS
 func (p *BCMProvider) Functions(ctx context.Context) []func() function.Function {
 	return []func() function.Function{
 		// No functions in POV scope
+	}
+}
+
+func (p *BCMProvider) Actions(ctx context.Context) []func() action.Action {
+	return []func() action.Action{
+		NewCMDevicePowerAction,
 	}
 }
 
