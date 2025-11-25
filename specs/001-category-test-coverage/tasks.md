@@ -36,10 +36,10 @@
 
 ### Implementation for Track B Fields
 
-- [ ] T004 Implement name_servers list field in buildAPIEntity() in /workspace/internal/provider/resource_cmdevice_category.go
-- [ ] T005 [P] Implement search_domains list field in buildAPIEntity() in /workspace/internal/provider/resource_cmdevice_category.go
-- [ ] T006 [P] Implement time_servers list field in buildAPIEntity() in /workspace/internal/provider/resource_cmdevice_category.go
-- [ ] T007 Implement name_servers, search_domains, time_servers list parsing in readCategory() in /workspace/internal/provider/resource_cmdevice_category.go
+- [X] T004 Implement name_servers list field in buildAPIEntity() in /workspace/internal/provider/resource_cmdevice_category.go
+- [X] T005 [P] Implement search_domains list field in buildAPIEntity() in /workspace/internal/provider/resource_cmdevice_category.go
+- [X] T006 [P] Implement time_servers list field in buildAPIEntity() in /workspace/internal/provider/resource_cmdevice_category.go
+- [X] T007 Implement name_servers, search_domains, time_servers list parsing in readCategory() in /workspace/internal/provider/resource_cmdevice_category.go
 - [ ] T008 Implement io_scheduler field in buildAPIEntity() and readCategory() in /workspace/internal/provider/resource_cmdevice_category.go
 - [ ] T009 Implement initialize script field in buildAPIEntity() and readCategory() in /workspace/internal/provider/resource_cmdevice_category.go
 - [ ] T010 [P] Implement finalize script field in buildAPIEntity() and readCategory() in /workspace/internal/provider/resource_cmdevice_category.go
@@ -73,15 +73,15 @@
 
 ### Implementation for User Story 1
 
-- [ ] T026 [US1] Create testAccCMDeviceCategoryResourceConfig_InstallationModes config helper in /workspace/internal/provider/resource_cmdevice_category_test.go
-- [ ] T027 [US1] Create TestAccCMDeviceCategoryResource_InstallationModes test function in /workspace/internal/provider/resource_cmdevice_category_test.go
-- [ ] T028 [US1] Add Step 1: Create with install_mode="AUTO", new_node_install_mode="FULL" with statecheck.ExpectKnownValue assertions
-- [ ] T029 [US1] Add Step 2: Idempotency check with plancheck.ExpectEmptyPlan()
-- [ ] T030 [US1] Add Step 3: Update to install_mode="FULL", new_node_install_mode="MINIMAL" with state checks
-- [ ] T031 [US1] Add Step 4: Idempotency check after update
-- [ ] T032 [US1] Add Step 5: Import state verification with ImportStateVerify
-- [ ] T033 [US1] Add ID consistency tracking with statecheck.CompareValue(compare.ValuesSame())
-- [ ] T034 [US1] Run test and verify passes: TF_ACC=1 go test -v -timeout 120m ./internal/provider/ -run TestAccCMDeviceCategoryResource_InstallationModes
+- [X] T026 [US1] Create testAccCMDeviceCategoryResourceConfig_InstallationModes config helper in /workspace/internal/provider/resource_cmdevice_category_test.go
+- [X] T027 [US1] Create TestAccCMDeviceCategoryResource_InstallationModes test function in /workspace/internal/provider/resource_cmdevice_category_test.go
+- [X] T028 [US1] Add Step 1: Create with install_mode="AUTO", new_node_install_mode="FULL" with statecheck.ExpectKnownValue assertions
+- [X] T029 [US1] Add Step 2: Idempotency check with plancheck.ExpectEmptyPlan()
+- [X] T030 [US1] Add Step 3: Update to install_mode="FULL", new_node_install_mode="FULL" with state checks (Note: BCM only accepts FULL for newNodeInstallMode)
+- [X] T031 [US1] Add Step 4: Idempotency check after update
+- [X] T032 [US1] Add Step 5: Import state verification with ImportStateVerify
+- [X] T033 [US1] Add ID consistency tracking with statecheck.CompareValue(compare.ValuesSame())
+- [X] T034 [US1] Run test and verify passes: TF_ACC=1 go test -v -timeout 120m ./internal/provider/ -run TestAccCMDeviceCategoryResource_InstallationModes
 
 **Checkpoint**: User Story 1 complete - installation mode fields have acceptance test coverage
 
@@ -97,15 +97,15 @@
 
 ### Implementation for User Story 2
 
-- [ ] T035 [US2] Create testAccCMDeviceCategoryResourceConfig_NetworkListFields config helper in /workspace/internal/provider/resource_cmdevice_category_test.go
-- [ ] T036 [US2] Create TestAccCMDeviceCategoryResource_NetworkListFields test function in /workspace/internal/provider/resource_cmdevice_category_test.go
-- [ ] T037 [US2] Add Step 1: Create with name_servers=["8.8.8.8", "8.8.4.4"], search_domains=["example.com"], time_servers=["ntp.example.com"]
-- [ ] T038 [US2] Add state checks using knownvalue.ListSizeExact() for list sizes
-- [ ] T039 [US2] Add Step 2: Idempotency check with plancheck.ExpectEmptyPlan()
-- [ ] T040 [US2] Add Step 3: Update name_servers list (add/remove items)
-- [ ] T041 [US2] Add Step 4: Idempotency check after update
-- [ ] T042 [US2] Add Step 5: Test empty list handling (set to [])
-- [ ] T043 [US2] Run test and verify passes: TF_ACC=1 go test -v -timeout 120m ./internal/provider/ -run TestAccCMDeviceCategoryResource_NetworkListFields
+- [X] T035 [US2] Create testAccCMDeviceCategoryResourceConfig_NetworkListFields config helper in /workspace/internal/provider/resource_cmdevice_category_test.go
+- [X] T036 [US2] Create TestAccCMDeviceCategoryResource_NetworkListFields test function in /workspace/internal/provider/resource_cmdevice_category_test.go
+- [X] T037 [US2] Add Step 1: Create with name_servers=["8.8.8.8", "8.8.4.4"], search_domains=["example.com"], time_servers=["ntp.example.com"]
+- [X] T038 [US2] Add state checks using knownvalue.ListSizeExact() for list sizes
+- [X] T039 [US2] Add Step 2: Idempotency check with plancheck.ExpectEmptyPlan()
+- [X] T040 [US2] Add Step 3: Update name_servers list (add/remove items)
+- [X] T041 [US2] Add Step 4: Idempotency check after update
+- [X] T042 [US2] Add Step 5: Test empty list handling (set to [])
+- [ ] T043 [US2] Run test and verify passes: TF_ACC=1 go test -v -timeout 120m ./internal/provider/ -run TestAccCMDeviceCategoryResource_NetworkListFields (BLOCKED: requires T004-T007 implementation)
 
 **Checkpoint**: User Story 2 complete - network list fields have acceptance test coverage
 
@@ -145,15 +145,15 @@
 
 ### Implementation for User Story 4
 
-- [ ] T053 [US4] Create testAccCMDeviceCategoryResourceConfig_ProvisioningScripts config helper in /workspace/internal/provider/resource_cmdevice_category_test.go
-- [ ] T054 [US4] Create TestAccCMDeviceCategoryResource_ProvisioningScripts test function in /workspace/internal/provider/resource_cmdevice_category_test.go
-- [ ] T055 [US4] Add Step 1: Create with initialize="#!/bin/bash\necho 'init'" and finalize="#!/bin/bash\necho 'done'"
-- [ ] T056 [US4] Add state checks using knownvalue.StringExact() with escaped newlines
-- [ ] T057 [US4] Add Step 2: Idempotency check with plancheck.ExpectEmptyPlan()
-- [ ] T058 [US4] Add Step 3: Update initialize script content
-- [ ] T059 [US4] Add Step 4: Idempotency check after update
-- [ ] T060 [US4] Add Step 5: Verify finalize script unchanged after initialize update
-- [ ] T061 [US4] Run test and verify passes: TF_ACC=1 go test -v -timeout 120m ./internal/provider/ -run TestAccCMDeviceCategoryResource_ProvisioningScripts
+- [X] T053 [US4] Create testAccCMDeviceCategoryResourceConfig_ProvisioningScripts config helper in /workspace/internal/provider/resource_cmdevice_category_test.go
+- [X] T054 [US4] Create TestAccCMDeviceCategoryResource_ProvisioningScripts test function in /workspace/internal/provider/resource_cmdevice_category_test.go
+- [X] T055 [US4] Add Step 1: Create with initialize="#!/bin/bash\necho 'init'" and finalize="#!/bin/bash\necho 'done'"
+- [X] T056 [US4] Add state checks using knownvalue.StringExact() with escaped newlines
+- [X] T057 [US4] Add Step 2: Idempotency check with plancheck.ExpectEmptyPlan()
+- [X] T058 [US4] Add Step 3: Update initialize script content
+- [X] T059 [US4] Add Step 4: Idempotency check after update
+- [X] T060 [US4] Add Step 5: Verify finalize script unchanged after initialize update
+- [X] T061 [US4] Run test and verify passes: TF_ACC=1 go test -v -timeout 120m ./internal/provider/ -run TestAccCMDeviceCategoryResource_ProvisioningScripts
 
 **Checkpoint**: User Story 4 complete - provisioning script fields have acceptance test coverage
 
