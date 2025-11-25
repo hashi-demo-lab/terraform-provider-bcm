@@ -269,6 +269,8 @@ Steps: []resource.TestStep{
 **Example Tests:**
 - `TestAccCMPartSoftwareImage_DriftKernelParameters` (resource_cmpart_softwareimage_test.go)
 - `TestAccCMDeviceCategory_DriftNotes` (resource_cmdevice_category_test.go)
+- `TestAccCMUserUser_DriftShell` (resource_cmuser_user_test.go)
+- `TestAccCMUserUser_DriftNotes` (resource_cmuser_user_test.go)
 
 **Running Drift Tests:**
 ```bash
@@ -806,6 +808,36 @@ BCM validates `disksetup` against an internal XSD schema. Key format requirement
 **raidconf field:** Currently uses empty string `""`. Valid XML format requires further BCM documentation.
 
 **Reference:** https://github.com/hashi-demo-lab/terraform-provider-bcm/issues/48
+
+### bcm_cmuser_user Field Mappings
+
+Field mappings for drift detection tests (Terraform snake_case to BCM API camelCase):
+
+| Terraform Attribute | BCM API Field | Type | Notes |
+|---------------------|---------------|------|-------|
+| username | name | string | Primary identifier |
+| password | password | string | Write-only, never returned by API |
+| uid | ID | string | Unix UID as string, auto-assigned from 60000+ |
+| gid | groupID | string | Primary GID, defaults to 1000 |
+| full_name | commonName | string | Display name, defaults to username |
+| surname | surname | string | Last name, defaults to username |
+| email | email | string | Email address |
+| home_directory | homeDirectory | string | Home path, defaults to /home/{username} |
+| shell | loginShell | string | Login shell, defaults to /bin/bash |
+| notes | notes | string | User notes |
+| authorized_ssh_keys | authorizedSshKeys | string | SSH public keys (multi-line) |
+| shadow_expire | shadowExpire | int64 | Account expiration (days since epoch) |
+| shadow_last_change | shadowLastChange | int64 | Password change date |
+| shadow_max | shadowMax | int64 | Max password age (days) |
+| shadow_min | shadowMin | int64 | Min password age (days) |
+| shadow_warning | shadowWarning | int64 | Warning period (days) |
+| shadow_inactive | shadowInactive | int64 | Inactive period (days) |
+
+**Critical Notes:**
+- `removeUser(uuid)` requires UUID, NOT username
+- UID/GID are NOT auto-assigned by BCM - provider handles this
+- Password is write-only (preserved from plan/state, never read from API)
+- Import uses username as identifier
 
 **Pre-flight Validation:**
 - All resources call `ValidateEntity()` before CREATE and UPDATE operations

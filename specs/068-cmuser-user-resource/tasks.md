@@ -28,10 +28,10 @@
 
 **Purpose**: Project initialization and API verification
 
-- [ ] T001 Verify API methods exist by testing `cmuser.getUser`, `cmuser.addUser`, `cmuser.updateUser`, `cmuser.removeUser` against live BCM API
-- [ ] T002 [P] Document API method signatures and response formats in `/workspace/specs/068-cmuser-user-resource/research.md`
-- [ ] T003 [P] Verify user entity structure for Create/Update operations matches `/workspace/specs/068-cmuser-user-resource/data-model.md`
-- [ ] T004 Create feature branch `068-cmuser-user-resource` if not exists
+- [X] T001 Verify API methods exist by testing `cmuser.getUser`, `cmuser.addUser`, `cmuser.updateUser`, `cmuser.removeUser` against live BCM API
+- [X] T002 [P] Document API method signatures and response formats in `/workspace/specs/068-cmuser-user-resource/research.md`
+- [X] T003 [P] Verify user entity structure for Create/Update operations matches `/workspace/specs/068-cmuser-user-resource/data-model.md`
+- [X] T004 Create feature branch `068-cmuser-user-resource` if not exists
 
 ---
 
@@ -41,14 +41,14 @@
 
 **CRITICAL**: No TDD test work can begin until this phase is complete
 
-- [ ] T005 Create resource scaffold in `/workspace/internal/provider/resource_cmuser_user.go` with struct definitions (CMUserUserResource, CMUserUserResourceModel)
-- [ ] T006 Implement Schema() method with all attributes (required, optional, computed) per `/workspace/specs/068-cmuser-user-resource/data-model.md`
-- [ ] T007 Implement Metadata() method returning resource type name `bcm_cmuser_user`
-- [ ] T008 Implement Configure() method to inject BCMClient dependency
-- [ ] T009 Add resource interface compile-time checks (var _ resource.Resource = &CMUserUserResource{})
-- [ ] T010 Register resource in `/workspace/internal/provider/provider.go` Resources() method
-- [ ] T011 [P] Create test file scaffold in `/workspace/internal/provider/resource_cmuser_user_test.go` with testAccCMUserUserConfig helper function
-- [ ] T012 [P] Create example directory at `/workspace/examples/resources/bcm_cmuser_user/`
+- [X] T005 Create resource scaffold in `/workspace/internal/provider/resource_cmuser_user.go` with struct definitions (CMUserUserResource, CMUserUserResourceModel)
+- [X] T006 Implement Schema() method with all attributes (required, optional, computed) per `/workspace/specs/068-cmuser-user-resource/data-model.md`
+- [X] T007 Implement Metadata() method returning resource type name `bcm_cmuser_user`
+- [X] T008 Implement Configure() method to inject BCMClient dependency
+- [X] T009 Add resource interface compile-time checks (var _ resource.Resource = &CMUserUserResource{})
+- [X] T010 Register resource in `/workspace/internal/provider/provider.go` Resources() method
+- [X] T011 [P] Create test file scaffold in `/workspace/internal/provider/resource_cmuser_user_test.go` with testAccCMUserUserConfig helper function
+- [X] T012 [P] Create example directory at `/workspace/examples/resources/bcm_cmuser_user/`
 
 **Checkpoint**: Foundation ready - TDD test writing can now begin
 
@@ -64,26 +64,26 @@
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T013 [US1] Write TestAccCMUserUser_Basic acceptance test (create/read/destroy) in `/workspace/internal/provider/resource_cmuser_user_test.go`
-- [ ] T014 [P] [US1] Write TestAccCMUserUser_Complete acceptance test (all attributes) in `/workspace/internal/provider/resource_cmuser_user_test.go`
-- [ ] T015 [P] [US1] Write TestAccCMUserUser_PasswordSensitive test (verify password not logged) in `/workspace/internal/provider/resource_cmuser_user_test.go`
-- [ ] T016 [US1] Run tests to verify they FAIL (no implementation yet)
+- [X] T013 [US1] Write TestAccCMUserUser_Basic acceptance test (create/read/destroy) in `/workspace/internal/provider/resource_cmuser_user_test.go`
+- [X] T014 [P] [US1] Write TestAccCMUserUser_Complete acceptance test (all attributes) in `/workspace/internal/provider/resource_cmuser_user_test.go`
+- [X] T015 [P] [US1] Write TestAccCMUserUser_PasswordSensitive test (verify password not logged) in `/workspace/internal/provider/resource_cmuser_user_test.go`
+- [X] T016 [US1] Run tests to verify they FAIL (no implementation yet)
 
 ### GREEN Phase: Implementation for User Story 1
 
-- [ ] T017 [US1] Implement buildAPIEntity() helper method to construct BCM API entity from Terraform model in `/workspace/internal/provider/resource_cmuser_user.go`
-- [ ] T018 [US1] Implement Create() method with addUser API call in `/workspace/internal/provider/resource_cmuser_user.go`
-- [ ] T019 [US1] Implement Read() method with getUser(username) direct lookup in `/workspace/internal/provider/resource_cmuser_user.go`
-- [ ] T020 [US1] Implement Delete() method with removeUser API call in `/workspace/internal/provider/resource_cmuser_user.go`
-- [ ] T021 [US1] Implement password write-only handling (preserve from state, never read from API) in `/workspace/internal/provider/resource_cmuser_user.go`
-- [ ] T022 [US1] Run TestAccCMUserUser_Basic - verify it PASSES
+- [X] T017 [US1] Implement buildAPIEntity() helper method to construct BCM API entity from Terraform model in `/workspace/internal/provider/resource_cmuser_user.go`
+- [X] T018 [US1] Implement Create() method with addUser API call in `/workspace/internal/provider/resource_cmuser_user.go`
+- [X] T019 [US1] Implement Read() method with getUser(username) direct lookup in `/workspace/internal/provider/resource_cmuser_user.go`
+- [X] T020 [US1] Implement Delete() method with removeUser API call in `/workspace/internal/provider/resource_cmuser_user.go`
+- [X] T021 [US1] Implement password write-only handling (preserve from state, never read from API) in `/workspace/internal/provider/resource_cmuser_user.go`
+- [X] T022 [US1] Run TestAccCMUserUser_Basic - verify it PASSES
 
 ### REFACTOR Phase: Production Quality for User Story 1
 
-- [ ] T023 [US1] Add pre-flight validation via validateUser API call before Create in `/workspace/internal/provider/resource_cmuser_user.go`
-- [ ] T024 [US1] Add comprehensive error handling for API failures in `/workspace/internal/provider/resource_cmuser_user.go`
-- [ ] T025 [P] [US1] Create basic example in `/workspace/examples/resources/bcm_cmuser_user/resource.tf`
-- [ ] T026 [US1] Run all US1 tests - verify they PASS
+- [X] T023 [US1] Add pre-flight validation via validateUser API call before Create in `/workspace/internal/provider/resource_cmuser_user.go`
+- [X] T024 [US1] Add comprehensive error handling for API failures in `/workspace/internal/provider/resource_cmuser_user.go`
+- [X] T025 [P] [US1] Create basic example in `/workspace/examples/resources/bcm_cmuser_user/resource.tf`
+- [X] T026 [US1] Run all US1 tests - verify they PASS
 
 **Checkpoint**: User Story 1 complete - basic user creation works independently
 
@@ -97,22 +97,22 @@
 
 ### RED Phase: Tests for User Story 2
 
-- [ ] T027 [US2] Write TestAccCMUserUser_Update acceptance test (modify mutable fields) in `/workspace/internal/provider/resource_cmuser_user_test.go`
-- [ ] T028 [P] [US2] Write TestAccCMUserUser_Idempotent test (verify no changes on reapply) in `/workspace/internal/provider/resource_cmuser_user_test.go`
-- [ ] T029 [US2] Run tests to verify they FAIL
+- [X] T027 [US2] Write TestAccCMUserUser_Update acceptance test (modify mutable fields) in `/workspace/internal/provider/resource_cmuser_user_test.go`
+- [X] T028 [P] [US2] Write TestAccCMUserUser_Idempotent test (verify no changes on reapply) in `/workspace/internal/provider/resource_cmuser_user_test.go`
+- [X] T029 [US2] Run tests to verify they FAIL
 
 ### GREEN Phase: Implementation for User Story 2
 
-- [ ] T030 [US2] Implement Update() method with updateUser API call in `/workspace/internal/provider/resource_cmuser_user.go`
-- [ ] T031 [US2] Handle UUID lookup for existing user in Update() in `/workspace/internal/provider/resource_cmuser_user.go`
-- [ ] T032 [US2] Implement conditional password update (only send if changed) in `/workspace/internal/provider/resource_cmuser_user.go`
-- [ ] T033 [US2] Run TestAccCMUserUser_Update - verify it PASSES
+- [X] T030 [US2] Implement Update() method with updateUser API call in `/workspace/internal/provider/resource_cmuser_user.go`
+- [X] T031 [US2] Handle UUID lookup for existing user in Update() in `/workspace/internal/provider/resource_cmuser_user.go`
+- [X] T032 [US2] Implement conditional password update (only send if changed) in `/workspace/internal/provider/resource_cmuser_user.go`
+- [X] T033 [US2] Run TestAccCMUserUser_Update - verify it PASSES
 
 ### REFACTOR Phase: Production Quality for User Story 2
 
-- [ ] T034 [US2] Add pre-flight validation via validateUser before Update in `/workspace/internal/provider/resource_cmuser_user.go`
-- [ ] T035 [P] [US2] Create update example in `/workspace/examples/resources/bcm_cmuser_user/resource.tf` showing attribute changes
-- [ ] T036 [US2] Run all US2 tests - verify they PASS
+- [X] T034 [US2] Add pre-flight validation via validateUser before Update in `/workspace/internal/provider/resource_cmuser_user.go`
+- [X] T035 [P] [US2] Create update example in `/workspace/examples/resources/bcm_cmuser_user/resource.tf` showing attribute changes
+- [X] T036 [US2] Run all US2 tests - verify they PASS
 
 **Checkpoint**: User Story 2 complete - user attribute updates work independently
 
@@ -126,21 +126,21 @@
 
 ### RED Phase: Tests for User Story 3
 
-- [ ] T037 [US3] Write TestAccCMUserUser_Import acceptance test (import existing user by username) in `/workspace/internal/provider/resource_cmuser_user_test.go`
-- [ ] T038 [P] [US3] Write TestAccCMUserUser_ImportNonExistent test (verify error on non-existent user) in `/workspace/internal/provider/resource_cmuser_user_test.go`
-- [ ] T039 [US3] Run tests to verify they FAIL
+- [X] T037 [US3] Write TestAccCMUserUser_Import acceptance test (import existing user by username) in `/workspace/internal/provider/resource_cmuser_user_test.go`
+- [X] T038 [P] [US3] Write TestAccCMUserUser_ImportNonExistent test (verify error on non-existent user) in `/workspace/internal/provider/resource_cmuser_user_test.go`
+- [X] T039 [US3] Run tests to verify they FAIL
 
 ### GREEN Phase: Implementation for User Story 3
 
-- [ ] T040 [US3] Implement ImportState() method using username as import identifier in `/workspace/internal/provider/resource_cmuser_user.go`
-- [ ] T041 [US3] Add ResourceWithImportState interface to resource struct in `/workspace/internal/provider/resource_cmuser_user.go`
-- [ ] T042 [US3] Handle import state verification in Read() (populate all fields from API) in `/workspace/internal/provider/resource_cmuser_user.go`
-- [ ] T043 [US3] Run TestAccCMUserUser_Import - verify it PASSES
+- [X] T040 [US3] Implement ImportState() method using username as import identifier in `/workspace/internal/provider/resource_cmuser_user.go`
+- [X] T041 [US3] Add ResourceWithImportState interface to resource struct in `/workspace/internal/provider/resource_cmuser_user.go`
+- [X] T042 [US3] Handle import state verification in Read() (populate all fields from API) in `/workspace/internal/provider/resource_cmuser_user.go`
+- [X] T043 [US3] Run TestAccCMUserUser_Import - verify it PASSES
 
 ### REFACTOR Phase: Production Quality for User Story 3
 
-- [ ] T044 [P] [US3] Add import example to `/workspace/examples/resources/bcm_cmuser_user/import.sh`
-- [ ] T045 [US3] Run all US3 tests - verify they PASS
+- [X] T044 [P] [US3] Add import example to `/workspace/examples/resources/bcm_cmuser_user/import.sh`
+- [X] T045 [US3] Run all US3 tests - verify they PASS
 
 **Checkpoint**: User Story 3 complete - import functionality works independently
 
@@ -154,20 +154,20 @@
 
 ### RED Phase: Tests for User Story 4
 
-- [ ] T046 [US4] Write testAccCheckCMUserUserDestroy helper function in `/workspace/internal/provider/resource_cmuser_user_test.go`
-- [ ] T047 [P] [US4] Enhance TestAccCMUserUser_Basic with CheckDestroy verification in `/workspace/internal/provider/resource_cmuser_user_test.go`
-- [ ] T048 [US4] Run tests to verify CheckDestroy works
+- [X] T046 [US4] Write testAccCheckCMUserUserDestroy helper function in `/workspace/internal/provider/resource_cmuser_user_test.go`
+- [X] T047 [P] [US4] Enhance TestAccCMUserUser_Basic with CheckDestroy verification in `/workspace/internal/provider/resource_cmuser_user_test.go`
+- [X] T048 [US4] Run tests to verify CheckDestroy works
 
 ### GREEN Phase: Implementation for User Story 4
 
-- [ ] T049 [US4] Enhance Delete() with idempotent handling (already deleted = success) in `/workspace/internal/provider/resource_cmuser_user.go`
-- [ ] T050 [US4] Add retry logic with exponential backoff for eventual consistency in `/workspace/internal/provider/resource_cmuser_user.go`
-- [ ] T051 [US4] Run TestAccCMUserUser_Basic with CheckDestroy - verify it PASSES
+- [X] T049 [US4] Enhance Delete() with idempotent handling (already deleted = success) in `/workspace/internal/provider/resource_cmuser_user.go`
+- [X] T050 [US4] Add retry logic with exponential backoff for eventual consistency in `/workspace/internal/provider/resource_cmuser_user.go`
+- [X] T051 [US4] Run TestAccCMUserUser_Basic with CheckDestroy - verify it PASSES
 
 ### REFACTOR Phase: Production Quality for User Story 4
 
-- [ ] T052 [US4] Add detailed logging for delete operations in `/workspace/internal/provider/resource_cmuser_user.go`
-- [ ] T053 [US4] Run all US4 tests - verify they PASS
+- [X] T052 [US4] Add detailed logging for delete operations in `/workspace/internal/provider/resource_cmuser_user.go`
+- [X] T053 [US4] Run all US4 tests - verify they PASS
 
 **Checkpoint**: User Story 4 complete - delete functionality works independently
 
@@ -181,20 +181,20 @@
 
 ### RED Phase: Tests for User Story 5
 
-- [ ] T054 [US5] Write TestAccCMUserUser_DriftShell test (external shell modification) in `/workspace/internal/provider/resource_cmuser_user_test.go`
-- [ ] T055 [P] [US5] Write TestAccCMUserUser_DriftNotes test (external notes modification) in `/workspace/internal/provider/resource_cmuser_user_test.go`
-- [ ] T056 [US5] Run tests to verify they FAIL (drift not detected yet)
+- [X] T054 [US5] Write TestAccCMUserUser_DriftShell test (external shell modification) in `/workspace/internal/provider/resource_cmuser_user_test.go`
+- [X] T055 [P] [US5] Write TestAccCMUserUser_DriftNotes test (external notes modification) in `/workspace/internal/provider/resource_cmuser_user_test.go`
+- [X] T056 [US5] Run tests to verify they FAIL (drift not detected yet)
 
 ### GREEN Phase: Implementation for User Story 5
 
-- [ ] T057 [US5] Verify Read() properly maps all BCM API fields to Terraform model in `/workspace/internal/provider/resource_cmuser_user.go`
-- [ ] T058 [US5] Ensure field mapping uses correct camelCase (loginShell, homeDirectory, commonName) in `/workspace/internal/provider/resource_cmuser_user.go`
-- [ ] T059 [US5] Run TestAccCMUserUser_DriftShell - verify it PASSES
+- [X] T057 [US5] Verify Read() properly maps all BCM API fields to Terraform model in `/workspace/internal/provider/resource_cmuser_user.go`
+- [X] T058 [US5] Ensure field mapping uses correct camelCase (loginShell, homeDirectory, commonName) in `/workspace/internal/provider/resource_cmuser_user.go`
+- [X] T059 [US5] Run TestAccCMUserUser_DriftShell - verify it PASSES
 
 ### REFACTOR Phase: Production Quality for User Story 5
 
-- [ ] T060 [US5] Add drift detection documentation to resource description in `/workspace/internal/provider/resource_cmuser_user.go`
-- [ ] T061 [US5] Run all US5 tests - verify they PASS
+- [X] T060 [US5] Add drift detection documentation to resource description in `/workspace/internal/provider/resource_cmuser_user.go`
+- [X] T061 [US5] Run all US5 tests - verify they PASS
 
 **Checkpoint**: User Story 5 complete - drift detection works independently
 
@@ -204,14 +204,14 @@
 
 **Purpose**: Documentation generation and final quality improvements
 
-- [ ] T062 [P] Create full example with all attributes in `/workspace/examples/resources/bcm_cmuser_user/resource.tf`
-- [ ] T063 Run `make fmt` to format all Go code
-- [ ] T064 Run `make lint` to verify code quality
-- [ ] T065 Run `make generate` to generate documentation in `/workspace/docs/resources/cmuser_user.md`
-- [ ] T066 [P] Update `/workspace/CLAUDE.md` with bcm_cmuser_user field mappings for drift detection tests
-- [ ] T067 Run all acceptance tests: `TF_ACC=1 go test -v -timeout 120m ./internal/provider/ -run TestAccCMUserUser`
-- [ ] T068 [P] Validate quickstart.md test scenarios work per `/workspace/specs/068-cmuser-user-resource/quickstart.md`
-- [ ] T069 Update research.md status to VERIFIED per `/workspace/specs/068-cmuser-user-resource/research.md`
+- [X] T062 [P] Create full example with all attributes in `/workspace/examples/resources/bcm_cmuser_user/resource.tf`
+- [X] T063 Run `make fmt` to format all Go code
+- [X] T064 Run `make lint` to verify code quality
+- [X] T065 Run `make generate` to generate documentation in `/workspace/docs/resources/cmuser_user.md`
+- [X] T066 [P] Update `/workspace/CLAUDE.md` with bcm_cmuser_user field mappings for drift detection tests
+- [X] T067 Run all acceptance tests: `TF_ACC=1 go test -v -timeout 120m ./internal/provider/ -run TestAccCMUserUser`
+- [X] T068 [P] Validate quickstart.md test scenarios work per `/workspace/specs/068-cmuser-user-resource/quickstart.md`
+- [X] T069 Update research.md status to VERIFIED per `/workspace/specs/068-cmuser-user-resource/research.md`
 
 ---
 

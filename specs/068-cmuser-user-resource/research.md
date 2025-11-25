@@ -2,7 +2,7 @@
 
 **Feature Branch**: `068-cmuser-user-resource`
 **Date**: 2025-11-26
-**Status**: NEEDS VERIFICATION
+**Status**: VERIFIED
 
 ## Overview
 
@@ -29,13 +29,13 @@ Based on existing data source implementation and BCM API patterns:
 
 ### Verification Status
 
-**NEEDS VERIFICATION**: The following must be tested against live BCM API:
+**VERIFIED** (2025-11-26): All methods tested against live BCM API:
 
-1. [ ] `getUser(username)` - Verify direct lookup works (vs list+filter)
-2. [ ] `addUser(entity, force)` - Verify create method and response format
-3. [ ] `updateUser(entity, force)` - Verify update method signature
-4. [ ] `removeUser(username)` - Verify delete by username works
-5. [ ] `validateUser(entity, isCreate)` - Verify validation method exists
+1. [X] `getUser(username)` - Verified: Direct lookup works, returns single user entity
+2. [X] `addUser(entity, force)` - Verified: Returns `{"success": true, "updated_entity": {...}}`
+3. [X] `updateUser(entity, force)` - Verified: Requires UUID in entity for updates
+4. [X] `removeUser(uuid)` - **CRITICAL**: Delete requires UUID (NOT username)
+5. [X] `validateUser(entity, isCreate)` - Verified: Validation method exists and works
 
 ### Research Notes
 
@@ -116,12 +116,18 @@ Based on BCM patterns (CMPartSoftwareImage, CMDeviceCategory):
 
 ### Verification Status
 
-**NEEDS VERIFICATION**:
+**VERIFIED** (2025-11-26):
 
-1. [ ] Confirm minimum required fields for addUser
-2. [ ] Verify UUID handling (empty for create, populated for update)
-3. [ ] Confirm ID/groupID auto-assignment when empty
-4. [ ] Test password field requirement on create
+1. [X] Minimum required fields: `name`, `password`, `ID` (UID), `groupID` (GID)
+2. [X] UUID handling: Empty for create, BCM returns UUID in `updated_entity.uuid`
+3. [X] ID/groupID: **NOT auto-assigned** - Must provide explicit values
+4. [X] Password field: Required on create
+
+**CRITICAL FINDINGS**:
+- BCM requires explicit UID (ID field) - does NOT auto-assign
+- BCM requires GID to reference existing group (e.g., 1000 for cmsupport group)
+- Implementation auto-assigns UID from 60000+ range (queries existing users)
+- Implementation defaults GID to 1000 (cmsupport group)
 
 ---
 
@@ -147,11 +153,13 @@ Based on BCM API structure, groups may be handled in one of these ways:
 
 ### Verification Status
 
-**NEEDS VERIFICATION**:
+**VERIFIED** (2025-11-26): Groups are NOT part of user entity
 
-1. [ ] Check if `groups` field exists in user entity
-2. [ ] Test creating user with group memberships
-3. [ ] Verify group reference format (name vs ID)
+1. [X] `groups` field does NOT exist in user entity
+2. [X] Primary group only via `groupID` field
+3. [X] Group reference format: GID number as string (e.g., "1000")
+
+**Conclusion**: Secondary groups are POST-MVP, require separate API calls
 
 ### Research Notes
 
@@ -179,11 +187,15 @@ Based on standard Unix user management patterns:
 
 ### Verification Status
 
-**NEEDS VERIFICATION**:
+**VERIFIED** (2025-11-26): BCM does NOT auto-assign UID/GID
 
-1. [ ] Create user without UID/GID
-2. [ ] Verify auto-assigned values are in valid range
-3. [ ] Confirm primary group creation behavior
+1. [X] Creating user without UID/GID fails with validation error
+2. [X] Provider implementation auto-assigns UID from 60000+ range
+3. [X] Provider defaults GID to 1000 (must reference existing group)
+
+**Implementation Details**:
+- `getNextAvailableUID()` queries all users, finds max UID, returns max+1 (starting from 60000)
+- Default GID 1000 references the cmsupport group which always exists
 
 ---
 
