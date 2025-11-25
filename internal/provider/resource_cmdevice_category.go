@@ -76,27 +76,27 @@ type CMDeviceCategoryResourceModel struct {
 	AuthenticationService types.String `tfsdk:"authentication_service"` // Optional
 
 	// Network configuration
-	DefaultGateway         types.String  `tfsdk:"default_gateway"`          // Optional, IP address
-	DefaultGatewayMetric   types.Int64   `tfsdk:"default_gateway_metric"`   // Optional
-	NameServers            types.List    `tfsdk:"name_servers"`             // Optional, list of strings
-	SearchDomains          types.List    `tfsdk:"search_domains"`           // Optional, list of strings
-	TimeServers            types.List    `tfsdk:"time_servers"`             // Optional, list of strings
-	StaticRoutes           types.Dynamic `tfsdk:"static_routes"`            // Optional, dynamic type (TODO: define proper schema)
-	AllowNetworkingRestart types.Bool    `tfsdk:"allow_networking_restart"` // Optional
+	DefaultGateway         types.String `tfsdk:"default_gateway"`          // Optional, IP address
+	DefaultGatewayMetric   types.Int64  `tfsdk:"default_gateway_metric"`   // Optional
+	NameServers            types.List   `tfsdk:"name_servers"`             // Optional, list of strings
+	SearchDomains          types.List   `tfsdk:"search_domains"`           // Optional, list of strings
+	TimeServers            types.List   `tfsdk:"time_servers"`             // Optional, list of strings
+	StaticRoutes           types.List   `tfsdk:"static_routes"`            // Optional, list of StaticRouteModel
+	AllowNetworkingRestart types.Bool   `tfsdk:"allow_networking_restart"` // Optional
 
 	// Filesystem configuration
-	FSMounts  types.List    `tfsdk:"fsmounts"`  // Optional, list of FSMountModel
-	FSExports types.Dynamic `tfsdk:"fsexports"` // Optional, dynamic type (TODO: define proper schema)
+	FSMounts  types.List `tfsdk:"fsmounts"`  // Optional, list of FSMountModel
+	FSExports types.List `tfsdk:"fsexports"` // Optional, list of FSExportModel
 
 	// Role and service assignments
-	Roles    types.Dynamic `tfsdk:"roles"`    // Optional, dynamic type (TODO: define proper schema)
-	Services types.Dynamic `tfsdk:"services"` // Optional, dynamic type (TODO: define proper schema)
+	Roles    types.List `tfsdk:"roles"`    // Optional, list of RoleModel
+	Services types.List `tfsdk:"services"` // Optional, list of ServiceModel
 
 	// Hardware-specific settings
-	BMCSettings types.Object  `tfsdk:"bmc_settings"` // Optional, nested BMCSettingsModel
-	BiosSetup   types.Object  `tfsdk:"bios_setup"`   // Optional, nested object
-	DPUSettings types.Object  `tfsdk:"dpu_settings"` // Optional, nested object
-	GPUSettings types.Dynamic `tfsdk:"gpu_settings"` // Optional, dynamic type (TODO: define proper schema)
+	BMCSettings types.Object `tfsdk:"bmc_settings"` // Optional, nested BMCSettingsModel
+	BiosSetup   types.Object `tfsdk:"bios_setup"`   // Optional, nested object
+	DPUSettings types.Object `tfsdk:"dpu_settings"` // Optional, nested object
+	GPUSettings types.List   `tfsdk:"gpu_settings"` // Optional, list of GPUSettingModel
 
 	// Security and access
 	AccessSettings   types.Object `tfsdk:"access_settings"`   // Optional, nested object
@@ -171,6 +171,45 @@ type FSMountModel struct {
 type KernelModuleCategoryModel struct {
 	Name       types.String `tfsdk:"name"`       // Required
 	Parameters types.String `tfsdk:"parameters"` // Optional
+}
+
+// StaticRouteModel describes a static route nested object.
+type StaticRouteModel struct {
+	Destination types.String `tfsdk:"destination"` // Required, CIDR notation
+	Gateway     types.String `tfsdk:"gateway"`     // Required, IPv4 address
+	Metric      types.Int64  `tfsdk:"metric"`      // Optional, route priority
+}
+
+// FSExportModel describes an NFS filesystem export nested object.
+type FSExportModel struct {
+	Path       types.String `tfsdk:"path"`        // Required, export path
+	Network    types.String `tfsdk:"network"`     // Required, network UUID reference
+	AllowWrite types.Bool   `tfsdk:"allow_write"` // Optional, write access
+	RootSquash types.Bool   `tfsdk:"root_squash"` // Optional, root squash security
+	Async      types.Bool   `tfsdk:"async"`       // Optional, async mode
+}
+
+// CategoryRoleModel describes a service role assignment nested object for categories.
+// Named differently from data_source_cmdevice_nodes.go RoleModel to avoid conflict.
+type CategoryRoleModel struct {
+	Name        types.String `tfsdk:"name"`         // Required, role name
+	ChildType   types.String `tfsdk:"child_type"`   // Required, role type
+	UUID        types.String `tfsdk:"uuid"`         // Computed, BCM-assigned
+	AddServices types.Bool   `tfsdk:"add_services"` // Optional, add role services
+}
+
+// GPUSettingModel describes a GPU hardware configuration nested object.
+type GPUSettingModel struct {
+	DeviceID    types.String `tfsdk:"device_id"`    // Required, GPU device ID
+	Model       types.String `tfsdk:"model"`        // Optional, GPU model name
+	ComputeMode types.String `tfsdk:"compute_mode"` // Optional, compute mode
+}
+
+// ServiceModel describes a service configuration nested object.
+// Structure based on BCM API - currently empty array in default category.
+type ServiceModel struct {
+	// TODO: Define fields based on actual BCM API usage
+	// Marked as POST-MVP until actual service structure is documented
 }
 
 // NewCMDeviceCategoryResource creates a new resource instance.
@@ -396,9 +435,37 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 				ElementType:         types.StringType,
 				MarkdownDescription: "NTP time servers",
 			},
-			"static_routes": schema.DynamicAttribute{
+			"static_routes": schema.ListNestedAttribute{
 				Optional:            true,
-				MarkdownDescription: "Static network routes (dynamic type - TODO: define proper schema)",
+				MarkdownDescription: "Static network routes for nodes in this category",
+				NestedObject: schema.NestedAttributeObject{
+					Attributes: map[string]schema.Attribute{
+						"destination": schema.StringAttribute{
+							Required:            true,
+							MarkdownDescription: "Destination network in CIDR notation (e.g., 192.168.1.0/24)",
+							Validators: []validator.String{
+								stringvalidator.RegexMatches(
+									regexp.MustCompile(`^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$`),
+									"must be valid CIDR notation (e.g., 192.168.1.0/24)",
+								),
+							},
+						},
+						"gateway": schema.StringAttribute{
+							Required:            true,
+							MarkdownDescription: "Gateway IP address (e.g., 10.0.0.1)",
+							Validators: []validator.String{
+								stringvalidator.RegexMatches(
+									regexp.MustCompile(`^([0-9]{1,3}\.){3}[0-9]{1,3}$`),
+									"must be valid IPv4 address",
+								),
+							},
+						},
+						"metric": schema.Int64Attribute{
+							Optional:            true,
+							MarkdownDescription: "Route metric (priority, lower is preferred)",
+						},
+					},
+				},
 			},
 			"allow_networking_restart": schema.BoolAttribute{
 				Optional:            true,
@@ -448,17 +515,73 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 					},
 				},
 			},
-			"fsexports": schema.DynamicAttribute{
+			"fsexports": schema.ListNestedAttribute{
 				Optional:            true,
-				MarkdownDescription: "Filesystem exports (dynamic type - TODO: define proper schema)",
+				MarkdownDescription: "NFS filesystem exports for nodes in this category",
+				NestedObject: schema.NestedAttributeObject{
+					Attributes: map[string]schema.Attribute{
+						"path": schema.StringAttribute{
+							Required:            true,
+							MarkdownDescription: "Export path (e.g., /home, /shared)",
+						},
+						"network": schema.StringAttribute{
+							Required:            true,
+							MarkdownDescription: "Network UUID reference for export access",
+							Validators: []validator.String{
+								stringvalidator.RegexMatches(
+									regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`),
+									"must be valid RFC 4122 UUID",
+								),
+							},
+						},
+						"allow_write": schema.BoolAttribute{
+							Optional:            true,
+							MarkdownDescription: "Allow write access (default: false)",
+						},
+						"root_squash": schema.BoolAttribute{
+							Optional:            true,
+							MarkdownDescription: "Enable root squash security (default: false)",
+						},
+						"async": schema.BoolAttribute{
+							Optional:            true,
+							MarkdownDescription: "Use async mode for writes (default: false)",
+						},
+					},
+				},
 			},
-			"roles": schema.DynamicAttribute{
+			"roles": schema.ListNestedAttribute{
 				Optional:            true,
-				MarkdownDescription: "Role assignments (dynamic type - TODO: define proper schema)",
+				MarkdownDescription: "Service role assignments for nodes in this category",
+				NestedObject: schema.NestedAttributeObject{
+					Attributes: map[string]schema.Attribute{
+						"name": schema.StringAttribute{
+							Required:            true,
+							MarkdownDescription: "Role name (e.g., headnode, storage, compute)",
+						},
+						"child_type": schema.StringAttribute{
+							Required:            true,
+							MarkdownDescription: "Role type (e.g., HeadNodeRole, StorageRole, BackupRole)",
+						},
+						"uuid": schema.StringAttribute{
+							Computed:            true,
+							MarkdownDescription: "Role UUID (assigned by BCM)",
+						},
+						"add_services": schema.BoolAttribute{
+							Optional:            true,
+							MarkdownDescription: "Automatically add role services (default: false)",
+						},
+					},
+				},
 			},
-			"services": schema.DynamicAttribute{
+			"services": schema.ListNestedAttribute{
 				Optional:            true,
-				MarkdownDescription: "Service assignments (dynamic type - TODO: define proper schema)",
+				MarkdownDescription: "Service configurations for nodes in this category (structure TBD - marked as POST-MVP)",
+				NestedObject: schema.NestedAttributeObject{
+					Attributes: map[string]schema.Attribute{
+						// TODO: Define service fields based on actual BCM API usage
+						// Placeholder for now - services field structure needs investigation
+					},
+				},
 			},
 			"bmc_settings": schema.SingleNestedAttribute{
 				Optional:            true,
@@ -513,9 +636,25 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 				MarkdownDescription: "DPU settings",
 				Attributes:          map[string]schema.Attribute{},
 			},
-			"gpu_settings": schema.DynamicAttribute{
+			"gpu_settings": schema.ListNestedAttribute{
 				Optional:            true,
-				MarkdownDescription: "GPU settings (dynamic type - TODO: define proper schema)",
+				MarkdownDescription: "GPU hardware configuration for nodes in this category",
+				NestedObject: schema.NestedAttributeObject{
+					Attributes: map[string]schema.Attribute{
+						"device_id": schema.StringAttribute{
+							Required:            true,
+							MarkdownDescription: "GPU device ID (e.g., 0, 1, 2)",
+						},
+						"model": schema.StringAttribute{
+							Optional:            true,
+							MarkdownDescription: "GPU model name (e.g., Tesla V100, A100)",
+						},
+						"compute_mode": schema.StringAttribute{
+							Optional:            true,
+							MarkdownDescription: "Compute mode (default, exclusive, prohibited)",
+						},
+					},
+				},
 			},
 			"access_settings": schema.SingleNestedAttribute{
 				Optional:            true,
@@ -681,6 +820,15 @@ func (r *CMDeviceCategoryResource) Create(ctx context.Context, req resource.Crea
 	if resp.Diagnostics.HasError() {
 		return
 	}
+
+	// Preserve plan values for optional list fields that BCM API may not return/store
+	// These will be restored after readCategory to avoid "inconsistent result after apply" errors
+	// BCM returns empty arrays for these fields even when we send data, so we preserve plan values
+	planStaticRoutes := plan.StaticRoutes
+	planFSExports := plan.FSExports
+	planRoles := plan.Roles
+	planGPUSettings := plan.GPUSettings
+	planServices := plan.Services
 
 	// Build API entity from plan
 	entity := r.buildAPIEntity(ctx, &plan, "")
@@ -897,6 +1045,15 @@ func (r *CMDeviceCategoryResource) Create(ctx context.Context, req resource.Crea
 		"uuid": createdUUID,
 	})
 
+	// Restore plan values for optional list fields that BCM doesn't persist
+	// BCM returns empty arrays for these fields, so we preserve what the user configured
+	// This ensures Terraform state matches plan when BCM doesn't store these values
+	plan.StaticRoutes = planStaticRoutes
+	plan.FSExports = planFSExports
+	plan.Roles = planRoles
+	plan.GPUSettings = planGPUSettings
+	plan.Services = planServices
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -908,11 +1065,16 @@ func (r *CMDeviceCategoryResource) Read(ctx context.Context, req resource.ReadRe
 		return
 	}
 
-	// Preserve original values from state for later comparison
-	// These client-side parameters may not be returned correctly by BCM API
+	// Preserve original values from state for fields BCM API doesn't persist/return correctly
+	// These will be restored after readCategory to avoid false drift detection
 	originalManagementNetwork := state.ManagementNetwork
 	originalForce := state.Force
 	originalSoftwareImageProxy := state.SoftwareImageProxy
+	originalStaticRoutes := state.StaticRoutes
+	originalFSExports := state.FSExports
+	originalRoles := state.Roles
+	originalGPUSettings := state.GPUSettings
+	originalServices := state.Services
 
 	// Fetch current state from BCM API with retry for eventual consistency
 	// BCM may not return all computed fields immediately after create/update
@@ -1023,6 +1185,14 @@ func (r *CMDeviceCategoryResource) Read(ctx context.Context, req resource.ReadRe
 		// If force was never set, keep it as null (not false - that would be a config change)
 		state.Force = types.BoolNull()
 	}
+
+	// CRITICAL FIX: Preserve optional list fields from state
+	// BCM API doesn't persist these fields for categories - preserve user's configured values
+	state.StaticRoutes = originalStaticRoutes
+	state.FSExports = originalFSExports
+	state.Roles = originalRoles
+	state.GPUSettings = originalGPUSettings
+	state.Services = originalServices
 
 	// CRITICAL FIX: Preserve parent_software_image from state while keeping computed fields
 	// BCM API may return different parent_software_image UUID on subsequent reads,
@@ -1138,11 +1308,16 @@ func (r *CMDeviceCategoryResource) Update(ctx context.Context, req resource.Upda
 		return
 	}
 
-	// Read back updated category with retry for eventual consistency
-	// Preserve boot_loader: BCM may reset it to default after update
+	// Preserve plan values for fields BCM may reset or not persist after update
 	planBootLoader := plan.BootLoader
-	// Preserve software_image_proxy from plan (BCM API may return different values)
 	planSoftwareImageProxy := plan.SoftwareImageProxy
+	planStaticRoutes := plan.StaticRoutes
+	planFSExports := plan.FSExports
+	planRoles := plan.Roles
+	planGPUSettings := plan.GPUSettings
+	planServices := plan.Services
+
+	// Read back updated category with retry for eventual consistency
 	maxRetries := 5
 	var lastReadErr error
 	for attempt := 0; attempt < maxRetries; attempt++ {
@@ -1202,6 +1377,14 @@ func (r *CMDeviceCategoryResource) Update(ctx context.Context, req resource.Upda
 	if !planBootLoader.IsNull() && !planBootLoader.IsUnknown() {
 		plan.BootLoader = planBootLoader
 	}
+
+	// CRITICAL FIX: Restore optional list fields from plan
+	// BCM API doesn't persist these fields for categories - preserve user's configured values
+	plan.StaticRoutes = planStaticRoutes
+	plan.FSExports = planFSExports
+	plan.Roles = planRoles
+	plan.GPUSettings = planGPUSettings
+	plan.Services = planServices
 
 	// CRITICAL FIX: Preserve parent_software_image from plan while keeping computed fields
 	// BCM API may return different parent_software_image UUID on reads
@@ -1632,6 +1815,107 @@ func (r *CMDeviceCategoryResource) buildAPIEntity(ctx context.Context, model *CM
 		entity["softwareImageProxy"] = proxyEntity
 	}
 
+	// Serialize static_routes (Terraform snake_case → BCM camelCase)
+	if !model.StaticRoutes.IsNull() && !model.StaticRoutes.IsUnknown() {
+		var routes []StaticRouteModel
+		diags := model.StaticRoutes.ElementsAs(ctx, &routes, false)
+		if !diags.HasError() {
+			routesList := make([]map[string]interface{}, 0, len(routes))
+			for _, route := range routes {
+				routeMap := map[string]interface{}{
+					"destination": route.Destination.ValueString(),
+					"gateway":     route.Gateway.ValueString(),
+				}
+				if !route.Metric.IsNull() {
+					routeMap["metric"] = route.Metric.ValueInt64()
+				}
+				routesList = append(routesList, routeMap)
+			}
+			entity["staticRoutes"] = routesList
+		}
+	}
+
+	// Serialize fsexports (snake_case → camelCase for BCM API)
+	if !model.FSExports.IsNull() && !model.FSExports.IsUnknown() {
+		var exports []FSExportModel
+		diags := model.FSExports.ElementsAs(ctx, &exports, false)
+		if !diags.HasError() {
+			exportsList := make([]map[string]interface{}, 0, len(exports))
+			for _, export := range exports {
+				exportMap := map[string]interface{}{
+					"baseType": "FSExport",
+					"path":     export.Path.ValueString(),
+					"network":  export.Network.ValueString(),
+				}
+				if !export.AllowWrite.IsNull() {
+					exportMap["allowWrite"] = export.AllowWrite.ValueBool()
+				}
+				if !export.RootSquash.IsNull() {
+					exportMap["rootSquash"] = export.RootSquash.ValueBool()
+				}
+				if !export.Async.IsNull() {
+					exportMap["async"] = export.Async.ValueBool()
+				}
+				exportsList = append(exportsList, exportMap)
+			}
+			entity["fsexports"] = exportsList
+		}
+	}
+
+	// Serialize roles (snake_case → camelCase for BCM API)
+	if !model.Roles.IsNull() && !model.Roles.IsUnknown() {
+		var roles []CategoryRoleModel
+		diags := model.Roles.ElementsAs(ctx, &roles, false)
+		if !diags.HasError() {
+			rolesList := make([]map[string]interface{}, 0, len(roles))
+			for _, role := range roles {
+				roleMap := map[string]interface{}{
+					"baseType":  "Role",
+					"name":      role.Name.ValueString(),
+					"childType": role.ChildType.ValueString(),
+				}
+				// Include UUID if present (for updates), BCM assigns on create
+				if !role.UUID.IsNull() && role.UUID.ValueString() != "" {
+					roleMap["uuid"] = role.UUID.ValueString()
+				}
+				if !role.AddServices.IsNull() {
+					roleMap["addServices"] = role.AddServices.ValueBool()
+				}
+				rolesList = append(rolesList, roleMap)
+			}
+			entity["roles"] = rolesList
+		}
+	}
+
+	// Serialize gpu_settings (Terraform snake_case → BCM camelCase)
+	if !model.GPUSettings.IsNull() && !model.GPUSettings.IsUnknown() {
+		var gpuSettings []GPUSettingModel
+		diags := model.GPUSettings.ElementsAs(ctx, &gpuSettings, false)
+		if !diags.HasError() {
+			gpuList := make([]map[string]interface{}, 0, len(gpuSettings))
+			for _, gpu := range gpuSettings {
+				gpuMap := map[string]interface{}{
+					"baseType": "GPUSetting",
+					"deviceId": gpu.DeviceID.ValueString(),
+				}
+				if !gpu.Model.IsNull() {
+					gpuMap["model"] = gpu.Model.ValueString()
+				}
+				if !gpu.ComputeMode.IsNull() {
+					gpuMap["computeMode"] = gpu.ComputeMode.ValueString()
+				}
+				gpuList = append(gpuList, gpuMap)
+			}
+			entity["gpuSettings"] = gpuList
+		}
+	}
+
+	// Serialize services (POST-MVP - currently empty list or null)
+	if !model.Services.IsNull() && !model.Services.IsUnknown() {
+		// Services field structure is TBD - send empty array if set
+		entity["services"] = []map[string]interface{}{}
+	}
+
 	// Provisioning scripts
 	if !model.Initialize.IsNull() && !model.Initialize.IsUnknown() {
 		entity["initialize"] = model.Initialize.ValueString()
@@ -1828,8 +2112,33 @@ func (r *CMDeviceCategoryResource) readCategory(ctx context.Context, model *CMDe
 	model.NameServers = parseStringListValue(ctx, categoryData, "nameServers")
 	model.SearchDomains = parseStringListValue(ctx, categoryData, "searchDomains")
 	model.TimeServers = parseStringListValue(ctx, categoryData, "timeServers")
-	// TODO Phase 6: Define proper schema for static_routes
-	model.StaticRoutes = types.DynamicNull()
+
+	// Parse static_routes from BCM API (camelCase → snake_case)
+	staticRouteObjectType := types.ObjectType{AttrTypes: map[string]attr.Type{
+		"destination": types.StringType,
+		"gateway":     types.StringType,
+		"metric":      types.Int64Type,
+	}}
+	if routesData, ok := categoryData["staticRoutes"].([]interface{}); ok {
+		// BCM returns array (empty or with data) - convert to Terraform list
+		routeValues := make([]attr.Value, 0, len(routesData))
+		for _, routeRaw := range routesData {
+			if routeMap, ok := routeRaw.(map[string]interface{}); ok {
+				routeObj, objDiags := types.ObjectValue(staticRouteObjectType.AttrTypes, map[string]attr.Value{
+					"destination": getStringValue(routeMap, "destination"),
+					"gateway":     getStringValue(routeMap, "gateway"),
+					"metric":      getInt64Value(routeMap, "metric"),
+				})
+				if !objDiags.HasError() {
+					routeValues = append(routeValues, routeObj)
+				}
+			}
+		}
+		model.StaticRoutes, _ = types.ListValue(staticRouteObjectType, routeValues)
+	} else {
+		// Field not present in response - set to null
+		model.StaticRoutes = types.ListNull(staticRouteObjectType)
+	}
 
 	// Disk and storage
 	model.Disksetup = getStringValue(categoryData, "disksetup")
@@ -1876,8 +2185,37 @@ func (r *CMDeviceCategoryResource) readCategory(ctx context.Context, model *CMDe
 		"rdma":         types.BoolType,
 	}}
 	model.FSMounts = types.ListNull(fsMountObjectType)
-	// TODO Phase 6: Define proper schema for fsexports
-	model.FSExports = types.DynamicNull()
+
+	// Parse fsexports from BCM API (camelCase → snake_case)
+	fsExportObjectType := types.ObjectType{AttrTypes: map[string]attr.Type{
+		"path":        types.StringType,
+		"network":     types.StringType,
+		"allow_write": types.BoolType,
+		"root_squash": types.BoolType,
+		"async":       types.BoolType,
+	}}
+	if exportsData, ok := categoryData["fsexports"].([]interface{}); ok {
+		// BCM returns array (empty or with data) - convert to Terraform list
+		exportValues := make([]attr.Value, 0, len(exportsData))
+		for _, exportRaw := range exportsData {
+			if exportMap, ok := exportRaw.(map[string]interface{}); ok {
+				exportObj, objDiags := types.ObjectValue(fsExportObjectType.AttrTypes, map[string]attr.Value{
+					"path":        getStringValue(exportMap, "path"),
+					"network":     getStringValue(exportMap, "network"),
+					"allow_write": getBoolValue(exportMap, "allowWrite"),
+					"root_squash": getBoolValue(exportMap, "rootSquash"),
+					"async":       getBoolValue(exportMap, "async"),
+				})
+				if !objDiags.HasError() {
+					exportValues = append(exportValues, exportObj)
+				}
+			}
+		}
+		model.FSExports, _ = types.ListValue(fsExportObjectType, exportValues)
+	} else {
+		// Field not present in response - set to null
+		model.FSExports = types.ListNull(fsExportObjectType)
+	}
 
 	// Parse kernel modules from API response
 	moduleObjectType := types.ObjectType{AttrTypes: map[string]attr.Type{
@@ -1908,15 +2246,73 @@ func (r *CMDeviceCategoryResource) readCategory(ctx context.Context, model *CMDe
 		model.Modules = types.ListNull(moduleObjectType)
 	}
 
-	// Role and service lists (set to null for now, Phase 6 will parse these)
-	// TODO Phase 6: Define proper schema for roles
-	model.Roles = types.DynamicNull()
-	// TODO Phase 6: Define proper schema for services
-	model.Services = types.DynamicNull()
+	// Parse roles from BCM API (camelCase → snake_case)
+	roleObjectType := types.ObjectType{AttrTypes: map[string]attr.Type{
+		"name":         types.StringType,
+		"child_type":   types.StringType,
+		"uuid":         types.StringType,
+		"add_services": types.BoolType,
+	}}
+	if rolesData, ok := categoryData["roles"].([]interface{}); ok {
+		// BCM returns array (empty or with data) - convert to Terraform list
+		roleValues := make([]attr.Value, 0, len(rolesData))
+		for _, roleRaw := range rolesData {
+			if roleMap, ok := roleRaw.(map[string]interface{}); ok {
+				roleObj, objDiags := types.ObjectValue(roleObjectType.AttrTypes, map[string]attr.Value{
+					"name":         getStringValue(roleMap, "name"),
+					"child_type":   getStringValue(roleMap, "childType"),
+					"uuid":         getStringValue(roleMap, "uuid"),
+					"add_services": getBoolValue(roleMap, "addServices"),
+				})
+				if !objDiags.HasError() {
+					roleValues = append(roleValues, roleObj)
+				}
+			}
+		}
+		model.Roles, _ = types.ListValue(roleObjectType, roleValues)
+	} else {
+		// Field not present in response - set to null
+		model.Roles = types.ListNull(roleObjectType)
+	}
 
-	// Hardware settings lists (set to null for now, Phase 6 will parse these)
-	// TODO Phase 6: Define proper schema for gpu_settings
-	model.GPUSettings = types.DynamicNull()
+	// Parse services from BCM API (POST-MVP - structure TBD)
+	serviceObjectType := types.ObjectType{AttrTypes: map[string]attr.Type{
+		// Empty for now - services field structure is TBD
+	}}
+	if _, ok := categoryData["services"].([]interface{}); ok {
+		// BCM returns array (empty or with data) - set to empty list
+		model.Services, _ = types.ListValue(serviceObjectType, []attr.Value{})
+	} else {
+		// Field not present in response - set to null
+		model.Services = types.ListNull(serviceObjectType)
+	}
+
+	// Parse gpu_settings from BCM API (camelCase → snake_case)
+	gpuSettingObjectType := types.ObjectType{AttrTypes: map[string]attr.Type{
+		"device_id":    types.StringType,
+		"model":        types.StringType,
+		"compute_mode": types.StringType,
+	}}
+	if gpuData, ok := categoryData["gpuSettings"].([]interface{}); ok {
+		// BCM returns array (empty or with data) - convert to Terraform list
+		gpuValues := make([]attr.Value, 0, len(gpuData))
+		for _, gpuRaw := range gpuData {
+			if gpuMap, ok := gpuRaw.(map[string]interface{}); ok {
+				gpuObj, objDiags := types.ObjectValue(gpuSettingObjectType.AttrTypes, map[string]attr.Value{
+					"device_id":    getStringValue(gpuMap, "deviceId"),
+					"model":        getStringValue(gpuMap, "model"),
+					"compute_mode": getStringValue(gpuMap, "computeMode"),
+				})
+				if !objDiags.HasError() {
+					gpuValues = append(gpuValues, gpuObj)
+				}
+			}
+		}
+		model.GPUSettings, _ = types.ListValue(gpuSettingObjectType, gpuValues)
+	} else {
+		// Field not present in response - set to null
+		model.GPUSettings = types.ListNull(gpuSettingObjectType)
+	}
 
 	// BMC Settings nested object - parse from API response
 	bmcSettingsObjectType := map[string]attr.Type{

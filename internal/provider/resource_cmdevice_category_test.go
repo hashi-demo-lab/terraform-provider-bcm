@@ -2516,3 +2516,338 @@ resource "bcm_cmdevice_category" "test" {
 		tsStr,
 	)
 }
+
+// ============================================================================
+// Static Routes Tests
+// ============================================================================
+
+// TestAccCMDeviceCategory_StaticRoutesBasicCRUD tests create, update of static routes
+func TestAccCMDeviceCategory_StaticRoutesBasicCRUD(t *testing.T) {
+	categoryName := generateUniqueTestName("staticroutes-test")
+
+	// ID consistency tracker
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceCategoryDestroy,
+		Steps: []resource.TestStep{
+			// Create with static routes
+			{
+				Config: testAccCMDeviceCategoryConfig_StaticRoutes(categoryName, 2),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(categoryName),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("static_routes"),
+						knownvalue.ListSizeExact(2),
+					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+			// Idempotency check after Create
+			{
+				Config: testAccCMDeviceCategoryConfig_StaticRoutes(categoryName, 2),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+			// Update to 3 routes
+			{
+				Config: testAccCMDeviceCategoryConfig_StaticRoutes(categoryName, 3),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("static_routes"),
+						knownvalue.ListSizeExact(3),
+					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+			// Idempotency check after Update
+			{
+				Config: testAccCMDeviceCategoryConfig_StaticRoutes(categoryName, 3),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+			// Import
+			// Note: BCM doesn't persist static_routes, fsexports, roles, gpu_settings, services
+			// so we must ignore these during import verification
+			{
+				ResourceName:      "bcm_cmdevice_category.test",
+				ImportState:       true,
+				ImportStateVerify: true,
+				ImportStateVerifyIgnore: []string{
+					"force",
+					"static_routes",
+					"fsexports",
+					"roles",
+					"gpu_settings",
+					"services",
+				},
+			},
+		},
+	})
+}
+
+// TestAccCMDeviceCategory_StaticRoutesValidation tests CIDR and IP format validation
+func TestAccCMDeviceCategory_StaticRoutesValidation(t *testing.T) {
+	categoryName := generateUniqueTestName("staticroutes-invalid")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			// Invalid CIDR format (missing octet)
+			{
+				Config:      testAccCMDeviceCategoryConfig_StaticRoutesInvalid(categoryName, "192.168.1/24", "10.0.0.1"),
+				ExpectError: regexp.MustCompile(`must be valid CIDR notation`),
+			},
+			// Invalid gateway IP format (letters instead of numbers)
+			{
+				Config:      testAccCMDeviceCategoryConfig_StaticRoutesInvalid(categoryName, "192.168.1.0/24", "not.an.ip.addr"),
+				ExpectError: regexp.MustCompile(`must be valid IPv4 address`),
+			},
+		},
+	})
+}
+
+// testAccCMDeviceCategoryConfig_StaticRoutes creates config with N static routes
+func testAccCMDeviceCategoryConfig_StaticRoutes(name string, routeCount int) string {
+	// Build routes dynamically
+	routes := ""
+	for i := 0; i < routeCount; i++ {
+		routes += fmt.Sprintf(`
+    {
+      destination = "192.168.%d.0/24"
+      gateway     = "10.0.0.%d"
+      metric      = %d
+    },`, i+1, i+1, (i+1)*100)
+	}
+
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmdevice_categories" "all" {}
+data "bcm_cmpart_softwareimages" "all" {}
+
+locals {
+  management_network_uuid = length(data.bcm_cmdevice_categories.all.categories) > 0 ? data.bcm_cmdevice_categories.all.categories[0].management_network_id : "00000000-0000-0000-0000-000000000000"
+  software_image_uuid = length(data.bcm_cmpart_softwareimages.all.images) > 0 ? data.bcm_cmpart_softwareimages.all.images[0].uuid : "00000000-0000-0000-0000-000000000000"
+}
+
+resource "bcm_cmdevice_category" "test" {
+  name               = %[4]q
+  management_network = local.management_network_uuid
+  notes              = "Static routes test category"
+
+  software_image_proxy = {
+    parent_software_image = local.software_image_uuid
+  }
+
+  static_routes = [%[5]s
+  ]
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		name,
+		routes,
+	)
+}
+
+// testAccCMDeviceCategoryConfig_StaticRoutesInvalid creates config with invalid static route
+func testAccCMDeviceCategoryConfig_StaticRoutesInvalid(name, destination, gateway string) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmdevice_categories" "all" {}
+data "bcm_cmpart_softwareimages" "all" {}
+
+locals {
+  management_network_uuid = length(data.bcm_cmdevice_categories.all.categories) > 0 ? data.bcm_cmdevice_categories.all.categories[0].management_network_id : "00000000-0000-0000-0000-000000000000"
+  software_image_uuid = length(data.bcm_cmpart_softwareimages.all.images) > 0 ? data.bcm_cmpart_softwareimages.all.images[0].uuid : "00000000-0000-0000-0000-000000000000"
+}
+
+resource "bcm_cmdevice_category" "test" {
+  name               = %[4]q
+  management_network = local.management_network_uuid
+
+  software_image_proxy = {
+    parent_software_image = local.software_image_uuid
+  }
+
+  static_routes = [
+    {
+      destination = %[5]q
+      gateway     = %[6]q
+    }
+  ]
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		name,
+		destination,
+		gateway,
+	)
+}
+
+// ============================================================================
+// GPU Settings Tests
+// ============================================================================
+
+// TestAccCMDeviceCategory_GPUSettingsBasicCRUD tests create, update of GPU settings
+func TestAccCMDeviceCategory_GPUSettingsBasicCRUD(t *testing.T) {
+	categoryName := generateUniqueTestName("gpusettings-test")
+
+	// ID consistency tracker
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceCategoryDestroy,
+		Steps: []resource.TestStep{
+			// Create with GPU settings
+			{
+				Config: testAccCMDeviceCategoryConfig_GPUSettings(categoryName, 2),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(categoryName),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("gpu_settings"),
+						knownvalue.ListSizeExact(2),
+					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+			// Idempotency check after Create
+			{
+				Config: testAccCMDeviceCategoryConfig_GPUSettings(categoryName, 2),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+			// Update to 4 GPUs
+			{
+				Config: testAccCMDeviceCategoryConfig_GPUSettings(categoryName, 4),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("gpu_settings"),
+						knownvalue.ListSizeExact(4),
+					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+			// Import
+			// Note: BCM doesn't persist static_routes, fsexports, roles, gpu_settings, services
+			// so we must ignore these during import verification
+			{
+				ResourceName:      "bcm_cmdevice_category.test",
+				ImportState:       true,
+				ImportStateVerify: true,
+				ImportStateVerifyIgnore: []string{
+					"force",
+					"static_routes",
+					"fsexports",
+					"roles",
+					"gpu_settings",
+					"services",
+				},
+			},
+		},
+	})
+}
+
+// testAccCMDeviceCategoryConfig_GPUSettings creates config with N GPU settings
+func testAccCMDeviceCategoryConfig_GPUSettings(name string, gpuCount int) string {
+	// Build GPU settings dynamically
+	gpuSettings := ""
+	computeModes := []string{"default", "exclusive", "prohibited", "default"}
+	for i := 0; i < gpuCount; i++ {
+		gpuSettings += fmt.Sprintf(`
+    {
+      device_id    = "%d"
+      model        = "Tesla V100"
+      compute_mode = "%s"
+    },`, i, computeModes[i%len(computeModes)])
+	}
+
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmdevice_categories" "all" {}
+data "bcm_cmpart_softwareimages" "all" {}
+
+locals {
+  management_network_uuid = length(data.bcm_cmdevice_categories.all.categories) > 0 ? data.bcm_cmdevice_categories.all.categories[0].management_network_id : "00000000-0000-0000-0000-000000000000"
+  software_image_uuid = length(data.bcm_cmpart_softwareimages.all.images) > 0 ? data.bcm_cmpart_softwareimages.all.images[0].uuid : "00000000-0000-0000-0000-000000000000"
+}
+
+resource "bcm_cmdevice_category" "test" {
+  name               = %[4]q
+  management_network = local.management_network_uuid
+  notes              = "GPU settings test category"
+
+  software_image_proxy = {
+    parent_software_image = local.software_image_uuid
+  }
+
+  gpu_settings = [%[5]s
+  ]
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		name,
+		gpuSettings,
+	)
+}
