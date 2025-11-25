@@ -107,6 +107,7 @@ func testAccCheckCMDeviceDeviceDestroy(s *terraform.State) error {
 	}
 
 	// Phase 2: Verify categories are deleted (must happen after devices)
+	// Uses retry with exponential backoff to handle eventual consistency
 	for _, rs := range s.RootModule().Resources {
 		if rs.Type != "bcm_cmdevice_category" {
 			continue
@@ -116,23 +117,27 @@ func testAccCheckCMDeviceDeviceDestroy(s *terraform.State) error {
 		name := rs.Primary.Attributes["name"]
 		uuid := rs.Primary.Attributes["uuid"]
 
-		// Attempt to read the category
-		body, err := client.CallJSONRPC(ctx, "cmdevice", "getCategory", name)
+		// Verify category deleted with exponential backoff
+		deleted := verifyResourceDeleted(
+			ctx,
+			client,
+			"cmdevice",
+			"getCategory",
+			name,
+			4, // retry count with exponential backoff
+		)
 
-		// If no error and response contains data, resource still exists
-		if err == nil {
-			var categoryData map[string]interface{}
-			if json.Unmarshal(body, &categoryData) == nil && len(categoryData) > 0 {
-				errors = append(errors, fmt.Sprintf(
-					"Category still exists after destroy. Name: %s, UUID: %s",
-					name,
-					uuid,
-				))
-			}
+		if !deleted {
+			errors = append(errors, fmt.Sprintf(
+				"Category still exists after destroy. Name: %s, UUID: %s, Retries: 4",
+				name,
+				uuid,
+			))
 		}
 	}
 
 	// Phase 3: Verify software images are deleted (must happen last)
+	// Uses retry with exponential backoff to handle eventual consistency
 	for _, rs := range s.RootModule().Resources {
 		if rs.Type != "bcm_cmpart_softwareimage" {
 			continue
@@ -144,19 +149,21 @@ func testAccCheckCMDeviceDeviceDestroy(s *terraform.State) error {
 			continue // Resource was never created
 		}
 
-		// Try to read the software image via BCM API
-		body, err := client.CallJSONRPC(ctx, "CMPart", "getSoftwareImage", uuid)
+		// Verify software image deleted with exponential backoff
+		deleted := verifyResourceDeleted(
+			ctx,
+			client,
+			"CMPart",
+			"getSoftwareImage",
+			uuid,
+			4, // retry count with exponential backoff
+		)
 
-		// If API returns error OR empty response, resource is deleted (success)
-		if err == nil {
-			// Try to unmarshal response
-			var imageData map[string]interface{}
-			if json.Unmarshal(body, &imageData) == nil && len(imageData) > 0 {
-				errors = append(errors, fmt.Sprintf(
-					"Software image still exists after destroy. UUID: %s",
-					uuid,
-				))
-			}
+		if !deleted {
+			errors = append(errors, fmt.Sprintf(
+				"Software image still exists after destroy. UUID: %s, Retries: 4",
+				uuid,
+			))
 		}
 	}
 
