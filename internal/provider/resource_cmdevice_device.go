@@ -652,9 +652,14 @@ func (r *CMDeviceDeviceResource) Create(ctx context.Context, req resource.Create
 		state.PartNumber = types.StringNull()
 	}
 
-	// Normalize interface order to match plan order (prevents spurious diffs)
+	// Handle interfaces in state based on mode
 	if len(plan.Interfaces) > 0 {
+		// Interfaces mode: Normalize interface order to match plan order (prevents spurious diffs)
 		state.Interfaces = normalizeInterfaceOrder(state.Interfaces, plan.Interfaces)
+	} else {
+		// Legacy mode: Don't populate interfaces in state (user didn't define interfaces block)
+		// BCM creates interfaces automatically, but we don't expose them in legacy mode
+		state.Interfaces = nil
 	}
 
 	// Set state - use what BCM returns for all other fields
@@ -822,6 +827,26 @@ func (r *CMDeviceDeviceResource) Read(ctx context.Context, req resource.ReadRequ
 			"partition":              newState.Partition.ValueString(),
 			"default_gateway_metric": newState.DefaultGatewayMetric.ValueInt64(),
 		})
+	}
+
+	// Handle interfaces based on mode
+	// During import (isImport=true), always populate interfaces from BCM
+	// During normal read, use state to determine if user used interfaces block
+	if isImport {
+		// Import: Keep interfaces from BCM API response (already parsed in newState)
+		tflog.Debug(ctx, "Import path - keeping interfaces from BCM API", map[string]interface{}{
+			"interface_count": len(newState.Interfaces),
+		})
+	} else if len(state.Interfaces) > 0 {
+		// Interfaces mode: normalize order and merge bond-specific fields from state
+		// BCM doesn't return members/bond_mode fields, so we need to preserve them from state
+		if len(newState.Interfaces) > 0 {
+			newState.Interfaces = normalizeInterfaceOrder(newState.Interfaces, state.Interfaces)
+		}
+	} else {
+		// Legacy mode: Don't populate interfaces in state (user didn't define interfaces block)
+		// This maintains backward compatibility with existing configs
+		newState.Interfaces = nil
 	}
 
 	// Set state - use what BCM returns (with preserved fields)
@@ -1010,7 +1035,15 @@ func (r *CMDeviceDeviceResource) Update(ctx context.Context, req resource.Update
 
 	// Preserve plan values for fields not persisted by BCM or modified during updates
 	newState.Force = plan.Force
-	newState.ManagementNetwork = plan.ManagementNetwork // BCM sets to nil UUID, preserve plan value
+
+	// BCM sets management_network to nil UUID - preserve plan value if set, otherwise use state or null
+	if !plan.ManagementNetwork.IsNull() && !plan.ManagementNetwork.IsUnknown() {
+		newState.ManagementNetwork = plan.ManagementNetwork
+	} else if !state.ManagementNetwork.IsNull() && !state.ManagementNetwork.IsUnknown() {
+		newState.ManagementNetwork = state.ManagementNetwork
+	} else {
+		newState.ManagementNetwork = types.StringNull()
+	}
 
 	// Set partition to the resolved value (either from plan or resolved from category)
 	if partitionUUID != "" {

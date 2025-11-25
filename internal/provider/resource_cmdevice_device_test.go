@@ -359,6 +359,23 @@ func TestAccCMDeviceDeviceResource_Basic(t *testing.T) {
 					"default_gateway_metric", // BCM returns default 0 when not set
 					"serial_number",          // BCM may populate from hardware discovery
 					"part_number",            // BCM may populate from hardware discovery
+					"interfaces.#",           // Import populates interfaces from BCM for legacy-mode devices
+					"interfaces.0.%",
+					"interfaces.0.base_type",
+					"interfaces.0.bootable",
+					"interfaces.0.cardtype",
+					"interfaces.0.child_type",
+					"interfaces.0.dhcp",
+					"interfaces.0.mac",
+					"interfaces.0.name",
+					"interfaces.0.network",
+					"interfaces.0.start_if",
+					"interfaces.0.type",
+					"interfaces.0.uuid",
+					"interfaces.0.bond_mode",
+					"interfaces.0.ip",
+					"interfaces.0.ipv6_ip",
+					"interfaces.0.members.#",
 				},
 			},
 			// Verify ID consistency after Import.
