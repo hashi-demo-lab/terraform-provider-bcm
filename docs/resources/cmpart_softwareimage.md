@@ -247,6 +247,7 @@ output "dpu_image_path" {
 ### Optional
 
 - `enable_sol` (Boolean) Enable Serial Over LAN for remote console access. Defaults to `false`.
+- `force` (Boolean) Force deletion even if categories reference this software image. **WARNING**: Force deletion may create orphaned references in the BCM database. Use with caution.
 - `kernel_output_console` (String) Kernel output console device. Defaults to `tty0`.
 - `kernel_parameters` (String) Kernel command-line parameters (e.g., `quiet splash`)
 - `kernel_version` (String) Kernel version string (e.g., `5.15.0-58-generic`). When cloning an image, this value is inherited from the source image and becomes known after the clone completes.

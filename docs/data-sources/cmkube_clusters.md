@@ -21,7 +21,7 @@ data "bcm_cmkube_clusters" "all" {}
 
 # Output all cluster names
 output "all_cluster_names" {
-  value = [for cluster in data.bcm_cmkube_clusters.all.clusters : cluster.name]
+  value = data.bcm_cmkube_clusters.all.clusters != null ? [for cluster in data.bcm_cmkube_clusters.all.clusters : cluster.name] : []
 }
 
 # Example 2: Filter clusters by name pattern
@@ -33,7 +33,7 @@ data "bcm_cmkube_clusters" "prod_clusters" {
 
 # Output production cluster UUIDs
 output "prod_cluster_uuids" {
-  value = [for cluster in data.bcm_cmkube_clusters.prod_clusters.clusters : cluster.uuid]
+  value = data.bcm_cmkube_clusters.prod_clusters.clusters != null ? [for cluster in data.bcm_cmkube_clusters.prod_clusters.clusters : cluster.uuid] : []
 }
 
 # Example 3: Filter clusters by Kubernetes version
@@ -45,10 +45,10 @@ data "bcm_cmkube_clusters" "k8s_1_28" {
 
 # Output clusters running Kubernetes 1.28.0
 output "k8s_1_28_clusters" {
-  value = [for cluster in data.bcm_cmkube_clusters.k8s_1_28.clusters : {
+  value = data.bcm_cmkube_clusters.k8s_1_28.clusters != null ? [for cluster in data.bcm_cmkube_clusters.k8s_1_28.clusters : {
     name    = cluster.name
     version = cluster.version
-  }]
+  }] : []
 }
 
 # Example 4: Filter clusters by master node UUID
@@ -60,7 +60,7 @@ data "bcm_cmkube_clusters" "clusters_with_node" {
 
 # Output clusters containing specific master node
 output "clusters_with_specific_node" {
-  value = [for cluster in data.bcm_cmkube_clusters.clusters_with_node.clusters : cluster.name]
+  value = data.bcm_cmkube_clusters.clusters_with_node.clusters != null ? [for cluster in data.bcm_cmkube_clusters.clusters_with_node.clusters : cluster.name] : []
 }
 
 # Example 5: Combine multiple filters (AND logic)
@@ -73,11 +73,11 @@ data "bcm_cmkube_clusters" "filtered" {
 
 # Output clusters matching all filters
 output "filtered_clusters" {
-  value = [for cluster in data.bcm_cmkube_clusters.filtered.clusters : {
+  value = data.bcm_cmkube_clusters.filtered.clusters != null ? [for cluster in data.bcm_cmkube_clusters.filtered.clusters : {
     name    = cluster.name
     version = cluster.version
     masters = cluster.master_nodes
-  }]
+  }] : []
 }
 
 # Example 6: Use cluster UUID for terraform import
@@ -97,12 +97,12 @@ data "bcm_cmkube_clusters" "network_info" {}
 
 # Output cluster network configurations
 output "cluster_networks" {
-  value = [for cluster in data.bcm_cmkube_clusters.network_info.clusters : {
+  value = data.bcm_cmkube_clusters.network_info.clusters != null ? [for cluster in data.bcm_cmkube_clusters.network_info.clusters : {
     name               = cluster.name
     management_network = cluster.management_network
     overlay_network    = cluster.overlay_network
     dns_servers        = cluster.dns_servers
-  }]
+  }] : []
 }
 ```
 

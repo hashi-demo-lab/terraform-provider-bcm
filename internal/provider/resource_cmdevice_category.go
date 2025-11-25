@@ -16,6 +16,10 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
@@ -190,10 +194,16 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 			"id": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "Resource identifier (same as UUID)",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"uuid": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "Unique identifier assigned by BCM",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"name": schema.StringAttribute{
 				Required:            true,
@@ -223,6 +233,9 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 					"uuid": schema.StringAttribute{
 						Computed:            true,
 						MarkdownDescription: "Unique identifier",
+						PlanModifiers: []planmodifier.String{
+							stringplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"parent_software_image": schema.StringAttribute{
 						Required:            true,
@@ -231,6 +244,9 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 					"revision_id": schema.Int64Attribute{
 						Computed:            true,
 						MarkdownDescription: "Revision identifier",
+						PlanModifiers: []planmodifier.Int64{
+							int64planmodifier.UseStateForUnknown(),
+						},
 					},
 				},
 			},
@@ -241,16 +257,25 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 				Validators: []validator.String{
 					stringvalidator.OneOf("SYSLINUX", "GRUB", "GRUB2", "PXELINUX"),
 				},
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"boot_loader_file": schema.StringAttribute{
 				Optional:            true,
 				Computed:            true,
 				MarkdownDescription: "Boot loader file path. If not specified, BCM uses defaults based on boot_loader.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"boot_loader_protocol": schema.StringAttribute{
 				Optional:            true,
 				Computed:            true,
 				MarkdownDescription: "Boot loader protocol (HTTP, TFTP, NFS). If not specified, BCM assigns a default.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"kernel_version": schema.StringAttribute{
 				Optional:            true,
@@ -292,16 +317,25 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 				Optional:            true,
 				Computed:            true,
 				MarkdownDescription: "Installation mode (AUTO, FULL, MINIMAL, CUSTOM). If not specified, BCM assigns a default.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"new_node_install_mode": schema.StringAttribute{
 				Optional:            true,
 				Computed:            true,
 				MarkdownDescription: "New node installation mode (FULL, MINIMAL, SKIP). If not specified, BCM assigns a default.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"install_boot_record": schema.BoolAttribute{
 				Optional:            true,
 				Computed:            true,
 				MarkdownDescription: "Install boot record flag. If not specified, BCM assigns a default.",
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"io_scheduler": schema.StringAttribute{
 				Optional:            true,
@@ -323,11 +357,17 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 				Optional:            true,
 				Computed:            true,
 				MarkdownDescription: "Default gateway IP address. If not specified, BCM may assign a default.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"default_gateway_metric": schema.Int64Attribute{
 				Optional:            true,
 				Computed:            true,
 				MarkdownDescription: "Default gateway metric. If not specified, BCM may assign a default.",
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.UseStateForUnknown(),
+				},
 			},
 			"name_servers": schema.ListAttribute{
 				Optional:            true,
@@ -544,26 +584,44 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 			"parent_uuid": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "Parent UUID",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"revision": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "Revision",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"modified": schema.BoolAttribute{
 				Computed:            true,
 				MarkdownDescription: "Modified flag",
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"to_be_removed": schema.BoolAttribute{
 				Computed:            true,
 				MarkdownDescription: "To be removed flag",
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"base_type": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "Base type (always 'Category')",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"child_type": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "Child type",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 		},
 	}
@@ -704,6 +762,9 @@ func (r *CMDeviceCategoryResource) Create(ctx context.Context, req resource.Crea
 	plan.ID = types.StringValue(createdUUID)
 	plan.UUID = types.StringValue(createdUUID)
 
+	// Preserve plan's software_image_proxy before reading (BCM API may return different values)
+	planSoftwareImageProxy := plan.SoftwareImageProxy
+
 	// Read back created category to populate all fields
 	// BCM has eventual consistency - retry if computed fields are not populated
 	// Pattern from terraform-provider-design skill: api_client_patterns.md lines 294-326
@@ -766,6 +827,43 @@ func (r *CMDeviceCategoryResource) Create(ctx context.Context, req resource.Crea
 		}
 	}
 
+	// CRITICAL FIX: Restore parent_software_image from plan while keeping computed fields
+	// BCM API may return different parent_software_image UUID on reads
+	// But we must preserve the user's configured value
+	if !planSoftwareImageProxy.IsNull() && !planSoftwareImageProxy.IsUnknown() {
+		var planProxy SoftwareImageProxyModel
+		planSoftwareImageProxy.As(ctx, &planProxy, basetypes.ObjectAsOptions{})
+
+		// Only restore if we have a valid parent_software_image from plan
+		if !planProxy.ParentSoftwareImage.IsNull() && !planProxy.ParentSoftwareImage.IsUnknown() {
+			// Get the computed values from the API response (uuid, revision_id)
+			var apiProxy SoftwareImageProxyModel
+			if !plan.SoftwareImageProxy.IsNull() {
+				plan.SoftwareImageProxy.As(ctx, &apiProxy, basetypes.ObjectAsOptions{})
+			}
+
+			// Build merged proxy: user's parent_software_image + API's computed fields
+			mergedProxy := SoftwareImageProxyModel{
+				UUID:                apiProxy.UUID,
+				ParentSoftwareImage: planProxy.ParentSoftwareImage, // Preserve user config
+				RevisionID:          apiProxy.RevisionID,
+			}
+
+			// Convert back to types.Object
+			proxyObj, diagsProxy := types.ObjectValueFrom(ctx, map[string]attr.Type{
+				"uuid":                  types.StringType,
+				"parent_software_image": types.StringType,
+				"revision_id":           types.Int64Type,
+			}, mergedProxy)
+			if !diagsProxy.HasError() {
+				plan.SoftwareImageProxy = proxyObj
+				tflog.Debug(ctx, "Merged software_image_proxy: preserved parent_software_image from plan", map[string]interface{}{
+					"parent_software_image": planProxy.ParentSoftwareImage.ValueString(),
+				})
+			}
+		}
+	}
+
 	tflog.Info(ctx, "Created category resource", map[string]interface{}{
 		"name": plan.Name.ValueString(),
 		"uuid": createdUUID,
@@ -782,10 +880,11 @@ func (r *CMDeviceCategoryResource) Read(ctx context.Context, req resource.ReadRe
 		return
 	}
 
-	// Preserve original management_network and force from state for later comparison
-	// These client-side parameters are not returned by BCM API
+	// Preserve original values from state for later comparison
+	// These client-side parameters may not be returned correctly by BCM API
 	originalManagementNetwork := state.ManagementNetwork
 	originalForce := state.Force
+	originalSoftwareImageProxy := state.SoftwareImageProxy
 
 	// Fetch current state from BCM API with retry for eventual consistency
 	// BCM may not return all computed fields immediately after create/update
@@ -897,6 +996,43 @@ func (r *CMDeviceCategoryResource) Read(ctx context.Context, req resource.ReadRe
 		state.Force = types.BoolNull()
 	}
 
+	// CRITICAL FIX: Preserve parent_software_image from state while keeping computed fields
+	// BCM API may return different parent_software_image UUID on subsequent reads,
+	// causing false drift detection. Preserve the user's configured value.
+	if !originalSoftwareImageProxy.IsNull() && !originalSoftwareImageProxy.IsUnknown() {
+		var stateProxy SoftwareImageProxyModel
+		originalSoftwareImageProxy.As(ctx, &stateProxy, basetypes.ObjectAsOptions{})
+
+		// Only restore if we have a valid parent_software_image from state
+		if !stateProxy.ParentSoftwareImage.IsNull() && !stateProxy.ParentSoftwareImage.IsUnknown() {
+			// Get the computed values from the API response (uuid, revision_id)
+			var apiProxy SoftwareImageProxyModel
+			if !state.SoftwareImageProxy.IsNull() {
+				state.SoftwareImageProxy.As(ctx, &apiProxy, basetypes.ObjectAsOptions{})
+			}
+
+			// Build merged proxy: user's parent_software_image + API's computed fields
+			mergedProxy := SoftwareImageProxyModel{
+				UUID:                apiProxy.UUID,
+				ParentSoftwareImage: stateProxy.ParentSoftwareImage, // Preserve user config
+				RevisionID:          apiProxy.RevisionID,
+			}
+
+			// Convert back to types.Object
+			proxyObj, diagsProxy := types.ObjectValueFrom(ctx, map[string]attr.Type{
+				"uuid":                  types.StringType,
+				"parent_software_image": types.StringType,
+				"revision_id":           types.Int64Type,
+			}, mergedProxy)
+			if !diagsProxy.HasError() {
+				state.SoftwareImageProxy = proxyObj
+				tflog.Debug(ctx, "Merged software_image_proxy: preserved parent_software_image from state", map[string]interface{}{
+					"parent_software_image": stateProxy.ParentSoftwareImage.ValueString(),
+				})
+			}
+		}
+	}
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
@@ -977,6 +1113,8 @@ func (r *CMDeviceCategoryResource) Update(ctx context.Context, req resource.Upda
 	// Read back updated category with retry for eventual consistency
 	// Preserve boot_loader: BCM may reset it to default after update
 	planBootLoader := plan.BootLoader
+	// Preserve software_image_proxy from plan (BCM API may return different values)
+	planSoftwareImageProxy := plan.SoftwareImageProxy
 	maxRetries := 5
 	var lastReadErr error
 	for attempt := 0; attempt < maxRetries; attempt++ {
@@ -1035,6 +1173,42 @@ func (r *CMDeviceCategoryResource) Update(ctx context.Context, req resource.Upda
 	// BCM API may reset boot_loader to default, but we want to preserve the user's setting
 	if !planBootLoader.IsNull() && !planBootLoader.IsUnknown() {
 		plan.BootLoader = planBootLoader
+	}
+
+	// CRITICAL FIX: Preserve parent_software_image from plan while keeping computed fields
+	// BCM API may return different parent_software_image UUID on reads
+	if !planSoftwareImageProxy.IsNull() && !planSoftwareImageProxy.IsUnknown() {
+		var planProxy SoftwareImageProxyModel
+		planSoftwareImageProxy.As(ctx, &planProxy, basetypes.ObjectAsOptions{})
+
+		// Only restore if we have a valid parent_software_image from plan
+		if !planProxy.ParentSoftwareImage.IsNull() && !planProxy.ParentSoftwareImage.IsUnknown() {
+			// Get the computed values from the API response (uuid, revision_id)
+			var apiProxy SoftwareImageProxyModel
+			if !plan.SoftwareImageProxy.IsNull() {
+				plan.SoftwareImageProxy.As(ctx, &apiProxy, basetypes.ObjectAsOptions{})
+			}
+
+			// Build merged proxy: user's parent_software_image + API's computed fields
+			mergedProxy := SoftwareImageProxyModel{
+				UUID:                apiProxy.UUID,
+				ParentSoftwareImage: planProxy.ParentSoftwareImage, // Preserve user config
+				RevisionID:          apiProxy.RevisionID,
+			}
+
+			// Convert back to types.Object
+			proxyObj, diagsProxy := types.ObjectValueFrom(ctx, map[string]attr.Type{
+				"uuid":                  types.StringType,
+				"parent_software_image": types.StringType,
+				"revision_id":           types.Int64Type,
+			}, mergedProxy)
+			if !diagsProxy.HasError() {
+				plan.SoftwareImageProxy = proxyObj
+				tflog.Debug(ctx, "Merged software_image_proxy: preserved parent_software_image from plan in Update", map[string]interface{}{
+					"parent_software_image": planProxy.ParentSoftwareImage.ValueString(),
+				})
+			}
+		}
 	}
 
 	tflog.Info(ctx, "Updated category resource", map[string]interface{}{

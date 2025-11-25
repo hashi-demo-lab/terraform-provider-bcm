@@ -14,6 +14,19 @@ Detects:
 - Modern pattern usage statistics
 - Optional field coverage
 - Test cleanup issues and verification
+- ID consistency tracking issues
+
+Codebase Statistics:
+- Total Go files and line counts
+- Code, comment, and blank line breakdown
+- File categorization (resource, data_source, test, other)
+- Test-to-implementation ratio
+
+ID Consistency Analysis:
+- CompareValue(ValuesSame()) usage for ID tracking across steps
+- Partial ID tracking (some steps tracked, not all)
+- Legacy ID checks (TestCheckResourceAttr for "id")
+- Missing ID verification in resource tests
 
 Cleanup Analysis:
 - Robust CheckDestroy verification
@@ -162,6 +175,14 @@ class TestFile:
         self.hardcoded_names = []  # List of (line_number, hardcoded_name) tuples
         self.non_unique_patterns = []  # List of non-unique naming patterns found
 
+        # ID consistency tracking
+        self.has_compare_value_for_id = False  # Uses CompareValue(ValuesSame()) for ID
+        self.id_tracking_steps = 0  # Number of steps with AddStateValue for ID
+        self.total_test_steps = 0  # Total number of test steps
+        self.legacy_id_checks = []  # Legacy TestCheckResourceAttr for "id"
+        self.modern_id_checks = 0  # Modern tfjsonpath.New("id") assertions
+        self.id_consistency_issues = []  # List of ID consistency problems
+
     def load(self):
         """Load file content."""
         with open(self.path, 'r') as f:
@@ -181,6 +202,7 @@ class TestFile:
         self._analyze_quality_metrics()
         self._analyze_cleanup_patterns()
         self._detect_hardcoded_names()
+        self._analyze_id_consistency()
         self._calculate_quality_score()
 
     def _find_test_functions(self):
@@ -458,6 +480,91 @@ class TestFile:
                         if not any(prefix in template for prefix in ['tftest-', 'citest-', '%s']):
                             self.non_unique_patterns.append(f"Line {i}: fmt.Sprintf without unique component")
 
+    def _analyze_id_consistency(self):
+        """Analyze ID property usage consistency across test steps."""
+        # Skip for data source tests (they don't typically manage ID lifecycle)
+        if 'data_source_' in self.name:
+            return
+
+        # Skip for error-only tests
+        if self.is_error_only_test:
+            return
+
+        # 1. Check for CompareValue usage for ID tracking
+        compare_value_id_pattern = r'compareID\s*:=\s*statecheck\.CompareValue\(compare\.ValuesSame\(\)\)'
+        self.has_compare_value_for_id = bool(re.search(compare_value_id_pattern, self.content))
+
+        # 2. Count test steps with ConfigStateChecks
+        # Look for { Config: patterns that start a TestStep
+        test_step_pattern = r'\{\s*Config:\s*\w+'
+        self.total_test_steps = len(re.findall(test_step_pattern, self.content))
+
+        # 3. Count steps with ID tracking via AddStateValue
+        add_state_id_pattern = r'compareID\.AddStateValue\s*\(\s*[^)]+,\s*tfjsonpath\.New\s*\(\s*"id"\s*\)'
+        self.id_tracking_steps = len(re.findall(add_state_id_pattern, self.content))
+
+        # 4. Find legacy ID checks (TestCheckResourceAttr for "id")
+        legacy_id_patterns = [
+            r'resource\.TestCheckResourceAttr\s*\([^,]+,\s*"id"',
+            r'resource\.TestCheckResourceAttrSet\s*\([^,]+,\s*"id"',
+        ]
+        for pattern in legacy_id_patterns:
+            matches = re.finditer(pattern, self.content)
+            for match in matches:
+                line_num = self.content[:match.start()].count('\n') + 1
+                self.legacy_id_checks.append((line_num, match.group()))
+
+        # 5. Count modern ID checks (tfjsonpath.New("id"))
+        modern_id_pattern = r'tfjsonpath\.New\s*\(\s*"id"\s*\)'
+        self.modern_id_checks = len(re.findall(modern_id_pattern, self.content))
+
+        # 6. Identify ID consistency issues
+        self._identify_id_consistency_issues()
+
+    def _identify_id_consistency_issues(self):
+        """Identify specific ID consistency problems."""
+        # Issue 1: Uses legacy ID checks instead of modern patterns
+        if self.legacy_id_checks:
+            self.id_consistency_issues.append(
+                f"Uses legacy ID checks ({len(self.legacy_id_checks)} occurrences) - migrate to statecheck.ExpectKnownValue"
+            )
+
+        # Issue 2: Has multiple test steps but no ID tracking
+        if self.total_test_steps >= 2 and not self.has_compare_value_for_id:
+            self.id_consistency_issues.append(
+                f"Multiple test steps ({self.total_test_steps}) without ID consistency tracking - add CompareValue(ValuesSame())"
+            )
+
+        # Issue 3: Partial ID tracking (some steps tracked, not all)
+        if self.has_compare_value_for_id and self.id_tracking_steps > 0:
+            # Calculate expected steps (Create, Import if present, Update steps)
+            expected_tracked_steps = self.total_test_steps
+            # Import steps are tracked via ImportStateVerify, not AddStateValue, so adjust
+            if self.has_import_test:
+                # Import steps may use ConfigStateChecks in modern tests
+                pass
+
+            # If we have CompareValue but fewer tracked steps than expected, that's partial
+            if self.id_tracking_steps < self.total_test_steps - 1:  # -1 for some tolerance (import step)
+                self.id_consistency_issues.append(
+                    f"Partial ID tracking: {self.id_tracking_steps}/{self.total_test_steps} steps track ID"
+                )
+
+        # Issue 4: Modern ID checks without consistency tracking
+        if self.modern_id_checks > 0 and not self.has_compare_value_for_id and self.total_test_steps >= 2:
+            self.id_consistency_issues.append(
+                f"Uses {self.modern_id_checks} ExpectKnownValue for ID but no CompareValue consistency tracking"
+            )
+
+        # Issue 5: No ID verification at all in resource tests
+        if (self.total_test_steps > 0 and
+            self.modern_id_checks == 0 and
+            len(self.legacy_id_checks) == 0 and
+            'resource_' in self.name):
+            self.id_consistency_issues.append(
+                "No ID verification in any test step - resources should verify ID persistence"
+            )
+
     def _calculate_quality_score(self):
         """Calculate overall quality score (0-100)."""
         # Error-only tests have different scoring criteria
@@ -521,6 +628,15 @@ class TestFile:
             naming_penalty = min(len(self.hardcoded_names) * 5, 20)  # Max -20 points
             score = max(0, score - naming_penalty)
 
+        # Penalty for ID consistency issues (resources only)
+        if 'resource_' in self.name and self.id_consistency_issues:
+            id_penalty = min(len(self.id_consistency_issues) * 5, 15)  # Max -15 points
+            score = max(0, score - id_penalty)
+
+        # Bonus for proper ID consistency tracking
+        if self.has_compare_value_for_id and self.id_tracking_steps > 0:
+            score = min(100, score + 5)  # Bonus for good ID tracking
+
         self.quality_score = score
 
 
@@ -535,6 +651,7 @@ class GapAnalyzer:
         self.resource_schemas: Dict[str, ResourceSchema] = {}  # resource_name -> schema
         self.validation_coverage: Dict[str, List[str]] = {}  # resource_name -> missing required fields
         self.optional_field_coverage: Dict[str, List[str]] = {}  # resource_name -> untested optional fields
+        self.codebase_stats: Dict[str, Dict] = {}  # Codebase line count statistics
 
     def scan(self):
         """Scan directory for test files and resource schemas."""
@@ -572,6 +689,9 @@ class GapAnalyzer:
         # Analyze validation coverage
         self._analyze_validation_coverage()
         self._analyze_optional_field_coverage()
+
+        # Analyze codebase line counts
+        self._analyze_codebase_lines()
 
     def _analyze_optional_field_coverage(self):
         """Check which optional fields are never tested."""
@@ -668,12 +788,159 @@ class GapAnalyzer:
             if missing_validations:
                 self.validation_coverage[schema_name] = missing_validations
 
+    def _analyze_codebase_lines(self):
+        """Analyze line counts for Go files in the internal directory."""
+        # Find the internal directory (parent of test_dir or test_dir itself)
+        internal_dir = self.test_dir.parent
+        if internal_dir.name != 'internal':
+            # Check if test_dir is internal/provider, so parent is internal
+            if self.test_dir.name == 'provider' and internal_dir.name == 'internal':
+                pass  # internal_dir is correct
+            else:
+                # Try to find internal directory
+                for parent in self.test_dir.parents:
+                    if parent.name == 'internal':
+                        internal_dir = parent
+                        break
+                    internal_internal = parent / 'internal'
+                    if internal_internal.exists():
+                        internal_dir = internal_internal
+                        break
+
+        if not internal_dir.exists():
+            return
+
+        # Initialize statistics
+        stats = {
+            'total': {'files': 0, 'lines': 0, 'code_lines': 0, 'comment_lines': 0, 'blank_lines': 0},
+            'by_type': {
+                'resource': {'files': 0, 'lines': 0, 'code_lines': 0},
+                'data_source': {'files': 0, 'lines': 0, 'code_lines': 0},
+                'test': {'files': 0, 'lines': 0, 'code_lines': 0},
+                'other': {'files': 0, 'lines': 0, 'code_lines': 0},
+            },
+            'by_extension': {},
+        }
+
+        # Walk through all files in internal directory
+        for root, dirs, files in os.walk(internal_dir):
+            # Skip hidden directories and vendor
+            dirs[:] = [d for d in dirs if not d.startswith('.') and d != 'vendor']
+
+            for filename in files:
+                file_path = Path(root) / filename
+                ext = file_path.suffix
+
+                # Only count Go files for detailed analysis
+                if ext != '.go':
+                    # Track other extensions briefly
+                    if ext not in stats['by_extension']:
+                        stats['by_extension'][ext] = {'files': 0, 'lines': 0}
+                    try:
+                        with open(file_path, 'r', errors='ignore') as f:
+                            line_count = sum(1 for _ in f)
+                        stats['by_extension'][ext]['files'] += 1
+                        stats['by_extension'][ext]['lines'] += line_count
+                    except:
+                        pass
+                    continue
+
+                # Analyze Go file
+                try:
+                    with open(file_path, 'r', errors='ignore') as f:
+                        content = f.read()
+                        lines = content.split('\n')
+                except:
+                    continue
+
+                total_lines = len(lines)
+                blank_lines = sum(1 for line in lines if not line.strip())
+                comment_lines = 0
+                in_block_comment = False
+
+                for line in lines:
+                    stripped = line.strip()
+                    if in_block_comment:
+                        comment_lines += 1
+                        if '*/' in stripped:
+                            in_block_comment = False
+                    elif stripped.startswith('//'):
+                        comment_lines += 1
+                    elif stripped.startswith('/*'):
+                        comment_lines += 1
+                        if '*/' not in stripped:
+                            in_block_comment = True
+
+                code_lines = total_lines - blank_lines - comment_lines
+
+                # Update totals
+                stats['total']['files'] += 1
+                stats['total']['lines'] += total_lines
+                stats['total']['code_lines'] += code_lines
+                stats['total']['comment_lines'] += comment_lines
+                stats['total']['blank_lines'] += blank_lines
+
+                # Track by extension
+                if ext not in stats['by_extension']:
+                    stats['by_extension'][ext] = {'files': 0, 'lines': 0}
+                stats['by_extension'][ext]['files'] += 1
+                stats['by_extension'][ext]['lines'] += total_lines
+
+                # Categorize by type
+                fname = filename.lower()
+                if '_test.go' in fname:
+                    category = 'test'
+                elif fname.startswith('resource_'):
+                    category = 'resource'
+                elif fname.startswith('data_source_'):
+                    category = 'data_source'
+                else:
+                    category = 'other'
+
+                stats['by_type'][category]['files'] += 1
+                stats['by_type'][category]['lines'] += total_lines
+                stats['by_type'][category]['code_lines'] += code_lines
+
+        self.codebase_stats = stats
+
     def generate_report(self) -> str:
         """Generate markdown gap analysis report."""
         report = []
         report.append("# Terraform Provider Test Modernization Gap Analysis\n")
         report.append(f"**Analysis Date:** {self._get_date()}\n")
         report.append(f"**Test Directory:** `{self.test_dir}`\n")
+
+        # Add codebase statistics section
+        if self.codebase_stats and self.codebase_stats.get('total', {}).get('files', 0) > 0:
+            report.append("\n## Codebase Statistics\n")
+            stats = self.codebase_stats
+            total = stats['total']
+            by_type = stats['by_type']
+
+            report.append(f"**Total Go Files:** {total['files']:,} files | {total['lines']:,} lines\n")
+            report.append(f"- Code: {total['code_lines']:,} lines ({total['code_lines']*100//total['lines'] if total['lines'] else 0}%)\n")
+            report.append(f"- Comments: {total['comment_lines']:,} lines ({total['comment_lines']*100//total['lines'] if total['lines'] else 0}%)\n")
+            report.append(f"- Blank: {total['blank_lines']:,} lines ({total['blank_lines']*100//total['lines'] if total['lines'] else 0}%)\n")
+
+            report.append("\n**By File Type:**\n")
+            report.append("| Type | Files | Lines | Code Lines |\n")
+            report.append("|------|------:|------:|-----------:|\n")
+
+            for type_name, type_stats in sorted(by_type.items(), key=lambda x: x[1]['lines'], reverse=True):
+                if type_stats['files'] > 0:
+                    display_name = type_name.replace('_', ' ').title()
+                    report.append(f"| {display_name} | {type_stats['files']:,} | {type_stats['lines']:,} | {type_stats['code_lines']:,} |\n")
+
+            # Add total row
+            report.append(f"| **Total** | **{total['files']:,}** | **{total['lines']:,}** | **{total['code_lines']:,}** |\n")
+
+            # Calculate test-to-code ratio
+            impl_lines = by_type['resource']['code_lines'] + by_type['data_source']['code_lines'] + by_type['other']['code_lines']
+            test_lines = by_type['test']['code_lines']
+            if impl_lines > 0:
+                ratio = test_lines / impl_lines
+                report.append(f"\n**Test-to-Implementation Ratio:** {ratio:.2f}:1 ({test_lines:,} test lines / {impl_lines:,} impl lines)\n")
+
         report.append("\n## Executive Summary\n")
 
         # Calculate statistics
@@ -717,6 +984,11 @@ class GapAnalyzer:
         untested_optional_count = sum(len(fields) for fields in self.optional_field_coverage.values())
         tested_optional_count = total_optional_fields - untested_optional_count
 
+        # ID consistency metrics
+        resources_with_id_tracking = sum(1 for t in real_resources if t.has_compare_value_for_id)
+        resources_with_id_issues = sum(1 for t in real_resources if t.id_consistency_issues)
+        total_id_issues = sum(len(t.id_consistency_issues) for t in real_resources)
+
         report.append(f"- **{total_modern_state}** modern state checks (`statecheck.ExpectKnownValue`)\n")
         report.append(f"- **{total_modern_plan}** modern plan checks (`plancheck.Expect*`)\n")
         report.append(f"- **{total_legacy}** legacy check calls (needs cleanup)\n")
@@ -746,6 +1018,17 @@ class GapAnalyzer:
             report.append(f"- **Risk**: Name conflicts in parallel tests or after failed test runs\n")
         else:
             report.append(f"- **All tests use unique name generation** ✅\n")
+
+        report.append(f"\n**ID Consistency Tracking:**\n")
+        if len(real_resources) > 0:
+            report.append(f"- **{resources_with_id_tracking}/{len(real_resources)}** resources use `CompareValue(ValuesSame())` for ID tracking\n")
+            if resources_with_id_issues > 0:
+                report.append(f"- **{resources_with_id_issues}/{len(real_resources)}** resources have ID consistency issues ({total_id_issues} total) ⚠️\n")
+            else:
+                report.append(f"- **All resources have consistent ID tracking** ✅\n")
+        else:
+            report.append(f"- **No resource tests found** (N/A)\n")
+
         report.append(f"\n**Average Quality Score:** {avg_quality_score:.0f}/100\n")
         if mock_resources:
             error_only_count = sum(1 for t in mock_resources if t.is_error_only_test)
@@ -835,6 +1118,17 @@ class GapAnalyzer:
                     if len(test.hardcoded_names) > 5:
                         lines.append(f"  - (and {len(test.hardcoded_names) - 5} more)\n")
 
+                # ID consistency tracking
+                if test.has_compare_value_for_id:
+                    lines.append(f"- **ID tracking:** ✅ Uses CompareValue ({test.id_tracking_steps}/{test.total_test_steps} steps)\n")
+                elif test.total_test_steps >= 2:
+                    lines.append(f"- **ID tracking:** ❌ Missing CompareValue for ID consistency\n")
+
+                if test.id_consistency_issues:
+                    lines.append(f"- **ID consistency issues:** {len(test.id_consistency_issues)} ⚠️\n")
+                    for issue in test.id_consistency_issues:
+                        lines.append(f"  - {issue}\n")
+
             if test.legacy_checks:
                 lines.append(f"- **Legacy checks:** {len(test.legacy_checks)} ⚠️\n")
                 lines.append(f"  - Lines: {', '.join(str(line) for line, _ in test.legacy_checks[:5])}")
@@ -918,6 +1212,19 @@ class GapAnalyzer:
             for resource_name, missing_fields in sorted(self.validation_coverage.items()):
                 lines.append(f"- **`{resource_name}`**: {', '.join(missing_fields)}\n")
 
+        # ID consistency issues
+        tests_with_id_issues = [t for t in self.resource_tests
+                                 if t.id_consistency_issues and not t.is_error_only_test]
+        if tests_with_id_issues:
+            has_high_priority = True
+            lines.append("\n**ID Consistency Issues:**\n")
+            lines.append("These tests have inconsistent ID property usage:\n\n")
+            for test in sorted(tests_with_id_issues, key=lambda x: len(x.id_consistency_issues), reverse=True):
+                lines.append(f"- **`{test.name}`** ({len(test.id_consistency_issues)} issues):\n")
+                for issue in test.id_consistency_issues:
+                    lines.append(f"  - {issue}\n")
+            lines.append("\n")
+
         if not has_high_priority:
             lines.append("\nNo high priority issues found! ✅\n")
 
@@ -983,6 +1290,8 @@ class GapAnalyzer:
                         improvements.append("add CheckDestroy")
                 if test.cleanup_issues:
                     improvements.append(f"fix {len(test.cleanup_issues)} cleanup issue(s)")
+                if test.id_consistency_issues:
+                    improvements.append(f"fix {len(test.id_consistency_issues)} ID consistency issue(s)")
                 lines.append(f"- `{test.name}` ({test.quality_score}/100) - Improve: {', '.join(improvements)}\n")
 
         return ''.join(lines)
@@ -1024,11 +1333,35 @@ ConfigPlanChecks: resource.ConfigPlanChecks{
 
 ### ID Consistency Tracking
 ```go
+// Initialize ID tracker at test start (before Steps)
 compareID := statecheck.CompareValue(compare.ValuesSame())
 
-ConfigStateChecks: []statecheck.StateCheck{
-    compareID.AddStateValue("example_resource.test", tfjsonpath.New("id")),
+// Step 1: Create - track ID
+{
+    Config: testAccResourceConfig(name),
+    ConfigStateChecks: []statecheck.StateCheck{
+        compareID.AddStateValue("example_resource.test", tfjsonpath.New("id")),
+    },
 }
+
+// Step 2: Import - track ID to verify consistency
+{
+    ResourceName:      "example_resource.test",
+    ImportState:       true,
+    ImportStateVerify: true,
+    ConfigStateChecks: []statecheck.StateCheck{
+        compareID.AddStateValue("example_resource.test", tfjsonpath.New("id")),
+    },
+}
+
+// Step 3: Update - track ID to ensure stability
+{
+    Config: testAccResourceConfig(name, "updated"),
+    ConfigStateChecks: []statecheck.StateCheck{
+        compareID.AddStateValue("example_resource.test", tfjsonpath.New("id")),
+    },
+}
+// CompareValue(ValuesSame()) ensures ID remains identical across all steps
 ```
 
 ### Robust CheckDestroy Pattern
