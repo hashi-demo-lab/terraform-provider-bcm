@@ -213,9 +213,26 @@ func parseInterfaceFromAPI(data map[string]interface{}) DeviceInterfaceModel {
 
 	// Network assignment
 	model.Network = getStringValue(data, "network")
-	model.MAC = getStringValue(data, "mac")
-	model.IP = getStringValue(data, "ip")
-	model.IPv6IP = getStringValue(data, "ipv6Ip")
+
+	// MAC address - BCM returns "00:00:00:00:00:00" as default for bonds, treat as null
+	if mac := getStringValue(data, "mac"); !mac.IsNull() && mac.ValueString() != "" && mac.ValueString() != "00:00:00:00:00:00" {
+		model.MAC = mac
+	} else {
+		model.MAC = types.StringNull()
+	}
+
+	// IP addresses - BCM returns "0.0.0.0" and "::0" as defaults, treat as null
+	if ip := getStringValue(data, "ip"); !ip.IsNull() && ip.ValueString() != "" && ip.ValueString() != "0.0.0.0" {
+		model.IP = ip
+	} else {
+		model.IP = types.StringNull()
+	}
+
+	if ipv6 := getStringValue(data, "ipv6Ip"); !ipv6.IsNull() && ipv6.ValueString() != "" && ipv6.ValueString() != "::0" {
+		model.IPv6IP = ipv6
+	} else {
+		model.IPv6IP = types.StringNull()
+	}
 
 	// Configuration flags
 	model.DHCP = getBoolValue(data, "dhcp")
@@ -311,7 +328,8 @@ func parseInterfacesFromAPI(data interface{}) []DeviceInterfaceModel {
 	return result
 }
 
-// normalizeInterfaceOrder reorders parsed interfaces to match plan order.
+// normalizeInterfaceOrder reorders parsed interfaces to match plan order and
+// preserves plan values for fields that BCM doesn't return (like members, bond_mode).
 // This prevents spurious diffs when BCM returns interfaces in a different order.
 func normalizeInterfaceOrder(parsedInterfaces []DeviceInterfaceModel, planInterfaces []DeviceInterfaceModel) []DeviceInterfaceModel {
 	if len(planInterfaces) == 0 {
@@ -324,11 +342,13 @@ func normalizeInterfaceOrder(parsedInterfaces []DeviceInterfaceModel, planInterf
 		parsedByName[iface.Name.ValueString()] = iface
 	}
 
-	// Reorder to match plan order
+	// Reorder to match plan order and merge plan values
 	result := make([]DeviceInterfaceModel, 0, len(planInterfaces))
 	for _, planIface := range planInterfaces {
 		if parsed, ok := parsedByName[planIface.Name.ValueString()]; ok {
-			result = append(result, parsed)
+			// Merge plan values for fields BCM doesn't return
+			merged := mergeInterfaceWithPlan(parsed, planIface)
+			result = append(result, merged)
 			delete(parsedByName, planIface.Name.ValueString())
 		}
 	}
@@ -336,6 +356,27 @@ func normalizeInterfaceOrder(parsedInterfaces []DeviceInterfaceModel, planInterf
 	// Append any interfaces not in plan (e.g., added externally)
 	for _, iface := range parsedByName {
 		result = append(result, iface)
+	}
+
+	return result
+}
+
+// mergeInterfaceWithPlan merges parsed interface data with plan values for fields
+// that BCM API doesn't return. This is essential for bond-specific fields.
+func mergeInterfaceWithPlan(parsed DeviceInterfaceModel, plan DeviceInterfaceModel) DeviceInterfaceModel {
+	result := parsed
+
+	// Preserve bond-specific fields from plan if not returned by BCM
+	if parsed.Type.ValueString() == "bond" {
+		// Members - BCM may not return this field
+		if parsed.Members.IsNull() && !plan.Members.IsNull() && !plan.Members.IsUnknown() {
+			result.Members = plan.Members
+		}
+
+		// Bond mode - BCM may not return this field
+		if parsed.BondMode.IsNull() && !plan.BondMode.IsNull() && !plan.BondMode.IsUnknown() {
+			result.BondMode = plan.BondMode
+		}
 	}
 
 	return result

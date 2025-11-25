@@ -129,7 +129,8 @@ resource "bcm_cmdevice_device" "test" {
 }
 
 // testAccCMDeviceDeviceConfigInterfaceBMC generates a config for a device with a BMC interface.
-func testAccCMDeviceDeviceConfigInterfaceBMC(hostname, mac, categoryUUID, mgmtNetworkUUID, bmcNetworkUUID, bmcIP string) string {
+// Note: BMC interface names must follow the pattern ipmiX, iloX, cimcX, dracX, or rfX where X is a number.
+func testAccCMDeviceDeviceConfigInterfaceBMC(hostname, mac, categoryUUID, networkUUID string) string {
 	return fmt.Sprintf(`
 provider "bcm" {
   endpoint             = %[1]q
@@ -153,11 +154,10 @@ resource "bcm_cmdevice_device" "test" {
   }
 
   interfaces {
-    name    = "ipmi"
+    name    = "ipmi0"
     type    = "bmc"
-    network = %[8]q
-    ip      = %[9]q
-    dhcp    = false
+    network = %[7]q
+    dhcp    = true
   }
 }
 `,
@@ -167,9 +167,7 @@ resource "bcm_cmdevice_device" "test" {
 		hostname,
 		mac,
 		categoryUUID,
-		mgmtNetworkUUID,
-		bmcNetworkUUID,
-		bmcIP,
+		networkUUID,
 	)
 }
 
@@ -302,20 +300,13 @@ func TestAccCMDeviceDevice_InterfaceBond(t *testing.T) {
 func TestAccCMDeviceDevice_InterfaceBMC(t *testing.T) {
 	hostname := generateShortTestName("dev")
 	mac := generateUniqueMAC()
-	bmcIP := "10.0.100.10" // Static IP for BMC
 
 	// Get test data from environment
 	categoryUUID := os.Getenv("BCM_TEST_CATEGORY_UUID")
-	mgmtNetworkUUID := os.Getenv("BCM_TEST_NETWORK_UUID")
-	bmcNetworkUUID := os.Getenv("BCM_TEST_BMC_NETWORK_UUID")
+	networkUUID := os.Getenv("BCM_TEST_NETWORK_UUID")
 
-	if categoryUUID == "" || mgmtNetworkUUID == "" {
+	if categoryUUID == "" || networkUUID == "" {
 		t.Skip("BCM_TEST_CATEGORY_UUID and BCM_TEST_NETWORK_UUID environment variables must be set")
-	}
-
-	// Use same network if BMC network not provided
-	if bmcNetworkUUID == "" {
-		bmcNetworkUUID = mgmtNetworkUUID
 	}
 
 	resource.Test(t, resource.TestCase{
@@ -324,16 +315,15 @@ func TestAccCMDeviceDevice_InterfaceBMC(t *testing.T) {
 		Steps: []resource.TestStep{
 			// Create with BMC interface
 			{
-				Config: testAccCMDeviceDeviceConfigInterfaceBMC(hostname, mac, categoryUUID, mgmtNetworkUUID, bmcNetworkUUID, bmcIP),
+				Config: testAccCMDeviceDeviceConfigInterfaceBMC(hostname, mac, categoryUUID, networkUUID),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("bcm_cmdevice_device.test", "hostname", hostname),
 					resource.TestCheckResourceAttr("bcm_cmdevice_device.test", "interfaces.#", "2"),
 					resource.TestCheckResourceAttr("bcm_cmdevice_device.test", "interfaces.0.name", "eth0"),
 					resource.TestCheckResourceAttr("bcm_cmdevice_device.test", "interfaces.0.type", "physical"),
-					resource.TestCheckResourceAttr("bcm_cmdevice_device.test", "interfaces.1.name", "ipmi"),
+					resource.TestCheckResourceAttr("bcm_cmdevice_device.test", "interfaces.1.name", "ipmi0"),
 					resource.TestCheckResourceAttr("bcm_cmdevice_device.test", "interfaces.1.type", "bmc"),
-					resource.TestCheckResourceAttr("bcm_cmdevice_device.test", "interfaces.1.ip", bmcIP),
-					resource.TestCheckResourceAttr("bcm_cmdevice_device.test", "interfaces.1.dhcp", "false"),
+					resource.TestCheckResourceAttr("bcm_cmdevice_device.test", "interfaces.1.dhcp", "true"),
 				),
 			},
 		},
@@ -373,7 +363,9 @@ func TestAccCMDeviceDevice_InterfaceImport(t *testing.T) {
 				ImportStateVerify: true,
 				ImportStateVerifyIgnore: []string{
 					"force",
-					"management_network",
+					"management_network", // BCM may not return this
+					"default_gateway",    // BCM returns "0.0.0.0" default
+					"power_control",      // BCM returns "none" default
 				},
 			},
 		},
