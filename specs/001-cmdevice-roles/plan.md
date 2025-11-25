@@ -1,104 +1,307 @@
-# Implementation Plan: [FEATURE]
+# Implementation Plan: BCM Device Roles Data Source
 
-**Branch**: `[###-feature-name]` | **Date**: [DATE] | **Spec**: [link]
-**Input**: Feature specification from `/specs/[###-feature-name]/spec.md`
+**Branch**: `001-cmdevice-roles` | **Date**: 2025-11-25 | **Spec**: [spec.md](/workspace/specs/001-cmdevice-roles/spec.md)
+**Input**: Feature specification from `/specs/001-cmdevice-roles/spec.md`
 
 **Note**: This template is filled in by the `/speckit.plan` command. See `.specify/templates/commands/plan.md` for the execution workflow.
 
 ## Summary
 
-[Extract from feature spec: primary requirement + technical approach from research]
+Implement a Terraform data source (`data.bcm_cmdevice_roles`) to query available role types in BCM for device role assignment. Roles are embedded in Device objects and must be extracted from `cmdevice.getNodes`, aggregated, deduplicated by UUID, and filtered client-side. This enables DevOps engineers to discover role types dynamically without hardcoding role names in automation workflows.
+
+**Technical Approach**: Extract roles from all nodes via `cmdevice.getNodes`, deduplicate by UUID using map[uuid]Role, apply optional client-side filters (childType exact match, name_pattern glob matching), and return filtered role list in Terraform state.
 
 ## Technical Context
 
-<!--
-  ACTION REQUIRED: Replace the content in this section with the technical details
-  for the project. The structure here is presented in advisory capacity to guide
-  the iteration process.
--->
-
-**Language/Version**: [e.g., Python 3.11, Swift 5.9, Rust 1.75 or NEEDS CLARIFICATION]  
-**Primary Dependencies**: [e.g., FastAPI, UIKit, LLVM or NEEDS CLARIFICATION]  
-**Storage**: [if applicable, e.g., PostgreSQL, CoreData, files or N/A]  
-**Testing**: [e.g., pytest, XCTest, cargo test or NEEDS CLARIFICATION]  
-**Target Platform**: [e.g., Linux server, iOS 15+, WASM or NEEDS CLARIFICATION]
-**Project Type**: [single/web/mobile - determines source structure]  
-**Performance Goals**: [domain-specific, e.g., 1000 req/s, 10k lines/sec, 60 fps or NEEDS CLARIFICATION]  
-**Constraints**: [domain-specific, e.g., <200ms p95, <100MB memory, offline-capable or NEEDS CLARIFICATION]  
-**Scale/Scope**: [domain-specific, e.g., 10k users, 1M LOC, 50 screens or NEEDS CLARIFICATION]
+**Language/Version**: Go 1.24+
+**Primary Dependencies**: terraform-plugin-framework v1.16.1, terraform-plugin-testing v1.13.3
+**Storage**: N/A (read-only data source)
+**Testing**: Acceptance tests with TF_ACC=1, environment variables for BCM credentials
+**Target Platform**: Linux/macOS/Windows (Terraform provider binary)
+**Project Type**: Single project (Terraform Provider)
+**Performance Goals**: <5 seconds for clusters with <100 nodes, <10 seconds for <1000 nodes
+**Constraints**: Client-side filtering only (no BCM API filtering), deduplication required
+**Scale/Scope**: Single data source, 2 optional filter attributes, 6 computed role attributes
 
 ## Constitution Check
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-[Gates determined based on constitution file]
+**TDD Compliance**:
+- ✅ RED-GREEN-REFACTOR cycle mandatory: Write failing acceptance tests → minimal implementation → refactor
+- ✅ Parallel execution where possible: Test files can be written concurrently with implementation
+- ✅ Acceptance tests required: TestAccCMDeviceRolesDataSource_* covering all filter scenarios
+
+**Test Coverage**:
+- ✅ All filter combinations tested: No filters, childType only, name_pattern only, combined filters
+- ✅ Edge cases covered: Empty results, API failures, null fields handled with helper functions
+- ✅ Environment portability: No hardcoded role names/counts, works on any BCM cluster
+
+**Code Quality**:
+- ✅ Follow existing patterns: Use data_source_cmdevice_categories.go structure
+- ✅ Null-safe extraction: Use getStringValue(), getBoolValue() helpers from data_source_cmpart_softwareimages.go
+- ✅ Client-side filtering: Follow matchesSoftwareImageFilter pattern with AND logic
+
+**Documentation**:
+- ✅ Auto-generated docs: Run `make generate` after implementation
+- ✅ Example usage: Create examples/data-sources/bcm_cmdevice_roles/*.tf files
+
+**Result**: ✅ All constitution checks pass. No complexity violations. Proceed to Phase 0.
 
 ## Project Structure
 
 ### Documentation (this feature)
 
 ```text
-specs/[###-feature]/
+specs/001-cmdevice-roles/
 ├── plan.md              # This file (/speckit.plan command output)
-├── research.md          # Phase 0 output (/speckit.plan command)
-├── data-model.md        # Phase 1 output (/speckit.plan command)
-├── quickstart.md        # Phase 1 output (/speckit.plan command)
-├── contracts/           # Phase 1 output (/speckit.plan command)
+├── research.md          # Phase 0 output - BCM API exploration for role extraction
+├── data-model.md        # Phase 1 output - Role entity structure
+├── quickstart.md        # Phase 1 output - Developer quick start guide
+├── contracts/           # Phase 1 output - Terraform schema definition
+│   └── data_source_bcm_cmdevice_roles.md
 └── tasks.md             # Phase 2 output (/speckit.tasks command - NOT created by /speckit.plan)
 ```
 
 ### Source Code (repository root)
-<!--
-  ACTION REQUIRED: Replace the placeholder tree below with the concrete layout
-  for this feature. Delete unused options and expand the chosen structure with
-  real paths (e.g., apps/admin, packages/something). The delivered plan must
-  not include Option labels.
--->
 
 ```text
-# [REMOVE IF UNUSED] Option 1: Single project (DEFAULT)
-src/
-├── models/
-├── services/
-├── cli/
-└── lib/
-
-tests/
-├── contract/
-├── integration/
-└── unit/
-
-# [REMOVE IF UNUSED] Option 2: Web application (when "frontend" + "backend" detected)
-backend/
-├── src/
-│   ├── models/
-│   ├── services/
-│   └── api/
-└── tests/
-
-frontend/
-├── src/
-│   ├── components/
-│   ├── pages/
-│   └── services/
-└── tests/
-
-# [REMOVE IF UNUSED] Option 3: Mobile + API (when "iOS/Android" detected)
-api/
-└── [same as backend above]
-
-ios/ or android/
-└── [platform-specific structure: feature modules, UI flows, platform tests]
+terraform-provider-bcm/
+├── internal/provider/
+│   ├── data_source_cmdevice_roles.go       # NEW - Data source implementation
+│   ├── data_source_cmdevice_roles_test.go  # NEW - Acceptance tests
+│   ├── data_source_cmdevice_categories.go  # REFERENCE - Data source pattern
+│   ├── data_source_cmpart_softwareimages.go # REFERENCE - Filter pattern + helpers
+│   ├── bcm_client.go                       # EXISTING - CallJSONRPC method
+│   ├── provider.go                         # UPDATE - Register new data source
+│   └── test_helpers.go                     # EXISTING - Test utilities
+├── examples/
+│   └── data-sources/
+│       └── bcm_cmdevice_roles/             # NEW - Example configurations
+│           ├── data-source.tf              # Query all roles
+│           ├── filter-by-type.tf           # Filter by childType
+│           └── filter-by-pattern.tf        # Filter by name pattern
+├── docs/
+│   └── data-sources/
+│       └── bcm_cmdevice_roles.md           # AUTO-GENERATED by tfplugindocs
+└── specs/
+    └── 001-cmdevice-roles/                 # THIS FEATURE
 ```
 
-**Structure Decision**: [Document the selected structure and reference the real
-directories captured above]
+**Structure Decision**: Single project (Terraform Provider). New data source follows existing pattern in `internal/provider/data_source_*.go`. Tests in parallel file `*_test.go`. Examples in `examples/data-sources/`. Documentation auto-generated by `make generate`.
 
 ## Complexity Tracking
 
-> **Fill ONLY if Constitution Check has violations that must be justified**
+> **No complexity violations. All constitution checks pass.**
 
-| Violation | Why Needed | Simpler Alternative Rejected Because |
-|-----------|------------|-------------------------------------|
-| [e.g., 4th project] | [current need] | [why 3 projects insufficient] |
-| [e.g., Repository pattern] | [specific problem] | [why direct DB access insufficient] |
+N/A - This feature follows established patterns with no additional complexity.
+
+---
+
+## Phase 0: Outline & Research
+
+### Research Questions
+
+Based on the feature specification and technical context, the following unknowns need research:
+
+1. **BCM API Role Extraction Method**: How do we extract roles from nodes via `cmdevice.getNodes`?
+   - What is the structure of the `roles` field in node objects?
+   - Are roles always present in node objects, or can they be null/missing?
+   - How do we access the roles array from each node?
+
+2. **Role Deduplication Strategy**: How do we deduplicate roles across all nodes?
+   - Is the UUID field guaranteed unique across all roles?
+   - Can the same role UUID appear with different data on different nodes?
+   - What data structure is most efficient for deduplication (map vs slice)?
+
+3. **Glob Pattern Matching in Go**: What library should we use for name_pattern filtering?
+   - Does Go's standard library support glob patterns?
+   - Should we use `filepath.Match` for glob matching?
+   - What are the limitations of glob patterns (*, ?, etc.)?
+
+4. **Filter Logic**: How should multiple filters interact?
+   - Should filters use AND logic (all must match) or OR logic (any can match)?
+   - What happens when no filters are specified?
+   - How do we handle empty filter values?
+
+### Research Tasks
+
+**Task 1: Verify BCM API Role Extraction**
+- Call `cmdevice.getNodes` and examine response structure
+- Locate `roles` array in node objects
+- Document role object structure (fields, types, nullable attributes)
+- Verify UUID uniqueness across nodes
+
+**Task 2: Glob Pattern Matching Research**
+- Test Go's `filepath.Match` function with glob patterns
+- Document supported patterns (*, ?, [abc], etc.)
+- Identify edge cases (empty pattern, invalid syntax)
+- Compare with Terraform's expectations for pattern matching
+
+**Task 3: Review Filtering Patterns**
+- Study `data_source_cmpart_softwareimages.go` filter implementation
+- Document AND/OR logic decision for multiple filters
+- Identify null/empty filter handling approach
+- Ensure consistency with existing data sources
+
+### Research Deliverables
+
+- `research.md`: Consolidated research findings with:
+  - BCM API role extraction method and data structure
+  - Role deduplication approach using map[uuid]Role
+  - Glob pattern matching library choice (filepath.Match)
+  - Filter logic decision (AND logic, matching existing patterns)
+  - Code samples demonstrating role extraction and filtering
+
+---
+
+## Phase 1: Design & Contracts
+
+**Prerequisites**: `research.md` complete with all unknowns resolved
+
+### Design Artifacts
+
+**1. Data Model (`data-model.md`)**
+
+Entity: **Role**
+
+Attributes:
+- `uuid` (string, required): Unique identifier for role (BCM field: `uuid`)
+- `name` (string, required): Role name (BCM field: `name`)
+- `child_type` (string, required): Role type like HeadNodeRole, ComputeRole (BCM field: `childType`)
+- `base_type` (string, required): Always "Role" (BCM field: `baseType`)
+- `add_services` (bool, optional): Whether role adds services to node (BCM field: `addServices`)
+
+Relationships:
+- Roles are embedded in Device objects as an array
+- Accessed via `node.roles` array from `cmdevice.getNodes` response
+- Deduplicated by UUID across all nodes
+
+State Management:
+- Read-only data source, no state persistence required
+- Terraform state stores filtered role list with all attributes
+- ID computed from aggregated role UUIDs for uniqueness
+
+**2. API Contracts (`contracts/data_source_bcm_cmdevice_roles.md`)**
+
+**Service**: `cmdevice`
+**Method**: `getNodes`
+**Pattern**: List all nodes → extract roles → deduplicate → filter
+
+**Request**:
+```json
+{
+  "service": "cmdevice",
+  "call": "getNodes"
+}
+```
+
+**Response** (excerpt showing role structure):
+```json
+[
+  {
+    "uuid": "node-uuid-123",
+    "name": "node01",
+    "roles": [
+      {
+        "baseType": "Role",
+        "childType": "HeadNodeRole",
+        "name": "headnode",
+        "uuid": "role-uuid-456",
+        "addServices": true,
+        "modified": false,
+        "to_be_removed": false,
+        "revision": ""
+      }
+    ]
+  }
+]
+```
+
+**Terraform Schema**:
+
+```hcl
+data "bcm_cmdevice_roles" "example" {
+  # Optional filters
+  name_pattern = "kube-*"      # Glob pattern for role name
+  child_type   = "ComputeRole" # Exact match for role type
+
+  # Computed attributes
+  id    = "computed-id"
+  roles = [
+    {
+      id           = "role-uuid-456"
+      uuid         = "role-uuid-456"
+      name         = "headnode"
+      child_type   = "HeadNodeRole"
+      base_type    = "Role"
+      add_services = true
+    }
+  ]
+}
+```
+
+**3. Developer Quick Start (`quickstart.md`)**
+
+Quick start guide for implementing the bcm_cmdevice_roles data source:
+
+1. **Run research script** to verify role extraction from nodes
+2. **Write failing acceptance test** in `data_source_cmdevice_roles_test.go`
+3. **Implement minimal data source** in `data_source_cmdevice_roles.go`:
+   - Define schema with filter attributes
+   - Call `cmdevice.getNodes`
+   - Extract roles from nodes
+   - Deduplicate by UUID
+   - Apply filters
+   - Set Terraform state
+4. **Register data source** in `provider.go` DataSources() method
+5. **Run acceptance tests** with `TF_ACC=1 go test -v ./internal/provider/ -run TestAccCMDeviceRoles`
+6. **Create examples** in `examples/data-sources/bcm_cmdevice_roles/`
+7. **Generate documentation** with `make generate`
+
+**Testing Strategy**:
+- TestAccCMDeviceRolesDataSource_All: Query all roles without filters
+- TestAccCMDeviceRolesDataSource_FilterByChildType: Filter by exact childType
+- TestAccCMDeviceRolesDataSource_FilterByNamePattern: Filter by glob pattern
+- TestAccCMDeviceRolesDataSource_CombinedFilters: Both filters together (AND logic)
+- TestAccCMDeviceRolesDataSource_EmptyResults: No matches for filter criteria
+
+**4. Update Agent Context**
+
+After generating design artifacts, run:
+```bash
+.specify/scripts/bash/update-agent-context.sh copilot
+```
+
+This updates the agent-specific context file with:
+- New data source bcm_cmdevice_roles
+- Role extraction pattern from nodes
+- Client-side filtering approach
+- Deduplication strategy
+
+---
+
+## Phase 2: Planning Complete
+
+**Command ends here**. The `/speckit.plan` command stops after Phase 1 design artifacts are generated.
+
+**Next Steps** (not executed by this command):
+1. Run `/speckit.tasks` to generate actionable task breakdown in `tasks.md`
+2. Run `/speckit.analyze` to verify cross-artifact consistency
+3. Run `/speckit.implement` to execute implementation tasks
+
+**Deliverables Location**: `/workspace/specs/001-cmdevice-roles/`
+- ✅ plan.md (this file)
+- ⏳ research.md (Phase 0 output)
+- ⏳ data-model.md (Phase 1 output)
+- ⏳ quickstart.md (Phase 1 output)
+- ⏳ contracts/ (Phase 1 output)
+
+**Branch**: `001-cmdevice-roles` (from setup script)
+
+**Implementation Approach**:
+- Follow TDD RED-GREEN-REFACTOR cycle
+- Use parallel tool calls for independent tasks
+- Reference existing patterns in data_source_cmdevice_categories.go
+- Use null-safe helpers from data_source_cmpart_softwareimages.go
+- Test on live BCM cluster with environment variables
