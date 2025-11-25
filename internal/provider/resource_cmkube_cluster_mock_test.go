@@ -12,11 +12,13 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-testing/compare"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
 	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/statecheck"
 	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
 )
 
 // ========================================
@@ -244,6 +246,30 @@ func handleGetKubeClusters(w http.ResponseWriter, state *mockClusterState) {
 	_ = json.NewEncoder(w).Encode(clusters)
 }
 
+// testAccCheckMockClusterDestroy creates a CheckDestroy function for mock cluster tests.
+// It verifies that all clusters have been removed from the mock state.
+func testAccCheckMockClusterDestroy(state *mockClusterState) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		for _, rs := range s.RootModule().Resources {
+			if rs.Type != "bcm_cmkube_cluster" {
+				continue
+			}
+
+			id := rs.Primary.ID
+
+			state.mu.RLock()
+			_, exists := state.clusters[id]
+			state.mu.RUnlock()
+
+			if exists {
+				return fmt.Errorf("bcm_cmkube_cluster %s still exists in mock state after destroy", id)
+			}
+		}
+
+		return nil
+	}
+}
+
 // ========================================
 // Mock Tests for etcd_nodes
 // ========================================
@@ -254,13 +280,17 @@ func TestAccCMKubeClusterResource_MockEtcdNodes(t *testing.T) {
 	cleanup := clearBCMEnvVars(t)
 	defer cleanup()
 
-	mockServer, _ := createMockBCMServerForKubeCluster()
+	mockServer, mockState := createMockBCMServerForKubeCluster()
 	defer mockServer.Close()
 
 	clusterName := generateUniqueTestName("mock-etcd-cluster")
 
+	// ID consistency tracking across test steps
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckMockClusterDestroy(mockState),
 		Steps: []resource.TestStep{
 			// Create cluster with etcd_nodes
 			{
@@ -281,6 +311,10 @@ func TestAccCMKubeClusterResource_MockEtcdNodes(t *testing.T) {
 						tfjsonpath.New("uuid"),
 						knownvalue.NotNull(),
 					),
+					compareID.AddStateValue(
+						"bcm_cmkube_cluster.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Idempotency check - etcd_nodes should be preserved
@@ -290,6 +324,12 @@ func TestAccCMKubeClusterResource_MockEtcdNodes(t *testing.T) {
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
 					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmkube_cluster.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 		},
@@ -301,13 +341,17 @@ func TestAccCMKubeClusterResource_MockEtcdNodesUpdate(t *testing.T) {
 	cleanup := clearBCMEnvVars(t)
 	defer cleanup()
 
-	mockServer, _ := createMockBCMServerForKubeCluster()
+	mockServer, mockState := createMockBCMServerForKubeCluster()
 	defer mockServer.Close()
 
 	clusterName := generateUniqueTestName("mock-etcd-update")
 
+	// ID consistency tracking across test steps
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckMockClusterDestroy(mockState),
 		Steps: []resource.TestStep{
 			// Create with 3 etcd nodes
 			{
@@ -317,6 +361,10 @@ func TestAccCMKubeClusterResource_MockEtcdNodesUpdate(t *testing.T) {
 						"bcm_cmkube_cluster.test",
 						tfjsonpath.New("etcd_nodes"),
 						knownvalue.ListSizeExact(3),
+					),
+					compareID.AddStateValue(
+						"bcm_cmkube_cluster.test",
+						tfjsonpath.New("id"),
 					),
 				},
 			},
@@ -329,6 +377,10 @@ func TestAccCMKubeClusterResource_MockEtcdNodesUpdate(t *testing.T) {
 						tfjsonpath.New("etcd_nodes"),
 						knownvalue.ListSizeExact(5),
 					),
+					compareID.AddStateValue(
+						"bcm_cmkube_cluster.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Idempotency after update
@@ -338,6 +390,12 @@ func TestAccCMKubeClusterResource_MockEtcdNodesUpdate(t *testing.T) {
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
 					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmkube_cluster.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 		},
@@ -403,13 +461,17 @@ func TestAccCMKubeClusterResource_MockEtcdNodesNullToValue(t *testing.T) {
 	cleanup := clearBCMEnvVars(t)
 	defer cleanup()
 
-	mockServer, _ := createMockBCMServerForKubeCluster()
+	mockServer, mockState := createMockBCMServerForKubeCluster()
 	defer mockServer.Close()
 
 	clusterName := generateUniqueTestName("mock-etcd-null")
 
+	// ID consistency tracking across test steps
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckMockClusterDestroy(mockState),
 		Steps: []resource.TestStep{
 			// Create without etcd_nodes
 			{
@@ -419,6 +481,10 @@ func TestAccCMKubeClusterResource_MockEtcdNodesNullToValue(t *testing.T) {
 						"bcm_cmkube_cluster.test",
 						tfjsonpath.New("name"),
 						knownvalue.StringExact(clusterName),
+					),
+					compareID.AddStateValue(
+						"bcm_cmkube_cluster.test",
+						tfjsonpath.New("id"),
 					),
 				},
 			},
@@ -431,6 +497,10 @@ func TestAccCMKubeClusterResource_MockEtcdNodesNullToValue(t *testing.T) {
 						tfjsonpath.New("etcd_nodes"),
 						knownvalue.ListSizeExact(3),
 					),
+					compareID.AddStateValue(
+						"bcm_cmkube_cluster.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Idempotency
@@ -440,6 +510,12 @@ func TestAccCMKubeClusterResource_MockEtcdNodesNullToValue(t *testing.T) {
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
 					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmkube_cluster.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 		},
