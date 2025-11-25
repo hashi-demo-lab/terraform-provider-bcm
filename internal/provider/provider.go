@@ -172,6 +172,7 @@ func (p *BCMProvider) Resources(ctx context.Context) []func() resource.Resource 
 		NewCMDeviceDeviceResource,
 		NewCMKubeClusterResource,
 		NewCMNetNetworkResource,
+		NewCMUserUserResource,
 	}
 }
 
