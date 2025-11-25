@@ -15,6 +15,7 @@ Detects:
 - Optional field coverage
 - Test cleanup issues and verification
 - ID consistency tracking issues
+- Hardcoded credentials and secrets
 
 Codebase Statistics:
 - Total Go files and line counts
@@ -33,6 +34,12 @@ Cleanup Analysis:
 - Cleanup-friendly naming patterns (citest prefix, unique names)
 - External resource cleanup
 - Hardcoded vs dynamic resource names
+
+Security Analysis:
+- Hardcoded passwords and secrets
+- Hardcoded API keys and tokens
+- Hardcoded IP addresses and endpoints
+- Credentials not using environment variables
 
 Usage:
     python3 analyze_gap.py <test_directory> [--output report.md]
@@ -183,6 +190,9 @@ class TestFile:
         self.modern_id_checks = 0  # Modern tfjsonpath.New("id") assertions
         self.id_consistency_issues = []  # List of ID consistency problems
 
+        # Security: Hardcoded credentials
+        self.hardcoded_credentials = []  # List of (line_num, credential_type, value, severity)
+
     def load(self):
         """Load file content."""
         with open(self.path, 'r') as f:
@@ -203,6 +213,7 @@ class TestFile:
         self._analyze_cleanup_patterns()
         self._detect_hardcoded_names()
         self._analyze_id_consistency()
+        self._detect_hardcoded_credentials()
         self._calculate_quality_score()
 
     def _find_test_functions(self):
@@ -431,6 +442,16 @@ class TestFile:
                 (r'\bimage_name\s*=\s*"([^"]+)"', 'image_name'),
             ]
 
+            # Skip lines that use string concatenation with variables
+            # Pattern: `"` + varName + `"` indicates parameterized value from function argument
+            if re.search(r'"\s*\+\s*\w+\s*\+\s*"', line):
+                continue
+
+            # Skip lines that are clearly Go string concatenation in config helpers
+            # These pass parameters from test functions that use generateUniqueTestName
+            if '`' in line and '+' in line:
+                continue
+
             for pattern, field in hardcoded_patterns:
                 matches = re.finditer(pattern, line)
                 for match in matches:
@@ -565,6 +586,105 @@ class TestFile:
                 "No ID verification in any test step - resources should verify ID persistence"
             )
 
+    def _detect_hardcoded_credentials(self):
+        """Detect hardcoded credentials, secrets, and sensitive values."""
+        lines = self.content.split('\n')
+
+        # Track if we're inside a block comment
+        in_block_comment = False
+
+        # Patterns to detect (pattern, credential_type, severity)
+        # severity: 'critical' = definite credential, 'warning' = potential issue
+        credential_patterns = [
+            # Passwords
+            (r'password\s*[=:]\s*["\']([^"\']{4,})["\']', 'password', 'critical'),
+            (r'passwd\s*[=:]\s*["\']([^"\']{4,})["\']', 'password', 'critical'),
+            (r'pwd\s*[=:]\s*["\']([^"\']{4,})["\']', 'password', 'critical'),
+
+            # API keys and tokens
+            (r'api[_-]?key\s*[=:]\s*["\']([^"\']{8,})["\']', 'api_key', 'critical'),
+            (r'apikey\s*[=:]\s*["\']([^"\']{8,})["\']', 'api_key', 'critical'),
+            (r'secret[_-]?key\s*[=:]\s*["\']([^"\']{8,})["\']', 'secret_key', 'critical'),
+            (r'access[_-]?key\s*[=:]\s*["\']([^"\']{8,})["\']', 'access_key', 'critical'),
+            (r'auth[_-]?token\s*[=:]\s*["\']([^"\']{8,})["\']', 'auth_token', 'critical'),
+            (r'bearer\s+([A-Za-z0-9_-]{20,})', 'bearer_token', 'critical'),
+
+            # AWS-style keys
+            (r'AKIA[0-9A-Z]{16}', 'aws_access_key', 'critical'),
+            (r'aws[_-]?secret[_-]?access[_-]?key\s*[=:]\s*["\']([^"\']{20,})["\']', 'aws_secret_key', 'critical'),
+
+            # Private keys
+            (r'-----BEGIN\s+(?:RSA\s+)?PRIVATE\s+KEY-----', 'private_key', 'critical'),
+            (r'-----BEGIN\s+OPENSSH\s+PRIVATE\s+KEY-----', 'ssh_private_key', 'critical'),
+
+            # Connection strings with credentials
+            (r'://[^:]+:([^@]{4,})@', 'connection_string_password', 'critical'),
+
+            # Hardcoded IPs (warning level - may be intentional for tests)
+            (r'endpoint\s*[=:]\s*["\']https?://(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})[:\d]*["\']', 'hardcoded_ip', 'warning'),
+
+            # Generic secrets
+            (r'secret\s*[=:]\s*["\']([^"\']{8,})["\']', 'secret', 'warning'),
+            (r'credential\s*[=:]\s*["\']([^"\']{8,})["\']', 'credential', 'warning'),
+        ]
+
+        # Safe patterns to exclude (using env vars correctly)
+        safe_patterns = [
+            r'os\.Getenv\s*\(\s*["\']',  # Go env var
+            r'\$\{?\w+\}?',  # Shell variable
+            r'%\[\d+\]',  # Go format placeholder
+            r'%[sqvd]',  # Go format verbs
+        ]
+
+        for i, line in enumerate(lines, 1):
+            stripped = line.strip()
+
+            # Track block comments
+            if '/*' in line:
+                in_block_comment = True
+            if '*/' in line:
+                in_block_comment = False
+                continue
+
+            # Skip comments
+            if in_block_comment or stripped.startswith('//'):
+                continue
+
+            # Skip lines with safe patterns (env vars)
+            if any(re.search(pattern, line) for pattern in safe_patterns):
+                continue
+
+            # Check each credential pattern
+            for pattern, cred_type, severity in credential_patterns:
+                matches = re.finditer(pattern, line, re.IGNORECASE)
+                for match in matches:
+                    value = match.group(1) if match.lastindex else match.group(0)
+
+                    # Skip placeholder values
+                    placeholder_indicators = [
+                        'example', 'placeholder', 'changeme', 'xxx', 'yyy', 'zzz',
+                        'your-', 'my-', 'test', 'dummy', 'fake', 'mock', 'sample',
+                        '...', '***', '${', '%[', '%s', '%q', '<', '>'
+                    ]
+                    if any(ind in value.lower() for ind in placeholder_indicators):
+                        continue
+
+                    # Skip if it's clearly a variable reference
+                    if re.match(r'^[a-z_]+$', value) and len(value) < 20:
+                        continue
+
+                    # Skip empty or very short values (likely false positives)
+                    if len(value.strip()) < 4:
+                        continue
+
+                    # For IPs, check if it's a test/local IP
+                    if cred_type == 'hardcoded_ip':
+                        # 127.x.x.x, 10.x.x.x, 192.168.x.x, 172.16-31.x.x are often OK for tests
+                        if re.match(r'^(127\.|10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.)', value):
+                            severity = 'info'  # Downgrade to info for private IPs
+
+                    self.hardcoded_credentials.append((i, cred_type, value[:50], severity))
+
     def _calculate_quality_score(self):
         """Calculate overall quality score (0-100)."""
         # Error-only tests have different scoring criteria
@@ -636,6 +756,12 @@ class TestFile:
         # Bonus for proper ID consistency tracking
         if self.has_compare_value_for_id and self.id_tracking_steps > 0:
             score = min(100, score + 5)  # Bonus for good ID tracking
+
+        # Severe penalty for hardcoded credentials
+        critical_creds = [c for c in self.hardcoded_credentials if c[3] == 'critical']
+        if critical_creds:
+            cred_penalty = min(len(critical_creds) * 20, 50)  # Max -50 points for critical
+            score = max(0, score - cred_penalty)
 
         self.quality_score = score
 
@@ -989,6 +1115,15 @@ class GapAnalyzer:
         resources_with_id_issues = sum(1 for t in real_resources if t.id_consistency_issues)
         total_id_issues = sum(len(t.id_consistency_issues) for t in real_resources)
 
+        # Security metrics (hardcoded credentials)
+        all_tests = self.resource_tests + self.data_source_tests
+        tests_with_credentials = sum(1 for t in all_tests if t.hardcoded_credentials)
+        total_credentials = sum(len(t.hardcoded_credentials) for t in all_tests)
+        critical_credentials = sum(
+            len([c for c in t.hardcoded_credentials if c[3] == 'critical'])
+            for t in all_tests
+        )
+
         report.append(f"- **{total_modern_state}** modern state checks (`statecheck.ExpectKnownValue`)\n")
         report.append(f"- **{total_modern_plan}** modern plan checks (`plancheck.Expect*`)\n")
         report.append(f"- **{total_legacy}** legacy check calls (needs cleanup)\n")
@@ -1028,6 +1163,17 @@ class GapAnalyzer:
                 report.append(f"- **All resources have consistent ID tracking** ✅\n")
         else:
             report.append(f"- **No resource tests found** (N/A)\n")
+
+        report.append(f"\n**Security (Hardcoded Credentials):**\n")
+        if critical_credentials > 0:
+            report.append(f"- **{critical_credentials} CRITICAL** hardcoded credentials found 🚨\n")
+            report.append(f"- **{tests_with_credentials}/{len(all_tests)}** test files have credential issues\n")
+            report.append(f"- **Action Required**: Replace with environment variables\n")
+        elif total_credentials > 0:
+            report.append(f"- **{total_credentials}** potential credential issues found ⚠️\n")
+            report.append(f"- **{tests_with_credentials}/{len(all_tests)}** test files affected\n")
+        else:
+            report.append(f"- **No hardcoded credentials detected** ✅\n")
 
         report.append(f"\n**Average Quality Score:** {avg_quality_score:.0f}/100\n")
         if mock_resources:
@@ -1129,6 +1275,20 @@ class GapAnalyzer:
                     for issue in test.id_consistency_issues:
                         lines.append(f"  - {issue}\n")
 
+            # Security: Hardcoded credentials
+            if test.hardcoded_credentials:
+                critical_creds = [c for c in test.hardcoded_credentials if c[3] == 'critical']
+                warning_creds = [c for c in test.hardcoded_credentials if c[3] == 'warning']
+                if critical_creds:
+                    lines.append(f"- **🚨 Hardcoded credentials:** {len(critical_creds)} CRITICAL\n")
+                    for line_num, cred_type, value, severity in critical_creds[:3]:
+                        masked = value[:4] + '*' * (len(value) - 4) if len(value) > 4 else '****'
+                        lines.append(f"  - Line {line_num}: `{cred_type}` = `{masked}`\n")
+                    if len(critical_creds) > 3:
+                        lines.append(f"  - (and {len(critical_creds) - 3} more)\n")
+                elif warning_creds:
+                    lines.append(f"- **Potential credentials:** {len(warning_creds)} ⚠️ (review)\n")
+
             if test.legacy_checks:
                 lines.append(f"- **Legacy checks:** {len(test.legacy_checks)} ⚠️\n")
                 lines.append(f"  - Lines: {', '.join(str(line) for line, _ in test.legacy_checks[:5])}")
@@ -1179,6 +1339,41 @@ class GapAnalyzer:
         lines.append("\n### HIGH PRIORITY ⚠️\n")
 
         has_high_priority = False
+
+        # CRITICAL: Hardcoded credentials
+        tests_with_creds = [t for t in self.resource_tests + self.data_source_tests
+                           if t.hardcoded_credentials]
+        critical_cred_tests = [t for t in tests_with_creds
+                               if any(c[3] == 'critical' for c in t.hardcoded_credentials)]
+
+        if critical_cred_tests:
+            has_high_priority = True
+            lines.append("\n**🚨 CRITICAL: Hardcoded Credentials Detected:**\n")
+            lines.append("These files contain hardcoded secrets that should be replaced with environment variables:\n\n")
+            for test in sorted(critical_cred_tests, key=lambda x: len(x.hardcoded_credentials), reverse=True):
+                critical_creds = [c for c in test.hardcoded_credentials if c[3] == 'critical']
+                lines.append(f"- **`{test.name}`** ({len(critical_creds)} critical):\n")
+                for line_num, cred_type, value, severity in critical_creds[:3]:
+                    # Mask the value for security
+                    masked = value[:4] + '*' * (len(value) - 4) if len(value) > 4 else '****'
+                    lines.append(f"  - Line {line_num}: `{cred_type}` = `{masked}` → Use `os.Getenv()`\n")
+                if len(critical_creds) > 3:
+                    lines.append(f"  - (and {len(critical_creds) - 3} more)\n")
+            lines.append("\n")
+
+        # Warning-level credential issues
+        warning_cred_tests = [t for t in tests_with_creds
+                              if any(c[3] == 'warning' for c in t.hardcoded_credentials)
+                              and t not in critical_cred_tests]
+        if warning_cred_tests:
+            has_high_priority = True
+            lines.append("\n**⚠️ Potential Credential Issues:**\n")
+            for test in warning_cred_tests[:5]:
+                warning_creds = [c for c in test.hardcoded_credentials if c[3] == 'warning']
+                lines.append(f"- **`{test.name}`**: {len(warning_creds)} potential issues (review recommended)\n")
+            if len(warning_cred_tests) > 5:
+                lines.append(f"- (and {len(warning_cred_tests) - 5} more files)\n")
+            lines.append("\n")
 
         # Hardcoded names (non-unique naming patterns)
         tests_with_hardcoded_names = [t for t in self.resource_tests + self.data_source_tests

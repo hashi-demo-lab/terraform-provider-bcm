@@ -1,0 +1,230 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "BCM Device Interface Entity",
+  "description": "JSON Schema for BCM network interface entities within device resources",
+  "definitions": {
+    "InterfaceEntity": {
+      "type": "object",
+      "required": ["baseType", "childType", "name", "uuid"],
+      "properties": {
+        "baseType": {
+          "type": "string",
+          "const": "NetworkInterface",
+          "description": "Entity base type, always 'NetworkInterface'"
+        },
+        "childType": {
+          "type": "string",
+          "enum": ["NetworkPhysicalInterface", "NetworkBondInterface", "NetworkBMCInterface"],
+          "description": "Specific interface type"
+        },
+        "uuid": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique identifier (client-generated before create)"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 63,
+          "pattern": "^[a-zA-Z][a-zA-Z0-9_-]*$",
+          "description": "Interface name (e.g., eth0, bond0, ipmi)"
+        },
+        "mac": {
+          "type": "string",
+          "pattern": "^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$",
+          "description": "MAC address in colon-separated format"
+        },
+        "network": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Network UUID reference"
+        },
+        "ip": {
+          "type": "string",
+          "format": "ipv4",
+          "description": "Static IPv4 address"
+        },
+        "ipv6Ip": {
+          "type": "string",
+          "default": "::0",
+          "description": "IPv6 address"
+        },
+        "dhcp": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable DHCP for IP assignment"
+        },
+        "ipv6Dhcp": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable IPv6 DHCP"
+        },
+        "bootable": {
+          "type": "boolean",
+          "default": false,
+          "description": "PXE boot capable"
+        },
+        "startIf": {
+          "type": "string",
+          "enum": ["ALWAYS", "NEVER", "HOTPLUG"],
+          "default": "ALWAYS",
+          "description": "Interface startup condition"
+        },
+        "cardtype": {
+          "type": "string",
+          "enum": ["Ethernet", "InfiniBand", "BMC"],
+          "default": "Ethernet",
+          "description": "Hardware card type"
+        },
+        "bringupduringinstall": {
+          "type": "string",
+          "enum": ["YES", "NO"],
+          "default": "NO",
+          "description": "Bring up interface during installation"
+        },
+        "members": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Member interface names (bond type only)"
+        },
+        "bondMode": {
+          "type": "string",
+          "enum": ["802.3ad", "active-backup", "balance-rr", "balance-xor", "broadcast", "balance-tlb", "balance-alb"],
+          "description": "Bond mode (bond type only)"
+        },
+        "modified": {
+          "type": "boolean",
+          "default": true,
+          "description": "BCM internal: entity has modifications"
+        },
+        "to_be_removed": {
+          "type": "boolean",
+          "default": false,
+          "description": "BCM internal: entity marked for removal"
+        },
+        "revision": {
+          "type": "string",
+          "default": "",
+          "description": "BCM internal: entity revision"
+        }
+      }
+    },
+    "PhysicalInterfaceEntity": {
+      "allOf": [
+        { "$ref": "#/definitions/InterfaceEntity" },
+        {
+          "properties": {
+            "childType": { "const": "NetworkPhysicalInterface" }
+          },
+          "required": ["mac"]
+        }
+      ],
+      "description": "Physical network interface (NIC)"
+    },
+    "BondInterfaceEntity": {
+      "allOf": [
+        { "$ref": "#/definitions/InterfaceEntity" },
+        {
+          "properties": {
+            "childType": { "const": "NetworkBondInterface" },
+            "members": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "type": "string" }
+            }
+          },
+          "required": ["members"]
+        }
+      ],
+      "description": "Bonded network interface"
+    },
+    "BMCInterfaceEntity": {
+      "allOf": [
+        { "$ref": "#/definitions/InterfaceEntity" },
+        {
+          "properties": {
+            "childType": { "const": "NetworkBMCInterface" },
+            "cardtype": { "const": "BMC" }
+          }
+        }
+      ],
+      "description": "BMC/IPMI management interface"
+    },
+    "DeviceInterfacesArray": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          { "$ref": "#/definitions/PhysicalInterfaceEntity" },
+          { "$ref": "#/definitions/BondInterfaceEntity" },
+          { "$ref": "#/definitions/BMCInterfaceEntity" }
+        ]
+      },
+      "description": "Array of interface entities within a device"
+    }
+  },
+  "type": "object",
+  "$ref": "#/definitions/DeviceInterfacesArray",
+  "examples": [
+    {
+      "description": "Physical interface example",
+      "value": {
+        "baseType": "NetworkInterface",
+        "childType": "NetworkPhysicalInterface",
+        "uuid": "00000000-0000-0000-0000-000000000001",
+        "name": "eth0",
+        "mac": "00:11:22:33:44:55",
+        "network": "12345678-1234-1234-1234-123456789012",
+        "ip": "",
+        "ipv6Ip": "::0",
+        "dhcp": true,
+        "ipv6Dhcp": false,
+        "bootable": true,
+        "startIf": "ALWAYS",
+        "cardtype": "Ethernet",
+        "bringupduringinstall": "NO",
+        "modified": true,
+        "to_be_removed": false,
+        "revision": ""
+      }
+    },
+    {
+      "description": "Bond interface example",
+      "value": {
+        "baseType": "NetworkInterface",
+        "childType": "NetworkBondInterface",
+        "uuid": "00000000-0000-0000-0000-000000000002",
+        "name": "bond0",
+        "network": "12345678-1234-1234-1234-123456789012",
+        "dhcp": true,
+        "bootable": true,
+        "startIf": "ALWAYS",
+        "cardtype": "Ethernet",
+        "bondMode": "802.3ad",
+        "members": ["eth0", "eth1"],
+        "modified": true,
+        "to_be_removed": false,
+        "revision": ""
+      }
+    },
+    {
+      "description": "BMC interface example",
+      "value": {
+        "baseType": "NetworkInterface",
+        "childType": "NetworkBMCInterface",
+        "uuid": "00000000-0000-0000-0000-000000000003",
+        "name": "ipmi",
+        "network": "12345678-1234-1234-1234-123456789099",
+        "ip": "10.0.100.10",
+        "dhcp": false,
+        "bootable": false,
+        "startIf": "ALWAYS",
+        "cardtype": "BMC",
+        "modified": true,
+        "to_be_removed": false,
+        "revision": ""
+      }
+    }
+  ]
+}

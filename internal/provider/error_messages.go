@@ -20,14 +20,14 @@ import (
 //   - dependentType: Type of dependent resources (e.g., "device", "category")
 //   - identifiers: List of dependent resource identifiers
 //
-// Returns formatted multi-line error message suitable for Terraform diagnostics
+// Returns formatted multi-line error message suitable for Terraform diagnostics.
 func BuildDependencyError(resourceType, resourceName, dependentType string, identifiers []ResourceIdentifier) string {
 	count := len(identifiers)
 
 	// Build dependent resource list (max 10, truncate if more)
 	var dependentList strings.Builder
 	maxShow := 10
-	shown := min(count, maxShow)
+	shown := minInt(count, maxShow)
 
 	for i := 0; i < shown; i++ {
 		dependentList.WriteString(fmt.Sprintf("  - %s (uuid: %s)\n", identifiers[i].Name, identifiers[i].UUID))
@@ -61,7 +61,7 @@ func BuildDependencyError(resourceType, resourceName, dependentType string, iden
 	}
 
 	// Format dependent type for grammatical correctness
-	dependentTypeDisplay := dependentType
+	var dependentTypeDisplay string
 	if count == 1 {
 		// Singular form
 		dependentTypeDisplay = dependentType
@@ -99,7 +99,7 @@ func BuildDependencyError(resourceType, resourceName, dependentType string, iden
 //   - resourceType: Type of resource being force deleted (e.g., "Category", "Software Image")
 //   - resourceName: Name of the resource being force deleted
 //
-// Returns formatted warning message suitable for Terraform diagnostics or logging
+// Returns formatted warning message suitable for Terraform diagnostics or logging.
 func BuildForceDeleteionWarning(resourceType, resourceName string) string {
 	var impact string
 	switch resourceType {
@@ -129,8 +129,8 @@ func BuildForceDeleteionWarning(resourceType, resourceName string) string {
 	)
 }
 
-// min returns the minimum of two integers (Go 1.21+ has this in stdlib, but for compatibility)
-func min(a, b int) int {
+// minInt returns the minimum of two integers (Go 1.21+ has this in stdlib, but for compatibility).
+func minInt(a, b int) int {
 	if a < b {
 		return a
 	}

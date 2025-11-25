@@ -20,8 +20,8 @@ import (
 // ========================================
 
 // clearBCMEnvVars clears BCM environment variables for mock server tests
-// This ensures the provider uses config values instead of environment
-func clearBCMEnvVars(t *testing.T) func() {
+// This ensures the provider uses config values instead of environment.
+func clearBCMEnvVars() func() {
 	oldEndpoint := os.Getenv("BCM_ENDPOINT")
 	oldUsername := os.Getenv("BCM_USERNAME")
 	oldPassword := os.Getenv("BCM_PASSWORD")
@@ -726,7 +726,7 @@ func handleDeviceDeleteError(w http.ResponseWriter, req struct {
 // - Mock BCM API returns HTTP 404 error when calling getCategory.
 // - Provider should detect error and return "Error Querying Category" diagnostic.
 func TestAccCMDeviceDeviceResource_MockErrorCategoryNotFound(t *testing.T) {
-	cleanup := clearBCMEnvVars(t)
+	cleanup := clearBCMEnvVars()
 	defer cleanup()
 
 	// Create mock server that simulates category not found error.
@@ -757,7 +757,7 @@ func TestAccCMDeviceDeviceResource_MockErrorCategoryNotFound(t *testing.T) {
 // - Mock BCM API returns malformed JSON when calling getCategory.
 // - Provider should fail to unmarshal response and return "Error Parsing Category" diagnostic.
 func TestAccCMDeviceDeviceResource_MockErrorCategoryInvalidJSON(t *testing.T) {
-	cleanup := clearBCMEnvVars(t)
+	cleanup := clearBCMEnvVars()
 	defer cleanup()
 
 	// Create mock server that returns malformed JSON for category query
@@ -788,7 +788,7 @@ func TestAccCMDeviceDeviceResource_MockErrorCategoryInvalidJSON(t *testing.T) {
 // - Mock BCM API returns category with neither partition nor softwareImageProxy fields.
 // - Provider should detect missing partition and return "Missing Partition" diagnostic.
 func TestAccCMDeviceDeviceResource_MockErrorCategoryNoPartition(t *testing.T) {
-	cleanup := clearBCMEnvVars(t)
+	cleanup := clearBCMEnvVars()
 	defer cleanup()
 
 	mockServer := createMockBCMServerForDeviceErrors(scenarioCategoryNoPartition)
@@ -818,7 +818,7 @@ func TestAccCMDeviceDeviceResource_MockErrorCategoryNoPartition(t *testing.T) {
 // - Mock category has softwareImageProxy but missing parentSoftwareImage field.
 // - Provider should return "Missing Partition" with proxy message.
 func TestAccCMDeviceDeviceResource_MockErrorCategoryProxyMissingParent(t *testing.T) {
-	cleanup := clearBCMEnvVars(t)
+	cleanup := clearBCMEnvVars()
 	defer cleanup()
 
 	mockServer := createMockBCMServerForDeviceErrors(scenarioCategoryProxyMissing)
@@ -852,7 +852,7 @@ func TestAccCMDeviceDeviceResource_MockErrorCategoryProxyMissingParent(t *testin
 // - Mock BCM API returns HTTP 500 error when calling getPartitions.
 // - Provider should detect error and return "Error Querying Partitions" diagnostic.
 func TestAccCMDeviceDeviceResource_MockErrorPartitionsQueryFailed(t *testing.T) {
-	cleanup := clearBCMEnvVars(t)
+	cleanup := clearBCMEnvVars()
 	defer cleanup()
 
 	mockServer := createMockBCMServerForDeviceErrors(scenarioPartitionsQueryError)
@@ -882,7 +882,7 @@ func TestAccCMDeviceDeviceResource_MockErrorPartitionsQueryFailed(t *testing.T) 
 // - Mock BCM API returns malformed JSON when calling getPartitions.
 // - Provider should fail to unmarshal and return "Error Parsing Partitions" diagnostic.
 func TestAccCMDeviceDeviceResource_MockErrorPartitionsInvalidJSON(t *testing.T) {
-	cleanup := clearBCMEnvVars(t)
+	cleanup := clearBCMEnvVars()
 	defer cleanup()
 
 	mockServer := createMockBCMServerForDeviceErrors(scenarioPartitionsInvalidJSON)
@@ -912,7 +912,7 @@ func TestAccCMDeviceDeviceResource_MockErrorPartitionsInvalidJSON(t *testing.T) 
 // - Mock BCM API returns partitions list without "base" partition.
 // - Provider should return "Missing Base Partition" diagnostic.
 func TestAccCMDeviceDeviceResource_MockErrorPartitionsNoBase(t *testing.T) {
-	cleanup := clearBCMEnvVars(t)
+	cleanup := clearBCMEnvVars()
 	defer cleanup()
 
 	mockServer := createMockBCMServerForDeviceErrors(scenarioPartitionsNoBase)
@@ -942,7 +942,7 @@ func TestAccCMDeviceDeviceResource_MockErrorPartitionsNoBase(t *testing.T) {
 // - Mock BCM API always returns error for getSoftwareImage (partition never commits).
 // - Provider should retry with exponential backoff and return "Partition Not Ready" after 20 retries.
 func TestAccCMDeviceDeviceResource_MockErrorPartitionNotCommitted(t *testing.T) {
-	cleanup := clearBCMEnvVars(t)
+	cleanup := clearBCMEnvVars()
 	defer cleanup()
 
 	mockServer := createMockBCMServerForDeviceErrors(scenarioPartitionNotCommitted)
@@ -976,7 +976,7 @@ func TestAccCMDeviceDeviceResource_MockErrorPartitionNotCommitted(t *testing.T) 
 // - Mock BCM API returns HTTP 500 error when calling addDevice.
 // - Provider should detect error and return "Error Creating Device" diagnostic.
 func TestAccCMDeviceDeviceResource_MockErrorDeviceCreateFailed(t *testing.T) {
-	cleanup := clearBCMEnvVars(t)
+	cleanup := clearBCMEnvVars()
 	defer cleanup()
 
 	mockServer := createMockBCMServerForDeviceErrors(scenarioDeviceCreateError)
@@ -1007,7 +1007,7 @@ func TestAccCMDeviceDeviceResource_MockErrorDeviceCreateFailed(t *testing.T) {
 // - bcm_client.parseErrorResponse detects invalid JSON and returns parse error.
 // - Provider returns "Error Creating Device" diagnostic with parse error details.
 func TestAccCMDeviceDeviceResource_MockErrorDeviceCreateInvalidJSON(t *testing.T) {
-	cleanup := clearBCMEnvVars(t)
+	cleanup := clearBCMEnvVars()
 	defer cleanup()
 
 	mockServer := createMockBCMServerForDeviceErrors(scenarioDeviceCreateInvalidJSON)
@@ -1037,7 +1037,7 @@ func TestAccCMDeviceDeviceResource_MockErrorDeviceCreateInvalidJSON(t *testing.T
 // - Mock BCM API validateDevice returns array of validation errors.
 // - Provider should parse validation errors and return "Validation Error: <field>" diagnostic.
 func TestAccCMDeviceDeviceResource_MockErrorDeviceValidationFailed(t *testing.T) {
-	cleanup := clearBCMEnvVars(t)
+	cleanup := clearBCMEnvVars()
 	defer cleanup()
 
 	mockServer := createMockBCMServerForDeviceErrors(scenarioDeviceValidationFailure)
@@ -1068,7 +1068,7 @@ func TestAccCMDeviceDeviceResource_MockErrorDeviceValidationFailed(t *testing.T)
 // - Provider should return "Error Reading Created Device" diagnostic.
 // - Note: This simulates eventual consistency issues where device created but not yet readable.
 func TestAccCMDeviceDeviceResource_MockErrorDeviceReadAfterCreateFailed(t *testing.T) {
-	cleanup := clearBCMEnvVars(t)
+	cleanup := clearBCMEnvVars()
 	defer cleanup()
 
 	mockServer := createMockBCMServerForDeviceErrors(scenarioDeviceReadError)
@@ -1099,7 +1099,7 @@ func TestAccCMDeviceDeviceResource_MockErrorDeviceReadAfterCreateFailed(t *testi
 // - BCM client's parseErrorResponse catches the JSON parsing error.
 // - Provider returns "Error Reading Created Device" diagnostic.
 func TestAccCMDeviceDeviceResource_MockErrorDeviceReadInvalidJSON(t *testing.T) {
-	cleanup := clearBCMEnvVars(t)
+	cleanup := clearBCMEnvVars()
 	defer cleanup()
 
 	mockServer := createMockBCMServerForDeviceErrors(scenarioDeviceReadInvalidJSON)

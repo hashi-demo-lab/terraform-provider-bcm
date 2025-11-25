@@ -15,7 +15,7 @@ import (
 )
 
 // TestAccCMDeviceRolesDataSource_All tests querying all roles without filters.
-// This is User Story 1: Query All Available Roles (P1 - MVP)
+// This is User Story 1: Query All Available Roles (P1 - MVP).
 func TestAccCMDeviceRolesDataSource_All(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -39,7 +39,7 @@ func TestAccCMDeviceRolesDataSource_All(t *testing.T) {
 }
 
 // TestAccCMDeviceRolesDataSource_FilterByChildType tests filtering by role type.
-// This is User Story 2: Filter Roles by Type (P2)
+// This is User Story 2: Filter Roles by Type (P2).
 func TestAccCMDeviceRolesDataSource_FilterByChildType(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -66,7 +66,7 @@ func TestAccCMDeviceRolesDataSource_FilterByChildType(t *testing.T) {
 }
 
 // TestAccCMDeviceRolesDataSource_FilterByNamePattern tests filtering by glob pattern.
-// This is User Story 3: Filter Roles by Name Pattern (P3)
+// This is User Story 3: Filter Roles by Name Pattern (P3).
 func TestAccCMDeviceRolesDataSource_FilterByNamePattern(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },

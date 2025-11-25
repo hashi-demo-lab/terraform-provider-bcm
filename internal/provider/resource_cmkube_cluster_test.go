@@ -1172,7 +1172,7 @@ resource "bcm_cmkube_cluster" "test" {
 	)
 }
 
-// TestAccCMKubeClusterResource_ForceOption tests the force parameter
+// TestAccCMKubeClusterResource_ForceOption tests the force parameter.
 func TestAccCMKubeClusterResource_ForceOption(t *testing.T) {
 	clusterName := generateUniqueTestName("tftest-cluster-force")
 	masterNodeUUID := getTestMasterNodeUUID(t)

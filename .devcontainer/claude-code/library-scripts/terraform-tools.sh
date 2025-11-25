@@ -7,7 +7,7 @@ set -e
 # This script installs Terraform and related tools
 
 # Versions
-TERRAFORM_VERSION=${1:-"1.13.5"}
+TERRAFORM_VERSION=${1:-"1.14.0"}
 TERRAFORM_DOCS_VERSION=${2:-"0.20.0"}
 TFSEC_VERSION=${3:-"1.28.14"}
 TERRASCAN_VERSION=${4:-"1.19.9"}

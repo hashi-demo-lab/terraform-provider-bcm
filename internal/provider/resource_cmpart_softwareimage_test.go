@@ -80,6 +80,12 @@ func TestAccCMPartSoftwareImageResource_Basic(t *testing.T) {
 						plancheck.ExpectEmptyPlan(),
 					},
 				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("id"),
+					),
+				},
 			},
 			// ImportState testing
 			{
@@ -121,6 +127,12 @@ func TestAccCMPartSoftwareImageResource_Basic(t *testing.T) {
 						plancheck.ExpectEmptyPlan(),
 					},
 				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("id"),
+					),
+				},
 			},
 			// Delete testing automatically occurs in TestCase
 		},
@@ -130,6 +142,9 @@ func TestAccCMPartSoftwareImageResource_Basic(t *testing.T) {
 func TestAccCMPartSoftwareImageResource_FullConfig(t *testing.T) {
 	imageName := generateUniqueTestName("tftest-full")
 	imagePath := fmt.Sprintf("/cm/images/%s", imageName)
+
+	// ID consistency tracking across test steps
+	compareID := statecheck.CompareValue(compare.ValuesSame())
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -176,6 +191,10 @@ func TestAccCMPartSoftwareImageResource_FullConfig(t *testing.T) {
 						tfjsonpath.New("modules"),
 						knownvalue.ListSizeExact(2),
 					),
+					compareID.AddStateValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Idempotency check
@@ -186,6 +205,12 @@ func TestAccCMPartSoftwareImageResource_FullConfig(t *testing.T) {
 						plancheck.ExpectEmptyPlan(),
 					},
 				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("id"),
+					),
+				},
 			},
 		},
 	})
@@ -194,6 +219,9 @@ func TestAccCMPartSoftwareImageResource_FullConfig(t *testing.T) {
 func TestAccCMPartSoftwareImageResource_UpdateKernelConfig(t *testing.T) {
 	imageName := generateUniqueTestName("tftest-kernel-update")
 	imagePath := fmt.Sprintf("/cm/images/%s", imageName)
+
+	// ID consistency tracking across test steps
+	compareID := statecheck.CompareValue(compare.ValuesSame())
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -210,6 +238,10 @@ func TestAccCMPartSoftwareImageResource_UpdateKernelConfig(t *testing.T) {
 						tfjsonpath.New("kernel_parameters"),
 						knownvalue.StringExact("quiet"),
 					),
+					compareID.AddStateValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			{
@@ -219,6 +251,10 @@ func TestAccCMPartSoftwareImageResource_UpdateKernelConfig(t *testing.T) {
 						"bcm_cmpart_softwareimage.test",
 						tfjsonpath.New("kernel_parameters"),
 						knownvalue.StringExact("quiet splash"),
+					),
+					compareID.AddStateValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("id"),
 					),
 				},
 			},
@@ -230,6 +266,12 @@ func TestAccCMPartSoftwareImageResource_UpdateKernelConfig(t *testing.T) {
 						plancheck.ExpectEmptyPlan(),
 					},
 				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("id"),
+					),
+				},
 			},
 		},
 	})
@@ -238,6 +280,9 @@ func TestAccCMPartSoftwareImageResource_UpdateKernelConfig(t *testing.T) {
 func TestAccCMPartSoftwareImageResource_UpdateModules(t *testing.T) {
 	imageName := generateUniqueTestName("tftest-modules-update")
 	imagePath := fmt.Sprintf("/cm/images/%s", imageName)
+
+	// ID consistency tracking across test steps
+	compareID := statecheck.CompareValue(compare.ValuesSame())
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -254,6 +299,10 @@ func TestAccCMPartSoftwareImageResource_UpdateModules(t *testing.T) {
 						tfjsonpath.New("modules"),
 						knownvalue.ListSizeExact(1),
 					),
+					compareID.AddStateValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			{
@@ -263,6 +312,10 @@ func TestAccCMPartSoftwareImageResource_UpdateModules(t *testing.T) {
 						"bcm_cmpart_softwareimage.test",
 						tfjsonpath.New("modules"),
 						knownvalue.ListSizeExact(2),
+					),
+					compareID.AddStateValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("id"),
 					),
 				},
 			},
@@ -274,6 +327,12 @@ func TestAccCMPartSoftwareImageResource_UpdateModules(t *testing.T) {
 						plancheck.ExpectEmptyPlan(),
 					},
 				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("id"),
+					),
+				},
 			},
 		},
 	})
@@ -282,6 +341,9 @@ func TestAccCMPartSoftwareImageResource_UpdateModules(t *testing.T) {
 func TestAccCMPartSoftwareImageResource_UpdateSOL(t *testing.T) {
 	imageName := generateUniqueTestName("tftest-sol-update")
 	imagePath := fmt.Sprintf("/cm/images/%s", imageName)
+
+	// ID consistency tracking across test steps
+	compareID := statecheck.CompareValue(compare.ValuesSame())
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -303,6 +365,10 @@ func TestAccCMPartSoftwareImageResource_UpdateSOL(t *testing.T) {
 						tfjsonpath.New("sol_speed"),
 						knownvalue.StringExact("9600"),
 					),
+					compareID.AddStateValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			{
@@ -318,6 +384,10 @@ func TestAccCMPartSoftwareImageResource_UpdateSOL(t *testing.T) {
 						tfjsonpath.New("sol_speed"),
 						knownvalue.StringExact("115200"),
 					),
+					compareID.AddStateValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Idempotency check after update
@@ -327,6 +397,12 @@ func TestAccCMPartSoftwareImageResource_UpdateSOL(t *testing.T) {
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
 					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 		},
@@ -339,11 +415,11 @@ func TestAccCMPartSoftwareImageResource_ValidationInvalidName(t *testing.T) {
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: `
+				Config: fmt.Sprintf(`
 provider "bcm" {
-  endpoint             = "https://172.21.15.254:8081"
-  username             = "root"
-  password             = "Hashicorp123!"
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
   insecure_skip_verify = true
 }
 
@@ -351,6 +427,10 @@ resource "bcm_cmpart_softwareimage" "test" {
   # Missing required name and path
 }
 `,
+					os.Getenv("BCM_ENDPOINT"),
+					os.Getenv("BCM_USERNAME"),
+					os.Getenv("BCM_PASSWORD"),
+				),
 				ExpectError: regexp.MustCompile(`The argument "name" is required`),
 			},
 		},
@@ -569,6 +649,9 @@ func TestAccCMPartSoftwareImage_DriftKernelParameters(t *testing.T) {
 	imageName := generateUniqueTestName("tftest-drift-kernel")
 	imagePath := fmt.Sprintf("/cm/images/%s", imageName)
 
+	// ID consistency tracking across test steps
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccCMPartSoftwareImagePreCheck(t, imageName)
@@ -594,6 +677,10 @@ func TestAccCMPartSoftwareImage_DriftKernelParameters(t *testing.T) {
 						"bcm_cmpart_softwareimage.test",
 						tfjsonpath.New("uuid"),
 						knownvalue.NotNull(),
+					),
+					compareID.AddStateValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("id"),
 					),
 				},
 			},
@@ -656,6 +743,12 @@ func TestAccCMPartSoftwareImage_DriftKernelParameters(t *testing.T) {
 						plancheck.ExpectNonEmptyPlan(),
 					},
 				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("id"),
+					),
+				},
 			},
 			// Step 3: Restore desired state (Terraform applies config to fix drift)
 			{
@@ -665,6 +758,10 @@ func TestAccCMPartSoftwareImage_DriftKernelParameters(t *testing.T) {
 						"bcm_cmpart_softwareimage.test",
 						tfjsonpath.New("kernel_parameters"),
 						knownvalue.StringExact("quiet splash"),
+					),
+					compareID.AddStateValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("id"),
 					),
 				},
 			},
@@ -678,6 +775,9 @@ func TestAccCMPartSoftwareImage_DriftKernelParameters(t *testing.T) {
 func TestAccCMPartSoftwareImage_Drift(t *testing.T) {
 	imageName := generateUniqueTestName("tftest-drift-notes")
 	imagePath := fmt.Sprintf("/cm/images/%s", imageName)
+
+	// ID consistency tracking across test steps
+	compareID := statecheck.CompareValue(compare.ValuesSame())
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -704,6 +804,10 @@ func TestAccCMPartSoftwareImage_Drift(t *testing.T) {
 						"bcm_cmpart_softwareimage.test",
 						tfjsonpath.New("uuid"),
 						knownvalue.NotNull(),
+					),
+					compareID.AddStateValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("id"),
 					),
 				},
 			},
@@ -765,6 +869,12 @@ func TestAccCMPartSoftwareImage_Drift(t *testing.T) {
 						plancheck.ExpectNonEmptyPlan(),
 					},
 				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("id"),
+					),
+				},
 			},
 			// Step 3: Restore desired state (Terraform applies config to fix drift)
 			{
@@ -774,6 +884,10 @@ func TestAccCMPartSoftwareImage_Drift(t *testing.T) {
 						"bcm_cmpart_softwareimage.test",
 						tfjsonpath.New("notes"),
 						knownvalue.StringExact("Production environment"),
+					),
+					compareID.AddStateValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("id"),
 					),
 				},
 			},
@@ -1226,6 +1340,9 @@ func TestAccCMPartSoftwareImageResource_SOLConfiguration(t *testing.T) {
 	imageName := generateUniqueTestName("tftest-sol-config")
 	imagePath := fmt.Sprintf("/cm/images/%s", imageName)
 
+	// ID consistency tracking across test steps
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccCMPartSoftwareImagePreCheck(t, imageName)
@@ -1252,6 +1369,10 @@ func TestAccCMPartSoftwareImageResource_SOLConfiguration(t *testing.T) {
 						tfjsonpath.New("sol_flow_control"),
 						knownvalue.Bool(true),
 					),
+					compareID.AddStateValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Update SOL configuration
@@ -1273,6 +1394,10 @@ func TestAccCMPartSoftwareImageResource_SOLConfiguration(t *testing.T) {
 						tfjsonpath.New("sol_flow_control"),
 						knownvalue.Bool(false),
 					),
+					compareID.AddStateValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Idempotency check
@@ -1287,6 +1412,12 @@ func TestAccCMPartSoftwareImageResource_SOLConfiguration(t *testing.T) {
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
 					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 		},
@@ -1324,6 +1455,9 @@ func TestAccCMPartSoftwareImageResource_KernelOutputConsole(t *testing.T) {
 	imageName := generateUniqueTestName("tftest-kernel-console")
 	imagePath := fmt.Sprintf("/cm/images/%s", imageName)
 
+	// ID consistency tracking across test steps
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccCMPartSoftwareImagePreCheck(t, imageName)
@@ -1340,6 +1474,10 @@ func TestAccCMPartSoftwareImageResource_KernelOutputConsole(t *testing.T) {
 						tfjsonpath.New("kernel_output_console"),
 						knownvalue.StringExact("tty0"),
 					),
+					compareID.AddStateValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Update to custom kernel_output_console
@@ -1351,6 +1489,10 @@ func TestAccCMPartSoftwareImageResource_KernelOutputConsole(t *testing.T) {
 						tfjsonpath.New("kernel_output_console"),
 						knownvalue.StringExact("ttyS0"),
 					),
+					compareID.AddStateValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Idempotency check
@@ -1361,6 +1503,12 @@ func TestAccCMPartSoftwareImageResource_KernelOutputConsole(t *testing.T) {
 						plancheck.ExpectEmptyPlan(),
 					},
 				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("id"),
+					),
+				},
 			},
 			// Update to different kernel_output_console
 			{
@@ -1370,6 +1518,10 @@ func TestAccCMPartSoftwareImageResource_KernelOutputConsole(t *testing.T) {
 						"bcm_cmpart_softwareimage.test",
 						tfjsonpath.New("kernel_output_console"),
 						knownvalue.StringExact("tty1"),
+					),
+					compareID.AddStateValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("id"),
 					),
 				},
 			},
@@ -1420,6 +1572,9 @@ func TestAccCMPartSoftwareImageResource_ForceParameter(t *testing.T) {
 	imageName := generateUniqueTestName("tftest-force-param")
 	imagePath := fmt.Sprintf("/cm/images/%s", imageName)
 
+	// ID consistency tracking across test steps
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccCMPartSoftwareImagePreCheck(t, imageName)
@@ -1441,6 +1596,10 @@ func TestAccCMPartSoftwareImageResource_ForceParameter(t *testing.T) {
 						tfjsonpath.New("force"),
 						knownvalue.Bool(false),
 					),
+					compareID.AddStateValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Idempotency check with force = false
@@ -1450,6 +1609,12 @@ func TestAccCMPartSoftwareImageResource_ForceParameter(t *testing.T) {
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
 					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Update to force = true
@@ -1461,6 +1626,10 @@ func TestAccCMPartSoftwareImageResource_ForceParameter(t *testing.T) {
 						tfjsonpath.New("force"),
 						knownvalue.Bool(true),
 					),
+					compareID.AddStateValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Idempotency check with force = true
@@ -1471,6 +1640,12 @@ func TestAccCMPartSoftwareImageResource_ForceParameter(t *testing.T) {
 						plancheck.ExpectEmptyPlan(),
 					},
 				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("id"),
+					),
+				},
 			},
 			// Update back to force = false
 			{
@@ -1480,6 +1655,10 @@ func TestAccCMPartSoftwareImageResource_ForceParameter(t *testing.T) {
 						"bcm_cmpart_softwareimage.test",
 						tfjsonpath.New("force"),
 						knownvalue.Bool(false),
+					),
+					compareID.AddStateValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("id"),
 					),
 				},
 			},
@@ -1574,6 +1753,9 @@ func TestAccCMPartSoftwareImageResource_BootFSPart(t *testing.T) {
 	imageName := generateUniqueTestName("tftest-bootfspart")
 	imagePath := fmt.Sprintf("/cm/images/%s", imageName)
 
+	// ID consistency tracking across test steps
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccCMPartSoftwareImagePreCheck(t, imageName)
@@ -1609,6 +1791,10 @@ func TestAccCMPartSoftwareImageResource_BootFSPart(t *testing.T) {
 						tfjsonpath.New("fspart"),
 						knownvalue.NotNull(),
 					),
+					compareID.AddStateValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Idempotency check - bootfspart should remain stable
@@ -1618,6 +1804,12 @@ func TestAccCMPartSoftwareImageResource_BootFSPart(t *testing.T) {
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
 					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Import test - verify bootfspart persists through import

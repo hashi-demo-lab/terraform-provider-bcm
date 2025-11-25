@@ -227,7 +227,7 @@ func TestAccCMNetNetwork_Update(t *testing.T) {
 	})
 }
 
-// TestAccCMNetNetwork_DriftDetection verifies Terraform detects external modifications
+// TestAccCMNetNetwork_DriftDetection verifies Terraform detects external modifications.
 func TestAccCMNetNetwork_DriftDetection(t *testing.T) {
 	networkName := generateUniqueTestName("tftest-network-drift")
 
