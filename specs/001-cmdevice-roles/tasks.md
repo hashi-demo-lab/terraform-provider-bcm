@@ -18,10 +18,10 @@
 
 **Purpose**: Project initialization and basic structure
 
-- [ ] T001 Verify BCM API credentials configured in environment (BCM_ENDPOINT, BCM_USERNAME, BCM_PASSWORD)
-- [ ] T002 Verify test dependencies available in /workspace/internal/provider/test_helpers.go
-- [ ] T003 [P] Review reference implementation patterns in /workspace/internal/provider/data_source_cmdevice_categories.go
-- [ ] T004 [P] Review null-safe helper functions in /workspace/internal/provider/data_source_cmpart_softwareimages.go
+- [X] T001 Verify BCM API credentials configured in environment (BCM_ENDPOINT, BCM_USERNAME, BCM_PASSWORD)
+- [X] T002 Verify test dependencies available in /workspace/internal/provider/test_helpers.go
+- [X] T003 [P] Review reference implementation patterns in /workspace/internal/provider/data_source_cmdevice_categories.go
+- [X] T004 [P] Review null-safe helper functions in /workspace/internal/provider/data_source_cmpart_softwareimages.go
 
 ---
 
@@ -31,11 +31,11 @@
 
 **Critical**: No user story work can begin until this phase is complete
 
-- [ ] T005 Create data source skeleton in /workspace/internal/provider/data_source_cmdevice_roles.go
-- [ ] T006 Define schema with optional filter attributes (name_pattern, child_type) and computed roles list
-- [ ] T007 Register data source in /workspace/internal/provider/provider.go DataSources() method
-- [ ] T008 Create test file skeleton in /workspace/internal/provider/data_source_cmdevice_roles_test.go
-- [ ] T009 Implement testAccPreCheck function if not already present in test file
+- [X] T005 Create data source skeleton in /workspace/internal/provider/data_source_cmdevice_roles.go
+- [X] T006 Define schema with optional filter attributes (name_pattern, child_type) and computed roles list
+- [X] T007 Register data source in /workspace/internal/provider/provider.go DataSources() method
+- [X] T008 Create test file skeleton in /workspace/internal/provider/data_source_cmdevice_roles_test.go
+- [X] T009 Implement testAccPreCheck function if not already present in test file
 
 **Checkpoint**: Foundation ready - user story implementation can now begin in parallel
 
@@ -51,31 +51,31 @@
 
 **Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T010 [P] [US1] Write TestAccCMDeviceRolesDataSource_All in /workspace/internal/provider/data_source_cmdevice_roles_test.go
-- [ ] T011 [P] [US1] Write testAccCMDeviceRolesDataSourceConfig helper function with provider config
-- [ ] T012 [US1] Run test to verify it fails with "data source not found" error
+- [X] T010 [P] [US1] Write TestAccCMDeviceRolesDataSource_All in /workspace/internal/provider/data_source_cmdevice_roles_test.go
+- [X] T011 [P] [US1] Write testAccCMDeviceRolesDataSourceConfig helper function with provider config
+- [X] T012 [US1] Run test to verify it fails with "data source not found" error
 
 ### GREEN: Minimal Implementation for User Story 1
 
-- [ ] T013 [US1] Implement Metadata method returning "bcm_cmdevice_roles" type name in /workspace/internal/provider/data_source_cmdevice_roles.go
-- [ ] T014 [US1] Implement Configure method to receive BCMClient from provider in /workspace/internal/provider/data_source_cmdevice_roles.go
-- [ ] T015 [US1] Implement Schema method defining id, name_pattern, child_type, roles attributes in /workspace/internal/provider/data_source_cmdevice_roles.go
-- [ ] T016 [US1] Implement Read method: Call cmdevice.getNodes API in /workspace/internal/provider/data_source_cmdevice_roles.go
-- [ ] T017 [US1] Implement Read method: Parse nodes response and extract roles array in /workspace/internal/provider/data_source_cmdevice_roles.go
-- [ ] T018 [US1] Implement Read method: Deduplicate roles by UUID using map[uuid]Role in /workspace/internal/provider/data_source_cmdevice_roles.go
-- [ ] T019 [US1] Implement Read method: Convert deduplicated roles to RoleModel slice in /workspace/internal/provider/data_source_cmdevice_roles.go
-- [ ] T020 [US1] Implement Read method: Set id and roles in Terraform state in /workspace/internal/provider/data_source_cmdevice_roles.go
-- [ ] T021 [US1] Run TestAccCMDeviceRolesDataSource_All and verify it passes
-- [ ] T022 [US1] Add ConfigStateChecks using statecheck.ExpectKnownValue for id attribute in test
+- [X] T013 [US1] Implement Metadata method returning "bcm_cmdevice_roles" type name in /workspace/internal/provider/data_source_cmdevice_roles.go
+- [X] T014 [US1] Implement Configure method to receive BCMClient from provider in /workspace/internal/provider/data_source_cmdevice_roles.go
+- [X] T015 [US1] Implement Schema method defining id, name_pattern, child_type, roles attributes in /workspace/internal/provider/data_source_cmdevice_roles.go
+- [X] T016 [US1] Implement Read method: Call cmdevice.getNodes API in /workspace/internal/provider/data_source_cmdevice_roles.go
+- [X] T017 [US1] Implement Read method: Parse nodes response and extract roles array in /workspace/internal/provider/data_source_cmdevice_roles.go
+- [X] T018 [US1] Implement Read method: Deduplicate roles by UUID using map[uuid]Role in /workspace/internal/provider/data_source_cmdevice_roles.go
+- [X] T019 [US1] Implement Read method: Convert deduplicated roles to RoleModel slice in /workspace/internal/provider/data_source_cmdevice_roles.go
+- [X] T020 [US1] Implement Read method: Set id and roles in Terraform state in /workspace/internal/provider/data_source_cmdevice_roles.go
+- [X] T021 [US1] Run TestAccCMDeviceRolesDataSource_All and verify it passes
+- [X] T022 [US1] Add ConfigStateChecks using statecheck.ExpectKnownValue for id attribute in test
 
 ### REFACTOR: Improve User Story 1
 
-- [ ] T023 [US1] Add null-safe field extraction using getStringValue and getBoolValue helpers in /workspace/internal/provider/data_source_cmdevice_roles.go
-- [ ] T024 [US1] Add error handling for API call failures in /workspace/internal/provider/data_source_cmdevice_roles.go
-- [ ] T025 [US1] Add error handling for JSON parsing failures in /workspace/internal/provider/data_source_cmdevice_roles.go
-- [ ] T026 [US1] Add debug logging for role extraction in /workspace/internal/provider/data_source_cmdevice_roles.go
-- [ ] T027 [US1] Add ConfigStateChecks for role attributes (uuid, name, child_type, base_type) in test
-- [ ] T028 [US1] Run all User Story 1 tests and verify they pass
+- [X] T023 [US1] Add null-safe field extraction using getStringValue and getBoolValue helpers in /workspace/internal/provider/data_source_cmdevice_roles.go
+- [X] T024 [US1] Add error handling for API call failures in /workspace/internal/provider/data_source_cmdevice_roles.go
+- [X] T025 [US1] Add error handling for JSON parsing failures in /workspace/internal/provider/data_source_cmdevice_roles.go
+- [X] T026 [US1] Add debug logging for role extraction in /workspace/internal/provider/data_source_cmdevice_roles.go
+- [X] T027 [US1] Add ConfigStateChecks for role attributes (uuid, name, child_type, base_type) in test
+- [X] T028 [US1] Run all User Story 1 tests and verify they pass
 
 **Checkpoint**: At this point, User Story 1 should be fully functional - can query all roles without filters
 
@@ -89,23 +89,23 @@
 
 ### RED: Write Failing Tests for User Story 2
 
-- [ ] T029 [P] [US2] Write TestAccCMDeviceRolesDataSource_FilterByChildType in /workspace/internal/provider/data_source_cmdevice_roles_test.go
-- [ ] T030 [P] [US2] Write testAccCMDeviceRolesDataSourceConfigFilterByChildType helper function in /workspace/internal/provider/data_source_cmdevice_roles_test.go
-- [ ] T031 [US2] Run test to verify it fails (returns unfiltered results)
+- [X] T029 [P] [US2] Write TestAccCMDeviceRolesDataSource_FilterByChildType in /workspace/internal/provider/data_source_cmdevice_roles_test.go
+- [X] T030 [P] [US2] Write testAccCMDeviceRolesDataSourceConfigFilterByChildType helper function in /workspace/internal/provider/data_source_cmdevice_roles_test.go
+- [X] T031 [US2] Run test to verify it fails (returns unfiltered results)
 
 ### GREEN: Minimal Implementation for User Story 2
 
-- [ ] T032 [US2] Implement matchesRoleFilter function with child_type exact match logic in /workspace/internal/provider/data_source_cmdevice_roles.go
-- [ ] T033 [US2] Update Read method to apply matchesRoleFilter before adding roles to results in /workspace/internal/provider/data_source_cmdevice_roles.go
-- [ ] T034 [US2] Handle null/unknown child_type values (skip filter if not specified) in matchesRoleFilter function
-- [ ] T035 [US2] Run TestAccCMDeviceRolesDataSource_FilterByChildType and verify it passes
+- [X] T032 [US2] Implement matchesRoleFilter function with child_type exact match logic in /workspace/internal/provider/data_source_cmdevice_roles.go
+- [X] T033 [US2] Update Read method to apply matchesRoleFilter before adding roles to results in /workspace/internal/provider/data_source_cmdevice_roles.go
+- [X] T034 [US2] Handle null/unknown child_type values (skip filter if not specified) in matchesRoleFilter function
+- [X] T035 [US2] Run TestAccCMDeviceRolesDataSource_FilterByChildType and verify it passes
 
 ### REFACTOR: Improve User Story 2
 
-- [ ] T036 [US2] Add test cases for different childType values (HeadNodeRole, ComputeRole, StorageRole) in /workspace/internal/provider/data_source_cmdevice_roles_test.go
-- [ ] T037 [US2] Add test case for non-existent childType returning empty results in /workspace/internal/provider/data_source_cmdevice_roles_test.go
-- [ ] T038 [US2] Add debug logging for filter application in /workspace/internal/provider/data_source_cmdevice_roles.go
-- [ ] T039 [US2] Run all User Story 2 tests and verify they pass
+- [X] T036 [US2] Add test cases for different childType values (HeadNodeRole, ComputeRole, StorageRole) in /workspace/internal/provider/data_source_cmdevice_roles_test.go
+- [X] T037 [US2] Add test case for non-existent childType returning empty results in /workspace/internal/provider/data_source_cmdevice_roles_test.go
+- [X] T038 [US2] Add debug logging for filter application in /workspace/internal/provider/data_source_cmdevice_roles.go
+- [X] T039 [US2] Run all User Story 2 tests and verify they pass
 
 **Checkpoint**: At this point, User Stories 1 AND 2 should both work independently
 
@@ -119,25 +119,25 @@
 
 ### RED: Write Failing Tests for User Story 3
 
-- [ ] T040 [P] [US3] Write TestAccCMDeviceRolesDataSource_FilterByNamePattern in /workspace/internal/provider/data_source_cmdevice_roles_test.go
-- [ ] T041 [P] [US3] Write testAccCMDeviceRolesDataSourceConfigFilterByNamePattern helper function in /workspace/internal/provider/data_source_cmdevice_roles_test.go
-- [ ] T042 [US3] Run test to verify it fails (glob matching not implemented)
+- [X] T040 [P] [US3] Write TestAccCMDeviceRolesDataSource_FilterByNamePattern in /workspace/internal/provider/data_source_cmdevice_roles_test.go
+- [X] T041 [P] [US3] Write testAccCMDeviceRolesDataSourceConfigFilterByNamePattern helper function in /workspace/internal/provider/data_source_cmdevice_roles_test.go
+- [X] T042 [US3] Run test to verify it fails (glob matching not implemented)
 
 ### GREEN: Minimal Implementation for User Story 3
 
-- [ ] T043 [US3] Add filepath.Match import for glob pattern matching in /workspace/internal/provider/data_source_cmdevice_roles.go
-- [ ] T044 [US3] Update matchesRoleFilter to add name_pattern glob matching using filepath.Match in /workspace/internal/provider/data_source_cmdevice_roles.go
-- [ ] T045 [US3] Handle null/unknown name_pattern values (skip filter if not specified) in matchesRoleFilter function
-- [ ] T046 [US3] Add error handling for invalid glob patterns in matchesRoleFilter function
-- [ ] T047 [US3] Run TestAccCMDeviceRolesDataSource_FilterByNamePattern and verify it passes
+- [X] T043 [US3] Add filepath.Match import for glob pattern matching in /workspace/internal/provider/data_source_cmdevice_roles.go
+- [X] T044 [US3] Update matchesRoleFilter to add name_pattern glob matching using filepath.Match in /workspace/internal/provider/data_source_cmdevice_roles.go
+- [X] T045 [US3] Handle null/unknown name_pattern values (skip filter if not specified) in matchesRoleFilter function
+- [X] T046 [US3] Add error handling for invalid glob patterns in matchesRoleFilter function
+- [X] T047 [US3] Run TestAccCMDeviceRolesDataSource_FilterByNamePattern and verify it passes
 
 ### REFACTOR: Improve User Story 3
 
-- [ ] T048 [US3] Add test cases for different glob patterns (prefix*, *suffix, node-?, [abc]*) in /workspace/internal/provider/data_source_cmdevice_roles_test.go
-- [ ] T049 [US3] Write TestAccCMDeviceRolesDataSource_CombinedFilters testing both filters together (AND logic) in /workspace/internal/provider/data_source_cmdevice_roles_test.go
-- [ ] T050 [US3] Write testAccCMDeviceRolesDataSourceConfigCombinedFilters helper function in /workspace/internal/provider/data_source_cmdevice_roles_test.go
-- [ ] T051 [US3] Write TestAccCMDeviceRolesDataSource_EmptyResults testing filter with no matches in /workspace/internal/provider/data_source_cmdevice_roles_test.go
-- [ ] T052 [US3] Run all User Story 3 tests and verify they pass
+- [X] T048 [US3] Add test cases for different glob patterns (prefix*, *suffix, node-?, [abc]*) in /workspace/internal/provider/data_source_cmdevice_roles_test.go
+- [X] T049 [US3] Write TestAccCMDeviceRolesDataSource_CombinedFilters testing both filters together (AND logic) in /workspace/internal/provider/data_source_cmdevice_roles_test.go
+- [X] T050 [US3] Write testAccCMDeviceRolesDataSourceConfigCombinedFilters helper function in /workspace/internal/provider/data_source_cmdevice_roles_test.go
+- [X] T051 [US3] Write TestAccCMDeviceRolesDataSource_EmptyResults testing filter with no matches in /workspace/internal/provider/data_source_cmdevice_roles_test.go
+- [X] T052 [US3] Run all User Story 3 tests and verify they pass
 
 **Checkpoint**: All user stories should now be independently functional
 
@@ -149,19 +149,19 @@
 
 ### Examples & Documentation
 
-- [ ] T053 [P] Create /workspace/examples/data-sources/bcm_cmdevice_roles/data-source.tf (query all roles)
-- [ ] T054 [P] Create /workspace/examples/data-sources/bcm_cmdevice_roles/filter-by-type.tf (filter by childType)
-- [ ] T055 [P] Create /workspace/examples/data-sources/bcm_cmdevice_roles/filter-by-pattern.tf (filter by name pattern)
-- [ ] T056 Generate provider documentation using make generate command
-- [ ] T057 Verify generated documentation in /workspace/docs/data-sources/bcm_cmdevice_roles.md
+- [X] T053 [P] Create /workspace/examples/data-sources/bcm_cmdevice_roles/data-source.tf (query all roles)
+- [X] T054 [P] Create /workspace/examples/data-sources/bcm_cmdevice_roles/filter-by-type.tf (filter by childType)
+- [X] T055 [P] Create /workspace/examples/data-sources/bcm_cmdevice_roles/filter-by-pattern.tf (filter by name pattern)
+- [X] T056 Generate provider documentation using make generate command
+- [X] T057 Verify generated documentation in /workspace/docs/data-sources/bcm_cmdevice_roles.md
 
 ### Code Quality & Final Validation
 
-- [ ] T058 [P] Run gofmt on data source implementation file
-- [ ] T059 [P] Run golangci-lint on data source implementation file
-- [ ] T060 Run all acceptance tests with TF_ACC=1 go test -v ./internal/provider/ -run TestAccCMDeviceRoles
-- [ ] T061 Verify all tests pass and no regression in existing data sources
-- [ ] T062 Manual test on live BCM cluster using examples
+- [X] T058 [P] Run gofmt on data source implementation file
+- [X] T059 [P] Run golangci-lint on data source implementation file
+- [X] T060 Run all acceptance tests with TF_ACC=1 go test -v ./internal/provider/ -run TestAccCMDeviceRoles
+- [X] T061 Verify all tests pass and no regression in existing data sources
+- [X] T062 Manual test on live BCM cluster using examples
 - [ ] T063 Verify quickstart.md instructions work end-to-end
 - [ ] T064 Update CHANGELOG.md with new data source entry (if project has one)
 
@@ -175,7 +175,7 @@
 - **Foundational (Phase 2)**: Depends on Setup completion - BLOCKS all user stories
 - **User Stories (Phase 3-5)**: All depend on Foundational phase completion
   - User stories can then proceed in parallel (if staffed)
-  - Or sequentially in priority order (P1 → P2 → P3)
+  - Or sequentially in priority order (P1 -> P2 -> P3)
 - **Polish (Phase 6)**: Depends on all user stories being complete
 
 ### User Story Dependencies
@@ -251,10 +251,10 @@ Task T011: Write testAccCMDeviceRolesDataSourceConfig helper
 
 ### Incremental Delivery
 
-1. Complete Setup + Foundational → Foundation ready
-2. Add User Story 1 → Test independently → Deploy/Demo (MVP - basic role discovery)
-3. Add User Story 2 → Test independently → Deploy/Demo (+ childType filtering)
-4. Add User Story 3 → Test independently → Deploy/Demo (+ pattern matching)
+1. Complete Setup + Foundational -> Foundation ready
+2. Add User Story 1 -> Test independently -> Deploy/Demo (MVP - basic role discovery)
+3. Add User Story 2 -> Test independently -> Deploy/Demo (+ childType filtering)
+4. Add User Story 3 -> Test independently -> Deploy/Demo (+ pattern matching)
 5. Each story adds value without breaking previous stories
 
 **Estimated Time**: 4-5 hours total
@@ -319,7 +319,7 @@ All tests use modern terraform-plugin-testing patterns:
 
 - **[P] tasks**: Different files, no dependencies, can run in parallel
 - **[Story] label**: Maps task to specific user story (US1, US2, US3) for traceability
-- **TDD Cycle**: Each user story follows RED (failing tests) → GREEN (minimal implementation) → REFACTOR (improve quality)
+- **TDD Cycle**: Each user story follows RED (failing tests) -> GREEN (minimal implementation) -> REFACTOR (improve quality)
 - **File paths**: All paths are absolute starting from /workspace/
 - **Test-first**: Write and verify tests FAIL before implementing functionality
 - **Independent stories**: Each story delivers value independently and can be tested in isolation
@@ -330,11 +330,11 @@ All tests use modern terraform-plugin-testing patterns:
 
 ## Success Criteria
 
-- [ ] All 5 acceptance tests pass
-- [ ] Data source registered in provider.go
-- [ ] Examples created for all use cases
-- [ ] Documentation auto-generated
-- [ ] Code follows existing patterns (null-safe helpers, filter logic)
-- [ ] Manual testing on live BCM cluster successful
-- [ ] No regression in existing data sources
-- [ ] Follows TDD RED-GREEN-REFACTOR cycle for each user story
+- [X] All 5 acceptance tests pass
+- [X] Data source registered in provider.go
+- [X] Examples created for all use cases
+- [X] Documentation auto-generated
+- [X] Code follows existing patterns (null-safe helpers, filter logic)
+- [X] Manual testing on live BCM cluster successful
+- [X] No regression in existing data sources
+- [X] Follows TDD RED-GREEN-REFACTOR cycle for each user story
