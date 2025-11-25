@@ -130,6 +130,36 @@ func getTestWorkerNodeUUID(t *testing.T, index int) string {
 	return ""
 }
 
+// getTestEtcdNodeUUID queries BCM for available etcd node (uses a different node than master).
+func getTestEtcdNodeUUID(t *testing.T, index int) string {
+	client := createTestBCMClient(t)
+	ctx := context.Background()
+
+	body, err := client.CallJSONRPC(ctx, "cmdevice", "getNodes")
+	if err != nil {
+		t.Fatalf("Failed to get nodes: %v", err)
+	}
+
+	var nodes []map[string]interface{}
+	if err := json.Unmarshal(body, &nodes); err != nil {
+		t.Fatalf("Failed to parse nodes: %v", err)
+	}
+
+	// For etcd nodes, we use nodes starting from index 2+ (master is 0, workers start at 1)
+	// This allows etcd to be on different nodes than master for HA testing
+	etcdIndex := index + 2
+	if len(nodes) <= etcdIndex {
+		t.Skipf("Not enough nodes for etcd index %d (need at least %d nodes)", index, etcdIndex+1)
+	}
+
+	if uuid, ok := nodes[etcdIndex]["uuid"].(string); ok {
+		return uuid
+	}
+
+	t.Fatalf("Node at index %d has invalid UUID format", etcdIndex)
+	return ""
+}
+
 // getTestManagementNetworkUUID queries BCM for available management network.
 func getTestManagementNetworkUUID(t *testing.T) string {
 	client := createTestBCMClient(t)
@@ -211,10 +241,10 @@ func TestAccCMKubeClusterResource_Basic(t *testing.T) {
 				ResourceName:      "bcm_cmkube_cluster.test",
 				ImportState:       true,
 				ImportStateVerify: true,
-				// BCM cmkube API Limitation: getKubeCluster does NOT return master_nodes/worker_nodes
+				// BCM cmkube API Limitation: getKubeCluster does NOT return master_nodes/worker_nodes/etcd_nodes
 				// These fields are write-only (used during create/update but not returned in read)
 				// This is a known BCM API limitation documented in resource_cmkube_cluster.go:296-301
-				ImportStateVerifyIgnore: []string{"master_nodes", "worker_nodes"},
+				ImportStateVerifyIgnore: []string{"master_nodes", "worker_nodes", "etcd_nodes"},
 			},
 			// Update name
 			{
@@ -1213,5 +1243,83 @@ resource "bcm_cmkube_cluster" "test" {
 		name,
 		masterNodeUUID,
 		force,
+	)
+}
+
+// TestAccCMKubeClusterResource_EtcdNodes tests etcd_nodes attribute for HA clusters.
+// NVIDIA DGX BasePOD deployments require dedicated etcd nodes for production HA.
+func TestAccCMKubeClusterResource_EtcdNodes(t *testing.T) {
+	clusterName := generateUniqueTestName("tftest-cluster-etcd")
+	masterNodeUUID := getTestMasterNodeUUID(t)
+	etcdNodeUUID := getTestEtcdNodeUUID(t, 0)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheckCMKubeCluster(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMKubeClusterDestroy,
+		Steps: []resource.TestStep{
+			// Create with etcd_nodes
+			{
+				Config: testAccCMKubeClusterResourceConfigWithEtcdNodes(clusterName, masterNodeUUID, etcdNodeUUID),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmkube_cluster.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(clusterName),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmkube_cluster.test",
+						tfjsonpath.New("etcd_nodes"),
+						knownvalue.ListSizeExact(1),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmkube_cluster.test",
+						tfjsonpath.New("uuid"),
+						knownvalue.NotNull(),
+					),
+				},
+			},
+			// Idempotency check - etcd_nodes preserved across plan
+			{
+				Config: testAccCMKubeClusterResourceConfigWithEtcdNodes(clusterName, masterNodeUUID, etcdNodeUUID),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+			// Import - etcd_nodes should be ignored (write-only field)
+			{
+				ResourceName:            "bcm_cmkube_cluster.test",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"master_nodes", "worker_nodes", "etcd_nodes"},
+			},
+		},
+	})
+}
+
+func testAccCMKubeClusterResourceConfigWithEtcdNodes(name, masterNodeUUID, etcdNodeUUID string) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+resource "bcm_cmkube_cluster" "test" {
+  name         = %[4]q
+  master_nodes = [%[5]q]
+  etcd_nodes   = [%[6]q]
+  version      = "1.28.0"
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		name,
+		masterNodeUUID,
+		etcdNodeUUID,
 	)
 }
