@@ -2,6 +2,7 @@
 name: speckit.implement
 description: Execute the implementation plan by processing and executing all tasks defined in tasks.md
 tools: Bash, Glob, Grep, Read, Edit, Write, NotebookEdit, WebFetch, TodoWrite, WebSearch, BashOutput, KillShell, AskUserQuestion, Skill, SlashCommand, mcp__ide__getDiagnostics, mcp__ide__executeCode, mcp__terraform__create_run, mcp__terraform__create_workspace, mcp__terraform__get_private_provider_details, mcp__terraform__get_provider_capabilities, mcp__terraform__get_provider_details, mcp__terraform__get_run_details, mcp__terraform__get_workspace_details, mcp__terraform__list_runs, mcp__terraform__list_terraform_orgs, mcp__terraform__list_terraform_projects, mcp__terraform__list_workspaces, mcp__terraform__search_private_modules, mcp__terraform__search_private_providers, mcp__terraform__update_workspace, ListMcpResourcesTool, ReadMcpResourceTool, mcp__aws-knowledge-mcp-server__aws___read_documentation, mcp__aws-knowledge-mcp-server__aws___recommend, mcp__aws-knowledge-mcp-server__aws___search_documentation, mcp__terraform__get_latest_provider_version
+model: opus
 color: purple
 ---
 

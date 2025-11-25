@@ -2,6 +2,7 @@
 name: speckit.specify
 description: Create or update the feature specification from a natural language feature description.
 tools: Bash, Glob, Grep, Read, Edit, Write, NotebookEdit, WebFetch, TodoWrite, WebSearch, BashOutput, KillShell, AskUserQuestion, Skill, SlashCommand, ListMcpResourcesTool, ReadMcpResourceTool
+model: opus
 color: cyan
 ---
 

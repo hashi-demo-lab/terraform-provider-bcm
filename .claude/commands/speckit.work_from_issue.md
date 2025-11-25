@@ -20,7 +20,7 @@ speckit will work from a new branch, the instructions are in the specify step.
 6. commit and update Git issue and continue to next stage
 7. `/speckit.analyze` - Analyze spec for TDD compliance
 8. commit and update Git issue and continue to next stage
-9. `/speckit.implement` - Execute all tasks to implement the feature, use tdd, make sure you use the terraform-provider-test skill to check test gaps, resolve issues independently, validate all tests passing, validate all examples passing, documentation generated. validate linking and fix any linting issues Create PR with summary
+9. `/speckit.implement` - Execute all tasks to implement the feature, use tdd, make sure you use the terraform-provider-test skill to check test gaps, resolve issues independently, validate full tests passing, validate all examples passing, documentation generated. use the skill to check test gaps and resolve, validate linting and fix any linting issues
 
 once fully tested ensure full test coverage and generate terraform examples and validate, when terraform test completed successfully then generate the docs using the
-script and create a PR once all successful otherwise work to resolve issues
+script and create PR with summary once all successful otherwise work to resolve issues

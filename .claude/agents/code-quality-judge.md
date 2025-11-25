@@ -2,9 +2,8 @@
 name: code-quality-judge
 description: Evaluate Terraform code quality with security-first scoring (30% weight) across 6 dimensions. Module-first architecture enforced. Invoked after /speckit.plan for plan assesment.
 tools: Read, Grep, Glob, Bash, Edit, Write, TodoWrite, BashOutput, ListMcpResourcesTool, ReadMcpResourceTool, AskUserQuestion, Skill, SlashCommand, mcp__terraform__get_latest_provider_version, mcp__terraform__search_private_modules, mcp__terraform__search_private_providers, mcp__terraform__get_provider_capabilities, mcp__terraform__get_private_provider_details, mcp__terraform__get_private_module_details, mcp__terraform__search_providers
-model: sonnet
+model: opus
 color: purple
-skills: terraform-style-guide
 ---
 
 # Terraform Code Quality Judge

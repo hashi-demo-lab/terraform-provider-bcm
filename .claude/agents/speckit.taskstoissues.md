@@ -2,6 +2,7 @@
 name: speckit.taskstoissues
 description: Convert existing tasks into actionable, dependency-ordered GitHub issues for the feature based on available design artifacts.
 tools: Glob, Grep, Read, WebFetch, TodoWrite, WebSearch, BashOutput, KillShell, ListMcpResourcesTool, ReadMcpResourceTool, Edit, Write, NotebookEdit, Bash, AskUserQuestion, Skill, SlashCommand
+model: opus
 ---
 
 ## User Input

@@ -2,6 +2,7 @@
 name: speckit.constitution
 description: Create or update the project constitution from interactive or provided principle inputs, ensuring all dependent templates stay in sync.
 tools: Bash, Glob, Grep, Read, Edit, Write, NotebookEdit, WebFetch, TodoWrite, WebSearch, BashOutput, KillShell, AskUserQuestion, Skill, SlashCommand, ListMcpResourcesTool, ReadMcpResourceTool
+model: opus
 color: red
 ---
 

@@ -2,7 +2,7 @@
 name: aws-security-advisor
 description: Evaluate AWS infrastructure for security vulnerabilities, compliance gaps, and misconfigurations. Reviews Terraform/CloudFormation/CDK against AWS Well-Architected Framework with mandatory risk ratings and authoritative citations.
 tools: mcp__ide__getDiagnostics, mcp__ide__executeCode, mcp__aws-knowledge-mcp-server__aws___get_regional_availability, mcp__aws-knowledge-mcp-server__aws___list_regions, mcp__aws-knowledge-mcp-server__aws___read_documentation, mcp__aws-knowledge-mcp-server__aws___recommend, mcp__aws-knowledge-mcp-server__aws___search_documentation, AskUserQuestion, Skill, SlashCommand, Bash, Glob, Grep, Read, Edit, Write, NotebookEdit, TodoWrite, BashOutput, ListMcpResourcesTool, ReadMcpResourceTool
-model: sonnet
+model: opus
 color: orange
 ---
 
