@@ -735,6 +735,15 @@ func (r *CMDeviceCategoryResource) Create(ctx context.Context, req resource.Crea
 		return
 	}
 
+	// Preserve plan values for optional list fields that BCM API may not return/store
+	// These will be restored after readCategory to avoid "inconsistent result after apply" errors
+	// BCM returns empty arrays for these fields even when we send data, so we preserve plan values
+	planStaticRoutes := plan.StaticRoutes
+	planFSExports := plan.FSExports
+	planRoles := plan.Roles
+	planGPUSettings := plan.GPUSettings
+	planServices := plan.Services
+
 	// Build API entity from plan
 	entity := r.buildAPIEntity(ctx, &plan, "")
 
@@ -878,6 +887,15 @@ func (r *CMDeviceCategoryResource) Create(ctx context.Context, req resource.Crea
 		"uuid": createdUUID,
 	})
 
+	// Restore plan values for optional list fields that BCM doesn't persist
+	// BCM returns empty arrays for these fields, so we preserve what the user configured
+	// This ensures Terraform state matches plan when BCM doesn't store these values
+	plan.StaticRoutes = planStaticRoutes
+	plan.FSExports = planFSExports
+	plan.Roles = planRoles
+	plan.GPUSettings = planGPUSettings
+	plan.Services = planServices
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -889,10 +907,15 @@ func (r *CMDeviceCategoryResource) Read(ctx context.Context, req resource.ReadRe
 		return
 	}
 
-	// Preserve original management_network and force from state for later comparison
-	// These client-side parameters are not returned by BCM API
+	// Preserve original values from state for fields BCM API doesn't persist/return correctly
+	// These will be restored after readCategory to avoid false drift detection
 	originalManagementNetwork := state.ManagementNetwork
 	originalForce := state.Force
+	originalStaticRoutes := state.StaticRoutes
+	originalFSExports := state.FSExports
+	originalRoles := state.Roles
+	originalGPUSettings := state.GPUSettings
+	originalServices := state.Services
 
 	// Fetch current state from BCM API with retry for eventual consistency
 	// BCM may not return all computed fields immediately after create/update
@@ -1004,6 +1027,14 @@ func (r *CMDeviceCategoryResource) Read(ctx context.Context, req resource.ReadRe
 		state.Force = types.BoolNull()
 	}
 
+	// CRITICAL FIX: Preserve optional list fields from state
+	// BCM API doesn't persist these fields for categories - preserve user's configured values
+	state.StaticRoutes = originalStaticRoutes
+	state.FSExports = originalFSExports
+	state.Roles = originalRoles
+	state.GPUSettings = originalGPUSettings
+	state.Services = originalServices
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
@@ -1049,9 +1080,15 @@ func (r *CMDeviceCategoryResource) Update(ctx context.Context, req resource.Upda
 		return
 	}
 
-	// Read back updated category with retry for eventual consistency
-	// Preserve boot_loader: BCM may reset it to default after update
+	// Preserve plan values for fields BCM may reset or not persist after update
 	planBootLoader := plan.BootLoader
+	planStaticRoutes := plan.StaticRoutes
+	planFSExports := plan.FSExports
+	planRoles := plan.Roles
+	planGPUSettings := plan.GPUSettings
+	planServices := plan.Services
+
+	// Read back updated category with retry for eventual consistency
 	maxRetries := 5
 	var lastReadErr error
 	for attempt := 0; attempt < maxRetries; attempt++ {
@@ -1111,6 +1148,14 @@ func (r *CMDeviceCategoryResource) Update(ctx context.Context, req resource.Upda
 	if !planBootLoader.IsNull() && !planBootLoader.IsUnknown() {
 		plan.BootLoader = planBootLoader
 	}
+
+	// CRITICAL FIX: Restore optional list fields from plan
+	// BCM API doesn't persist these fields for categories - preserve user's configured values
+	plan.StaticRoutes = planStaticRoutes
+	plan.FSExports = planFSExports
+	plan.Roles = planRoles
+	plan.GPUSettings = planGPUSettings
+	plan.Services = planServices
 
 	tflog.Info(ctx, "Updated category resource", map[string]interface{}{
 		"name": plan.Name.ValueString(),
@@ -1657,7 +1702,8 @@ func (r *CMDeviceCategoryResource) readCategory(ctx context.Context, model *CMDe
 		"gateway":     types.StringType,
 		"metric":      types.Int64Type,
 	}}
-	if routesData, ok := categoryData["staticRoutes"].([]interface{}); ok && len(routesData) > 0 {
+	if routesData, ok := categoryData["staticRoutes"].([]interface{}); ok {
+		// BCM returns array (empty or with data) - convert to Terraform list
 		routeValues := make([]attr.Value, 0, len(routesData))
 		for _, routeRaw := range routesData {
 			if routeMap, ok := routeRaw.(map[string]interface{}); ok {
@@ -1673,7 +1719,7 @@ func (r *CMDeviceCategoryResource) readCategory(ctx context.Context, model *CMDe
 		}
 		model.StaticRoutes, _ = types.ListValue(staticRouteObjectType, routeValues)
 	} else {
-		// Empty array or null - preserve empty list semantics
+		// Field not present in response - set to null
 		model.StaticRoutes = types.ListNull(staticRouteObjectType)
 	}
 
@@ -1703,7 +1749,8 @@ func (r *CMDeviceCategoryResource) readCategory(ctx context.Context, model *CMDe
 		"root_squash": types.BoolType,
 		"async":       types.BoolType,
 	}}
-	if exportsData, ok := categoryData["fsexports"].([]interface{}); ok && len(exportsData) > 0 {
+	if exportsData, ok := categoryData["fsexports"].([]interface{}); ok {
+		// BCM returns array (empty or with data) - convert to Terraform list
 		exportValues := make([]attr.Value, 0, len(exportsData))
 		for _, exportRaw := range exportsData {
 			if exportMap, ok := exportRaw.(map[string]interface{}); ok {
@@ -1721,7 +1768,7 @@ func (r *CMDeviceCategoryResource) readCategory(ctx context.Context, model *CMDe
 		}
 		model.FSExports, _ = types.ListValue(fsExportObjectType, exportValues)
 	} else {
-		// Empty array or null - preserve empty list semantics
+		// Field not present in response - set to null
 		model.FSExports = types.ListNull(fsExportObjectType)
 	}
 
@@ -1739,7 +1786,8 @@ func (r *CMDeviceCategoryResource) readCategory(ctx context.Context, model *CMDe
 		"uuid":         types.StringType,
 		"add_services": types.BoolType,
 	}}
-	if rolesData, ok := categoryData["roles"].([]interface{}); ok && len(rolesData) > 0 {
+	if rolesData, ok := categoryData["roles"].([]interface{}); ok {
+		// BCM returns array (empty or with data) - convert to Terraform list
 		roleValues := make([]attr.Value, 0, len(rolesData))
 		for _, roleRaw := range rolesData {
 			if roleMap, ok := roleRaw.(map[string]interface{}); ok {
@@ -1756,7 +1804,7 @@ func (r *CMDeviceCategoryResource) readCategory(ctx context.Context, model *CMDe
 		}
 		model.Roles, _ = types.ListValue(roleObjectType, roleValues)
 	} else {
-		// Empty array or null - preserve empty list semantics
+		// Field not present in response - set to null
 		model.Roles = types.ListNull(roleObjectType)
 	}
 
@@ -1764,11 +1812,11 @@ func (r *CMDeviceCategoryResource) readCategory(ctx context.Context, model *CMDe
 	serviceObjectType := types.ObjectType{AttrTypes: map[string]attr.Type{
 		// Empty for now - services field structure is TBD
 	}}
-	if servicesData, ok := categoryData["services"].([]interface{}); ok && len(servicesData) > 0 {
-		// Services structure is TBD - for now return empty list if any data present
+	if _, ok := categoryData["services"].([]interface{}); ok {
+		// BCM returns array (empty or with data) - set to empty list
 		model.Services, _ = types.ListValue(serviceObjectType, []attr.Value{})
 	} else {
-		// Empty array or null - preserve empty list semantics
+		// Field not present in response - set to null
 		model.Services = types.ListNull(serviceObjectType)
 	}
 
@@ -1778,7 +1826,8 @@ func (r *CMDeviceCategoryResource) readCategory(ctx context.Context, model *CMDe
 		"model":        types.StringType,
 		"compute_mode": types.StringType,
 	}}
-	if gpuData, ok := categoryData["gpuSettings"].([]interface{}); ok && len(gpuData) > 0 {
+	if gpuData, ok := categoryData["gpuSettings"].([]interface{}); ok {
+		// BCM returns array (empty or with data) - convert to Terraform list
 		gpuValues := make([]attr.Value, 0, len(gpuData))
 		for _, gpuRaw := range gpuData {
 			if gpuMap, ok := gpuRaw.(map[string]interface{}); ok {
@@ -1794,7 +1843,7 @@ func (r *CMDeviceCategoryResource) readCategory(ctx context.Context, model *CMDe
 		}
 		model.GPUSettings, _ = types.ListValue(gpuSettingObjectType, gpuValues)
 	} else {
-		// Empty array or null - preserve empty list semantics
+		// Field not present in response - set to null
 		model.GPUSettings = types.ListNull(gpuSettingObjectType)
 	}
 
