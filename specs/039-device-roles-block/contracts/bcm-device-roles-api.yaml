@@ -1,0 +1,318 @@
+# BCM Device Roles API Contract
+# Feature: 039-device-roles-block
+# Date: 2025-11-26
+#
+# This contract documents the BCM JSON-RPC API patterns for device role assignment.
+# BCM uses JSON-RPC over HTTPS, not REST/OpenAPI, but this format documents the contract.
+
+openapi: "3.0.3"
+info:
+  title: BCM Device Roles API Contract
+  version: "1.0.0"
+  description: |
+    Contract for role assignment within BCM Device entities.
+    BCM uses JSON-RPC protocol - this OpenAPI spec documents the data structures.
+
+paths:
+  /json:
+    post:
+      summary: JSON-RPC Endpoint
+      description: All BCM API calls use this single endpoint with service/call pattern
+      requestBody:
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/AddDeviceRequest'
+                - $ref: '#/components/schemas/UpdateDeviceRequest'
+                - $ref: '#/components/schemas/GetDeviceRequest'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/DeviceResponse'
+                  - $ref: '#/components/schemas/ValidationResponse'
+
+components:
+  schemas:
+    # JSON-RPC Request Structures
+    AddDeviceRequest:
+      type: object
+      required:
+        - service
+        - call
+        - args
+      properties:
+        service:
+          type: string
+          enum: [cmdevice]
+        call:
+          type: string
+          enum: [addDevice]
+        args:
+          type: array
+          items:
+            oneOf:
+              - $ref: '#/components/schemas/DeviceEntity'
+              - type: boolean
+                description: Force flag
+          minItems: 1
+          maxItems: 2
+      example:
+        service: cmdevice
+        call: addDevice
+        args:
+          - baseType: Device
+            childType: PhysicalNode
+            hostname: control-01
+            mac: "00:11:22:33:44:55"
+            category: "uuid-here"
+            roles:
+              - baseType: Role
+                name: control-plane
+                modified: true
+                to_be_removed: false
+                revision: ""
+          - false
+
+    UpdateDeviceRequest:
+      type: object
+      required:
+        - service
+        - call
+        - args
+      properties:
+        service:
+          type: string
+          enum: [cmdevice]
+        call:
+          type: string
+          enum: [updateDevice]
+        args:
+          type: array
+          items:
+            oneOf:
+              - $ref: '#/components/schemas/DeviceEntity'
+              - type: boolean
+                description: Force flag
+          minItems: 1
+          maxItems: 2
+
+    GetDeviceRequest:
+      type: object
+      required:
+        - service
+        - call
+        - args
+      properties:
+        service:
+          type: string
+          enum: [cmdevice]
+        call:
+          type: string
+          enum: [getDevice]
+        args:
+          type: array
+          items:
+            type: string
+            description: Device UUID or hostname
+          minItems: 1
+          maxItems: 1
+
+    # Entity Structures
+    DeviceEntity:
+      type: object
+      required:
+        - baseType
+        - childType
+        - hostname
+        - mac
+        - category
+        - uuid
+      properties:
+        baseType:
+          type: string
+          enum: [Device]
+        childType:
+          type: string
+          enum: [PhysicalNode, ComputeNode, HeadNode, CloudNode]
+        hostname:
+          type: string
+          pattern: '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$'
+          description: RFC 1123 DNS label
+        mac:
+          type: string
+          pattern: '^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$'
+        uuid:
+          type: string
+          format: uuid
+        category:
+          type: string
+          format: uuid
+        partition:
+          type: string
+          format: uuid
+        managementNetwork:
+          type: string
+          format: uuid
+        interfaces:
+          type: array
+          items:
+            $ref: '#/components/schemas/NetworkInterface'
+        roles:
+          type: array
+          items:
+            $ref: '#/components/schemas/RoleAssignment'
+          description: Role assignments for this device
+        modified:
+          type: boolean
+          default: true
+        to_be_removed:
+          type: boolean
+          default: false
+        revision:
+          type: string
+          default: ""
+
+    RoleAssignment:
+      type: object
+      description: Role assignment for create/update operations
+      required:
+        - baseType
+        - name
+        - modified
+        - to_be_removed
+        - revision
+      properties:
+        baseType:
+          type: string
+          enum: [Role]
+        name:
+          type: string
+          description: Role name (e.g., 'worker', 'headnode', 'control-plane')
+          examples:
+            - worker
+            - headnode
+            - control-plane
+            - master
+            - etcd
+            - storage
+            - monitoring
+        modified:
+          type: boolean
+          description: Set true for new/changed roles
+        to_be_removed:
+          type: boolean
+          description: Set true to remove this role
+        revision:
+          type: string
+          description: Empty string for new roles
+
+    RoleResponse:
+      type: object
+      description: Role object as returned by BCM API
+      properties:
+        baseType:
+          type: string
+          enum: [Role]
+        childType:
+          type: string
+          description: BCM role type
+          enum:
+            - HeadNodeRole
+            - StorageRole
+            - BackupRole
+            - MonitoringRole
+            - ProvisioningRole
+            - BootRole
+            - ComputeRole
+            - KubeControlPlaneRole
+            - KubeMasterRole
+            - KubeWorkerRole
+            - KubeEtcdRole
+        name:
+          type: string
+        uuid:
+          type: string
+          format: uuid
+        addServices:
+          type: boolean
+          description: Whether role auto-adds services
+        modified:
+          type: boolean
+        to_be_removed:
+          type: boolean
+        revision:
+          type: string
+
+    NetworkInterface:
+      type: object
+      properties:
+        baseType:
+          type: string
+          enum: [NetworkInterface]
+        childType:
+          type: string
+          enum: [NetworkPhysicalInterface, NetworkBondInterface, NetworkBMCInterface]
+        name:
+          type: string
+        mac:
+          type: string
+        network:
+          type: string
+          format: uuid
+        dhcp:
+          type: boolean
+        bootable:
+          type: boolean
+
+    DeviceResponse:
+      type: object
+      description: Device entity returned from getDevice
+      properties:
+        baseType:
+          type: string
+        childType:
+          type: string
+        hostname:
+          type: string
+        uuid:
+          type: string
+        mac:
+          type: string
+        category:
+          type: string
+        partition:
+          type: string
+        interfaces:
+          type: array
+          items:
+            $ref: '#/components/schemas/NetworkInterface'
+        roles:
+          type: array
+          items:
+            $ref: '#/components/schemas/RoleResponse'
+        creationTime:
+          type: integer
+          description: Unix timestamp
+
+    ValidationResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        validation:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              message:
+                type: string
+              severity:
+                type: string
+                enum: [ERROR, WARNING]
