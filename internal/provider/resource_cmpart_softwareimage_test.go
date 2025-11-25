@@ -415,11 +415,11 @@ func TestAccCMPartSoftwareImageResource_ValidationInvalidName(t *testing.T) {
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: `
+				Config: fmt.Sprintf(`
 provider "bcm" {
-  endpoint             = "https://172.21.15.254:8081"
-  username             = "root"
-  password             = "Hashicorp123!"
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
   insecure_skip_verify = true
 }
 
@@ -427,6 +427,10 @@ resource "bcm_cmpart_softwareimage" "test" {
   # Missing required name and path
 }
 `,
+					os.Getenv("BCM_ENDPOINT"),
+					os.Getenv("BCM_USERNAME"),
+					os.Getenv("BCM_PASSWORD"),
+				),
 				ExpectError: regexp.MustCompile(`The argument "name" is required`),
 			},
 		},
