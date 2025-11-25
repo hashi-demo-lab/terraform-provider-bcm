@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -1130,20 +1131,11 @@ resource "bcm_cmpart_softwareimage" "test" {
 // Note: Software images may still exist if referenced by categories - this is not a test failure,
 // as the proper cleanup order is: devices → categories → software images.
 func testAccCheckCMPartSoftwareImageDestroy(s *terraform.State) error {
-	client, err := NewBCMClient(
-		context.Background(),
-		os.Getenv("BCM_ENDPOINT"),
-		os.Getenv("BCM_USERNAME"),
-		os.Getenv("BCM_PASSWORD"),
-		true, // insecure_skip_verify
-		30,   // timeout
-	)
-	if err != nil {
-		return fmt.Errorf("Failed to create BCM client for CheckDestroy: %v", err)
-	}
+	client := createTestBCMClient(&testing.T{})
+	ctx := context.Background()
 
 	resourceCount := 0
-	ctx := context.Background()
+	var errors []string
 
 	for _, rs := range s.RootModule().Resources {
 		if rs.Type != "bcm_cmpart_softwareimage" {
@@ -1157,30 +1149,18 @@ func testAccCheckCMPartSoftwareImageDestroy(s *terraform.State) error {
 			continue // Resource was never created
 		}
 
-		// Create 10s timeout context for this API call
-		apiCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
+		// Verify software image deleted with exponential backoff (4 retries)
+		deleted := verifyResourceDeleted(
+			ctx,
+			client,
+			"CMPart",
+			"getSoftwareImage",
+			uuid,
+			4, // retry count with exponential backoff
+		)
 
-		// Try to read the software image via BCM API
-		body, err := client.CallJSONRPC(apiCtx, "CMPart", "getSoftwareImage", uuid)
-
-		// If API returns error OR empty response, resource is deleted (success)
-		if err != nil {
-			// API error means resource doesn't exist (deleted successfully)
-			continue
-		}
-
-		// Try to unmarshal response
-		var imageData map[string]interface{}
-		if err := json.Unmarshal(body, &imageData); err != nil {
-			// Can't parse response, assume deleted
-			continue
-		}
-
-		// If we got valid data back, resource still exists
-		// Check if it's referenced by categories before failing
-		if len(imageData) > 0 {
-			// Check for dependent categories
+		if !deleted {
+			// Image still exists - check if it's referenced by categories
 			result, checkErr := CheckCategoriesUsingImage(ctx, client, imageName)
 			if checkErr == nil && result.HasDependencies {
 				// Image still exists because it's referenced by categories
@@ -1191,9 +1171,16 @@ func testAccCheckCMPartSoftwareImageDestroy(s *terraform.State) error {
 			}
 
 			// Image exists but has no dependencies - this is a test failure
-			return fmt.Errorf("Software image '%s' still exists after destroy with no dependencies. UUID: %s, Response: %s",
-				imageName, uuid, string(body))
+			errors = append(errors, fmt.Sprintf(
+				"Software image '%s' still exists after destroy with no dependencies. UUID: %s, Retries: 4",
+				imageName, uuid))
 		}
+	}
+
+	if len(errors) > 0 {
+		return fmt.Errorf("CheckDestroy failures:\n  - %s\n  - Verified: %d software images",
+			strings.Join(errors, "\n  - "),
+			resourceCount)
 	}
 
 	// Log summary

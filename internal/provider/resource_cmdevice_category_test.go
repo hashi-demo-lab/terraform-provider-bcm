@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -26,8 +27,11 @@ import (
 func testAccCheckCMDeviceCategoryDestroy(s *terraform.State) error {
 	// Create BCM client using shared helper
 	client := createTestBCMClient(&testing.T{})
+	ctx := context.Background()
 
 	resourcesChecked := 0
+	var errors []string
+
 	for _, rs := range s.RootModule().Resources {
 		if rs.Type != "bcm_cmdevice_category" {
 			continue
@@ -37,28 +41,32 @@ func testAccCheckCMDeviceCategoryDestroy(s *terraform.State) error {
 		name := rs.Primary.Attributes["name"]
 		uuid := rs.Primary.Attributes["uuid"]
 
-		// Add 10s timeout context per API call
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
+		// Verify category deleted with exponential backoff (4 retries)
+		deleted := verifyResourceDeleted(
+			ctx,
+			client,
+			"cmdevice",
+			"getCategory",
+			name,
+			4, // retry count with exponential backoff
+		)
 
-		// Attempt to read the category
-		body, err := client.CallJSONRPC(ctx, "cmdevice", "getCategory", name)
-
-		// If no error and response contains data, resource still exists
-		if err == nil {
-			var categoryData map[string]interface{}
-			if json.Unmarshal(body, &categoryData) == nil && len(categoryData) > 0 {
-				return fmt.Errorf("category still exists after destroy: name=%s uuid=%s response=%s",
-					name, uuid, string(body))
-			}
+		if !deleted {
+			errors = append(errors, fmt.Sprintf(
+				"Category still exists after destroy. Name: %s, UUID: %s, Retries: 4",
+				name, uuid))
 		}
-		// If error or empty response, resource is gone (expected)
+	}
+
+	if len(errors) > 0 {
+		return fmt.Errorf("CheckDestroy failures:\n  - %s\n  - Verified: %d categories",
+			strings.Join(errors, "\n  - "),
+			resourcesChecked)
 	}
 
 	// Log number of resources checked for debugging
-	if resourcesChecked == 0 {
-		// This is not an error - may be checking destroy for data sources or other resources
-		return nil
+	if resourcesChecked > 0 {
+		fmt.Printf("[DEBUG] CheckDestroy verified %d category resources were deleted\n", resourcesChecked)
 	}
 
 	return nil
