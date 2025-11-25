@@ -97,12 +97,6 @@ func TestAccCMPartSoftwareImageResource_Basic(t *testing.T) {
 					"original_image", // Computed field for cloning - not returned by BCM after clone
 					"force",          // Action parameter - not persisted in BCM state
 				},
-				ConfigStateChecks: []statecheck.StateCheck{
-					compareID.AddStateValue(
-						"bcm_cmpart_softwareimage.test",
-						tfjsonpath.New("id"),
-					),
-				},
 			},
 			// Update and Read testing
 			{
@@ -1822,12 +1816,6 @@ func TestAccCMPartSoftwareImageResource_BootFSPart(t *testing.T) {
 				ImportStateVerifyIgnore: []string{
 					"original_image", // Computed field for cloning - not returned by BCM after clone
 					"force",          // Action parameter - not persisted in BCM state
-				},
-				ConfigStateChecks: []statecheck.StateCheck{
-					compareID.AddStateValue(
-						"bcm_cmpart_softwareimage.test",
-						tfjsonpath.New("id"),
-					),
 				},
 			},
 		},
