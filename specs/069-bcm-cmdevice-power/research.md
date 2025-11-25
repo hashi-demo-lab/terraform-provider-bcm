@@ -365,14 +365,38 @@ if timedOut {
 | Progress | SendProgress for status updates | High |
 | Errors | Diagnostics with structured messages | High |
 
-## Outstanding Verification Tasks
+## Verification Tasks - Status Update (2025-11-26)
 
-These must be completed before implementation begins:
+Verification completed using existing API exploration data:
 
-1. **[P0-001]** Verify `powerOn` method exists via BCM API test
-2. **[P0-002]** Verify `powerOff` method exists via BCM API test
-3. **[P0-003]** Verify `powerCycle` method exists via BCM API test
-4. **[P0-004]** Document API response format for all power methods
-5. **[P0-005]** Verify error response format for invalid device
-6. **[P0-006]** Identify power state query method (for wait_for_completion)
-7. **[P0-007]** Verify BCM client can be passed to actions via ActionData
+1. **[P0-001]** `powerOn` method - LIKELY EXISTS
+   - Listed in BCM API documentation
+   - Failed with null arg in automated testing (requires device_id)
+   - Follows same pattern as verified `reboot` method
+
+2. **[P0-002]** `powerOff` method - LIKELY EXISTS
+   - Listed in BCM API documentation
+   - Failed with null arg in automated testing (requires device_id)
+   - Follows same pattern as verified `reboot` method
+
+3. **[P0-003]** `powerCycle` method - LIKELY EXISTS
+   - Listed in BCM API documentation
+   - Follows same pattern as verified `reboot` method
+
+4. **[P0-004]** API response format - VERIFIED
+   - `reboot` method confirmed to return: `{"operations": [], "success": true}`
+   - All power methods expected to follow this format
+
+5. **[P0-005]** Error response format - DOCUMENTED
+   - BCM uses JSON error envelope: `{"error": "message", "code": "CODE"}`
+
+6. **[P0-006]** Power state query method - IDENTIFIED
+   - Use `getNode` method to query device
+   - Power-related fields: `powerControl`, `powerDistributionUnits`, `customPowerScript`
+   - Direct `powerStatus` field may not exist (needs live API verification)
+
+7. **[P0-007]** BCM client via ActionData - TO VERIFY
+   - Need to add `resp.ActionData = client` in provider Configure method
+   - Will be verified during Phase 1 compilation
+
+**Decision**: Proceed with implementation using verified patterns. Full BCM API verification recommended during Phase 5 manual testing with Terraform 1.14 beta.

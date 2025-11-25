@@ -68,6 +68,8 @@ terraform-provider-bcm/
 ├── internal/provider/
 │   ├── provider.go                    # Provider configuration
 │   ├── bcm_client.go                  # JSON-RPC API client
+│   ├── action_*.go                    # Action implementations (Terraform 1.14+)
+│   ├── action_*_test.go               # Action unit tests
 │   ├── data_source_*.go               # Data source implementations
 │   ├── data_source_*_test.go          # Acceptance tests
 │   ├── resource_*.go                  # Resource implementations
@@ -78,6 +80,7 @@ terraform-provider-bcm/
 │       └── getInt64Value()            # Null-safe int64 extraction
 ├── examples/
 │   ├── provider/                      # Provider config examples
+│   ├── actions/                       # Action examples (Terraform 1.14+)
 │   ├── data-sources/                  # Data source examples
 │   └── resources/                     # Resource examples
 ├── docs/                              # Generated docs (DON'T EDIT)
@@ -147,6 +150,55 @@ Resources follow CRUD operations with these key characteristics:
 - **Eventual Consistency**: Some operations (like image cloning) are asynchronous. Use polling with exponential backoff to wait for completion.
 - **State Preservation**: Preserve plan values for fields that BCM API resets after operations (e.g., `original_image` after cloning).
 - **Unknown Value Handling**: NEVER propagate `Unknown` values to state - always resolve to known values (null or actual value).
+
+### Action Pattern (Terraform 1.14+)
+
+Actions are a new Terraform 1.14 feature for imperative, non-CRUD operations that do not maintain state.
+
+**Provider Setup:**
+```go
+// provider.go - Add interface assertion
+var _ provider.ProviderWithActions = &BCMProvider{}
+
+// Add Actions method
+func (p *BCMProvider) Actions(ctx context.Context) []func() action.Action {
+    return []func() action.Action{
+        NewCMDevicePowerAction,
+    }
+}
+
+// In Configure method, add:
+resp.ActionData = client
+```
+
+**Action Implementation Pattern:**
+```go
+// action_cmdevice_power.go
+var (
+    _ action.Action              = &CMDevicePowerAction{}
+    _ action.ActionWithConfigure = &CMDevicePowerAction{}
+)
+
+type CMDevicePowerAction struct {
+    client *BCMClient
+}
+
+func (a *CMDevicePowerAction) Metadata(...)  // Returns type name (e.g., "bcm_cmdevice_power")
+func (a *CMDevicePowerAction) Schema(...)    // Returns action schema (inputs only, no computed)
+func (a *CMDevicePowerAction) Configure(...) // Receives BCM client via ProviderData
+func (a *CMDevicePowerAction) Invoke(...)    // Executes the action (main logic)
+```
+
+**Key Differences from Resources:**
+- No state persistence (actions don't maintain terraform.tfstate)
+- No drift detection or import
+- Only input attributes, no computed attributes
+- Use `resp.SendProgress()` for status updates during execution
+- Direct invocation: `terraform apply -invoke="action.bcm_cmdevice_power.name"`
+
+**Testing Strategy:**
+- Unit tests: Immediate (test schema, mapping, interfaces)
+- Acceptance tests: Deferred until Terraform 1.14 GA
 
 ### Test Configuration Pattern
 

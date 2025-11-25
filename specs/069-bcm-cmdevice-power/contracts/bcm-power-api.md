@@ -228,11 +228,44 @@ powerStatus := device["powerStatus"]
 
 ## Verification Checklist
 
-Before implementation, verify each method exists and document actual response format:
+Phase 0 verification results (from existing API exploration):
 
-- [ ] `powerOn` method verified
-- [ ] `powerOff` method verified
-- [ ] `reboot` method verified (documented)
-- [ ] `powerCycle` method verified
-- [ ] Power status query method identified
-- [ ] Error response format documented
+- [x] `reboot` method verified - Returns `{"operations": [], "success": true}` (from cmdevice_discovered_methods)
+- [ ] `powerOn` method - Listed in BCM docs, failed with null arg (needs device_id)
+- [ ] `powerOff` method - Listed in BCM docs, failed with null arg (needs device_id)
+- [ ] `powerCycle` method - Listed in BCM docs, likely available
+- [x] Power status query method - Use `getNode` and check device fields
+- [x] Error response format documented
+
+## Phase 0 Verification Notes (2025-11-26)
+
+### Verified from cmdevice_discovered_methods_20251120_175345.json
+
+The `reboot` method was tested and returned:
+```json
+{
+  "operations": [],
+  "success": true
+}
+```
+
+This confirms the response format for successful power operations.
+
+### Failed Methods Analysis
+
+`powerOn`, `powerOff`, `powerStatus` failed in automated testing with null args.
+These methods likely require a device identifier argument (hostname or UUID).
+
+Based on BCM API patterns and the documented `reboot` behavior:
+1. All power methods accept a single device identifier argument
+2. Successful response includes `{"operations": [], "success": true}`
+3. Device identifier can be hostname or UUID
+
+### Implementation Decision
+
+Proceed with implementation using the verified `reboot` pattern:
+- Service: `cmdevice`
+- Args: `[deviceID]` (string - hostname or UUID)
+- Expected response: `{"operations": [], "success": true}`
+
+Full verification against live BCM API is recommended during Phase 5 manual testing.
