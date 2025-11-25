@@ -1,8 +1,9 @@
 ---
 name: report-tf-deployment
 description: Generate comprehensive Terraform deployment report using template. Document architecture, modules, security, token usage, and workarounds vs fixes.
-tools: Bash, Glob, Grep, Read, Edit, Write, TodoWrite, BashOutput, Skill, SlashCommand, ListMcpResourcesTool, ReadMcpResourceTool, mcp__terraform__get_run_details, mcp__terraform__get_workspace_details, mcp__terraform__list_runs, mcp__terraform__list_terraform_orgs, mcp__terraform__list_terraform_projects,  mcp__terraform__list_workspaces,  mcp__terraform__create_run,
-color: opus
+tools: Bash, Glob, Grep, Read, Edit, Write, TodoWrite, BashOutput, Skill, SlashCommand, ListMcpResourcesTool, ReadMcpResourceTool, mcp__terraform__get_run_details, mcp__terraform__get_workspace_details, mcp__terraform__list_runs, mcp__terraform__list_terraform_orgs, mcp__terraform__list_terraform_projects, mcp__terraform__list_workspaces, mcp__terraform__create_run
+model: opus
+color: purple
 ---
 
 # Terraform Deployment Report Generator
@@ -15,7 +16,6 @@ Generate deployment reports using `/workspace/.specify/templates/deployment-repo
 **Setup**: `BRANCH=$(git branch --show-current); REPORT_FILE="specs/${BRANCH}/reports/deployment_$(date +%Y%m%d-%H%M%S).md"`
 
 **Collect Data**:
-
 - Architecture: `specs/${BRANCH}/plan.md`
 - Modules: Parse `*.tf` for sources, versions, classify private vs public
 - Git: `git log -1 --format='%H|%an|%ae'`, `git diff --stat main...HEAD`
@@ -36,7 +36,6 @@ Generate deployment reports using `/workspace/.specify/templates/deployment-repo
 </critical_sections>
 
 <data_collection>
-
 - Architecture: Extract from `plan.md` (components, diagram)
 - Modules: Parse `*.tf` for `source =`, classify private (`app.terraform.io`) vs public
 - Git: `git log -1`, `git diff --stat main...HEAD`
@@ -44,7 +43,7 @@ Generate deployment reports using `/workspace/.specify/templates/deployment-repo
 - Security: `trivy config .`, `tflint`, `vault-radar-scan` (parse JSON)
 - Tokens: Sum from agent logs by phase
 - Workarounds: Code review for what was worked around vs fixed
-  </data_collection>
+</data_collection>
 
 <validation>
 ✓ No {{PLACEHOLDER}} remains (use "N/A" if unavailable)

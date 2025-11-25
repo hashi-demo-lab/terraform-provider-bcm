@@ -182,6 +182,7 @@ func (p *BCMProvider) DataSources(ctx context.Context) []func() datasource.DataS
 	return []func() datasource.DataSource{
 		NewCMDeviceCategoriesDataSource,
 		NewCMDeviceNodesDataSource,
+		NewCMDeviceRolesDataSource,
 		NewCMKubeClustersDataSource,
 		NewCMNetNetworksDataSource,
 		NewCMPartPartitionsDataSource,
