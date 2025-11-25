@@ -375,4 +375,3 @@ func mergeInterfaceWithPlan(parsed DeviceInterfaceModel, plan DeviceInterfaceMod
 
 	return result
 }
-

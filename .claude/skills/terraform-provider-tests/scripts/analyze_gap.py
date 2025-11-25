@@ -1115,6 +1115,15 @@ class GapAnalyzer:
         resources_with_id_issues = sum(1 for t in real_resources if t.id_consistency_issues)
         total_id_issues = sum(len(t.id_consistency_issues) for t in real_resources)
 
+        # Security metrics (hardcoded credentials)
+        all_tests = self.resource_tests + self.data_source_tests
+        tests_with_credentials = sum(1 for t in all_tests if t.hardcoded_credentials)
+        total_credentials = sum(len(t.hardcoded_credentials) for t in all_tests)
+        critical_credentials = sum(
+            len([c for c in t.hardcoded_credentials if c[3] == 'critical'])
+            for t in all_tests
+        )
+
         report.append(f"- **{total_modern_state}** modern state checks (`statecheck.ExpectKnownValue`)\n")
         report.append(f"- **{total_modern_plan}** modern plan checks (`plancheck.Expect*`)\n")
         report.append(f"- **{total_legacy}** legacy check calls (needs cleanup)\n")
@@ -1154,6 +1163,17 @@ class GapAnalyzer:
                 report.append(f"- **All resources have consistent ID tracking** ✅\n")
         else:
             report.append(f"- **No resource tests found** (N/A)\n")
+
+        report.append(f"\n**Security (Hardcoded Credentials):**\n")
+        if critical_credentials > 0:
+            report.append(f"- **{critical_credentials} CRITICAL** hardcoded credentials found 🚨\n")
+            report.append(f"- **{tests_with_credentials}/{len(all_tests)}** test files have credential issues\n")
+            report.append(f"- **Action Required**: Replace with environment variables\n")
+        elif total_credentials > 0:
+            report.append(f"- **{total_credentials}** potential credential issues found ⚠️\n")
+            report.append(f"- **{tests_with_credentials}/{len(all_tests)}** test files affected\n")
+        else:
+            report.append(f"- **No hardcoded credentials detected** ✅\n")
 
         report.append(f"\n**Average Quality Score:** {avg_quality_score:.0f}/100\n")
         if mock_resources:
@@ -1255,6 +1275,20 @@ class GapAnalyzer:
                     for issue in test.id_consistency_issues:
                         lines.append(f"  - {issue}\n")
 
+            # Security: Hardcoded credentials
+            if test.hardcoded_credentials:
+                critical_creds = [c for c in test.hardcoded_credentials if c[3] == 'critical']
+                warning_creds = [c for c in test.hardcoded_credentials if c[3] == 'warning']
+                if critical_creds:
+                    lines.append(f"- **🚨 Hardcoded credentials:** {len(critical_creds)} CRITICAL\n")
+                    for line_num, cred_type, value, severity in critical_creds[:3]:
+                        masked = value[:4] + '*' * (len(value) - 4) if len(value) > 4 else '****'
+                        lines.append(f"  - Line {line_num}: `{cred_type}` = `{masked}`\n")
+                    if len(critical_creds) > 3:
+                        lines.append(f"  - (and {len(critical_creds) - 3} more)\n")
+                elif warning_creds:
+                    lines.append(f"- **Potential credentials:** {len(warning_creds)} ⚠️ (review)\n")
+
             if test.legacy_checks:
                 lines.append(f"- **Legacy checks:** {len(test.legacy_checks)} ⚠️\n")
                 lines.append(f"  - Lines: {', '.join(str(line) for line, _ in test.legacy_checks[:5])}")
@@ -1305,6 +1339,41 @@ class GapAnalyzer:
         lines.append("\n### HIGH PRIORITY ⚠️\n")
 
         has_high_priority = False
+
+        # CRITICAL: Hardcoded credentials
+        tests_with_creds = [t for t in self.resource_tests + self.data_source_tests
+                           if t.hardcoded_credentials]
+        critical_cred_tests = [t for t in tests_with_creds
+                               if any(c[3] == 'critical' for c in t.hardcoded_credentials)]
+
+        if critical_cred_tests:
+            has_high_priority = True
+            lines.append("\n**🚨 CRITICAL: Hardcoded Credentials Detected:**\n")
+            lines.append("These files contain hardcoded secrets that should be replaced with environment variables:\n\n")
+            for test in sorted(critical_cred_tests, key=lambda x: len(x.hardcoded_credentials), reverse=True):
+                critical_creds = [c for c in test.hardcoded_credentials if c[3] == 'critical']
+                lines.append(f"- **`{test.name}`** ({len(critical_creds)} critical):\n")
+                for line_num, cred_type, value, severity in critical_creds[:3]:
+                    # Mask the value for security
+                    masked = value[:4] + '*' * (len(value) - 4) if len(value) > 4 else '****'
+                    lines.append(f"  - Line {line_num}: `{cred_type}` = `{masked}` → Use `os.Getenv()`\n")
+                if len(critical_creds) > 3:
+                    lines.append(f"  - (and {len(critical_creds) - 3} more)\n")
+            lines.append("\n")
+
+        # Warning-level credential issues
+        warning_cred_tests = [t for t in tests_with_creds
+                              if any(c[3] == 'warning' for c in t.hardcoded_credentials)
+                              and t not in critical_cred_tests]
+        if warning_cred_tests:
+            has_high_priority = True
+            lines.append("\n**⚠️ Potential Credential Issues:**\n")
+            for test in warning_cred_tests[:5]:
+                warning_creds = [c for c in test.hardcoded_credentials if c[3] == 'warning']
+                lines.append(f"- **`{test.name}`**: {len(warning_creds)} potential issues (review recommended)\n")
+            if len(warning_cred_tests) > 5:
+                lines.append(f"- (and {len(warning_cred_tests) - 5} more files)\n")
+            lines.append("\n")
 
         # Hardcoded names (non-unique naming patterns)
         tests_with_hardcoded_names = [t for t in self.resource_tests + self.data_source_tests
