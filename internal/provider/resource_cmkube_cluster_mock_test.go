@@ -25,7 +25,7 @@ import (
 // Mock BCM Server for CMKube Cluster Tests
 // ========================================
 
-// mockClusterState tracks cluster state for CRUD operations
+// mockClusterState tracks cluster state for CRUD operations.
 type mockClusterState struct {
 	mu       sync.RWMutex
 	clusters map[string]map[string]interface{}
@@ -56,7 +56,7 @@ func createMockBCMServerForKubeCluster() (*httptest.Server, *mockClusterState) {
 			return
 		}
 
-		// Handle login
+		// Handle login.
 		if req.Service == "login" {
 			w.Header().Set("Set-Cookie", "cm-login-token=mock-token; Path=/")
 			w.WriteHeader(http.StatusOK)
@@ -64,13 +64,13 @@ func createMockBCMServerForKubeCluster() (*httptest.Server, *mockClusterState) {
 			return
 		}
 
-		// Route cmkube API calls
+		// Route cmkube API calls.
 		if req.Service == "cmkube" {
 			handleCMKubeCall(w, req, state)
 			return
 		}
 
-		// Default success for other services
+		// Default success for other services.
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
@@ -79,7 +79,7 @@ func createMockBCMServerForKubeCluster() (*httptest.Server, *mockClusterState) {
 	return server, state
 }
 
-// handleCMKubeCall routes cmkube service API calls
+// handleCMKubeCall routes cmkube service API calls.
 func handleCMKubeCall(w http.ResponseWriter, req struct {
 	Service  string        `json:"service"`
 	Call     string        `json:"call"`
@@ -91,7 +91,7 @@ func handleCMKubeCall(w http.ResponseWriter, req struct {
 
 	switch req.Call {
 	case "validateKubeCluster":
-		// Return empty array (no validation errors)
+		// Return empty array (no validation errors).
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode([]interface{}{})
 
@@ -116,7 +116,7 @@ func handleCMKubeCall(w http.ResponseWriter, req struct {
 	}
 }
 
-// handleAddKubeCluster handles cluster creation
+// handleAddKubeCluster handles cluster creation.
 func handleAddKubeCluster(w http.ResponseWriter, args []interface{}, state *mockClusterState) {
 	if len(args) < 1 {
 		http.Error(w, "Missing cluster entity", http.StatusBadRequest)
@@ -134,7 +134,7 @@ func handleAddKubeCluster(w http.ResponseWriter, args []interface{}, state *mock
 		uuid = generateUUID()
 	}
 
-	// Store cluster (simulating BCM behavior: etcdNodes is accepted but not returned)
+	// Store cluster (simulating BCM behavior: etcdNodes is accepted but not returned).
 	state.mu.Lock()
 	state.clusters[uuid] = map[string]interface{}{
 		"uuid":              uuid,
@@ -143,8 +143,8 @@ func handleAddKubeCluster(w http.ResponseWriter, args []interface{}, state *mock
 		"managementNetwork": entity["managementNetwork"],
 		"creationTime":      1700000000,
 		"revisionId":        1,
-		// Note: masterNodes, workerNodes, etcdNodes are NOT stored/returned
-		// This simulates BCM's write-only behavior for node lists
+		// Note: masterNodes, workerNodes, etcdNodes are NOT stored/returned.
+		// This simulates BCM's write-only behavior for node lists.
 	}
 	state.mu.Unlock()
 
@@ -155,7 +155,7 @@ func handleAddKubeCluster(w http.ResponseWriter, args []interface{}, state *mock
 	})
 }
 
-// handleGetKubeCluster handles cluster read (simulates write-only fields)
+// handleGetKubeCluster handles cluster read (simulates write-only fields).
 func handleGetKubeCluster(w http.ResponseWriter, args []interface{}, state *mockClusterState) {
 	if len(args) < 1 {
 		http.Error(w, "Missing cluster UUID", http.StatusBadRequest)
@@ -177,13 +177,13 @@ func handleGetKubeCluster(w http.ResponseWriter, args []interface{}, state *mock
 		return
 	}
 
-	// Return cluster WITHOUT masterNodes, workerNodes, etcdNodes
-	// This simulates BCM's actual behavior where these are write-only fields
+	// Return cluster WITHOUT masterNodes, workerNodes, etcdNodes.
+	// This simulates BCM's actual behavior where these are write-only fields.
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(cluster)
 }
 
-// handleUpdateKubeCluster handles cluster update
+// handleUpdateKubeCluster handles cluster update.
 func handleUpdateKubeCluster(w http.ResponseWriter, args []interface{}, state *mockClusterState) {
 	if len(args) < 1 {
 		http.Error(w, "Missing cluster entity", http.StatusBadRequest)
@@ -200,7 +200,7 @@ func handleUpdateKubeCluster(w http.ResponseWriter, args []interface{}, state *m
 
 	state.mu.Lock()
 	if _, exists := state.clusters[uuid]; exists {
-		// Update stored fields (but NOT node lists - they're write-only)
+		// Update stored fields (but NOT node lists - they're write-only).
 		state.clusters[uuid]["name"] = entity["name"]
 		state.clusters[uuid]["version"] = entity["version"]
 		state.clusters[uuid]["managementNetwork"] = entity["managementNetwork"]
@@ -212,7 +212,7 @@ func handleUpdateKubeCluster(w http.ResponseWriter, args []interface{}, state *m
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
 }
 
-// handleRemoveKubeCluster handles cluster deletion
+// handleRemoveKubeCluster handles cluster deletion.
 func handleRemoveKubeCluster(w http.ResponseWriter, args []interface{}, state *mockClusterState) {
 	if len(args) < 1 {
 		http.Error(w, "Missing cluster UUID", http.StatusBadRequest)
@@ -233,7 +233,7 @@ func handleRemoveKubeCluster(w http.ResponseWriter, args []interface{}, state *m
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
 }
 
-// handleGetKubeClusters handles listing all clusters
+// handleGetKubeClusters handles listing all clusters.
 func handleGetKubeClusters(w http.ResponseWriter, state *mockClusterState) {
 	state.mu.RLock()
 	clusters := make([]map[string]interface{}, 0, len(state.clusters))
@@ -277,7 +277,7 @@ func testAccCheckMockClusterDestroy(state *mockClusterState) resource.TestCheckF
 // TestAccCMKubeClusterResource_MockEtcdNodes tests etcd_nodes with mock server.
 // This test validates the write-only field behavior without requiring physical nodes.
 func TestAccCMKubeClusterResource_MockEtcdNodes(t *testing.T) {
-	cleanup := clearBCMEnvVars(t)
+	cleanup := clearBCMEnvVars()
 	defer cleanup()
 
 	mockServer, mockState := createMockBCMServerForKubeCluster()
@@ -338,7 +338,7 @@ func TestAccCMKubeClusterResource_MockEtcdNodes(t *testing.T) {
 
 // TestAccCMKubeClusterResource_MockEtcdNodesUpdate tests updating etcd_nodes.
 func TestAccCMKubeClusterResource_MockEtcdNodesUpdate(t *testing.T) {
-	cleanup := clearBCMEnvVars(t)
+	cleanup := clearBCMEnvVars()
 	defer cleanup()
 
 	mockServer, mockState := createMockBCMServerForKubeCluster()
@@ -404,7 +404,7 @@ func TestAccCMKubeClusterResource_MockEtcdNodesUpdate(t *testing.T) {
 
 // TestAccCMKubeClusterResource_MockEtcdNodesValidationError tests validation error for etcd_nodes.
 func TestAccCMKubeClusterResource_MockEtcdNodesValidationError(t *testing.T) {
-	cleanup := clearBCMEnvVars(t)
+	cleanup := clearBCMEnvVars()
 	defer cleanup()
 
 	// Create mock server that returns validation ERROR for invalid etcd nodes count
@@ -458,7 +458,7 @@ func TestAccCMKubeClusterResource_MockEtcdNodesValidationError(t *testing.T) {
 
 // TestAccCMKubeClusterResource_MockEtcdNodesNullToValue tests adding etcd_nodes to existing cluster.
 func TestAccCMKubeClusterResource_MockEtcdNodesNullToValue(t *testing.T) {
-	cleanup := clearBCMEnvVars(t)
+	cleanup := clearBCMEnvVars()
 	defer cleanup()
 
 	mockServer, mockState := createMockBCMServerForKubeCluster()

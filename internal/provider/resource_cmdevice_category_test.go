@@ -746,7 +746,7 @@ resource "bcm_cmdevice_category" "test" {
 // Network and Partition Configuration Tests (Priority Group 3)
 // ========================================
 
-// TestAccCMDeviceCategory_NetworkConfiguration tests network-related optional fields
+// TestAccCMDeviceCategory_NetworkConfiguration tests network-related optional fields.
 func TestAccCMDeviceCategory_NetworkConfiguration(t *testing.T) {
 	categoryName := generateUniqueTestName("tftest-network-config")
 
@@ -913,7 +913,7 @@ func TestAccCMDeviceCategory_PartitionConfiguration(t *testing.T) {
 // Network and Partition Test Config Helpers
 // ========================================
 
-// testAccCMDeviceCategoryResourceConfig_NetworkConfig creates config with network settings
+// testAccCMDeviceCategoryResourceConfig_NetworkConfig creates config with network settings.
 func testAccCMDeviceCategoryResourceConfig_NetworkConfig(name string) string {
 	return fmt.Sprintf(`
 provider "bcm" {
@@ -953,7 +953,7 @@ resource "bcm_cmdevice_category" "test" {
 	)
 }
 
-// testAccCMDeviceCategoryResourceConfig_NetworkConfigUpdated creates updated network config
+// testAccCMDeviceCategoryResourceConfig_NetworkConfigUpdated creates updated network config.
 func testAccCMDeviceCategoryResourceConfig_NetworkConfigUpdated(name string) string {
 	return fmt.Sprintf(`
 provider "bcm" {
@@ -993,7 +993,7 @@ resource "bcm_cmdevice_category" "test" {
 	)
 }
 
-// testAccCMDeviceCategoryResourceConfig_PartitionConfig creates config with partition settings
+// testAccCMDeviceCategoryResourceConfig_PartitionConfig creates config with partition settings.
 func testAccCMDeviceCategoryResourceConfig_PartitionConfig(name string) string {
 	return fmt.Sprintf(`
 provider "bcm" {
@@ -1061,7 +1061,7 @@ EOT
 	)
 }
 
-// testAccCMDeviceCategoryResourceConfig_PartitionConfigUpdated creates updated partition config
+// testAccCMDeviceCategoryResourceConfig_PartitionConfigUpdated creates updated partition config.
 func testAccCMDeviceCategoryResourceConfig_PartitionConfigUpdated(name string) string {
 	return fmt.Sprintf(`
 provider "bcm" {
@@ -1218,7 +1218,7 @@ func TestAccCMDeviceCategoryResource_DiskSetupAdvanced(t *testing.T) {
 			// Step 1: Create with disk setup fields (install_boot_record=true)
 			// Note: raidconf uses empty string as valid XML format is unknown
 			{
-				Config: testAccCMDeviceCategoryResourceConfig_DiskSetup(categoryName, diskSetupXML, "", true),
+				Config: testAccCMDeviceCategoryResourceConfig_DiskSetup(categoryName, diskSetupXML, true),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_category.test",
@@ -1256,7 +1256,7 @@ func TestAccCMDeviceCategoryResource_DiskSetupAdvanced(t *testing.T) {
 			},
 			// Step 2: Idempotency check after Create
 			{
-				Config: testAccCMDeviceCategoryResourceConfig_DiskSetup(categoryName, diskSetupXML, "", true),
+				Config: testAccCMDeviceCategoryResourceConfig_DiskSetup(categoryName, diskSetupXML, true),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
@@ -1265,7 +1265,7 @@ func TestAccCMDeviceCategoryResource_DiskSetupAdvanced(t *testing.T) {
 			},
 			// Step 3: Update disk setup fields (change disksetup and install_boot_record)
 			{
-				Config: testAccCMDeviceCategoryResourceConfig_DiskSetup(categoryName, updatedDiskSetupXML, "", false),
+				Config: testAccCMDeviceCategoryResourceConfig_DiskSetup(categoryName, updatedDiskSetupXML, false),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_category.test",
@@ -1292,7 +1292,7 @@ func TestAccCMDeviceCategoryResource_DiskSetupAdvanced(t *testing.T) {
 			},
 			// Step 4: Idempotency check after Update
 			{
-				Config: testAccCMDeviceCategoryResourceConfig_DiskSetup(categoryName, updatedDiskSetupXML, "", false),
+				Config: testAccCMDeviceCategoryResourceConfig_DiskSetup(categoryName, updatedDiskSetupXML, false),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
@@ -1301,7 +1301,7 @@ func TestAccCMDeviceCategoryResource_DiskSetupAdvanced(t *testing.T) {
 			},
 			// Step 5: Import and verify all disk setup fields
 			{
-				Config:            testAccCMDeviceCategoryResourceConfig_DiskSetup(categoryName, updatedDiskSetupXML, "", false),
+				Config:            testAccCMDeviceCategoryResourceConfig_DiskSetup(categoryName, updatedDiskSetupXML, false),
 				ResourceName:      "bcm_cmdevice_category.test",
 				ImportState:       true,
 				ImportStateVerify: true,
@@ -1413,14 +1413,8 @@ func TestAccCMDeviceCategoryResource_DiskSetupOptionalCombinations(t *testing.T)
 // ========================================
 
 // testAccCMDeviceCategoryResourceConfig_DiskSetup creates config with all disk setup fields.
-// Note: raidconf is omitted when empty since BCM treats empty string as null.
-func testAccCMDeviceCategoryResourceConfig_DiskSetup(name, disksetup, raidconf string, installBootRecord bool) string {
-	// Build raidconf line only if non-empty (BCM treats "" as null)
-	raidconfLine := ""
-	if raidconf != "" {
-		raidconfLine = fmt.Sprintf("  raidconf            = %q", raidconf)
-	}
-
+// Note: raidconf is omitted since BCM treats empty string as null.
+func testAccCMDeviceCategoryResourceConfig_DiskSetup(name, disksetup string, installBootRecord bool) string {
 	return fmt.Sprintf(`
 provider "bcm" {
   endpoint             = %[1]q
@@ -1442,8 +1436,7 @@ resource "bcm_cmdevice_category" "test" {
   management_network  = local.management_network_uuid
   notes               = "Disk setup configuration test"
   disksetup           = %[5]q
-%[6]s
-  install_boot_record = %[7]t
+  install_boot_record = %[6]t
 
   software_image_proxy = {
     parent_software_image = local.software_image_uuid
@@ -1455,7 +1448,6 @@ resource "bcm_cmdevice_category" "test" {
 		os.Getenv("BCM_PASSWORD"),
 		name,
 		disksetup,
-		raidconfLine,
 		installBootRecord,
 	)
 }
@@ -1505,7 +1497,7 @@ resource "bcm_cmdevice_category" "test" {
 // - Optional partition attributes: id, partitiontype
 // - Optional partition child: <mountOptions>
 //
-// Reference: BCM category schema documentation at /workspace/sampleRest/category_schema_documentation_20251121_070629.md (line 113)
+// Reference: BCM category schema documentation at /workspace/sampleRest/category_schema_documentation_20251121_070629.md (line 113).
 func testAccCMDeviceCategoryResourceConfig_DiskSetupOnly(name, disksetup string) string {
 	return fmt.Sprintf(`
 provider "bcm" {
@@ -1541,85 +1533,13 @@ resource "bcm_cmdevice_category" "test" {
 	)
 }
 
-// testAccCMDeviceCategoryResourceConfig_RaidConfOnly creates config with only raidconf field.
-func testAccCMDeviceCategoryResourceConfig_RaidConfOnly(name, raidconf string) string {
-	return fmt.Sprintf(`
-provider "bcm" {
-  endpoint             = %[1]q
-  username             = %[2]q
-  password             = %[3]q
-  insecure_skip_verify = true
-}
-
-data "bcm_cmdevice_categories" "all" {}
-data "bcm_cmpart_softwareimages" "all" {}
-
-locals {
-  management_network_uuid = length(data.bcm_cmdevice_categories.all.categories) > 0 ? data.bcm_cmdevice_categories.all.categories[0].management_network_id : "00000000-0000-0000-0000-000000000000"
-  software_image_uuid = length(data.bcm_cmpart_softwareimages.all.images) > 0 ? data.bcm_cmpart_softwareimages.all.images[0].uuid : "00000000-0000-0000-0000-000000000000"
-}
-
-resource "bcm_cmdevice_category" "test" {
-  name               = %[4]q
-  management_network = local.management_network_uuid
-  raidconf           = %[5]q
-
-  software_image_proxy = {
-    parent_software_image = local.software_image_uuid
-  }
-}
-`,
-		os.Getenv("BCM_ENDPOINT"),
-		os.Getenv("BCM_USERNAME"),
-		os.Getenv("BCM_PASSWORD"),
-		name,
-		raidconf,
-	)
-}
-
-// testAccCMDeviceCategoryResourceConfig_InstallBootRecordOnly creates config with only install_boot_record field.
-func testAccCMDeviceCategoryResourceConfig_InstallBootRecordOnly(name string, installBootRecord bool) string {
-	return fmt.Sprintf(`
-provider "bcm" {
-  endpoint             = %[1]q
-  username             = %[2]q
-  password             = %[3]q
-  insecure_skip_verify = true
-}
-
-data "bcm_cmdevice_categories" "all" {}
-data "bcm_cmpart_softwareimages" "all" {}
-
-locals {
-  management_network_uuid = length(data.bcm_cmdevice_categories.all.categories) > 0 ? data.bcm_cmdevice_categories.all.categories[0].management_network_id : "00000000-0000-0000-0000-000000000000"
-  software_image_uuid = length(data.bcm_cmpart_softwareimages.all.images) > 0 ? data.bcm_cmpart_softwareimages.all.images[0].uuid : "00000000-0000-0000-0000-000000000000"
-}
-
-resource "bcm_cmdevice_category" "test" {
-  name                = %[4]q
-  management_network  = local.management_network_uuid
-  install_boot_record = %[5]t
-
-  software_image_proxy = {
-    parent_software_image = local.software_image_uuid
-  }
-}
-`,
-		os.Getenv("BCM_ENDPOINT"),
-		os.Getenv("BCM_USERNAME"),
-		os.Getenv("BCM_PASSWORD"),
-		name,
-		installBootRecord,
-	)
-}
-
 // ========================================
 // User Story 4: Provisioning Scripts Field Testing (T053-T061)
 // ========================================
 
-// TestAccCMDeviceCategoryResource_ProvisioningScripts tests initialize and finalize provisioning script fields
+// TestAccCMDeviceCategoryResource_ProvisioningScripts tests initialize and finalize provisioning script fields.
 // This test verifies multi-line script content is preserved correctly across CRUD operations.
-// Task: T053-T061
+// Task: T053-T061.
 func TestAccCMDeviceCategoryResource_ProvisioningScripts(t *testing.T) {
 	categoryName := generateUniqueTestName("tftest-prov-scripts")
 
@@ -1641,7 +1561,7 @@ func TestAccCMDeviceCategoryResource_ProvisioningScripts(t *testing.T) {
 		Steps: []resource.TestStep{
 			// Step 1: Create with initialize and finalize scripts (T055)
 			{
-				Config: testAccCMDeviceCategoryResourceConfig_ProvisioningScripts(categoryName, initializeScript, finalizeScript),
+				Config: testAccCMDeviceCategoryResourceConfig_ProvisioningScripts(categoryName, initializeScript),
 				ConfigStateChecks: []statecheck.StateCheck{
 					// Verify name and UUID
 					statecheck.ExpectKnownValue(
@@ -1675,7 +1595,7 @@ func TestAccCMDeviceCategoryResource_ProvisioningScripts(t *testing.T) {
 			},
 			// Step 2: Idempotency check after Create (T057)
 			{
-				Config: testAccCMDeviceCategoryResourceConfig_ProvisioningScripts(categoryName, initializeScript, finalizeScript),
+				Config: testAccCMDeviceCategoryResourceConfig_ProvisioningScripts(categoryName, initializeScript),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
@@ -1684,7 +1604,7 @@ func TestAccCMDeviceCategoryResource_ProvisioningScripts(t *testing.T) {
 			},
 			// Step 3: Update initialize script content while keeping finalize unchanged (T058)
 			{
-				Config: testAccCMDeviceCategoryResourceConfig_ProvisioningScripts(categoryName, updatedInitializeScript, finalizeScript),
+				Config: testAccCMDeviceCategoryResourceConfig_ProvisioningScripts(categoryName, updatedInitializeScript),
 				ConfigStateChecks: []statecheck.StateCheck{
 					// Verify name unchanged
 					statecheck.ExpectKnownValue(
@@ -1713,7 +1633,7 @@ func TestAccCMDeviceCategoryResource_ProvisioningScripts(t *testing.T) {
 			},
 			// Step 4: Idempotency check after update (T059)
 			{
-				Config: testAccCMDeviceCategoryResourceConfig_ProvisioningScripts(categoryName, updatedInitializeScript, finalizeScript),
+				Config: testAccCMDeviceCategoryResourceConfig_ProvisioningScripts(categoryName, updatedInitializeScript),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
@@ -1733,8 +1653,9 @@ func TestAccCMDeviceCategoryResource_ProvisioningScripts(t *testing.T) {
 }
 
 // testAccCMDeviceCategoryResourceConfig_ProvisioningScripts creates config with provisioning script fields.
-// Task: T053
-func testAccCMDeviceCategoryResourceConfig_ProvisioningScripts(name, initialize, finalize string) string {
+// Task: T053.
+func testAccCMDeviceCategoryResourceConfig_ProvisioningScripts(name, initialize string) string {
+	finalizeScript := "#!/bin/bash\necho 'done'\ndate >> /var/log/finalize.log"
 	return fmt.Sprintf(`
 provider "bcm" {
   endpoint             = %[1]q
@@ -1767,7 +1688,7 @@ resource "bcm_cmdevice_category" "test" {
 		os.Getenv("BCM_PASSWORD"),
 		name,
 		initialize,
-		finalize,
+		finalizeScript,
 	)
 }
 
@@ -1998,9 +1919,9 @@ resource "bcm_cmdevice_category" "test" {
 // Optional Field Coverage Tests
 // ========================================
 
-// TestAccCMDeviceCategoryResource_BootLoaderFields tests boot loader related optional fields
-// Covers: boot_loader_file, boot_loader_protocol, kernel_output_console
-// Note: kernel_version is omitted as it requires a valid kernel path from the actual software image
+// TestAccCMDeviceCategoryResource_BootLoaderFields tests boot loader related optional fields.
+// Covers: boot_loader_file, boot_loader_protocol, kernel_output_console.
+// Note: kernel_version is omitted as it requires a valid kernel path from the actual software image.
 func TestAccCMDeviceCategoryResource_BootLoaderFields(t *testing.T) {
 	categoryName := generateUniqueTestName("tftest-bootloader")
 
@@ -2130,7 +2051,7 @@ func TestAccCMDeviceCategoryResource_BootLoaderFields(t *testing.T) {
 	})
 }
 
-// testAccCMDeviceCategoryResourceConfig_BootLoaderFields creates config with boot loader fields
+// testAccCMDeviceCategoryResourceConfig_BootLoaderFields creates config with boot loader fields.
 func testAccCMDeviceCategoryResourceConfig_BootLoaderFields(name, bootLoaderFile, bootLoaderProtocol, kernelOutputConsole string) string {
 	return fmt.Sprintf(`
 provider "bcm" {
@@ -2191,11 +2112,11 @@ resource "bcm_cmdevice_category" "test" {
 //
 // Tests:
 // - Create with install_mode="AUTO", new_node_install_mode="FULL"
-// - Idempotency check after create
-// - Update to install_mode="FULL", new_node_install_mode="MINIMAL"
-// - Idempotency check after update
-// - Import state verification
-// - ID consistency tracking across all operations
+// - Idempotency check after create.
+// - Update to install_mode="FULL", new_node_install_mode="MINIMAL".
+// - Idempotency check after update.
+// - Import state verification.
+// - ID consistency tracking across all operations.
 func TestAccCMDeviceCategoryResource_InstallationModes(t *testing.T) {
 	categoryName := generateUniqueTestName("tftest-install-modes")
 
@@ -2212,7 +2133,7 @@ func TestAccCMDeviceCategoryResource_InstallationModes(t *testing.T) {
 		Steps: []resource.TestStep{
 			// Step 1 (T028): Create with install_mode="AUTO", new_node_install_mode="FULL"
 			{
-				Config: testAccCMDeviceCategoryResourceConfig_InstallationModes(categoryName, "AUTO", "FULL"),
+				Config: testAccCMDeviceCategoryResourceConfig_InstallationModes(categoryName, "AUTO"),
 				ConfigStateChecks: []statecheck.StateCheck{
 					// Verify name
 					statecheck.ExpectKnownValue(
@@ -2252,7 +2173,7 @@ func TestAccCMDeviceCategoryResource_InstallationModes(t *testing.T) {
 			},
 			// Step 2 (T029): Idempotency check after Create
 			{
-				Config: testAccCMDeviceCategoryResourceConfig_InstallationModes(categoryName, "AUTO", "FULL"),
+				Config: testAccCMDeviceCategoryResourceConfig_InstallationModes(categoryName, "AUTO"),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
@@ -2262,7 +2183,7 @@ func TestAccCMDeviceCategoryResource_InstallationModes(t *testing.T) {
 			// Step 3 (T030): Update to install_mode="FULL" (keeping new_node_install_mode="FULL")
 			// Note: BCM only accepts "FULL" for newNodeInstallMode; install_mode accepts AUTO, FULL, MINIMAL, CUSTOM
 			{
-				Config: testAccCMDeviceCategoryResourceConfig_InstallationModes(categoryName, "FULL", "FULL"),
+				Config: testAccCMDeviceCategoryResourceConfig_InstallationModes(categoryName, "FULL"),
 				ConfigStateChecks: []statecheck.StateCheck{
 					// Verify name unchanged
 					statecheck.ExpectKnownValue(
@@ -2291,7 +2212,7 @@ func TestAccCMDeviceCategoryResource_InstallationModes(t *testing.T) {
 			},
 			// Step 4 (T031): Idempotency check after Update
 			{
-				Config: testAccCMDeviceCategoryResourceConfig_InstallationModes(categoryName, "FULL", "FULL"),
+				Config: testAccCMDeviceCategoryResourceConfig_InstallationModes(categoryName, "FULL"),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
@@ -2308,7 +2229,7 @@ func TestAccCMDeviceCategoryResource_InstallationModes(t *testing.T) {
 			},
 			// Step 6: Verify ID consistency after import (T033 continued)
 			{
-				Config: testAccCMDeviceCategoryResourceConfig_InstallationModes(categoryName, "FULL", "FULL"),
+				Config: testAccCMDeviceCategoryResourceConfig_InstallationModes(categoryName, "FULL"),
 				ConfigStateChecks: []statecheck.StateCheck{
 					// Verify ID consistency across import
 					compareID.AddStateValue(
@@ -2332,7 +2253,7 @@ func TestAccCMDeviceCategoryResource_InstallationModes(t *testing.T) {
 // This is a workaround for a provider bug where Optional fields are populated with BCM defaults
 // even when not specified in config. The proper fix is to add Computed+UseStateForUnknown to
 // these fields in the schema, but for now we work around it in tests.
-func testAccCMDeviceCategoryResourceConfig_InstallationModes(name, installMode, newNodeInstallMode string) string {
+func testAccCMDeviceCategoryResourceConfig_InstallationModes(name, installMode string) string {
 	return fmt.Sprintf(`
 provider "bcm" {
   endpoint             = %[1]q
@@ -2362,7 +2283,7 @@ resource "bcm_cmdevice_category" "test" {
 
   # Installation mode configuration (User Story 1)
   install_mode           = %[5]q
-  new_node_install_mode  = %[6]q
+  new_node_install_mode  = "FULL"
 
   # BCM default values - explicitly set to avoid "inconsistent result" errors
   # These fields are populated by BCM API even when not specified
@@ -2384,7 +2305,6 @@ resource "bcm_cmdevice_category" "test" {
 		os.Getenv("BCM_PASSWORD"),
 		name,
 		installMode,
-		newNodeInstallMode,
 	)
 }
 
@@ -2413,11 +2333,11 @@ func formatHCLList(items []string) string {
 //
 // Test coverage:
 // - Create with populated lists
-// - List size verification with knownvalue.ListSizeExact()
-// - Idempotency after create
-// - Update lists (add/remove items)
-// - Idempotency after update
-// - Empty list handling
+// - List size verification with knownvalue.ListSizeExact().
+// - Idempotency after create.
+// - Update lists (add/remove items).
+// - Idempotency after update.
+// - Empty list handling.
 func TestAccCMDeviceCategoryResource_NetworkListFields(t *testing.T) {
 	categoryName := generateUniqueTestName("tftest-network-lists")
 

@@ -259,12 +259,6 @@ func parseInterfaceFromAPI(data map[string]interface{}) DeviceInterfaceModel {
 	return model
 }
 
-// isLegacyMode returns true if device uses mac/management_network instead of interfaces block.
-// This enables backward compatibility with existing device configurations.
-func isLegacyMode(interfaces []DeviceInterfaceModel, mac types.String) bool {
-	return len(interfaces) == 0 && !mac.IsNull() && !mac.IsUnknown()
-}
-
 // findInterfaceByName searches for an interface by name in a list of interfaces.
 // Returns the interface and its index, or nil and -1 if not found.
 func findInterfaceByName(interfaces []DeviceInterfaceModel, name string) (*DeviceInterfaceModel, int) {
@@ -382,15 +376,3 @@ func mergeInterfaceWithPlan(parsed DeviceInterfaceModel, plan DeviceInterfaceMod
 	return result
 }
 
-// markInterfaceForRemoval creates an interface entity marked for removal in BCM.
-func markInterfaceForRemoval(iface DeviceInterfaceModel) map[string]interface{} {
-	return map[string]interface{}{
-		"baseType":      "NetworkInterface",
-		"childType":     interfaceTypeToBCMChildType(iface.Type.ValueString()),
-		"uuid":          iface.UUID.ValueString(),
-		"name":          iface.Name.ValueString(),
-		"modified":      true,
-		"to_be_removed": true,
-		"revision":      "",
-	}
-}

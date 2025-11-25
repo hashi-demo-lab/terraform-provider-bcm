@@ -68,7 +68,7 @@ func testAccCMDeviceDevicePreCheck(t *testing.T, deviceNames ...string) {
 // This function handles cleanup verification in proper dependency order:
 // 1. Devices (must be deleted first)
 // 2. Categories (can be deleted after devices)
-// 3. Software Images (must be deleted last)
+// 3. Software Images (must be deleted last).
 func testAccCheckCMDeviceDeviceDestroy(s *terraform.State) error {
 	client := createTestBCMClient(&testing.T{})
 	ctx := context.Background()

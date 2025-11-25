@@ -360,14 +360,6 @@ func (d *CMNetNetworksDataSource) Read(ctx context.Context, req datasource.ReadR
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
-// minInt returns the minimum of two integers (helper for error message truncation).
-func minInt(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
 // mapAPIToNetwork converts an API response map to a NetworkModel.
 func mapAPIToNetwork(data map[string]interface{}) NetworkModel {
 	// Compute DHCP enabled based on dynamic range
