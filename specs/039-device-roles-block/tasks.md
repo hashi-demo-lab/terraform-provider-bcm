@@ -26,10 +26,10 @@
 
 **Purpose**: Prepare development environment and understand existing implementation
 
-- [ ] T001 Review existing device resource implementation in internal/provider/resource_cmdevice_device.go
-- [ ] T002 [P] Review existing device tests in internal/provider/resource_cmdevice_device_test.go
-- [ ] T003 [P] Review roles data source for parsing patterns in internal/provider/data_source_cmdevice_roles.go
-- [ ] T004 Create feature branch `039-device-roles-block` from main
+- [X] T001 Review existing device resource implementation in internal/provider/resource_cmdevice_device.go
+- [X] T002 [P] Review existing device tests in internal/provider/resource_cmdevice_device_test.go
+- [X] T003 [P] Review roles data source for parsing patterns in internal/provider/data_source_cmdevice_roles.go
+- [X] T004 Create feature branch `039-device-roles-block` from main
 
 ---
 
@@ -39,11 +39,11 @@
 
 **CRITICAL**: These changes enable all role-related functionality
 
-- [ ] T005 Add Roles field to CMDeviceDeviceResourceModel struct in internal/provider/resource_cmdevice_device.go
-- [ ] T006 Add roles schema attribute definition to Schema() method in internal/provider/resource_cmdevice_device.go
-- [ ] T007 Add roles array building logic to buildDeviceAPIEntityWithExisting() in internal/provider/resource_cmdevice_device.go
-- [ ] T008 Add roles parsing logic to parseDeviceFromAPI() in internal/provider/resource_cmdevice_device.go
-- [ ] T009 Add sort import if not present for role name sorting in internal/provider/resource_cmdevice_device.go
+- [X] T005 Add Roles field to CMDeviceDeviceResourceModel struct in internal/provider/resource_cmdevice_device.go
+- [X] T006 Add roles schema attribute definition to Schema() method in internal/provider/resource_cmdevice_device.go
+- [X] T007 Add roles array building logic to buildDeviceAPIEntityWithExisting() in internal/provider/resource_cmdevice_device.go
+- [X] T008 Add roles parsing logic to parseDeviceFromAPI() in internal/provider/resource_cmdevice_device.go
+- [X] T009 Add sort import if not present for role name sorting in internal/provider/resource_cmdevice_device.go
 
 **Checkpoint**: Foundation ready - acceptance tests can now be written and will fail appropriately
 
@@ -59,14 +59,14 @@
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation passes**
 
-- [ ] T010 [US1] Write TestAccCMDeviceDevice_RolesCreate test in internal/provider/resource_cmdevice_device_test.go
-- [ ] T011 [US1] Write TestAccCMDeviceDevice_RolesMultiple test for multiple roles in internal/provider/resource_cmdevice_device_test.go
-- [ ] T012 [US1] Write testAccCMDeviceDeviceConfigWithRoles helper function in internal/provider/resource_cmdevice_device_test.go
+- [X] T010 [US1] Write TestAccCMDeviceDevice_RolesCreate test in internal/provider/resource_cmdevice_device_test.go
+- [X] T011 [US1] Write TestAccCMDeviceDevice_RolesMultiple test for multiple roles in internal/provider/resource_cmdevice_device_test.go
+- [X] T012 [US1] Write testAccCMDeviceDeviceConfigWithRoles helper function in internal/provider/resource_cmdevice_device_test.go
 
 ### Verification for User Story 1
 
-- [ ] T013 [US1] Run TestAccCMDeviceDevice_RolesCreate to verify device created with roles
-- [ ] T014 [US1] Run TestAccCMDeviceDevice_RolesMultiple to verify multiple role assignment
+- [X] T013 [US1] Run TestAccCMDeviceDevice_RolesCreate to verify device created with roles
+- [X] T014 [US1] Run TestAccCMDeviceDevice_RolesMultiple to verify multiple role assignment
 
 **Checkpoint**: User Story 1 complete - devices can be created with Kubernetes control plane roles
 
@@ -82,11 +82,11 @@
 
 > **NOTE: Tests should pass with existing implementation from Phase 2/3**
 
-- [ ] T015 [US2] Write TestAccCMDeviceDevice_RolesIdempotent test in internal/provider/resource_cmdevice_device_test.go
+- [X] T015 [US2] Write TestAccCMDeviceDevice_RolesIdempotent test in internal/provider/resource_cmdevice_device_test.go
 
 ### Verification for User Story 2
 
-- [ ] T016 [US2] Run TestAccCMDeviceDevice_RolesIdempotent to verify idempotent role assignment
+- [X] T016 [US2] Run TestAccCMDeviceDevice_RolesIdempotent to verify idempotent role assignment
 
 **Checkpoint**: User Story 2 complete - worker nodes can be configured independently
 
@@ -100,13 +100,13 @@
 
 ### Acceptance Tests for User Story 3
 
-- [ ] T017 [US3] Write TestAccCMDeviceDevice_RolesUpdate test in internal/provider/resource_cmdevice_device_test.go
-- [ ] T018 [US3] Write TestAccCMDeviceDevice_RolesRemove test for removing all roles in internal/provider/resource_cmdevice_device_test.go
+- [X] T017 [US3] Write TestAccCMDeviceDevice_RolesUpdate test in internal/provider/resource_cmdevice_device_test.go
+- [X] T018 [US3] Write TestAccCMDeviceDevice_RolesRemove test for removing all roles in internal/provider/resource_cmdevice_device_test.go
 
 ### Verification for User Story 3
 
-- [ ] T019 [US3] Run TestAccCMDeviceDevice_RolesUpdate to verify role updates work
-- [ ] T020 [US3] Run TestAccCMDeviceDevice_RolesRemove to verify roles can be removed
+- [X] T019 [US3] Run TestAccCMDeviceDevice_RolesUpdate to verify role updates work
+- [X] T020 [US3] Run TestAccCMDeviceDevice_RolesRemove to verify roles can be removed
 
 **Checkpoint**: User Story 3 complete - role updates and removal work correctly
 
@@ -120,11 +120,11 @@
 
 ### Acceptance Tests for User Story 4
 
-- [ ] T021 [US4] Write TestAccCMDeviceDevice_RolesImport test in internal/provider/resource_cmdevice_device_test.go
+- [X] T021 [US4] Write TestAccCMDeviceDevice_RolesImport test in internal/provider/resource_cmdevice_device_test.go
 
 ### Verification for User Story 4
 
-- [ ] T022 [US4] Run TestAccCMDeviceDevice_RolesImport to verify import preserves roles
+- [X] T022 [US4] Run TestAccCMDeviceDevice_RolesImport to verify import preserves roles
 
 **Checkpoint**: User Story 4 complete - existing infrastructure can be imported
 
@@ -138,11 +138,11 @@
 
 ### Acceptance Tests for User Story 5
 
-- [ ] T023 [US5] Write TestAccCMDeviceDevice_RolesDrift test in internal/provider/resource_cmdevice_device_test.go
+- [X] T023 [US5] Write TestAccCMDeviceDevice_RolesDrift test in internal/provider/resource_cmdevice_device_test.go
 
 ### Verification for User Story 5
 
-- [ ] T024 [US5] Run TestAccCMDeviceDevice_RolesDrift to verify drift detection works
+- [X] T024 [US5] Run TestAccCMDeviceDevice_RolesDrift to verify drift detection works
 
 **Checkpoint**: User Story 5 complete - drift detection ensures configuration consistency
 
@@ -152,11 +152,11 @@
 
 **Purpose**: Documentation, examples, and final validation
 
-- [ ] T025 [P] Create example configuration in examples/resources/bcm_cmdevice_device/resource_with_roles.tf
-- [ ] T026 [P] Run make generate to update documentation in docs/
-- [ ] T027 Run make lint to verify code quality
-- [ ] T028 Run make test to verify unit tests pass
-- [ ] T029 Run full acceptance test suite with TF_ACC=1 go test -v -timeout 120m ./internal/provider/ -run "CMDeviceDevice.*Roles"
+- [X] T025 [P] Create example configuration in examples/resources/bcm_cmdevice_device/with_roles.tf
+- [X] T026 [P] Run make generate to update documentation in docs/
+- [X] T027 Run make lint to verify code quality
+- [X] T028 Run make test to verify unit tests pass
+- [X] T029 Run full acceptance test suite with TF_ACC=1 go test -v -timeout 120m ./internal/provider/ -run "CMDeviceDevice.*Roles"
 - [ ] T030 Validate quickstart.md scenarios work as documented
 
 ---

@@ -304,9 +304,9 @@ resource "bcm_cmdevice_category" "comprehensive" {
 - `finalize` (String) Finalization script
 - `fips` (String) FIPS mode (YES or NO). If not specified, BCM assigns NO.
 - `force` (Boolean) Force parameter to override warnings and constraints
-- `fsexports` (Dynamic) Filesystem exports (dynamic type - TODO: define proper schema)
+- `fsexports` (Attributes List) NFS filesystem exports for nodes in this category (see [below for nested schema](#nestedatt--fsexports))
 - `fsmounts` (Attributes List) Filesystem mounts (see [below for nested schema](#nestedatt--fsmounts))
-- `gpu_settings` (Dynamic) GPU settings (dynamic type - TODO: define proper schema)
+- `gpu_settings` (Attributes List) GPU hardware configuration for nodes in this category (see [below for nested schema](#nestedatt--gpu_settings))
 - `initialize` (String) Initialization script
 - `install_boot_record` (Boolean) Install boot record flag. If not specified, BCM assigns a default.
 - `install_mode` (String) Installation mode (AUTO, FULL, MINIMAL, CUSTOM). If not specified, BCM assigns a default.
@@ -322,12 +322,12 @@ resource "bcm_cmdevice_category" "comprehensive" {
 - `notes` (String) User notes or description for the category
 - `proxy_settings` (Attributes) Proxy settings (see [below for nested schema](#nestedatt--proxy_settings))
 - `raidconf` (String) RAID configuration
-- `roles` (Dynamic) Role assignments (dynamic type - TODO: define proper schema)
+- `roles` (Attributes List) Service role assignments for nodes in this category (see [below for nested schema](#nestedatt--roles))
 - `search_domains` (List of String) DNS search domains
 - `selinux_settings` (Attributes) SELinux settings (see [below for nested schema](#nestedatt--selinux_settings))
-- `services` (Dynamic) Service assignments (dynamic type - TODO: define proper schema)
+- `services` (Attributes List) Service configurations for nodes in this category (structure TBD - marked as POST-MVP) (see [below for nested schema](#nestedatt--services))
 - `software_image_proxy` (Attributes) Software image proxy configuration (see [below for nested schema](#nestedatt--software_image_proxy))
-- `static_routes` (Dynamic) Static network routes (dynamic type - TODO: define proper schema)
+- `static_routes` (Attributes List) Static network routes for nodes in this category (see [below for nested schema](#nestedatt--static_routes))
 - `time_servers` (List of String) NTP time servers
 - `timezone_settings` (Attributes) Timezone settings (see [below for nested schema](#nestedatt--timezone_settings))
 - `use_exclusively_for` (String) Use exclusively for
@@ -376,6 +376,21 @@ Read-Only:
 ### Nested Schema for `dpu_settings`
 
 
+<a id="nestedatt--fsexports"></a>
+### Nested Schema for `fsexports`
+
+Required:
+
+- `network` (String) Network UUID reference for export access
+- `path` (String) Export path (e.g., /home, /shared)
+
+Optional:
+
+- `allow_write` (Boolean) Allow write access (default: false)
+- `async` (Boolean) Use async mode for writes (default: false)
+- `root_squash` (Boolean) Enable root squash security (default: false)
+
+
 <a id="nestedatt--fsmounts"></a>
 ### Nested Schema for `fsmounts`
 
@@ -397,6 +412,19 @@ Read-Only:
 - `uuid` (String) Unique identifier
 
 
+<a id="nestedatt--gpu_settings"></a>
+### Nested Schema for `gpu_settings`
+
+Required:
+
+- `device_id` (String) GPU device ID (e.g., 0, 1, 2)
+
+Optional:
+
+- `compute_mode` (String) Compute mode (default, exclusive, prohibited)
+- `model` (String) GPU model name (e.g., Tesla V100, A100)
+
+
 <a id="nestedatt--modules"></a>
 ### Nested Schema for `modules`
 
@@ -413,8 +441,29 @@ Optional:
 ### Nested Schema for `proxy_settings`
 
 
+<a id="nestedatt--roles"></a>
+### Nested Schema for `roles`
+
+Required:
+
+- `child_type` (String) Role type (e.g., HeadNodeRole, StorageRole, BackupRole)
+- `name` (String) Role name (e.g., headnode, storage, compute)
+
+Optional:
+
+- `add_services` (Boolean) Automatically add role services (default: false)
+
+Read-Only:
+
+- `uuid` (String) Role UUID (assigned by BCM)
+
+
 <a id="nestedatt--selinux_settings"></a>
 ### Nested Schema for `selinux_settings`
+
+
+<a id="nestedatt--services"></a>
+### Nested Schema for `services`
 
 
 <a id="nestedatt--software_image_proxy"></a>
@@ -428,6 +477,19 @@ Read-Only:
 
 - `revision_id` (Number) Revision identifier
 - `uuid` (String) Unique identifier
+
+
+<a id="nestedatt--static_routes"></a>
+### Nested Schema for `static_routes`
+
+Required:
+
+- `destination` (String) Destination network in CIDR notation (e.g., 192.168.1.0/24)
+- `gateway` (String) Gateway IP address (e.g., 10.0.0.1)
+
+Optional:
+
+- `metric` (Number) Route metric (priority, lower is preferred)
 
 
 <a id="nestedatt--timezone_settings"></a>

@@ -181,12 +181,27 @@ output "ipmi_devices" {
 - `default_gateway` (String) Default gateway IP address for the device
 - `default_gateway_metric` (Number) Default gateway metric/priority (lower is preferred)
 - `force` (Boolean) Force operation (override BCM validation warnings)
+- `interfaces` (Block List) Network interface configurations for the device. When specified, provides full control over interface setup. Each interface can be physical, bond, or BMC type. (see [below for nested schema](#nestedblock--interfaces))
 - `kernel_parameters` (String) Kernel boot parameters
 - `management_network` (String) Management network UUID reference (may be reset by BCM, required for device creation)
 - `notes` (String) Device notes/description
 - `part_number` (String) Hardware part number
 - `partition` (String) Partition UUID reference (uses category default if not specified)
 - `power_control` (String) Power control method (e.g., 'none', 'ipmi', 'ipdu', 'redfish')
+- `roles` (List of String) List of role UUIDs assigned to this device. Roles define the device's function in the cluster. Use the `bcm_cmdevice_roles` data source to discover available roles and their UUIDs. Role UUIDs are sorted alphabetically for consistent state comparison. Example usage:
+
+```hcl
+data "bcm_cmdevice_roles" "all" {}
+
+locals {
+  monitoring_role = [for r in data.bcm_cmdevice_roles.all.roles : r.uuid if r.name == "monitoring"][0]
+}
+
+resource "bcm_cmdevice_device" "node" {
+  # ... other configuration ...
+  roles = [local.monitoring_role]
+}
+```
 - `serial_number` (String) Hardware serial number
 
 ### Read-Only
@@ -196,3 +211,30 @@ output "ipmi_devices" {
 - `creation_time` (Number) Device creation timestamp (Unix epoch)
 - `id` (String) Device identifier (same as UUID)
 - `uuid` (String) Device UUID assigned by BCM
+
+<a id="nestedblock--interfaces"></a>
+### Nested Schema for `interfaces`
+
+Required:
+
+- `name` (String) Interface name (e.g., 'eth0', 'bond0', 'ipmi'). Must be unique within the device.
+- `type` (String) Interface type: 'physical', 'bond', or 'bmc'.
+
+Optional:
+
+- `bond_mode` (String) Bond mode (e.g., '802.3ad', 'active-backup', 'balance-rr'). Only applicable when type is 'bond'.
+- `bootable` (Boolean) Enable PXE boot capability. Default: false. First bootable interface becomes provisioning interface.
+- `dhcp` (Boolean) Enable DHCP for IP assignment. Default: true.
+- `ip` (String) Static IPv4 address.
+- `ipv6_ip` (String) Static IPv6 address.
+- `mac` (String) MAC address (format: 00:11:22:33:44:55). Required for physical interfaces on create.
+- `members` (List of String) Member interface names for bond type. Required when type is 'bond'.
+- `network` (String) Network UUID reference for interface assignment.
+- `start_if` (String) Interface startup condition: 'ALWAYS', 'NEVER', 'HOTPLUG'. Default: 'ALWAYS'.
+
+Read-Only:
+
+- `base_type` (String) Entity base type (always 'NetworkInterface').
+- `cardtype` (String) Hardware card type (Ethernet, InfiniBand, BMC).
+- `child_type` (String) Interface type (NetworkPhysicalInterface, NetworkBondInterface, NetworkBMCInterface).
+- `uuid` (String) BCM-assigned interface UUID.

@@ -8,10 +8,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"sort"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -70,6 +72,10 @@ type CMDeviceDeviceResourceModel struct {
 	// Interfaces block - NEW for multi-interface support
 	// When specified, takes precedence over legacy mac/management_network
 	Interfaces []DeviceInterfaceModel `tfsdk:"interfaces"`
+
+	// Roles - list of role names assigned to this device
+	// Used for Kubernetes cluster topology (control-plane, worker, etcd, master)
+	Roles types.List `tfsdk:"roles"`
 }
 
 // NewCMDeviceDeviceResource creates a new resource instance.
@@ -212,6 +218,25 @@ func (r *CMDeviceDeviceResource) Schema(ctx context.Context, req resource.Schema
 			"child_type": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "Device type (HeadNode, ComputeNode, PhysicalNode, etc.)",
+			},
+			"roles": schema.ListAttribute{
+				Optional:    true,
+				Computed:    true,
+				ElementType: types.StringType,
+				MarkdownDescription: "List of role UUIDs assigned to this device. Roles define the device's function in the cluster. " +
+					"Use the `bcm_cmdevice_roles` data source to discover available roles and their UUIDs. " +
+					"Role UUIDs are sorted alphabetically for consistent state comparison. " +
+					"Example usage:\n\n" +
+					"```hcl\n" +
+					"data \"bcm_cmdevice_roles\" \"all\" {}\n\n" +
+					"locals {\n" +
+					"  monitoring_role = [for r in data.bcm_cmdevice_roles.all.roles : r.uuid if r.name == \"monitoring\"][0]\n" +
+					"}\n\n" +
+					"resource \"bcm_cmdevice_device\" \"node\" {\n" +
+					"  # ... other configuration ...\n" +
+					"  roles = [local.monitoring_role]\n" +
+					"}\n" +
+					"```",
 			},
 		},
 		Blocks: map[string]schema.Block{
@@ -504,6 +529,17 @@ func (r *CMDeviceDeviceResource) Create(ctx context.Context, req resource.Create
 	// Partition field is always included as BCM requires it
 	deviceEntity := r.buildDeviceAPIEntity(plan, newUUID, partitionUUID)
 
+	// Lookup and add roles to the entity (requires BCM API access to get full role objects)
+	if err := r.lookupAndBuildRolesForEntity(ctx, plan, deviceEntity); err != nil {
+		resp.Diagnostics.AddError(
+			"Error Looking Up Roles",
+			fmt.Sprintf("Could not resolve role UUIDs for device '%s': %s\n\n"+
+				"Ensure the role UUIDs exist in the cluster. You can find available roles using "+
+				"the bcm_cmdevice_roles data source.", plan.Hostname.ValueString(), err.Error()),
+		)
+		return
+	}
+
 	// Pre-flight validation: Call validateDevice before CREATE
 	validationErrors, err := r.client.ValidateEntity(ctx, "CMDevice", "validateDevice", deviceEntity, true)
 	if err != nil {
@@ -650,6 +686,11 @@ func (r *CMDeviceDeviceResource) Create(ctx context.Context, req resource.Create
 
 	if plan.PartNumber.IsNull() && !state.PartNumber.IsNull() {
 		state.PartNumber = types.StringNull()
+	}
+
+	// Handle roles - preserve null from plan if user didn't specify roles
+	if plan.Roles.IsNull() {
+		state.Roles = types.ListNull(types.StringType)
 	}
 
 	// Handle interfaces in state based on mode
@@ -849,6 +890,11 @@ func (r *CMDeviceDeviceResource) Read(ctx context.Context, req resource.ReadRequ
 		newState.Interfaces = nil
 	}
 
+	// Handle roles - preserve null from state if user didn't specify roles (non-import path)
+	if !isImport && state.Roles.IsNull() {
+		newState.Roles = types.ListNull(types.StringType)
+	}
+
 	// Set state - use what BCM returns (with preserved fields)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &newState)...)
 }
@@ -956,6 +1002,17 @@ func (r *CMDeviceDeviceResource) Update(ctx context.Context, req resource.Update
 	// Partition field is always included as BCM requires it
 	// Pass existing interfaces from state to preserve UUIDs
 	deviceEntity := r.buildDeviceAPIEntityWithExisting(plan, state.UUID.ValueString(), partitionUUID, state.Interfaces)
+
+	// Lookup and add roles to the entity (requires BCM API access to get full role objects)
+	if err := r.lookupAndBuildRolesForEntity(ctx, plan, deviceEntity); err != nil {
+		resp.Diagnostics.AddError(
+			"Error Looking Up Roles",
+			fmt.Sprintf("Could not resolve role UUIDs for device '%s': %s\n\n"+
+				"Ensure the role UUIDs exist in the cluster. You can find available roles using "+
+				"the bcm_cmdevice_roles data source.", plan.Hostname.ValueString(), err.Error()),
+		)
+		return
+	}
 
 	// Pre-flight validation: Call validateDevice before UPDATE
 	validationErrors, err := r.client.ValidateEntity(ctx, "CMDevice", "validateDevice", deviceEntity, false)
@@ -1082,6 +1139,11 @@ func (r *CMDeviceDeviceResource) Update(ctx context.Context, req resource.Update
 
 	if plan.PartNumber.IsNull() && !newState.PartNumber.IsNull() {
 		newState.PartNumber = types.StringNull()
+	}
+
+	// Handle roles - preserve null from plan if user didn't specify roles
+	if plan.Roles.IsNull() {
+		newState.Roles = types.ListNull(types.StringType)
 	}
 
 	// Handle interfaces in state based on mode
@@ -1268,7 +1330,94 @@ func (r *CMDeviceDeviceResource) buildDeviceAPIEntityWithExisting(plan CMDeviceD
 		entity["partNumber"] = plan.PartNumber.ValueString()
 	}
 
+	// Roles handling is done separately via lookupAndBuildRolesForEntity
+	// because it requires BCM API access to get full role objects
+
 	return entity
+}
+
+// lookupAndBuildRolesForEntity looks up role objects by UUID and adds them to the device entity.
+// BCM requires full role objects (not just UUIDs or names) when assigning roles to devices.
+// This function queries all nodes to extract available role objects, then matches them by UUID.
+func (r *CMDeviceDeviceResource) lookupAndBuildRolesForEntity(ctx context.Context, plan CMDeviceDeviceResourceModel, entity map[string]interface{}) error {
+	if plan.Roles.IsNull() || plan.Roles.IsUnknown() {
+		return nil
+	}
+
+	var roleUUIDs []string
+	diags := plan.Roles.ElementsAs(ctx, &roleUUIDs, false)
+	if diags.HasError() {
+		return fmt.Errorf("failed to extract role UUIDs from plan")
+	}
+
+	// If empty list, set empty roles (explicit removal)
+	if len(roleUUIDs) == 0 {
+		entity["roles"] = []interface{}{}
+		return nil
+	}
+
+	// Deduplicate role UUIDs
+	roleSet := make(map[string]struct{})
+	for _, uuid := range roleUUIDs {
+		roleSet[uuid] = struct{}{}
+	}
+
+	// Query all nodes to extract available role objects
+	// Roles are embedded in node objects and must be extracted
+	body, err := r.client.CallJSONRPC(ctx, "cmdevice", "getNodes")
+	if err != nil {
+		return fmt.Errorf("failed to query nodes for role lookup: %w", err)
+	}
+
+	var nodes []map[string]interface{}
+	if err := json.Unmarshal(body, &nodes); err != nil {
+		return fmt.Errorf("failed to parse nodes response: %w", err)
+	}
+
+	// Build a map of all available role objects by UUID
+	availableRoles := make(map[string]map[string]interface{})
+	for _, node := range nodes {
+		if rolesData, ok := node["roles"].([]interface{}); ok {
+			for _, roleData := range rolesData {
+				if role, ok := roleData.(map[string]interface{}); ok {
+					if uuid, ok := role["uuid"].(string); ok && uuid != "" {
+						availableRoles[uuid] = role
+					}
+				}
+			}
+		}
+	}
+
+	// Match requested role UUIDs to full role objects
+	roleObjects := make([]interface{}, 0, len(roleSet))
+	var missingRoles []string
+
+	for uuid := range roleSet {
+		if role, ok := availableRoles[uuid]; ok {
+			// Create a copy of the role object for this assignment
+			roleCopy := make(map[string]interface{})
+			for k, v := range role {
+				roleCopy[k] = v
+			}
+			roleObjects = append(roleObjects, roleCopy)
+		} else {
+			missingRoles = append(missingRoles, uuid)
+		}
+	}
+
+	if len(missingRoles) > 0 {
+		return fmt.Errorf("role UUIDs not found in cluster: %v", missingRoles)
+	}
+
+	// Sort role objects by name for consistent ordering
+	sort.Slice(roleObjects, func(i, j int) bool {
+		nameI, _ := roleObjects[i].(map[string]interface{})["name"].(string)
+		nameJ, _ := roleObjects[j].(map[string]interface{})["name"].(string)
+		return nameI < nameJ
+	})
+
+	entity["roles"] = roleObjects
+	return nil
 }
 
 // parseDeviceFromAPI parses BCM API response into Terraform model.
@@ -1387,5 +1536,51 @@ func (r *CMDeviceDeviceResource) parseDeviceFromAPI(data map[string]interface{})
 	// Parse interfaces from BCM response
 	model.Interfaces = parseInterfacesFromAPI(data["interfaces"])
 
+	// Parse roles from BCM response
+	// BCM returns roles as an array of role objects with "name" field, or as an array of strings
+	model.Roles = parseRolesFromAPI(data["roles"])
+
 	return model
+}
+
+// parseRolesFromAPI parses BCM API roles response into a Terraform list of role UUIDs.
+// BCM returns roles as an array of role objects: [{"uuid": "...", "name": "worker", ...}]
+// We extract UUIDs because users specify roles by UUID (obtained from bcm_cmdevice_roles data source).
+// Role UUIDs are sorted alphabetically for consistent state comparison.
+func parseRolesFromAPI(rolesData interface{}) types.List {
+	if rolesData == nil {
+		return types.ListNull(types.StringType)
+	}
+
+	rolesArray, ok := rolesData.([]interface{})
+	if !ok || len(rolesArray) == 0 {
+		return types.ListNull(types.StringType)
+	}
+
+	// Extract role UUIDs from the array
+	roleUUIDs := make([]string, 0, len(rolesArray))
+	for _, roleItem := range rolesArray {
+		if role, ok := roleItem.(map[string]interface{}); ok {
+			// Role object with "uuid" field
+			if uuid, ok := role["uuid"].(string); ok && uuid != "" {
+				roleUUIDs = append(roleUUIDs, uuid)
+			}
+		}
+	}
+
+	if len(roleUUIDs) == 0 {
+		return types.ListNull(types.StringType)
+	}
+
+	// Sort role UUIDs for consistent state comparison
+	sort.Strings(roleUUIDs)
+
+	// Convert to Terraform list
+	roleValues := make([]attr.Value, len(roleUUIDs))
+	for i, uuid := range roleUUIDs {
+		roleValues[i] = types.StringValue(uuid)
+	}
+
+	rolesList, _ := types.ListValue(types.StringType, roleValues)
+	return rolesList
 }
