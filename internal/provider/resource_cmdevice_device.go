@@ -1084,9 +1084,14 @@ func (r *CMDeviceDeviceResource) Update(ctx context.Context, req resource.Update
 		newState.PartNumber = types.StringNull()
 	}
 
-	// Normalize interface order to match plan order (prevents spurious diffs)
+	// Handle interfaces in state based on mode
 	if len(plan.Interfaces) > 0 {
+		// Interfaces mode: Normalize interface order to match plan order (prevents spurious diffs)
 		newState.Interfaces = normalizeInterfaceOrder(newState.Interfaces, plan.Interfaces)
+	} else {
+		// Legacy mode: Don't populate interfaces in state (user didn't define interfaces block)
+		// BCM creates/maintains interfaces, but we don't expose them in legacy mode
+		newState.Interfaces = nil
 	}
 
 	// Set state
