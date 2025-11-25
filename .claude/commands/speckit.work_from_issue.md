@@ -8,7 +8,8 @@ $ARGUMENTS
 
 work on $ARGUMENT autonomously
 
-Workflow - autonomously complete the tasks,
+Workflow - autonomously complete the tasks, follow the steps in each speckit workflow.
+speckit will work from a new branch, the instructions are in the specify step.
 
 0. first confirm the gh issue is valid, when you start mark the issue to in-progress using the label in-progress, update the github issue with comments when you start and finish each speckit stage with a short summary
 1. `/speckit.specify_parent` - Create feature specification from natural language and continue to next stage

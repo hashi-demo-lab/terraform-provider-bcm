@@ -441,6 +441,13 @@ func handleDeviceCreateError(w http.ResponseWriter, req struct {
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{"uuid": "11111111-1111-1111-1111-111111111111"})
 		return
 	}
+	// Handle validation calls - return empty array for success
+	if req.Call == "validateDevice" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("[]"))
+		return
+	}
 	// Fail on addDevice
 	if req.Service == "cmdevice" && req.Call == "addDevice" {
 		http.Error(w, "Failed to create device", http.StatusInternalServerError)
@@ -472,6 +479,13 @@ func handleDeviceCreateInvalidJSON(w http.ResponseWriter, req struct {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{"uuid": "11111111-1111-1111-1111-111111111111"})
+		return
+	}
+	// Handle validation calls - return empty array for success
+	if req.Call == "validateDevice" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("[]"))
 		return
 	}
 	// Return invalid JSON only for addDevice
@@ -508,24 +522,26 @@ func handleDeviceValidationFailure(w http.ResponseWriter, req struct {
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{"uuid": "11111111-1111-1111-1111-111111111111"})
 		return
 	}
-	if req.Service == "cmdevice" && req.Call == "addDevice" {
+	// Handle validation calls - return validation errors in array format
+	if req.Call == "validateDevice" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": false,
-			"validation": []map[string]interface{}{
-				{
-					"field":   "hostname",
-					"message": "Hostname already exists in cluster",
-				},
-				{
-					"field":   "mac",
-					"message": "MAC address is already in use",
-				},
+		_ = json.NewEncoder(w).Encode([]map[string]interface{}{
+			{
+				"Field":    "hostname",
+				"Message":  "Hostname already exists in cluster",
+				"Severity": "ERROR",
+			},
+			{
+				"Field":    "mac",
+				"Message":  "MAC address is already in use",
+				"Severity": "ERROR",
 			},
 		})
 		return
 	}
+	// Default success for other calls (addDevice won't be reached due to validation failure)
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
 }
@@ -552,6 +568,13 @@ func handleDeviceReadError(w http.ResponseWriter, req struct {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{"uuid": "11111111-1111-1111-1111-111111111111"})
+		return
+	}
+	// Handle validation calls - return empty array for success
+	if req.Call == "validateDevice" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("[]"))
 		return
 	}
 	// Allow device creation to succeed
@@ -596,6 +619,13 @@ func handleDeviceReadInvalidJSON(w http.ResponseWriter, req struct {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{"uuid": "11111111-1111-1111-1111-111111111111"})
+		return
+	}
+	// Handle validation calls - return empty array for success
+	if req.Call == "validateDevice" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("[]"))
 		return
 	}
 	// Return success for device creation
@@ -695,7 +725,7 @@ func handleDeviceDeleteError(w http.ResponseWriter, req struct {
 // - Create device without explicit partition attribute (triggers category query for default partition).
 // - Mock BCM API returns HTTP 404 error when calling getCategory.
 // - Provider should detect error and return "Error Querying Category" diagnostic.
-func TestAccCMDeviceDeviceResource_ErrorCategoryNotFound(t *testing.T) {
+func TestAccCMDeviceDeviceResource_MockErrorCategoryNotFound(t *testing.T) {
 	cleanup := clearBCMEnvVars(t)
 	defer cleanup()
 
@@ -726,7 +756,7 @@ func TestAccCMDeviceDeviceResource_ErrorCategoryNotFound(t *testing.T) {
 // - Create device without explicit partition attribute (triggers category query).
 // - Mock BCM API returns malformed JSON when calling getCategory.
 // - Provider should fail to unmarshal response and return "Error Parsing Category" diagnostic.
-func TestAccCMDeviceDeviceResource_ErrorCategoryInvalidJSON(t *testing.T) {
+func TestAccCMDeviceDeviceResource_MockErrorCategoryInvalidJSON(t *testing.T) {
 	cleanup := clearBCMEnvVars(t)
 	defer cleanup()
 
@@ -757,7 +787,7 @@ func TestAccCMDeviceDeviceResource_ErrorCategoryInvalidJSON(t *testing.T) {
 // - Create device without explicit partition attribute.
 // - Mock BCM API returns category with neither partition nor softwareImageProxy fields.
 // - Provider should detect missing partition and return "Missing Partition" diagnostic.
-func TestAccCMDeviceDeviceResource_ErrorCategoryNoPartition(t *testing.T) {
+func TestAccCMDeviceDeviceResource_MockErrorCategoryNoPartition(t *testing.T) {
 	cleanup := clearBCMEnvVars(t)
 	defer cleanup()
 
@@ -787,7 +817,7 @@ func TestAccCMDeviceDeviceResource_ErrorCategoryNoPartition(t *testing.T) {
 // - Create device without explicit partition.
 // - Mock category has softwareImageProxy but missing parentSoftwareImage field.
 // - Provider should return "Missing Partition" with proxy message.
-func TestAccCMDeviceDeviceResource_ErrorCategoryProxyMissingParent(t *testing.T) {
+func TestAccCMDeviceDeviceResource_MockErrorCategoryProxyMissingParent(t *testing.T) {
 	cleanup := clearBCMEnvVars(t)
 	defer cleanup()
 
@@ -821,7 +851,7 @@ func TestAccCMDeviceDeviceResource_ErrorCategoryProxyMissingParent(t *testing.T)
 // - Create device with category using softwareImageProxy (triggers partition query).
 // - Mock BCM API returns HTTP 500 error when calling getPartitions.
 // - Provider should detect error and return "Error Querying Partitions" diagnostic.
-func TestAccCMDeviceDeviceResource_ErrorPartitionsQueryFailed(t *testing.T) {
+func TestAccCMDeviceDeviceResource_MockErrorPartitionsQueryFailed(t *testing.T) {
 	cleanup := clearBCMEnvVars(t)
 	defer cleanup()
 
@@ -851,7 +881,7 @@ func TestAccCMDeviceDeviceResource_ErrorPartitionsQueryFailed(t *testing.T) {
 // - Create device with category using softwareImageProxy.
 // - Mock BCM API returns malformed JSON when calling getPartitions.
 // - Provider should fail to unmarshal and return "Error Parsing Partitions" diagnostic.
-func TestAccCMDeviceDeviceResource_ErrorPartitionsInvalidJSON(t *testing.T) {
+func TestAccCMDeviceDeviceResource_MockErrorPartitionsInvalidJSON(t *testing.T) {
 	cleanup := clearBCMEnvVars(t)
 	defer cleanup()
 
@@ -881,7 +911,7 @@ func TestAccCMDeviceDeviceResource_ErrorPartitionsInvalidJSON(t *testing.T) {
 // - Create device with category using softwareImageProxy.
 // - Mock BCM API returns partitions list without "base" partition.
 // - Provider should return "Missing Base Partition" diagnostic.
-func TestAccCMDeviceDeviceResource_ErrorPartitionsNoBase(t *testing.T) {
+func TestAccCMDeviceDeviceResource_MockErrorPartitionsNoBase(t *testing.T) {
 	cleanup := clearBCMEnvVars(t)
 	defer cleanup()
 
@@ -911,7 +941,7 @@ func TestAccCMDeviceDeviceResource_ErrorPartitionsNoBase(t *testing.T) {
 // - Create device with category having direct partition reference.
 // - Mock BCM API always returns error for getSoftwareImage (partition never commits).
 // - Provider should retry with exponential backoff and return "Partition Not Ready" after 20 retries.
-func TestAccCMDeviceDeviceResource_ErrorPartitionNotCommitted(t *testing.T) {
+func TestAccCMDeviceDeviceResource_MockErrorPartitionNotCommitted(t *testing.T) {
 	cleanup := clearBCMEnvVars(t)
 	defer cleanup()
 
@@ -945,7 +975,7 @@ func TestAccCMDeviceDeviceResource_ErrorPartitionNotCommitted(t *testing.T) {
 // - Create device with valid configuration.
 // - Mock BCM API returns HTTP 500 error when calling addDevice.
 // - Provider should detect error and return "Error Creating Device" diagnostic.
-func TestAccCMDeviceDeviceResource_ErrorDeviceCreateFailed(t *testing.T) {
+func TestAccCMDeviceDeviceResource_MockErrorDeviceCreateFailed(t *testing.T) {
 	cleanup := clearBCMEnvVars(t)
 	defer cleanup()
 
@@ -976,7 +1006,7 @@ func TestAccCMDeviceDeviceResource_ErrorDeviceCreateFailed(t *testing.T) {
 // - Mock BCM API returns malformed JSON from addDevice.
 // - bcm_client.parseErrorResponse detects invalid JSON and returns parse error.
 // - Provider returns "Error Creating Device" diagnostic with parse error details.
-func TestAccCMDeviceDeviceResource_ErrorDeviceCreateInvalidJSON(t *testing.T) {
+func TestAccCMDeviceDeviceResource_MockErrorDeviceCreateInvalidJSON(t *testing.T) {
 	cleanup := clearBCMEnvVars(t)
 	defer cleanup()
 
@@ -997,16 +1027,16 @@ func TestAccCMDeviceDeviceResource_ErrorDeviceCreateInvalidJSON(t *testing.T) {
 }
 
 // TestAccCMDeviceDeviceResource_ErrorDeviceValidationFailed tests BCM validation failure.
-// References: resource_cmdevice_device.go:417-432
+// References: resource_cmdevice_device.go:387-416 (ValidateEntity and error processing)
 //
-// Error Path Tested: Lines 417-432 (Create operation)
-// Expected Diagnostic: "Error Creating Device" with validation details
+// Error Path Tested: Lines 387-416 (Create operation, pre-flight validation)
+// Expected Diagnostic: "Validation Error: hostname" with "Hostname already exists in cluster"
 //
 // Test Scenario:
 // - Create device with configuration that BCM rejects.
-// - Mock BCM API returns success=false with validation array containing hostname and MAC errors.
-// - Provider should parse validation errors and return detailed error message.
-func TestAccCMDeviceDeviceResource_ErrorDeviceValidationFailed(t *testing.T) {
+// - Mock BCM API validateDevice returns array of validation errors.
+// - Provider should parse validation errors and return "Validation Error: <field>" diagnostic.
+func TestAccCMDeviceDeviceResource_MockErrorDeviceValidationFailed(t *testing.T) {
 	cleanup := clearBCMEnvVars(t)
 	defer cleanup()
 
@@ -1020,7 +1050,7 @@ func TestAccCMDeviceDeviceResource_ErrorDeviceValidationFailed(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config:      testAccDeviceResourceConfigWithMockServer(mockServer.URL, deviceName),
-				ExpectError: regexp.MustCompile(`(?is)Error Creating Device.*validation.*errors.*hostname.*already.*exists`),
+				ExpectError: regexp.MustCompile(`(?is)Validation Error.*hostname.*already exists`),
 			},
 		},
 	})
@@ -1037,7 +1067,7 @@ func TestAccCMDeviceDeviceResource_ErrorDeviceValidationFailed(t *testing.T) {
 // - Mock BCM API returns error when reading device back (getDevice fails).
 // - Provider should return "Error Reading Created Device" diagnostic.
 // - Note: This simulates eventual consistency issues where device created but not yet readable.
-func TestAccCMDeviceDeviceResource_ErrorDeviceReadAfterCreateFailed(t *testing.T) {
+func TestAccCMDeviceDeviceResource_MockErrorDeviceReadAfterCreateFailed(t *testing.T) {
 	cleanup := clearBCMEnvVars(t)
 	defer cleanup()
 
@@ -1068,7 +1098,7 @@ func TestAccCMDeviceDeviceResource_ErrorDeviceReadAfterCreateFailed(t *testing.T
 // - Device read operation returns malformed JSON (getDevice returns invalid JSON).
 // - BCM client's parseErrorResponse catches the JSON parsing error.
 // - Provider returns "Error Reading Created Device" diagnostic.
-func TestAccCMDeviceDeviceResource_ErrorDeviceReadInvalidJSON(t *testing.T) {
+func TestAccCMDeviceDeviceResource_MockErrorDeviceReadInvalidJSON(t *testing.T) {
 	cleanup := clearBCMEnvVars(t)
 	defer cleanup()
 
@@ -1101,11 +1131,11 @@ func TestAccCMDeviceDeviceResource_ErrorDeviceReadInvalidJSON(t *testing.T) {
 //
 // Note: This test would require a two-step process (create, then update with category error).
 // For simplicity in mock server testing, we skip this complex scenario.
-func TestAccCMDeviceDeviceResource_ErrorDeviceUpdateCategoryQueryFailed(t *testing.T) {
+func TestAccCMDeviceDeviceResource_MockErrorDeviceUpdateCategoryQueryFailed(t *testing.T) {
 	t.Skip("Skipping complex two-step mock server test - would require stateful mock server")
 }
 
-// TestAccCMDeviceDeviceResource_ErrorDeviceUpdateFailed tests device update API failure.
+// TestAccCMDeviceDeviceResource_MockErrorDeviceUpdateFailed tests device update API failure.
 // References: resource_cmdevice_device.go:763
 //
 // Error Path Tested: Lines 763-768 (Update operation)
@@ -1118,11 +1148,11 @@ func TestAccCMDeviceDeviceResource_ErrorDeviceUpdateCategoryQueryFailed(t *testi
 //
 // Note: This test would require a two-step process (create, then update with error).
 // For simplicity in mock server testing, we skip this complex scenario.
-func TestAccCMDeviceDeviceResource_ErrorDeviceUpdateFailed(t *testing.T) {
+func TestAccCMDeviceDeviceResource_MockErrorDeviceUpdateFailed(t *testing.T) {
 	t.Skip("Skipping complex two-step mock server test - would require stateful mock server")
 }
 
-// TestAccCMDeviceDeviceResource_ErrorDeviceUpdateReadFailed tests read-back after update failure.
+// TestAccCMDeviceDeviceResource_MockErrorDeviceUpdateReadFailed tests read-back after update failure.
 // References: resource_cmdevice_device.go:778
 //
 // Error Path Tested: Lines 778-783 (Update operation, read after update)
@@ -1135,11 +1165,11 @@ func TestAccCMDeviceDeviceResource_ErrorDeviceUpdateFailed(t *testing.T) {
 //
 // Note: This test would require a two-step process with stateful mock behavior.
 // For simplicity, we skip this complex scenario.
-func TestAccCMDeviceDeviceResource_ErrorDeviceUpdateReadFailed(t *testing.T) {
+func TestAccCMDeviceDeviceResource_MockErrorDeviceUpdateReadFailed(t *testing.T) {
 	t.Skip("Skipping complex two-step mock server test - would require stateful mock server")
 }
 
-// TestAccCMDeviceDeviceResource_ErrorDeviceDeleteFailed tests device deletion failure.
+// TestAccCMDeviceDeviceResource_MockErrorDeviceDeleteFailed tests device deletion failure.
 // References: resource_cmdevice_device.go:867
 //
 // Error Path Tested: Lines 867-873 (Delete operation)
@@ -1152,7 +1182,7 @@ func TestAccCMDeviceDeviceResource_ErrorDeviceUpdateReadFailed(t *testing.T) {
 //
 // Note: This test would require create first, then delete with error.
 // For simplicity, we skip this complex scenario.
-func TestAccCMDeviceDeviceResource_ErrorDeviceDeleteFailed(t *testing.T) {
+func TestAccCMDeviceDeviceResource_MockErrorDeviceDeleteFailed(t *testing.T) {
 	t.Skip("Skipping complex two-step mock server test - would require stateful mock server")
 }
 
