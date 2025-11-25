@@ -283,14 +283,14 @@ resource "bcm_cmdevice_category" "comprehensive" {
 ### Optional
 
 - `access_settings` (Attributes) Access settings (see [below for nested schema](#nestedatt--access_settings))
-- `allow_networking_restart` (Boolean) Allow networking restart flag
-- `authentication_service` (String) Authentication service (AUTO, LDAP, SSSD, LOCAL)
+- `allow_networking_restart` (Boolean) Allow networking restart flag. If not specified, BCM assigns a default.
+- `authentication_service` (String) Authentication service (AUTO, LDAP, SSSD, LOCAL). If not specified, BCM assigns AUTO.
 - `bios_setup` (Attributes) BIOS setup configuration (see [below for nested schema](#nestedatt--bios_setup))
 - `bmc_settings` (Attributes) BMC configuration settings (see [below for nested schema](#nestedatt--bmc_settings))
 - `boot_loader` (String) Boot loader type (SYSLINUX, GRUB, GRUB2, PXELINUX). If not specified, BCM assigns a default.
 - `boot_loader_file` (String) Boot loader file path. If not specified, BCM uses defaults based on boot_loader.
 - `boot_loader_protocol` (String) Boot loader protocol (HTTP, TFTP, NFS). If not specified, BCM assigns a default.
-- `data_node` (Boolean) Data node flag
+- `data_node` (Boolean) Data node flag. If not specified, BCM assigns a default.
 - `default_gateway` (String) Default gateway IP address. If not specified, BCM may assign a default.
 - `default_gateway_metric` (Number) Default gateway metric. If not specified, BCM may assign a default.
 - `disksetup` (String) Disk setup XML configuration (max 10KB)
@@ -302,7 +302,7 @@ resource "bcm_cmdevice_category" "comprehensive" {
 - `exclude_list_sync` (String) Exclude list for sync operations (max 50KB)
 - `exclude_list_update` (String) Exclude list for update operations (max 50KB)
 - `finalize` (String) Finalization script
-- `fips` (String) FIPS mode (YES or NO)
+- `fips` (String) FIPS mode (YES or NO). If not specified, BCM assigns NO.
 - `force` (Boolean) Force parameter to override warnings and constraints
 - `fsexports` (Dynamic) Filesystem exports (dynamic type - TODO: define proper schema)
 - `fsmounts` (Attributes List) Filesystem mounts (see [below for nested schema](#nestedatt--fsmounts))
@@ -310,7 +310,7 @@ resource "bcm_cmdevice_category" "comprehensive" {
 - `initialize` (String) Initialization script
 - `install_boot_record` (Boolean) Install boot record flag. If not specified, BCM assigns a default.
 - `install_mode` (String) Installation mode (AUTO, FULL, MINIMAL, CUSTOM). If not specified, BCM assigns a default.
-- `interactive_user` (String) Interactive user
+- `interactive_user` (String) Interactive user. If not specified, BCM assigns ALWAYS.
 - `io_scheduler` (String) I/O scheduler
 - `kernel_output_console` (String) Kernel output console device
 - `kernel_parameters` (String) Kernel command-line parameters
@@ -318,7 +318,7 @@ resource "bcm_cmdevice_category" "comprehensive" {
 - `modules` (Attributes List) Kernel modules to load (see [below for nested schema](#nestedatt--modules))
 - `name_servers` (List of String) DNS name servers
 - `new_node_install_mode` (String) New node installation mode (FULL, MINIMAL, SKIP). If not specified, BCM assigns a default.
-- `node_installer_disk` (Boolean) Node installer disk flag
+- `node_installer_disk` (Boolean) Node installer disk flag. If not specified, BCM assigns a default.
 - `notes` (String) User notes or description for the category
 - `proxy_settings` (Attributes) Proxy settings (see [below for nested schema](#nestedatt--proxy_settings))
 - `raidconf` (String) RAID configuration
@@ -331,7 +331,7 @@ resource "bcm_cmdevice_category" "comprehensive" {
 - `time_servers` (List of String) NTP time servers
 - `timezone_settings` (Attributes) Timezone settings (see [below for nested schema](#nestedatt--timezone_settings))
 - `use_exclusively_for` (String) Use exclusively for
-- `version_config_files` (Boolean) Version config files flag
+- `version_config_files` (Boolean) Version config files flag. If not specified, BCM assigns a default.
 - `ztp_settings` (Attributes) ZTP settings (see [below for nested schema](#nestedatt--ztp_settings))
 
 ### Read-Only
