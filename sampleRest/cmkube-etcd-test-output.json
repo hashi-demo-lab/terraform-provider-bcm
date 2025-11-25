@@ -1,0 +1,14 @@
+{
+  "etcd_nodes_supported": true,
+  "attribute_results": {
+    "version": "FULL_SUPPORT",
+    "cni_plugin": "WRITE_ONLY",
+    "dns_servers": "WRITE_ONLY",
+    "overlay_network": "WRITE_ONLY",
+    "load_balancer_mode": "WRITE_ONLY",
+    "storage_classes": "WRITE_ONLY",
+    "addons": "WRITE_ONLY",
+    "ingress_controller": "WRITE_ONLY"
+  },
+  "research_complete": true
+}

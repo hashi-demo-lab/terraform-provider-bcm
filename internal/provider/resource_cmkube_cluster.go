@@ -46,6 +46,7 @@ type CMKubeClusterResourceModel struct {
 	// Node configuration
 	MasterNodes types.List `tfsdk:"master_nodes"` // Required, list of UUIDs
 	WorkerNodes types.List `tfsdk:"worker_nodes"` // Optional, list of UUIDs
+	EtcdNodes   types.List `tfsdk:"etcd_nodes"`   // Optional, list of UUIDs for etcd cluster members
 
 	// Network configuration
 	ManagementNetwork types.String `tfsdk:"management_network"` // Optional, UUID
@@ -143,6 +144,17 @@ func (r *CMKubeClusterResource) Schema(ctx context.Context, req resource.SchemaR
 				ElementType:         types.StringType,
 				Optional:            true,
 				MarkdownDescription: "List of worker node UUIDs",
+				PlanModifiers: []planmodifier.List{
+					listplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"etcd_nodes": schema.ListAttribute{
+				ElementType:         types.StringType,
+				Optional:            true,
+				MarkdownDescription: "List of node UUIDs designated as etcd cluster members. NVIDIA recommends 3 nodes for production high availability. If not specified, etcd runs on master nodes.",
+				PlanModifiers: []planmodifier.List{
+					listplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"management_network": schema.StringAttribute{
 				Optional:            true,
@@ -341,7 +353,11 @@ func (r *CMKubeClusterResource) Create(ctx context.Context, req resource.CreateR
 
 	// Read back full cluster state from BCM
 	// (This populates computed fields like creation_time, revision_id)
-	// CRITICAL: Preserve optional P3 fields from plan before reading (BCM API may not return them)
+	// CRITICAL: Preserve optional fields from plan before reading (BCM API may not return them)
+	// Node lists (master_nodes, worker_nodes, etcd_nodes) are write-only fields
+	planMasterNodes := plan.MasterNodes
+	planWorkerNodes := plan.WorkerNodes
+	planEtcdNodes := plan.EtcdNodes
 	planManagementNetwork := plan.ManagementNetwork
 	planOverlayNetwork := plan.OverlayNetwork
 	planDNSServers := plan.DNSServers
@@ -356,6 +372,18 @@ func (r *CMKubeClusterResource) Create(ctx context.Context, req resource.CreateR
 	resp.Diagnostics.Append(readDiags...)
 	if resp.Diagnostics.HasError() {
 		return
+	}
+
+	// CRITICAL FIX: Restore write-only node list fields from plan
+	// These fields are accepted by BCM API but NOT returned in getKubeCluster response
+	if !planMasterNodes.IsUnknown() && !planMasterNodes.IsNull() {
+		plan.MasterNodes = planMasterNodes
+	}
+	if !planWorkerNodes.IsUnknown() && !planWorkerNodes.IsNull() {
+		plan.WorkerNodes = planWorkerNodes
+	}
+	if !planEtcdNodes.IsUnknown() && !planEtcdNodes.IsNull() {
+		plan.EtcdNodes = planEtcdNodes
 	}
 
 	// CRITICAL FIX: Restore optional P3 fields from plan ONLY if they're known values
@@ -403,7 +431,11 @@ func (r *CMKubeClusterResource) Read(ctx context.Context, req resource.ReadReque
 		return
 	}
 
-	// CRITICAL: Preserve optional P3 fields from state before reading (BCM API may not return them)
+	// CRITICAL: Preserve optional fields from state before reading (BCM API may not return them)
+	// Node lists (master_nodes, worker_nodes, etcd_nodes) are write-only fields
+	stateMasterNodes := state.MasterNodes
+	stateWorkerNodes := state.WorkerNodes
+	stateEtcdNodes := state.EtcdNodes
 	stateManagementNetwork := state.ManagementNetwork
 	stateOverlayNetwork := state.OverlayNetwork
 	stateDNSServers := state.DNSServers
@@ -418,6 +450,18 @@ func (r *CMKubeClusterResource) Read(ctx context.Context, req resource.ReadReque
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
+	}
+
+	// CRITICAL FIX: Restore write-only node list fields from prior state
+	// These fields are accepted by BCM API but NOT returned in getKubeCluster response
+	if state.MasterNodes.IsNull() && !stateMasterNodes.IsNull() && !stateMasterNodes.IsUnknown() {
+		state.MasterNodes = stateMasterNodes
+	}
+	if state.WorkerNodes.IsNull() && !stateWorkerNodes.IsNull() && !stateWorkerNodes.IsUnknown() {
+		state.WorkerNodes = stateWorkerNodes
+	}
+	if state.EtcdNodes.IsNull() && !stateEtcdNodes.IsNull() && !stateEtcdNodes.IsUnknown() {
+		state.EtcdNodes = stateEtcdNodes
 	}
 
 	// CRITICAL FIX: Restore optional P3 fields from prior state ONLY if BCM returned null
@@ -525,6 +569,13 @@ func (r *CMKubeClusterResource) readCluster(ctx context.Context, model *CMKubeCl
 		}
 		// else: preserve existing plan value (which might be an empty list)
 	}
+
+	// Etcd nodes (write-only field - same pattern as master_nodes/worker_nodes)
+	// BCM cmkube API accepts etcdNodes during create/update but does NOT return them in getKubeCluster
+	if model.EtcdNodes.IsNull() || model.EtcdNodes.IsUnknown() {
+		model.EtcdNodes = types.ListNull(types.StringType)
+	}
+	// else: preserve existing state value (which was set via plan)
 
 	// Network configuration (optional)
 	model.ManagementNetwork = getStringValue(clusterData, "managementNetwork")
@@ -650,7 +701,11 @@ func (r *CMKubeClusterResource) Update(ctx context.Context, req resource.UpdateR
 	plan.ID = state.ID
 
 	// Read back updated state
-	// CRITICAL: Preserve optional P3 fields from plan before reading (BCM API may not return them)
+	// CRITICAL: Preserve optional fields from plan before reading (BCM API may not return them)
+	// Node lists (master_nodes, worker_nodes, etcd_nodes) are write-only fields
+	planMasterNodes := plan.MasterNodes
+	planWorkerNodes := plan.WorkerNodes
+	planEtcdNodes := plan.EtcdNodes
 	planManagementNetwork := plan.ManagementNetwork
 	planOverlayNetwork := plan.OverlayNetwork
 	planDNSServers := plan.DNSServers
@@ -665,6 +720,18 @@ func (r *CMKubeClusterResource) Update(ctx context.Context, req resource.UpdateR
 	resp.Diagnostics.Append(readDiags...)
 	if resp.Diagnostics.HasError() {
 		return
+	}
+
+	// CRITICAL FIX: Restore write-only node list fields from plan
+	// These fields are accepted by BCM API but NOT returned in getKubeCluster response
+	if !planMasterNodes.IsUnknown() && !planMasterNodes.IsNull() {
+		plan.MasterNodes = planMasterNodes
+	}
+	if !planWorkerNodes.IsUnknown() && !planWorkerNodes.IsNull() {
+		plan.WorkerNodes = planWorkerNodes
+	}
+	if !planEtcdNodes.IsUnknown() && !planEtcdNodes.IsNull() {
+		plan.EtcdNodes = planEtcdNodes
 	}
 
 	// CRITICAL FIX: Restore optional P3 fields from plan ONLY if they're known values
@@ -777,6 +844,13 @@ func buildClusterEntity(ctx context.Context, model CMKubeClusterResourceModel, u
 		entity["workerNodes"] = workerNodes
 	} else {
 		entity["workerNodes"] = []string{}
+	}
+
+	// Etcd nodes (optional) - for dedicated etcd cluster members
+	if !model.EtcdNodes.IsNull() && !model.EtcdNodes.IsUnknown() {
+		var etcdNodes []string
+		diags.Append(model.EtcdNodes.ElementsAs(ctx, &etcdNodes, false)...)
+		entity["etcdNodes"] = etcdNodes
 	}
 
 	// Network configuration (optional)
