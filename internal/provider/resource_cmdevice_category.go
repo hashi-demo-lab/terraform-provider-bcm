@@ -185,8 +185,9 @@ type FSExportModel struct {
 	Async      types.Bool   `tfsdk:"async"`       // Optional, async mode
 }
 
-// RoleModel describes a service role assignment nested object.
-type RoleModel struct {
+// CategoryRoleModel describes a service role assignment nested object for categories.
+// Named differently from data_source_cmdevice_nodes.go RoleModel to avoid conflict.
+type CategoryRoleModel struct {
 	Name        types.String `tfsdk:"name"`         // Required, role name
 	ChildType   types.String `tfsdk:"child_type"`   // Required, role type
 	UUID        types.String `tfsdk:"uuid"`         // Computed, BCM-assigned
@@ -1450,6 +1451,107 @@ func (r *CMDeviceCategoryResource) buildAPIEntity(ctx context.Context, model *CM
 		entity["softwareImageProxy"] = proxyEntity
 	}
 
+	// Serialize static_routes (Terraform snake_case → BCM camelCase)
+	if !model.StaticRoutes.IsNull() && !model.StaticRoutes.IsUnknown() {
+		var routes []StaticRouteModel
+		diags := model.StaticRoutes.ElementsAs(ctx, &routes, false)
+		if !diags.HasError() {
+			routesList := make([]map[string]interface{}, 0, len(routes))
+			for _, route := range routes {
+				routeMap := map[string]interface{}{
+					"destination": route.Destination.ValueString(),
+					"gateway":     route.Gateway.ValueString(),
+				}
+				if !route.Metric.IsNull() {
+					routeMap["metric"] = route.Metric.ValueInt64()
+				}
+				routesList = append(routesList, routeMap)
+			}
+			entity["staticRoutes"] = routesList
+		}
+	}
+
+	// Serialize fsexports (snake_case → camelCase for BCM API)
+	if !model.FSExports.IsNull() && !model.FSExports.IsUnknown() {
+		var exports []FSExportModel
+		diags := model.FSExports.ElementsAs(ctx, &exports, false)
+		if !diags.HasError() {
+			exportsList := make([]map[string]interface{}, 0, len(exports))
+			for _, export := range exports {
+				exportMap := map[string]interface{}{
+					"baseType": "FSExport",
+					"path":     export.Path.ValueString(),
+					"network":  export.Network.ValueString(),
+				}
+				if !export.AllowWrite.IsNull() {
+					exportMap["allowWrite"] = export.AllowWrite.ValueBool()
+				}
+				if !export.RootSquash.IsNull() {
+					exportMap["rootSquash"] = export.RootSquash.ValueBool()
+				}
+				if !export.Async.IsNull() {
+					exportMap["async"] = export.Async.ValueBool()
+				}
+				exportsList = append(exportsList, exportMap)
+			}
+			entity["fsexports"] = exportsList
+		}
+	}
+
+	// Serialize roles (snake_case → camelCase for BCM API)
+	if !model.Roles.IsNull() && !model.Roles.IsUnknown() {
+		var roles []CategoryRoleModel
+		diags := model.Roles.ElementsAs(ctx, &roles, false)
+		if !diags.HasError() {
+			rolesList := make([]map[string]interface{}, 0, len(roles))
+			for _, role := range roles {
+				roleMap := map[string]interface{}{
+					"baseType":  "Role",
+					"name":      role.Name.ValueString(),
+					"childType": role.ChildType.ValueString(),
+				}
+				// Include UUID if present (for updates), BCM assigns on create
+				if !role.UUID.IsNull() && role.UUID.ValueString() != "" {
+					roleMap["uuid"] = role.UUID.ValueString()
+				}
+				if !role.AddServices.IsNull() {
+					roleMap["addServices"] = role.AddServices.ValueBool()
+				}
+				rolesList = append(rolesList, roleMap)
+			}
+			entity["roles"] = rolesList
+		}
+	}
+
+	// Serialize gpu_settings (Terraform snake_case → BCM camelCase)
+	if !model.GPUSettings.IsNull() && !model.GPUSettings.IsUnknown() {
+		var gpuSettings []GPUSettingModel
+		diags := model.GPUSettings.ElementsAs(ctx, &gpuSettings, false)
+		if !diags.HasError() {
+			gpuList := make([]map[string]interface{}, 0, len(gpuSettings))
+			for _, gpu := range gpuSettings {
+				gpuMap := map[string]interface{}{
+					"baseType": "GPUSetting",
+					"deviceId": gpu.DeviceID.ValueString(),
+				}
+				if !gpu.Model.IsNull() {
+					gpuMap["model"] = gpu.Model.ValueString()
+				}
+				if !gpu.ComputeMode.IsNull() {
+					gpuMap["computeMode"] = gpu.ComputeMode.ValueString()
+				}
+				gpuList = append(gpuList, gpuMap)
+			}
+			entity["gpuSettings"] = gpuList
+		}
+	}
+
+	// Serialize services (POST-MVP - currently empty list or null)
+	if !model.Services.IsNull() && !model.Services.IsUnknown() {
+		// Services field structure is TBD - send empty array if set
+		entity["services"] = []map[string]interface{}{}
+	}
+
 	// TODO: Add remaining nested objects and arrays in Phase 6 (Comprehensive Schema)
 	// - modules (array of KernelModule)
 	// - fsmounts (array of FSMount)
@@ -1548,8 +1650,32 @@ func (r *CMDeviceCategoryResource) readCategory(ctx context.Context, model *CMDe
 	model.NameServers = types.ListNull(types.StringType)
 	model.SearchDomains = types.ListNull(types.StringType)
 	model.TimeServers = types.ListNull(types.StringType)
-	// TODO Phase 6: Define proper schema for static_routes
-	model.StaticRoutes = types.DynamicNull()
+
+	// Parse static_routes from BCM API (camelCase → snake_case)
+	staticRouteObjectType := types.ObjectType{AttrTypes: map[string]attr.Type{
+		"destination": types.StringType,
+		"gateway":     types.StringType,
+		"metric":      types.Int64Type,
+	}}
+	if routesData, ok := categoryData["staticRoutes"].([]interface{}); ok && len(routesData) > 0 {
+		routeValues := make([]attr.Value, 0, len(routesData))
+		for _, routeRaw := range routesData {
+			if routeMap, ok := routeRaw.(map[string]interface{}); ok {
+				routeObj, objDiags := types.ObjectValue(staticRouteObjectType.AttrTypes, map[string]attr.Value{
+					"destination": getStringValue(routeMap, "destination"),
+					"gateway":     getStringValue(routeMap, "gateway"),
+					"metric":      getInt64Value(routeMap, "metric"),
+				})
+				if !objDiags.HasError() {
+					routeValues = append(routeValues, routeObj)
+				}
+			}
+		}
+		model.StaticRoutes, _ = types.ListValue(staticRouteObjectType, routeValues)
+	} else {
+		// Empty array or null - preserve empty list semantics
+		model.StaticRoutes = types.ListNull(staticRouteObjectType)
+	}
 
 	// Disk and storage
 	model.Disksetup = getStringValue(categoryData, "disksetup")
@@ -1568,8 +1694,36 @@ func (r *CMDeviceCategoryResource) readCategory(ctx context.Context, model *CMDe
 		"rdma":         types.BoolType,
 	}}
 	model.FSMounts = types.ListNull(fsMountObjectType)
-	// TODO Phase 6: Define proper schema for fsexports
-	model.FSExports = types.DynamicNull()
+
+	// Parse fsexports from BCM API (camelCase → snake_case)
+	fsExportObjectType := types.ObjectType{AttrTypes: map[string]attr.Type{
+		"path":        types.StringType,
+		"network":     types.StringType,
+		"allow_write": types.BoolType,
+		"root_squash": types.BoolType,
+		"async":       types.BoolType,
+	}}
+	if exportsData, ok := categoryData["fsexports"].([]interface{}); ok && len(exportsData) > 0 {
+		exportValues := make([]attr.Value, 0, len(exportsData))
+		for _, exportRaw := range exportsData {
+			if exportMap, ok := exportRaw.(map[string]interface{}); ok {
+				exportObj, objDiags := types.ObjectValue(fsExportObjectType.AttrTypes, map[string]attr.Value{
+					"path":        getStringValue(exportMap, "path"),
+					"network":     getStringValue(exportMap, "network"),
+					"allow_write": getBoolValue(exportMap, "allowWrite"),
+					"root_squash": getBoolValue(exportMap, "rootSquash"),
+					"async":       getBoolValue(exportMap, "async"),
+				})
+				if !objDiags.HasError() {
+					exportValues = append(exportValues, exportObj)
+				}
+			}
+		}
+		model.FSExports, _ = types.ListValue(fsExportObjectType, exportValues)
+	} else {
+		// Empty array or null - preserve empty list semantics
+		model.FSExports = types.ListNull(fsExportObjectType)
+	}
 
 	// Kernel modules (use proper KernelModule object type)
 	moduleObjectType := types.ObjectType{AttrTypes: map[string]attr.Type{
@@ -1578,15 +1732,71 @@ func (r *CMDeviceCategoryResource) readCategory(ctx context.Context, model *CMDe
 	}}
 	model.Modules = types.ListNull(moduleObjectType)
 
-	// Role and service lists (set to null for now, Phase 6 will parse these)
-	// TODO Phase 6: Define proper schema for roles
-	model.Roles = types.DynamicNull()
-	// TODO Phase 6: Define proper schema for services
-	model.Services = types.DynamicNull()
+	// Parse roles from BCM API (camelCase → snake_case)
+	roleObjectType := types.ObjectType{AttrTypes: map[string]attr.Type{
+		"name":         types.StringType,
+		"child_type":   types.StringType,
+		"uuid":         types.StringType,
+		"add_services": types.BoolType,
+	}}
+	if rolesData, ok := categoryData["roles"].([]interface{}); ok && len(rolesData) > 0 {
+		roleValues := make([]attr.Value, 0, len(rolesData))
+		for _, roleRaw := range rolesData {
+			if roleMap, ok := roleRaw.(map[string]interface{}); ok {
+				roleObj, objDiags := types.ObjectValue(roleObjectType.AttrTypes, map[string]attr.Value{
+					"name":         getStringValue(roleMap, "name"),
+					"child_type":   getStringValue(roleMap, "childType"),
+					"uuid":         getStringValue(roleMap, "uuid"),
+					"add_services": getBoolValue(roleMap, "addServices"),
+				})
+				if !objDiags.HasError() {
+					roleValues = append(roleValues, roleObj)
+				}
+			}
+		}
+		model.Roles, _ = types.ListValue(roleObjectType, roleValues)
+	} else {
+		// Empty array or null - preserve empty list semantics
+		model.Roles = types.ListNull(roleObjectType)
+	}
 
-	// Hardware settings lists (set to null for now, Phase 6 will parse these)
-	// TODO Phase 6: Define proper schema for gpu_settings
-	model.GPUSettings = types.DynamicNull()
+	// Parse services from BCM API (POST-MVP - structure TBD)
+	serviceObjectType := types.ObjectType{AttrTypes: map[string]attr.Type{
+		// Empty for now - services field structure is TBD
+	}}
+	if servicesData, ok := categoryData["services"].([]interface{}); ok && len(servicesData) > 0 {
+		// Services structure is TBD - for now return empty list if any data present
+		model.Services, _ = types.ListValue(serviceObjectType, []attr.Value{})
+	} else {
+		// Empty array or null - preserve empty list semantics
+		model.Services = types.ListNull(serviceObjectType)
+	}
+
+	// Parse gpu_settings from BCM API (camelCase → snake_case)
+	gpuSettingObjectType := types.ObjectType{AttrTypes: map[string]attr.Type{
+		"device_id":    types.StringType,
+		"model":        types.StringType,
+		"compute_mode": types.StringType,
+	}}
+	if gpuData, ok := categoryData["gpuSettings"].([]interface{}); ok && len(gpuData) > 0 {
+		gpuValues := make([]attr.Value, 0, len(gpuData))
+		for _, gpuRaw := range gpuData {
+			if gpuMap, ok := gpuRaw.(map[string]interface{}); ok {
+				gpuObj, objDiags := types.ObjectValue(gpuSettingObjectType.AttrTypes, map[string]attr.Value{
+					"device_id":    getStringValue(gpuMap, "deviceId"),
+					"model":        getStringValue(gpuMap, "model"),
+					"compute_mode": getStringValue(gpuMap, "computeMode"),
+				})
+				if !objDiags.HasError() {
+					gpuValues = append(gpuValues, gpuObj)
+				}
+			}
+		}
+		model.GPUSettings, _ = types.ListValue(gpuSettingObjectType, gpuValues)
+	} else {
+		// Empty array or null - preserve empty list semantics
+		model.GPUSettings = types.ListNull(gpuSettingObjectType)
+	}
 
 	// Security and access objects (set to null for now, Phase 6 will parse these)
 	// TODO Phase 6: Parse actual BMC settings from API
