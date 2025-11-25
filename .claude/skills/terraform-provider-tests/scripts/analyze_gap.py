@@ -757,6 +757,12 @@ class TestFile:
         if self.has_compare_value_for_id and self.id_tracking_steps > 0:
             score = min(100, score + 5)  # Bonus for good ID tracking
 
+        # Severe penalty for hardcoded credentials
+        critical_creds = [c for c in self.hardcoded_credentials if c[3] == 'critical']
+        if critical_creds:
+            cred_penalty = min(len(critical_creds) * 20, 50)  # Max -50 points for critical
+            score = max(0, score - cred_penalty)
+
         self.quality_score = score
 
 
