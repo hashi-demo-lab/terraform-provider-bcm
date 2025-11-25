@@ -1,6 +1,6 @@
 @user=root
 @password=Hashicorp123!
-@cookie=cm-login-token=KpPK7G0bmgNm5xeUj6VPvNuMAweSPegI
+@cookie=cm-login-token=C2nfLtXRlODdutKtaHg7eJ7D8DKSb30W
 
 ### login
 POST https://172.21.15.254:8081/json

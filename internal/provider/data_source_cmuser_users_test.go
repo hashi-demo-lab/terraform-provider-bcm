@@ -14,7 +14,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
 )
 
-// TestAccCMUserUsersDataSource_Basic tests basic user retrieval without filters
+// TestAccCMUserUsersDataSource_Basic tests basic user retrieval without filters.
 func TestAccCMUserUsersDataSource_Basic(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -41,7 +41,7 @@ func TestAccCMUserUsersDataSource_Basic(t *testing.T) {
 	})
 }
 
-// TestAccCMUserUsersDataSource_FilterUsername tests username pattern filtering
+// TestAccCMUserUsersDataSource_FilterUsername tests username pattern filtering.
 func TestAccCMUserUsersDataSource_FilterUsername(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -68,7 +68,7 @@ func TestAccCMUserUsersDataSource_FilterUsername(t *testing.T) {
 	})
 }
 
-// TestAccCMUserUsersDataSource_FilterGroupID tests group_id filtering
+// TestAccCMUserUsersDataSource_FilterGroupID tests group_id filtering.
 func TestAccCMUserUsersDataSource_FilterGroupID(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -95,7 +95,7 @@ func TestAccCMUserUsersDataSource_FilterGroupID(t *testing.T) {
 	})
 }
 
-// TestAccCMUserUsersDataSource_FilterUserID tests user_id filtering
+// TestAccCMUserUsersDataSource_FilterUserID tests user_id filtering.
 func TestAccCMUserUsersDataSource_FilterUserID(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -122,7 +122,7 @@ func TestAccCMUserUsersDataSource_FilterUserID(t *testing.T) {
 	})
 }
 
-// TestAccCMUserUsersDataSource_NestedAttributes tests Unix attribute population
+// TestAccCMUserUsersDataSource_NestedAttributes tests Unix attribute population.
 func TestAccCMUserUsersDataSource_NestedAttributes(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -169,7 +169,7 @@ func TestAccCMUserUsersDataSource_NestedAttributes(t *testing.T) {
 	})
 }
 
-// TestAccCMUserUsersDataSource_AccountActive tests account_active computation
+// TestAccCMUserUsersDataSource_AccountActive tests account_active computation.
 func TestAccCMUserUsersDataSource_AccountActive(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },

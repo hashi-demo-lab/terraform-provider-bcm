@@ -16,6 +16,10 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
@@ -229,10 +233,16 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 			"id": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "Resource identifier (same as UUID)",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"uuid": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "Unique identifier assigned by BCM",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"name": schema.StringAttribute{
 				Required:            true,
@@ -262,6 +272,9 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 					"uuid": schema.StringAttribute{
 						Computed:            true,
 						MarkdownDescription: "Unique identifier",
+						PlanModifiers: []planmodifier.String{
+							stringplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"parent_software_image": schema.StringAttribute{
 						Required:            true,
@@ -270,6 +283,9 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 					"revision_id": schema.Int64Attribute{
 						Computed:            true,
 						MarkdownDescription: "Revision identifier",
+						PlanModifiers: []planmodifier.Int64{
+							int64planmodifier.UseStateForUnknown(),
+						},
 					},
 				},
 			},
@@ -280,16 +296,25 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 				Validators: []validator.String{
 					stringvalidator.OneOf("SYSLINUX", "GRUB", "GRUB2", "PXELINUX"),
 				},
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"boot_loader_file": schema.StringAttribute{
 				Optional:            true,
 				Computed:            true,
 				MarkdownDescription: "Boot loader file path. If not specified, BCM uses defaults based on boot_loader.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"boot_loader_protocol": schema.StringAttribute{
 				Optional:            true,
 				Computed:            true,
 				MarkdownDescription: "Boot loader protocol (HTTP, TFTP, NFS). If not specified, BCM assigns a default.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"kernel_version": schema.StringAttribute{
 				Optional:            true,
@@ -331,16 +356,25 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 				Optional:            true,
 				Computed:            true,
 				MarkdownDescription: "Installation mode (AUTO, FULL, MINIMAL, CUSTOM). If not specified, BCM assigns a default.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"new_node_install_mode": schema.StringAttribute{
 				Optional:            true,
 				Computed:            true,
 				MarkdownDescription: "New node installation mode (FULL, MINIMAL, SKIP). If not specified, BCM assigns a default.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"install_boot_record": schema.BoolAttribute{
 				Optional:            true,
 				Computed:            true,
 				MarkdownDescription: "Install boot record flag. If not specified, BCM assigns a default.",
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"io_scheduler": schema.StringAttribute{
 				Optional:            true,
@@ -348,25 +382,43 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 			},
 			"node_installer_disk": schema.BoolAttribute{
 				Optional:            true,
-				MarkdownDescription: "Node installer disk flag",
+				Computed:            true,
+				MarkdownDescription: "Node installer disk flag. If not specified, BCM assigns a default.",
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"version_config_files": schema.BoolAttribute{
 				Optional:            true,
-				MarkdownDescription: "Version config files flag",
+				Computed:            true,
+				MarkdownDescription: "Version config files flag. If not specified, BCM assigns a default.",
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"authentication_service": schema.StringAttribute{
 				Optional:            true,
-				MarkdownDescription: "Authentication service (AUTO, LDAP, SSSD, LOCAL)",
+				Computed:            true,
+				MarkdownDescription: "Authentication service (AUTO, LDAP, SSSD, LOCAL). If not specified, BCM assigns AUTO.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"default_gateway": schema.StringAttribute{
 				Optional:            true,
 				Computed:            true,
 				MarkdownDescription: "Default gateway IP address. If not specified, BCM may assign a default.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"default_gateway_metric": schema.Int64Attribute{
 				Optional:            true,
 				Computed:            true,
 				MarkdownDescription: "Default gateway metric. If not specified, BCM may assign a default.",
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.UseStateForUnknown(),
+				},
 			},
 			"name_servers": schema.ListAttribute{
 				Optional:            true,
@@ -417,7 +469,11 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 			},
 			"allow_networking_restart": schema.BoolAttribute{
 				Optional:            true,
-				MarkdownDescription: "Allow networking restart flag",
+				Computed:            true,
+				MarkdownDescription: "Allow networking restart flag. If not specified, BCM assigns a default.",
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"fsmounts": schema.ListNestedAttribute{
 				Optional:            true,
@@ -627,9 +683,13 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 			},
 			"fips": schema.StringAttribute{
 				Optional:            true,
-				MarkdownDescription: "FIPS mode (YES or NO)",
+				Computed:            true,
+				MarkdownDescription: "FIPS mode (YES or NO). If not specified, BCM assigns NO.",
 				Validators: []validator.String{
 					stringvalidator.OneOf("YES", "NO"),
+				},
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"initialize": schema.StringAttribute{
@@ -666,11 +726,19 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 			},
 			"data_node": schema.BoolAttribute{
 				Optional:            true,
-				MarkdownDescription: "Data node flag",
+				Computed:            true,
+				MarkdownDescription: "Data node flag. If not specified, BCM assigns a default.",
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"interactive_user": schema.StringAttribute{
 				Optional:            true,
-				MarkdownDescription: "Interactive user",
+				Computed:            true,
+				MarkdownDescription: "Interactive user. If not specified, BCM assigns ALWAYS.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"use_exclusively_for": schema.StringAttribute{
 				Optional:            true,
@@ -683,26 +751,44 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 			"parent_uuid": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "Parent UUID",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"revision": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "Revision",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"modified": schema.BoolAttribute{
 				Computed:            true,
 				MarkdownDescription: "Modified flag",
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"to_be_removed": schema.BoolAttribute{
 				Computed:            true,
 				MarkdownDescription: "To be removed flag",
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"base_type": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "Base type (always 'Category')",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"child_type": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "Child type",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 		},
 	}
@@ -746,6 +832,38 @@ func (r *CMDeviceCategoryResource) Create(ctx context.Context, req resource.Crea
 
 	// Build API entity from plan
 	entity := r.buildAPIEntity(ctx, &plan, "")
+
+	// Pre-flight validation: Call validateCategory before CREATE
+	validationErrors, err := r.client.ValidateEntity(ctx, "CMDevice", "validateCategory", entity, true)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Validation API Error",
+			fmt.Sprintf("Could not validate category '%s': %s", plan.Name.ValueString(), err.Error()),
+		)
+		return
+	}
+
+	// Process validation results
+	hasErrors := false
+	for _, valErr := range validationErrors {
+		if valErr.IsError() {
+			resp.Diagnostics.AddError(
+				fmt.Sprintf("Validation Error: %s", valErr.Field),
+				valErr.Message,
+			)
+			hasErrors = true
+		} else if valErr.IsWarning() {
+			resp.Diagnostics.AddWarning(
+				fmt.Sprintf("Validation Warning: %s", valErr.Field),
+				valErr.Message,
+			)
+		}
+	}
+
+	// Halt if validation errors found
+	if hasErrors {
+		return
+	}
 
 	// Get force parameter from plan (default to false)
 	force := false
@@ -820,6 +938,9 @@ func (r *CMDeviceCategoryResource) Create(ctx context.Context, req resource.Crea
 	plan.ID = types.StringValue(createdUUID)
 	plan.UUID = types.StringValue(createdUUID)
 
+	// Preserve plan's software_image_proxy before reading (BCM API may return different values)
+	planSoftwareImageProxy := plan.SoftwareImageProxy
+
 	// Read back created category to populate all fields
 	// BCM has eventual consistency - retry if computed fields are not populated
 	// Pattern from terraform-provider-design skill: api_client_patterns.md lines 294-326
@@ -882,6 +1003,43 @@ func (r *CMDeviceCategoryResource) Create(ctx context.Context, req resource.Crea
 		}
 	}
 
+	// CRITICAL FIX: Restore parent_software_image from plan while keeping computed fields
+	// BCM API may return different parent_software_image UUID on reads
+	// But we must preserve the user's configured value
+	if !planSoftwareImageProxy.IsNull() && !planSoftwareImageProxy.IsUnknown() {
+		var planProxy SoftwareImageProxyModel
+		planSoftwareImageProxy.As(ctx, &planProxy, basetypes.ObjectAsOptions{})
+
+		// Only restore if we have a valid parent_software_image from plan
+		if !planProxy.ParentSoftwareImage.IsNull() && !planProxy.ParentSoftwareImage.IsUnknown() {
+			// Get the computed values from the API response (uuid, revision_id)
+			var apiProxy SoftwareImageProxyModel
+			if !plan.SoftwareImageProxy.IsNull() {
+				plan.SoftwareImageProxy.As(ctx, &apiProxy, basetypes.ObjectAsOptions{})
+			}
+
+			// Build merged proxy: user's parent_software_image + API's computed fields
+			mergedProxy := SoftwareImageProxyModel{
+				UUID:                apiProxy.UUID,
+				ParentSoftwareImage: planProxy.ParentSoftwareImage, // Preserve user config
+				RevisionID:          apiProxy.RevisionID,
+			}
+
+			// Convert back to types.Object
+			proxyObj, diagsProxy := types.ObjectValueFrom(ctx, map[string]attr.Type{
+				"uuid":                  types.StringType,
+				"parent_software_image": types.StringType,
+				"revision_id":           types.Int64Type,
+			}, mergedProxy)
+			if !diagsProxy.HasError() {
+				plan.SoftwareImageProxy = proxyObj
+				tflog.Debug(ctx, "Merged software_image_proxy: preserved parent_software_image from plan", map[string]interface{}{
+					"parent_software_image": planProxy.ParentSoftwareImage.ValueString(),
+				})
+			}
+		}
+	}
+
 	tflog.Info(ctx, "Created category resource", map[string]interface{}{
 		"name": plan.Name.ValueString(),
 		"uuid": createdUUID,
@@ -911,6 +1069,7 @@ func (r *CMDeviceCategoryResource) Read(ctx context.Context, req resource.ReadRe
 	// These will be restored after readCategory to avoid false drift detection
 	originalManagementNetwork := state.ManagementNetwork
 	originalForce := state.Force
+	originalSoftwareImageProxy := state.SoftwareImageProxy
 	originalStaticRoutes := state.StaticRoutes
 	originalFSExports := state.FSExports
 	originalRoles := state.Roles
@@ -1035,6 +1194,43 @@ func (r *CMDeviceCategoryResource) Read(ctx context.Context, req resource.ReadRe
 	state.GPUSettings = originalGPUSettings
 	state.Services = originalServices
 
+	// CRITICAL FIX: Preserve parent_software_image from state while keeping computed fields
+	// BCM API may return different parent_software_image UUID on subsequent reads,
+	// causing false drift detection. Preserve the user's configured value.
+	if !originalSoftwareImageProxy.IsNull() && !originalSoftwareImageProxy.IsUnknown() {
+		var stateProxy SoftwareImageProxyModel
+		originalSoftwareImageProxy.As(ctx, &stateProxy, basetypes.ObjectAsOptions{})
+
+		// Only restore if we have a valid parent_software_image from state
+		if !stateProxy.ParentSoftwareImage.IsNull() && !stateProxy.ParentSoftwareImage.IsUnknown() {
+			// Get the computed values from the API response (uuid, revision_id)
+			var apiProxy SoftwareImageProxyModel
+			if !state.SoftwareImageProxy.IsNull() {
+				state.SoftwareImageProxy.As(ctx, &apiProxy, basetypes.ObjectAsOptions{})
+			}
+
+			// Build merged proxy: user's parent_software_image + API's computed fields
+			mergedProxy := SoftwareImageProxyModel{
+				UUID:                apiProxy.UUID,
+				ParentSoftwareImage: stateProxy.ParentSoftwareImage, // Preserve user config
+				RevisionID:          apiProxy.RevisionID,
+			}
+
+			// Convert back to types.Object
+			proxyObj, diagsProxy := types.ObjectValueFrom(ctx, map[string]attr.Type{
+				"uuid":                  types.StringType,
+				"parent_software_image": types.StringType,
+				"revision_id":           types.Int64Type,
+			}, mergedProxy)
+			if !diagsProxy.HasError() {
+				state.SoftwareImageProxy = proxyObj
+				tflog.Debug(ctx, "Merged software_image_proxy: preserved parent_software_image from state", map[string]interface{}{
+					"parent_software_image": stateProxy.ParentSoftwareImage.ValueString(),
+				})
+			}
+		}
+	}
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
@@ -1051,6 +1247,38 @@ func (r *CMDeviceCategoryResource) Update(ctx context.Context, req resource.Upda
 	// Build updated entity from plan (include UUID from state, as UUID is computed)
 	// UUID must come from state, not plan, since it's a computed attribute
 	entity := r.buildAPIEntity(ctx, &plan, state.UUID.ValueString())
+
+	// Pre-flight validation: Call validateCategory before UPDATE
+	validationErrors, err := r.client.ValidateEntity(ctx, "CMDevice", "validateCategory", entity, false)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Validation API Error",
+			fmt.Sprintf("Could not validate category '%s': %s", plan.Name.ValueString(), err.Error()),
+		)
+		return
+	}
+
+	// Process validation results
+	hasErrors := false
+	for _, valErr := range validationErrors {
+		if valErr.IsError() {
+			resp.Diagnostics.AddError(
+				fmt.Sprintf("Validation Error: %s", valErr.Field),
+				valErr.Message,
+			)
+			hasErrors = true
+		} else if valErr.IsWarning() {
+			resp.Diagnostics.AddWarning(
+				fmt.Sprintf("Validation Warning: %s", valErr.Field),
+				valErr.Message,
+			)
+		}
+	}
+
+	// Halt if validation errors found
+	if hasErrors {
+		return
+	}
 
 	// Get force parameter from plan
 	// IMPORTANT: BCM's updateCategory sometimes requires force=true to bypass validation quirks
@@ -1071,7 +1299,7 @@ func (r *CMDeviceCategoryResource) Update(ctx context.Context, req resource.Upda
 	})
 
 	// Call updateCategory API
-	_, err := r.client.CallJSONRPC(ctx, "cmdevice", "updateCategory", entity, force)
+	_, err = r.client.CallJSONRPC(ctx, "cmdevice", "updateCategory", entity, force)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Category Update Failed",
@@ -1082,6 +1310,7 @@ func (r *CMDeviceCategoryResource) Update(ctx context.Context, req resource.Upda
 
 	// Preserve plan values for fields BCM may reset or not persist after update
 	planBootLoader := plan.BootLoader
+	planSoftwareImageProxy := plan.SoftwareImageProxy
 	planStaticRoutes := plan.StaticRoutes
 	planFSExports := plan.FSExports
 	planRoles := plan.Roles
@@ -1156,6 +1385,42 @@ func (r *CMDeviceCategoryResource) Update(ctx context.Context, req resource.Upda
 	plan.Roles = planRoles
 	plan.GPUSettings = planGPUSettings
 	plan.Services = planServices
+
+	// CRITICAL FIX: Preserve parent_software_image from plan while keeping computed fields
+	// BCM API may return different parent_software_image UUID on reads
+	if !planSoftwareImageProxy.IsNull() && !planSoftwareImageProxy.IsUnknown() {
+		var planProxy SoftwareImageProxyModel
+		planSoftwareImageProxy.As(ctx, &planProxy, basetypes.ObjectAsOptions{})
+
+		// Only restore if we have a valid parent_software_image from plan
+		if !planProxy.ParentSoftwareImage.IsNull() && !planProxy.ParentSoftwareImage.IsUnknown() {
+			// Get the computed values from the API response (uuid, revision_id)
+			var apiProxy SoftwareImageProxyModel
+			if !plan.SoftwareImageProxy.IsNull() {
+				plan.SoftwareImageProxy.As(ctx, &apiProxy, basetypes.ObjectAsOptions{})
+			}
+
+			// Build merged proxy: user's parent_software_image + API's computed fields
+			mergedProxy := SoftwareImageProxyModel{
+				UUID:                apiProxy.UUID,
+				ParentSoftwareImage: planProxy.ParentSoftwareImage, // Preserve user config
+				RevisionID:          apiProxy.RevisionID,
+			}
+
+			// Convert back to types.Object
+			proxyObj, diagsProxy := types.ObjectValueFrom(ctx, map[string]attr.Type{
+				"uuid":                  types.StringType,
+				"parent_software_image": types.StringType,
+				"revision_id":           types.Int64Type,
+			}, mergedProxy)
+			if !diagsProxy.HasError() {
+				plan.SoftwareImageProxy = proxyObj
+				tflog.Debug(ctx, "Merged software_image_proxy: preserved parent_software_image from plan in Update", map[string]interface{}{
+					"parent_software_image": planProxy.ParentSoftwareImage.ValueString(),
+				})
+			}
+		}
+	}
 
 	tflog.Info(ctx, "Updated category resource", map[string]interface{}{
 		"name": plan.Name.ValueString(),
@@ -1461,12 +1726,66 @@ func (r *CMDeviceCategoryResource) buildAPIEntity(ctx context.Context, model *CM
 		entity["defaultGatewayMetric"] = model.DefaultGatewayMetric.ValueInt64()
 	}
 
+	// Network list fields
+	if !model.NameServers.IsNull() && !model.NameServers.IsUnknown() {
+		var servers []string
+		model.NameServers.ElementsAs(ctx, &servers, false)
+		entity["nameServers"] = servers
+	}
+	if !model.SearchDomains.IsNull() && !model.SearchDomains.IsUnknown() {
+		var domains []string
+		model.SearchDomains.ElementsAs(ctx, &domains, false)
+		entity["searchDomains"] = domains
+	}
+	if !model.TimeServers.IsNull() && !model.TimeServers.IsUnknown() {
+		var servers []string
+		model.TimeServers.ElementsAs(ctx, &servers, false)
+		entity["timeServers"] = servers
+	}
+
 	// Disk and storage
 	if !model.Disksetup.IsNull() {
 		entity["disksetup"] = model.Disksetup.ValueString()
 	}
 	if !model.Raidconf.IsNull() {
 		entity["raidconf"] = model.Raidconf.ValueString()
+	}
+
+	// I/O scheduler
+	if !model.IOScheduler.IsNull() && !model.IOScheduler.IsUnknown() {
+		entity["ioScheduler"] = model.IOScheduler.ValueString()
+	}
+
+	// FIPS setting (T019)
+	if !model.FIPS.IsNull() && !model.FIPS.IsUnknown() {
+		entity["fips"] = model.FIPS.ValueString()
+	}
+
+	// Behavioral flags (T020-T022)
+	if !model.DataNode.IsNull() && !model.DataNode.IsUnknown() {
+		entity["dataNode"] = model.DataNode.ValueBool()
+	}
+	if !model.InteractiveUser.IsNull() && !model.InteractiveUser.IsUnknown() {
+		entity["interactiveUser"] = model.InteractiveUser.ValueString()
+	}
+	if !model.UseExclusivelyFor.IsNull() && !model.UseExclusivelyFor.IsUnknown() {
+		entity["useExclusivelyFor"] = model.UseExclusivelyFor.ValueString()
+	}
+
+	// Installation additional settings (T023-T025)
+	if !model.NodeInstallerDisk.IsNull() && !model.NodeInstallerDisk.IsUnknown() {
+		entity["nodeInstallerDisk"] = model.NodeInstallerDisk.ValueBool()
+	}
+	if !model.VersionConfigFiles.IsNull() && !model.VersionConfigFiles.IsUnknown() {
+		entity["versionConfigFiles"] = model.VersionConfigFiles.ValueBool()
+	}
+	if !model.AuthenticationService.IsNull() && !model.AuthenticationService.IsUnknown() {
+		entity["authenticationService"] = model.AuthenticationService.ValueString()
+	}
+
+	// Allow networking restart
+	if !model.AllowNetworkingRestart.IsNull() && !model.AllowNetworkingRestart.IsUnknown() {
+		entity["allowNetworkingRestart"] = model.AllowNetworkingRestart.ValueBool()
 	}
 
 	// Nested object: software_image_proxy (minimal support for Phase 4)
@@ -1597,10 +1916,105 @@ func (r *CMDeviceCategoryResource) buildAPIEntity(ctx context.Context, model *CM
 		entity["services"] = []map[string]interface{}{}
 	}
 
+	// Provisioning scripts
+	if !model.Initialize.IsNull() && !model.Initialize.IsUnknown() {
+		entity["initialize"] = model.Initialize.ValueString()
+	}
+	if !model.Finalize.IsNull() && !model.Finalize.IsUnknown() {
+		entity["finalize"] = model.Finalize.ValueString()
+	}
+
+	// Exclude lists (large text fields)
+	if !model.ExcludeListFull.IsNull() && !model.ExcludeListFull.IsUnknown() {
+		entity["excludeListFull"] = model.ExcludeListFull.ValueString()
+	}
+	if !model.ExcludeListGrab.IsNull() && !model.ExcludeListGrab.IsUnknown() {
+		entity["excludeListGrab"] = model.ExcludeListGrab.ValueString()
+	}
+	if !model.ExcludeListGrabnew.IsNull() && !model.ExcludeListGrabnew.IsUnknown() {
+		entity["excludeListGrabnew"] = model.ExcludeListGrabnew.ValueString()
+	}
+	if !model.ExcludeListSync.IsNull() && !model.ExcludeListSync.IsUnknown() {
+		entity["excludeListSync"] = model.ExcludeListSync.ValueString()
+	}
+	if !model.ExcludeListUpdate.IsNull() && !model.ExcludeListUpdate.IsUnknown() {
+		entity["excludeListUpdate"] = model.ExcludeListUpdate.ValueString()
+	}
+	if !model.ExcludeListManipulateScript.IsNull() && !model.ExcludeListManipulateScript.IsUnknown() {
+		entity["excludeListManipulateScript"] = model.ExcludeListManipulateScript.ValueString()
+	}
+
+	// BMC Settings nested object
+	if !model.BMCSettings.IsNull() && !model.BMCSettings.IsUnknown() {
+		var bmcModel BMCSettingsModel
+		model.BMCSettings.As(ctx, &bmcModel, basetypes.ObjectAsOptions{})
+
+		bmcEntity := map[string]interface{}{
+			"baseType":      "BMCSettings",
+			"childType":     "",
+			"modified":      true,
+			"to_be_removed": false,
+		}
+
+		if !bmcModel.UUID.IsNull() && bmcModel.UUID.ValueString() != "" {
+			bmcEntity["uuid"] = bmcModel.UUID.ValueString()
+		} else {
+			bmcEntity["uuid"] = generateUUID()
+		}
+		if !bmcModel.UserName.IsNull() {
+			bmcEntity["userName"] = bmcModel.UserName.ValueString()
+		}
+		if !bmcModel.Password.IsNull() {
+			bmcEntity["password"] = bmcModel.Password.ValueString()
+		}
+		if !bmcModel.Privilege.IsNull() {
+			bmcEntity["privilege"] = bmcModel.Privilege.ValueString()
+		}
+		if !bmcModel.UserID.IsNull() {
+			bmcEntity["userID"] = bmcModel.UserID.ValueInt64()
+		}
+		if !bmcModel.FirmwareManageMode.IsNull() {
+			bmcEntity["firmwareManageMode"] = bmcModel.FirmwareManageMode.ValueString()
+		}
+		if !bmcModel.LeakPolicy.IsNull() {
+			bmcEntity["leakPolicy"] = bmcModel.LeakPolicy.ValueString()
+		}
+		if !bmcModel.LeakReactionDelay.IsNull() {
+			bmcEntity["leakReactionDelay"] = bmcModel.LeakReactionDelay.ValueFloat64()
+		}
+		if !bmcModel.PowerResetDelay.IsNull() {
+			bmcEntity["powerResetDelay"] = bmcModel.PowerResetDelay.ValueInt64()
+		}
+
+		entity["bmcSettings"] = bmcEntity
+	}
+
+	// Kernel modules list
+	if !model.Modules.IsNull() && !model.Modules.IsUnknown() {
+		var modules []KernelModuleCategoryModel
+		model.Modules.ElementsAs(ctx, &modules, false)
+
+		var moduleEntities []map[string]interface{}
+		for _, mod := range modules {
+			moduleEntity := map[string]interface{}{
+				"baseType":      "KernelModule",
+				"childType":     "",
+				"modified":      true,
+				"to_be_removed": false,
+			}
+			if !mod.Name.IsNull() {
+				moduleEntity["name"] = mod.Name.ValueString()
+			}
+			if !mod.Parameters.IsNull() {
+				moduleEntity["parameters"] = mod.Parameters.ValueString()
+			}
+			moduleEntities = append(moduleEntities, moduleEntity)
+		}
+		entity["modules"] = moduleEntities
+	}
+
 	// TODO: Add remaining nested objects and arrays in Phase 6 (Comprehensive Schema)
-	// - modules (array of KernelModule)
 	// - fsmounts (array of FSMount)
-	// - bmc_settings (nested BMCSettings)
 
 	return entity
 }
@@ -1687,14 +2101,17 @@ func (r *CMDeviceCategoryResource) readCategory(ctx context.Context, model *CMDe
 	model.NewNodeInstallMode = getStringValue(categoryData, "newNodeInstallMode")
 	model.InstallBootRecord = getBoolValue(categoryData, "installBootRecord")
 
+	// I/O Scheduler
+	model.IOScheduler = getStringValue(categoryData, "ioScheduler")
+
 	// Network configuration (Optional+Computed - Terraform handles plan/state automatically)
 	model.DefaultGateway = getStringValue(categoryData, "defaultGateway")
 	model.DefaultGatewayMetric = getInt64Value(categoryData, "defaultGatewayMetric")
 
-	// Network lists (set to null for now, Phase 6 will parse these)
-	model.NameServers = types.ListNull(types.StringType)
-	model.SearchDomains = types.ListNull(types.StringType)
-	model.TimeServers = types.ListNull(types.StringType)
+	// Network lists - parse from API
+	model.NameServers = parseStringListValue(ctx, categoryData, "nameServers")
+	model.SearchDomains = parseStringListValue(ctx, categoryData, "searchDomains")
+	model.TimeServers = parseStringListValue(ctx, categoryData, "timeServers")
 
 	// Parse static_routes from BCM API (camelCase → snake_case)
 	staticRouteObjectType := types.ObjectType{AttrTypes: map[string]attr.Type{
@@ -1726,6 +2143,34 @@ func (r *CMDeviceCategoryResource) readCategory(ctx context.Context, model *CMDe
 	// Disk and storage
 	model.Disksetup = getStringValue(categoryData, "disksetup")
 	model.Raidconf = getStringValue(categoryData, "raidconf")
+
+	// FIPS setting (T019)
+	model.FIPS = getStringValue(categoryData, "fips")
+
+	// Behavioral flags (T020-T022)
+	model.DataNode = getBoolValue(categoryData, "dataNode")
+	model.InteractiveUser = getStringValue(categoryData, "interactiveUser")
+	model.UseExclusivelyFor = getStringValue(categoryData, "useExclusivelyFor")
+
+	// Installation additional settings (T023-T025)
+	model.NodeInstallerDisk = getBoolValue(categoryData, "nodeInstallerDisk")
+	model.VersionConfigFiles = getBoolValue(categoryData, "versionConfigFiles")
+	model.AuthenticationService = getStringValue(categoryData, "authenticationService")
+
+	// Allow networking restart
+	model.AllowNetworkingRestart = getBoolValue(categoryData, "allowNetworkingRestart")
+
+	// Provisioning scripts
+	model.Initialize = getStringValue(categoryData, "initialize")
+	model.Finalize = getStringValue(categoryData, "finalize")
+
+	// Exclude lists
+	model.ExcludeListFull = getStringValue(categoryData, "excludeListFull")
+	model.ExcludeListGrab = getStringValue(categoryData, "excludeListGrab")
+	model.ExcludeListGrabnew = getStringValue(categoryData, "excludeListGrabnew")
+	model.ExcludeListSync = getStringValue(categoryData, "excludeListSync")
+	model.ExcludeListUpdate = getStringValue(categoryData, "excludeListUpdate")
+	model.ExcludeListManipulateScript = getStringValue(categoryData, "excludeListManipulateScript")
 
 	// Filesystem lists (set to null for now, Phase 6 will parse these)
 	// TODO Phase 6: Parse actual fsmounts from API
@@ -1772,12 +2217,34 @@ func (r *CMDeviceCategoryResource) readCategory(ctx context.Context, model *CMDe
 		model.FSExports = types.ListNull(fsExportObjectType)
 	}
 
-	// Kernel modules (use proper KernelModule object type)
+	// Parse kernel modules from API response
 	moduleObjectType := types.ObjectType{AttrTypes: map[string]attr.Type{
 		"name":       types.StringType,
 		"parameters": types.StringType,
 	}}
-	model.Modules = types.ListNull(moduleObjectType)
+	if modulesData, ok := categoryData["modules"].([]interface{}); ok && modulesData != nil {
+		var moduleModels []KernelModuleCategoryModel
+		for _, modData := range modulesData {
+			if mod, ok := modData.(map[string]interface{}); ok {
+				moduleModels = append(moduleModels, KernelModuleCategoryModel{
+					Name:       getStringValue(mod, "name"),
+					Parameters: getStringValue(mod, "parameters"),
+				})
+			}
+		}
+		if len(moduleModels) > 0 {
+			moduleList, diags := types.ListValueFrom(ctx, moduleObjectType, moduleModels)
+			if !diags.HasError() {
+				model.Modules = moduleList
+			} else {
+				model.Modules = types.ListNull(moduleObjectType)
+			}
+		} else {
+			model.Modules = types.ListNull(moduleObjectType)
+		}
+	} else {
+		model.Modules = types.ListNull(moduleObjectType)
+	}
 
 	// Parse roles from BCM API (camelCase → snake_case)
 	roleObjectType := types.ObjectType{AttrTypes: map[string]attr.Type{
@@ -1847,9 +2314,8 @@ func (r *CMDeviceCategoryResource) readCategory(ctx context.Context, model *CMDe
 		model.GPUSettings = types.ListNull(gpuSettingObjectType)
 	}
 
-	// Security and access objects (set to null for now, Phase 6 will parse these)
-	// TODO Phase 6: Parse actual BMC settings from API
-	bmcSettingsObjectType := types.ObjectType{AttrTypes: map[string]attr.Type{
+	// BMC Settings nested object - parse from API response
+	bmcSettingsObjectType := map[string]attr.Type{
 		"uuid":                 types.StringType,
 		"user_name":            types.StringType,
 		"password":             types.StringType,
@@ -1859,8 +2325,35 @@ func (r *CMDeviceCategoryResource) readCategory(ctx context.Context, model *CMDe
 		"leak_policy":          types.StringType,
 		"leak_reaction_delay":  types.Float64Type,
 		"power_reset_delay":    types.Int64Type,
-	}}
-	model.BMCSettings = types.ObjectNull(bmcSettingsObjectType.AttrTypes)
+	}
+
+	if bmcData, ok := categoryData["bmcSettings"].(map[string]interface{}); ok && bmcData != nil {
+		bmcModel := BMCSettingsModel{
+			UUID:               getStringValue(bmcData, "uuid"),
+			UserName:           getStringValue(bmcData, "userName"),
+			Password:           types.StringNull(), // Don't read back password (sensitive)
+			Privilege:          getStringValue(bmcData, "privilege"),
+			UserID:             getInt64Value(bmcData, "userID"),
+			FirmwareManageMode: getStringValue(bmcData, "firmwareManageMode"),
+			LeakPolicy:         getStringValue(bmcData, "leakPolicy"),
+			LeakReactionDelay:  getFloat64Value(bmcData, "leakReactionDelay"),
+			PowerResetDelay:    getInt64Value(bmcData, "powerResetDelay"),
+		}
+
+		bmcObj, bmcDiags := types.ObjectValueFrom(ctx, bmcSettingsObjectType, bmcModel)
+		if !bmcDiags.HasError() {
+			model.BMCSettings = bmcObj
+		} else {
+			tflog.Error(ctx, "Failed to convert bmc_settings to object", map[string]interface{}{
+				"errors": bmcDiags.Errors(),
+			})
+			model.BMCSettings = types.ObjectNull(bmcSettingsObjectType)
+		}
+	} else {
+		model.BMCSettings = types.ObjectNull(bmcSettingsObjectType)
+	}
+
+	// Other security and access objects (set to null for now, Phase 6 will parse these)
 	model.BiosSetup = types.ObjectNull(map[string]attr.Type{})
 	model.DPUSettings = types.ObjectNull(map[string]attr.Type{})
 	model.AccessSettings = types.ObjectNull(map[string]attr.Type{})
@@ -1916,4 +2409,23 @@ func (r *CMDeviceCategoryResource) readCategory(ctx context.Context, model *CMDe
 // generateUUID creates a new UUID v4 string.
 func generateUUID() string {
 	return uuid.New().String()
+}
+
+// parseStringListValue parses a string array from API response into types.List.
+// Returns a null list if the key doesn't exist or the value is empty.
+func parseStringListValue(ctx context.Context, data map[string]interface{}, key string) types.List {
+	if val, ok := data[key]; ok && val != nil {
+		if arr, ok := val.([]interface{}); ok {
+			var items []string
+			for _, item := range arr {
+				if s, ok := item.(string); ok {
+					items = append(items, s)
+				}
+			}
+			// Return list even if empty - maintains consistency with Terraform plan
+			list, _ := types.ListValueFrom(ctx, types.StringType, items)
+			return list
+		}
+	}
+	return types.ListNull(types.StringType)
 }

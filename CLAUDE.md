@@ -749,6 +749,130 @@ See `./AGENTS.md` for comprehensive Terraform Provider TDD patterns, parallel ex
 **Self-signed certs:**
 - `insecure_skip_verify = true` required for local dev
 
+### disksetup XML Schema
+
+BCM validates `disksetup` against an internal XSD schema. Key format requirements:
+
+**Root element:** `<diskSetup>` (camelCase, NOT `<disksetup>`)
+
+**Structure:**
+- `<device>` - Container for block devices and partitions
+  - `<blockdev>` - Block device path (e.g., `/dev/sda`, `/dev/vda`)
+  - `<partition>` - Partition definition with required `id` attribute
+
+**Partition attributes:**
+- `id` (required) - Unique identifier (e.g., "a0", "a1")
+- `partitiontype` (optional) - Use "esp" for EFI system partitions
+
+**Partition child elements:**
+- `<size>` - Size value: "100M", "20G", "max"
+- `<type>` - Partition type: "linux", "linux swap"
+- `<filesystem>` - FS type: "fat", "xfs", "ext4"
+- `<mountPoint>` - Mount path: "/", "/boot/efi"
+- `<mountOptions>` - Mount options: "defaults,noatime,nodiratime"
+
+**Example:**
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<diskSetup>
+  <device>
+    <blockdev>/dev/sda</blockdev>
+    <blockdev>/dev/vda</blockdev>
+    <partition id="a0" partitiontype="esp">
+      <size>100M</size>
+      <type>linux</type>
+      <filesystem>fat</filesystem>
+      <mountPoint>/boot/efi</mountPoint>
+      <mountOptions>defaults,noatime,nodiratime</mountOptions>
+    </partition>
+    <partition id="a1">
+      <size>20G</size>
+      <type>linux</type>
+      <filesystem>xfs</filesystem>
+      <mountPoint>/</mountPoint>
+      <mountOptions>defaults,noatime,nodiratime</mountOptions>
+    </partition>
+    <partition id="a2">
+      <size>max</size>
+      <type>linux</type>
+      <filesystem>xfs</filesystem>
+      <mountPoint>/local</mountPoint>
+      <mountOptions>defaults,noatime,nodiratime</mountOptions>
+    </partition>
+  </device>
+</diskSetup>
+```
+
+**raidconf field:** Currently uses empty string `""`. Valid XML format requires further BCM documentation.
+
+**Reference:** https://github.com/hashi-demo-lab/terraform-provider-bcm/issues/48
+
+**Pre-flight Validation:**
+- All resources call `ValidateEntity()` before CREATE and UPDATE operations
+- Service names: CMPart, CMDevice, CMNet, **cmkube** (lowercase exception)
+- Validation methods: validate[ResourceType] (e.g., validateSoftwareImage, validateCategory)
+- ERROR severity halts operation, WARNING displays advisory but continues
+- Zero UUID errors automatically filtered for CREATE operations
+
+### Validation Pattern
+
+BCM provides server-side validation through validate* API methods. The provider calls these before CREATE/UPDATE to provide immediate feedback with field-specific error messages.
+
+**Integration Pattern:**
+
+```go
+// Build API entity first
+entity := buildResourceAPIEntity(ctx, &plan, uuid)
+
+// Pre-flight validation
+validationErrors, err := r.client.ValidateEntity(ctx, "ServiceName", "validateMethod", entity, isCreate)
+if err != nil {
+    resp.Diagnostics.AddError("Validation API Error", err.Error())
+    return
+}
+
+// Process validation results
+hasErrors := false
+for _, valErr := range validationErrors {
+    if valErr.IsError() {
+        resp.Diagnostics.AddError(
+            fmt.Sprintf("Validation Error: %s", valErr.Field),
+            valErr.Message,
+        )
+        hasErrors = true
+    } else if valErr.IsWarning() {
+        resp.Diagnostics.AddWarning(
+            fmt.Sprintf("Validation Warning: %s", valErr.Field),
+            valErr.Message,
+        )
+    }
+}
+
+// Halt if errors found
+if hasErrors {
+    return
+}
+
+// Continue with CREATE/UPDATE operation...
+```
+
+**Service Name and Method Reference:**
+
+| Resource Type | Service Name | Validation Method | isCreate (CREATE) | isCreate (UPDATE) |
+|---------------|--------------|-------------------|-------------------|-------------------|
+| Software Images | CMPart | validateSoftwareImage | true | false |
+| Categories | CMDevice | validateCategory | true | false |
+| Devices | CMDevice | validateDevice | true | false |
+| Networks | CMNet | validateNetwork | true | false |
+| Kubernetes Clusters | **cmkube** | validateKubeCluster | true | false |
+
+**Important Notes:**
+- `cmkube` uses **lowercase** service name (exception to CamelCase pattern)
+- `isCreate=true` filters Zero UUID errors (expected during CREATE)
+- `isCreate=false` preserves all validation errors (UPDATE operations)
+- ERROR severity: Operation halts, user must fix configuration
+- WARNING severity: Advisory displayed, operation continues
+
 ### Common Development Patterns
 
 **Adding a New Data Source:**

@@ -37,7 +37,7 @@ func main() {
 		fmt.Printf("Error: Failed to connect to BCM: %v\n", err)
 		os.Exit(1)
 	}
-	fmt.Println("✓ Connected successfully\n")
+	fmt.Println("✓ Connected successfully")
 
 	// Get all software images
 	fmt.Println("Fetching all software images...")

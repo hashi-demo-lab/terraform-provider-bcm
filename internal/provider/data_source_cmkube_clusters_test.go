@@ -14,7 +14,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
 )
 
-// T005: TestAccCMKubeClustersDataSource_Basic tests listing all clusters without filters
+// T005: TestAccCMKubeClustersDataSource_Basic tests listing all clusters without filters.
 func TestAccCMKubeClustersDataSource_Basic(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -54,7 +54,7 @@ data "bcm_cmkube_clusters" "test" {}
 	)
 }
 
-// T006: TestAccCMKubeClustersDataSource_FilterByName tests filtering by name pattern
+// T006: TestAccCMKubeClustersDataSource_FilterByName tests filtering by name pattern.
 func TestAccCMKubeClustersDataSource_FilterByName(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -99,7 +99,7 @@ data "bcm_cmkube_clusters" "test" {
 	)
 }
 
-// T007: TestAccCMKubeClustersDataSource_FilterByVersion tests filtering by Kubernetes version
+// T007: TestAccCMKubeClustersDataSource_FilterByVersion tests filtering by Kubernetes version.
 func TestAccCMKubeClustersDataSource_FilterByVersion(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -144,7 +144,7 @@ data "bcm_cmkube_clusters" "test" {
 	)
 }
 
-// T008: TestAccCMKubeClustersDataSource_FilterByMasterNode tests filtering by master node UUID
+// T008: TestAccCMKubeClustersDataSource_FilterByMasterNode tests filtering by master node UUID.
 func TestAccCMKubeClustersDataSource_FilterByMasterNode(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -189,7 +189,7 @@ data "bcm_cmkube_clusters" "test" {
 	)
 }
 
-// T009: TestAccCMKubeClustersDataSource_MultipleFilters tests combining multiple filters with AND logic
+// T009: TestAccCMKubeClustersDataSource_MultipleFilters tests combining multiple filters with AND logic.
 func TestAccCMKubeClustersDataSource_MultipleFilters(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -236,7 +236,7 @@ data "bcm_cmkube_clusters" "test" {
 	)
 }
 
-// T010: TestAccCMKubeClustersDataSource_EmptyResults tests graceful handling of no matches
+// T010: TestAccCMKubeClustersDataSource_EmptyResults tests graceful handling of no matches.
 func TestAccCMKubeClustersDataSource_EmptyResults(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -259,7 +259,7 @@ func TestAccCMKubeClustersDataSource_EmptyResults(t *testing.T) {
 	})
 }
 
-// T011: TestAccCMKubeClustersDataSource_NullFields tests null handling for optional fields
+// T011: TestAccCMKubeClustersDataSource_NullFields tests null handling for optional fields.
 func TestAccCMKubeClustersDataSource_NullFields(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },

@@ -206,8 +206,47 @@ func (r *CMNetNetworkResource) Create(ctx context.Context, req resource.CreateRe
 		return
 	}
 
-	// Capture the generated UUID from the entity (Networks require UUID even for create)
-	generatedUUID := entity["uuid"].(string)
+	// Capture the generated UUID from the entity (Networks require UUID even for create).
+	generatedUUID, ok := entity["uuid"].(string)
+	if !ok {
+		resp.Diagnostics.AddError(
+			"Internal Error",
+			"Failed to extract UUID from created entity",
+		)
+		return
+	}
+
+	// Pre-flight validation: Call validateNetwork before CREATE
+	validationErrors, err := r.client.ValidateEntity(ctx, "CMNet", "validateNetwork", entity, true)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Validation API Error",
+			fmt.Sprintf("Could not validate network '%s': %s", plan.Name.ValueString(), err.Error()),
+		)
+		return
+	}
+
+	// Process validation results
+	hasErrors := false
+	for _, valErr := range validationErrors {
+		if valErr.IsError() {
+			resp.Diagnostics.AddError(
+				fmt.Sprintf("Validation Error: %s", valErr.Field),
+				valErr.Message,
+			)
+			hasErrors = true
+		} else if valErr.IsWarning() {
+			resp.Diagnostics.AddWarning(
+				fmt.Sprintf("Validation Warning: %s", valErr.Field),
+				valErr.Message,
+			)
+		}
+	}
+
+	// Halt if validation errors found
+	if hasErrors {
+		return
+	}
 
 	tflog.Debug(ctx, "Creating network via BCM API", map[string]interface{}{
 		"name": plan.Name.ValueString(),
@@ -356,6 +395,38 @@ func (r *CMNetNetworkResource) Update(ctx context.Context, req resource.UpdateRe
 	// Include revision from state for concurrency control
 	entity["revision"] = plan.Revision.ValueString()
 
+	// Pre-flight validation: Call validateNetwork before UPDATE
+	validationErrors, err := r.client.ValidateEntity(ctx, "CMNet", "validateNetwork", entity, false)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Validation API Error",
+			fmt.Sprintf("Could not validate network '%s': %s", plan.Name.ValueString(), err.Error()),
+		)
+		return
+	}
+
+	// Process validation results
+	hasErrors := false
+	for _, valErr := range validationErrors {
+		if valErr.IsError() {
+			resp.Diagnostics.AddError(
+				fmt.Sprintf("Validation Error: %s", valErr.Field),
+				valErr.Message,
+			)
+			hasErrors = true
+		} else if valErr.IsWarning() {
+			resp.Diagnostics.AddWarning(
+				fmt.Sprintf("Validation Warning: %s", valErr.Field),
+				valErr.Message,
+			)
+		}
+	}
+
+	// Halt if validation errors found
+	if hasErrors {
+		return
+	}
+
 	tflog.Debug(ctx, "Updating network via BCM API", map[string]interface{}{
 		"uuid": plan.UUID.ValueString(),
 		"name": plan.Name.ValueString(),
@@ -426,8 +497,9 @@ func (r *CMNetNetworkResource) ImportState(ctx context.Context, req resource.Imp
 
 // Helper functions
 
-// buildNetworkAPIEntity converts Terraform model to BCM API entity
+// buildNetworkAPIEntity converts Terraform model to BCM API entity.
 func buildNetworkAPIEntity(ctx context.Context, data *CMNetNetworkResourceModel, uuid string) (map[string]interface{}, error) {
+	_ = ctx // ctx is unused but required by signature
 	entity := map[string]interface{}{
 		"baseType":      "Network",
 		"childType":     "",
@@ -485,8 +557,9 @@ func buildNetworkAPIEntity(ctx context.Context, data *CMNetNetworkResourceModel,
 	return entity, nil
 }
 
-// mapNetworkAPIResponseToState maps BCM API response to Terraform state
+// mapNetworkAPIResponseToState maps BCM API response to Terraform state.
 func mapNetworkAPIResponseToState(ctx context.Context, apiData map[string]interface{}, data *CMNetNetworkResourceModel) {
+	_ = ctx // ctx is unused but required by signature
 	// Identity fields
 	if uuid, ok := apiData["uuid"].(string); ok {
 		data.UUID = types.StringValue(uuid)
@@ -578,7 +651,7 @@ func mapNetworkAPIResponseToState(ctx context.Context, apiData map[string]interf
 	data.ToBeRemoved = getBoolValue(apiData, "to_be_removed")
 }
 
-// parseCIDR converts CIDR notation to baseAddress and netmaskBits
+// parseCIDR converts CIDR notation to baseAddress and netmaskBits.
 func parseCIDR(cidr string) (baseAddress string, netmaskBits int, err error) {
 	ip, ipnet, err := net.ParseCIDR(cidr)
 	if err != nil {
@@ -590,18 +663,18 @@ func parseCIDR(cidr string) (baseAddress string, netmaskBits int, err error) {
 	return baseAddress, maskBits, nil
 }
 
-// formatCIDR reconstructs CIDR from baseAddress and netmaskBits
+// formatCIDR reconstructs CIDR from baseAddress and netmaskBits.
 func formatCIDR(baseAddress string, netmaskBits int64) string {
 	return fmt.Sprintf("%s/%d", baseAddress, netmaskBits)
 }
 
-// isDHCPEnabled derives DHCP status from range configuration
+// isDHCPEnabled derives DHCP status from range configuration.
 func isDHCPEnabled(rangeStart, rangeEnd string) bool {
 	return rangeStart != "" && rangeStart != "0.0.0.0" &&
 		rangeEnd != "" && rangeEnd != "0.0.0.0"
 }
 
-// cidrRegex returns a compiled regex for CIDR notation validation
+// cidrRegex returns a compiled regex for CIDR notation validation.
 func cidrRegex() *regexp.Regexp {
 	return regexp.MustCompile(`^(\d{1,3}\.){3}\d{1,3}/\d{1,2}$`)
 }

@@ -492,6 +492,20 @@ func getInt64Value(data map[string]interface{}, key string) types.Int64 {
 	return types.Int64Null()
 }
 
+func getFloat64Value(data map[string]interface{}, key string) types.Float64 {
+	if val, ok := data[key]; ok && val != nil {
+		switch v := val.(type) {
+		case float64:
+			return types.Float64Value(v)
+		case int64:
+			return types.Float64Value(float64(v))
+		case int:
+			return types.Float64Value(float64(v))
+		}
+	}
+	return types.Float64Null()
+}
+
 // matchesSoftwareImageFilter checks if an image matches the filter criteria.
 // Multiple filters use AND logic - the image must match all specified filters.
 //

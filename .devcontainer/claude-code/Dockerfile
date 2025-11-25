@@ -7,7 +7,7 @@ FROM node:22-slim
 ARG TZ \
     USERNAME=node \
     GO_VERSION="1.24.0" \
-    TERRAFORM_VERSION="1.13.5" \
+    TERRAFORM_VERSION="1.14.0" \
     TERRAFORM_DOCS_VERSION="0.20.0" \
     TFSEC_VERSION="1.28.14" \
     TERRASCAN_VERSION="1.19.9" \
@@ -96,8 +96,75 @@ RUN sh -c "$(wget -O- https://github.com/deluan/zsh-in-docker/releases/download/
         -p git \
         -a "export PROMPT_COMMAND='history -a' && export HISTFILE=/commandhistory/.bash_history" \
         -x && \
-    npm install -g @anthropic-ai/claude-code && \
+    npm install -g @anthropic-ai/claude-code ccstatusline && \
     curl -LsSf https://astral.sh/uv/install.sh | sh && \
     echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc && \
     ~/.local/bin/uv tool install pre-commit --with pre-commit-uv && \
     ~/.local/bin/uv tool install specify-cli --from git+https://github.com/github/spec-kit.git
+
+# Configure ccstatusline with Powerline enabled
+RUN mkdir -p /home/node/.config/ccstatusline && \
+    echo '{\
+  "version": 3,\
+  "lines": [\
+    [\
+      {\
+        "id": "1",\
+        "type": "model",\
+        "color": "cyan"\
+      },\
+      {\
+        "id": "2",\
+        "type": "separator"\
+      },\
+      {\
+        "id": "3",\
+        "type": "context-length",\
+        "color": "brightBlack"\
+      },\
+      {\
+        "id": "4",\
+        "type": "separator"\
+      },\
+      {\
+        "id": "5",\
+        "type": "git-branch",\
+        "color": "magenta"\
+      },\
+      {\
+        "id": "6",\
+        "type": "separator"\
+      },\
+      {\
+        "id": "7",\
+        "type": "git-changes",\
+        "color": "yellow"\
+      }\
+    ],\
+    [],\
+    []\
+  ],\
+  "flexMode": "full-minus-40",\
+  "compactThreshold": 60,\
+  "colorLevel": 2,\
+  "inheritSeparatorColors": false,\
+  "globalBold": false,\
+  "powerline": {\
+    "enabled": true,\
+    "separators": [\
+      ""\
+    ],\
+    "separatorInvertBackground": [\
+      false\
+    ],\
+    "startCaps": [""],\
+    "endCaps": [""],\
+    "autoAlign": true,\
+    "theme": "gruvbox"\
+  },\
+  "defaultPadding": "     "\
+}' > /home/node/.config/ccstatusline/settings.json
+
+# Add clauded alias for claude --dangerously-skip-permissions
+RUN echo 'alias clauded="claude --dangerously-skip-permissions"' >> /home/node/.zshrc && \
+    chown node:node /home/node/.zshrc

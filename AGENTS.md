@@ -10,7 +10,7 @@
 
 **Stack**: Terraform Plugin Framework v1.16+ | Go 1.24+ | terraform-plugin-testing
 
-Use `terraform-provider-design` skill for design principles and best practices.
+Use `terraform-provider-tests` skill for design principles and best practices.
 if you need to geenrate a report and don't have a given path then use /workspace/ai_reports/
 
 ## Parallel Execution Pattern

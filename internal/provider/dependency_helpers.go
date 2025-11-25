@@ -9,14 +9,14 @@ import (
 	"fmt"
 )
 
-// ResourceIdentifier uniquely identifies a BCM resource in dependency checks
+// ResourceIdentifier uniquely identifies a BCM resource in dependency checks.
 type ResourceIdentifier struct {
 	UUID string
 	Name string
 	Type string
 }
 
-// DependencyCheckResult encapsulates results of dependency validation
+// DependencyCheckResult encapsulates results of dependency validation.
 type DependencyCheckResult struct {
 	HasDependencies bool
 	DependentCount  int
@@ -30,7 +30,7 @@ type DependencyCheckResult struct {
 // This function queries all devices via CMDevice.getNodes and filters client-side
 // by category UUID since BCM API does not support server-side filtering.
 //
-// Performance: Typical response < 1s, large clusters (1000+ devices) < 5s
+// Performance: Typical response < 1s, large clusters (1000+ devices) < 5s.
 func CheckDevicesInCategory(ctx context.Context, client *BCMClient, categoryUUID string) (*DependencyCheckResult, error) {
 	// Query all devices from BCM
 	body, err := client.CallJSONRPC(ctx, "CMDevice", "getNodes")
@@ -88,7 +88,7 @@ func CheckDevicesInCategory(ctx context.Context, client *BCMClient, categoryUUID
 //
 // IMPORTANT: The category.softwareimage field contains the IMAGE NAME (string), not UUID.
 //
-// Performance: Typical response < 1s, large clusters (100+ categories) < 2s
+// Performance: Typical response < 1s, large clusters (100+ categories) < 2s.
 func CheckCategoriesUsingImage(ctx context.Context, client *BCMClient, imageName string) (*DependencyCheckResult, error) {
 	// Query all categories from BCM
 	body, err := client.CallJSONRPC(ctx, "CMDevice", "getCategories")

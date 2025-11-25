@@ -105,11 +105,13 @@ python3 scripts/analyze_gap.py ./internal/provider/ --output ./ai_reports/tf_pro
 - ✅ Missing import tests
 - ✅ Missing idempotency checks
 - ✅ Modern pattern adoption statistics
+- ✅ ID consistency tracking issues
 - ✅ Prioritized recommendations
 
 ### Output
 
 Markdown report with:
+- Codebase statistics (line counts by file type, test-to-impl ratio)
 - Executive summary with overall grade (A/B/C)
 - File-by-file analysis with status
 - Prioritized recommendations (High/Medium/Low)
@@ -418,6 +420,107 @@ A fully modernized test file has:
 - ✅ ID consistency tracking with `CompareValue`
 - ✅ All tests compile and pass
 - ✅ All examples validate successfully
+
+## ID Consistency Tracking
+
+The analyzer detects inconsistent usage of the `.id` property across test steps.
+
+### Why It Matters
+
+Resource IDs should remain stable across:
+- Initial creation
+- Import operations
+- Update operations
+
+Inconsistent ID handling can indicate:
+- Resource recreation instead of in-place updates
+- Import state mismatches
+- State management bugs
+
+### What the Analyzer Detects
+
+| Issue | Description | Severity |
+|-------|-------------|----------|
+| Missing CompareValue | Multiple test steps without ID consistency tracking | High |
+| Partial ID tracking | Some steps track ID, others don't | Medium |
+| Legacy ID checks | Uses `TestCheckResourceAttr` for "id" instead of modern patterns | Medium |
+| No ID verification | Resource tests that never verify ID | High |
+| Modern without tracking | Uses `ExpectKnownValue` for ID but no `CompareValue` | Low |
+
+### Correct Pattern
+
+```go
+func TestAccResource_Complete(t *testing.T) {
+    // Initialize ID tracker BEFORE Steps
+    compareID := statecheck.CompareValue(compare.ValuesSame())
+
+    resource.Test(t, resource.TestCase{
+        Steps: []resource.TestStep{
+            // Step 1: Create - track ID
+            {
+                Config: testAccResourceConfig(name),
+                ConfigStateChecks: []statecheck.StateCheck{
+                    compareID.AddStateValue("example_resource.test", tfjsonpath.New("id")),
+                },
+            },
+            // Step 2: Import - track ID
+            {
+                ResourceName:      "example_resource.test",
+                ImportState:       true,
+                ImportStateVerify: true,
+                ConfigStateChecks: []statecheck.StateCheck{
+                    compareID.AddStateValue("example_resource.test", tfjsonpath.New("id")),
+                },
+            },
+            // Step 3: Update - track ID
+            {
+                Config: testAccResourceConfig(name, "updated"),
+                ConfigStateChecks: []statecheck.StateCheck{
+                    compareID.AddStateValue("example_resource.test", tfjsonpath.New("id")),
+                },
+            },
+        },
+    })
+}
+```
+
+### Common Anti-Patterns
+
+**Anti-pattern 1: Legacy ID checks**
+```go
+// ❌ Bad - uses legacy pattern
+Check: resource.ComposeAggregateTestCheckFunc(
+    resource.TestCheckResourceAttrSet("example_resource.test", "id"),
+),
+```
+
+**Anti-pattern 2: Inconsistent tracking**
+```go
+// ❌ Bad - only tracks ID in Create step, not Import/Update
+Steps: []resource.TestStep{
+    {
+        Config: testAccConfig(name),
+        ConfigStateChecks: []statecheck.StateCheck{
+            compareID.AddStateValue("example_resource.test", tfjsonpath.New("id")), // ✅
+        },
+    },
+    {
+        ResourceName: "example_resource.test",
+        ImportState:  true,
+        // ❌ Missing: compareID.AddStateValue
+    },
+    {
+        Config: testAccConfig(name, "updated"),
+        // ❌ Missing: compareID.AddStateValue
+    },
+}
+```
+
+**Anti-pattern 3: No tracking at all**
+```go
+// ❌ Bad - multiple steps with no ID consistency tracking
+compareID := statecheck.CompareValue(compare.ValuesSame()) // Declared but never used!
+```
 
 ## Common Pitfalls
 

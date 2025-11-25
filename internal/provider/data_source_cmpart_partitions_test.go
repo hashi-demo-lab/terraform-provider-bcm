@@ -82,7 +82,7 @@ func TestAccCMPartPartitionsDataSource_NoMatches(t *testing.T) {
 }
 
 // TestAccCMPartPartitionsDataSource_ComputedFields verifies all partition attributes are exposed with correct types.
-// This test assumes at least one partition exists in the BCM cluster (typical for any configured cluster)
+// This test assumes at least one partition exists in the BCM cluster (typical for any configured cluster).
 func TestAccCMPartPartitionsDataSource_ComputedFields(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -150,8 +150,8 @@ data "bcm_cmpart_partitions" "test" {
 	)
 }
 
-// TestAccCMPartPartitionsDataSource_AttributeTypes verifies all attribute types are correctly populated
-// This test provides comprehensive type verification for String, Int64, Bool, and List attributes
+// TestAccCMPartPartitionsDataSource_AttributeTypes verifies all attribute types are correctly populated.
+// This test provides comprehensive type verification for String, Int64, Bool, and List attributes.
 func TestAccCMPartPartitionsDataSource_AttributeTypes(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -193,8 +193,8 @@ func TestAccCMPartPartitionsDataSource_AttributeTypes(t *testing.T) {
 	})
 }
 
-// TestAccCMPartPartitionsDataSource_ListAttributes verifies List[String] attributes are properly unmarshaled
-// Tests all four List-type attributes: admin_email, time_servers, search_domains, name_servers
+// TestAccCMPartPartitionsDataSource_ListAttributes verifies List[String] attributes are properly unmarshaled.
+// Tests all four List-type attributes: admin_email, time_servers, search_domains, name_servers.
 func TestAccCMPartPartitionsDataSource_ListAttributes(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -296,8 +296,8 @@ func TestAccCMPartPartitionsDataSource_FilterCaseInsensitive(t *testing.T) {
 	})
 }
 
-// TestAccCMPartPartitionsDataSource_FilterEmptyString verifies empty string filter returns all partitions
-// Edge case: Empty filter should behave same as no filter
+// TestAccCMPartPartitionsDataSource_FilterEmptyString verifies empty string filter returns all partitions.
+// Edge case: Empty filter should behave same as no filter.
 func TestAccCMPartPartitionsDataSource_FilterEmptyString(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -324,8 +324,8 @@ func TestAccCMPartPartitionsDataSource_FilterEmptyString(t *testing.T) {
 	})
 }
 
-// TestAccCMPartPartitionsDataSource_FilterSubsetProperty verifies filtered results are subset of unfiltered
-// Mathematical property: count(filtered) <= count(all)
+// TestAccCMPartPartitionsDataSource_FilterSubsetProperty verifies filtered results are subset of unfiltered.
+// Mathematical property: count(filtered) <= count(all).
 func TestAccCMPartPartitionsDataSource_FilterSubsetProperty(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },

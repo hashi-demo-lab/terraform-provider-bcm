@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -226,7 +227,7 @@ func TestAccCMNetNetwork_Update(t *testing.T) {
 	})
 }
 
-// TestAccCMNetNetwork_DriftDetection verifies Terraform detects external modifications
+// TestAccCMNetNetwork_DriftDetection verifies Terraform detects external modifications.
 func TestAccCMNetNetwork_DriftDetection(t *testing.T) {
 	networkName := generateUniqueTestName("tftest-network-drift")
 
@@ -322,8 +323,11 @@ func TestAccCMNetNetwork_DriftDetection(t *testing.T) {
 func testAccCheckCMNetNetworkDestroy(s *terraform.State) error {
 	// Create BCM client using shared helper
 	client := createTestBCMClient(&testing.T{})
+	ctx := context.Background()
 
 	resourcesChecked := 0
+	var errors []string
+
 	for _, rs := range s.RootModule().Resources {
 		if rs.Type != "bcm_cmnet_network" {
 			continue
@@ -333,22 +337,32 @@ func testAccCheckCMNetNetworkDestroy(s *terraform.State) error {
 		name := rs.Primary.Attributes["name"]
 		uuid := rs.Primary.Attributes["uuid"]
 
-		// Add 10s timeout context per API call
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
+		// Verify network deleted with exponential backoff (4 retries)
+		deleted := verifyResourceDeleted(
+			ctx,
+			client,
+			"cmnet",
+			"getNetwork",
+			name,
+			4, // retry count with exponential backoff
+		)
 
-		// Attempt to read the network
-		body, err := client.CallJSONRPC(ctx, "cmnet", "getNetwork", name)
-
-		// If no error and response contains data, resource still exists
-		if err == nil {
-			var networkData map[string]interface{}
-			if json.Unmarshal(body, &networkData) == nil && len(networkData) > 0 {
-				return fmt.Errorf("network still exists after destroy: name=%s uuid=%s response=%s",
-					name, uuid, string(body))
-			}
+		if !deleted {
+			errors = append(errors, fmt.Sprintf(
+				"Network still exists after destroy. Name: %s, UUID: %s, Retries: 4",
+				name, uuid))
 		}
-		// If error or empty response, resource is gone (expected)
+	}
+
+	if len(errors) > 0 {
+		return fmt.Errorf("CheckDestroy failures:\n  - %s\n  - Verified: %d networks",
+			strings.Join(errors, "\n  - "),
+			resourcesChecked)
+	}
+
+	// Log number of resources checked for debugging
+	if resourcesChecked > 0 {
+		fmt.Printf("[DEBUG] CheckDestroy verified %d network resources were deleted\n", resourcesChecked)
 	}
 
 	return nil

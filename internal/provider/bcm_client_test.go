@@ -622,3 +622,262 @@ func TestCallJSONRPC_ValidationError(t *testing.T) {
 		t.Errorf("Expected error to mention path field, got: %v", err)
 	}
 }
+
+// TestValidateEntity_Success tests successful validation with empty array response.
+func TestValidateEntity_Success(t *testing.T) {
+	callCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		if callCount == 1 {
+			// Login
+			http.SetCookie(w, &http.Cookie{Name: "cm-login-token", Value: "token"})
+			w.WriteHeader(http.StatusOK)
+			if _, err := w.Write([]byte("true")); err != nil {
+				t.Logf("Failed to write login response: %v", err)
+			}
+		} else {
+			// Validation success - empty array
+			w.WriteHeader(http.StatusOK)
+			if _, err := w.Write([]byte("[]")); err != nil {
+				t.Logf("Failed to write validation response: %v", err)
+			}
+		}
+	}))
+	defer server.Close()
+
+	ctx := context.Background()
+	client, _ := NewBCMClient(ctx, server.URL, "user", "pass", true, 30)
+
+	// Call ValidateEntity with valid entity
+	entity := map[string]interface{}{"name": "test-image", "path": "/valid/path"}
+	validationErrors, err := client.ValidateEntity(ctx, "CMPart", "validateSoftwareImage", entity, true)
+
+	// Verify no errors
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+	if len(validationErrors) != 0 {
+		t.Errorf("Expected 0 validation errors, got %d", len(validationErrors))
+	}
+}
+
+// TestValidateEntity_ErrorResponse tests validation with ERROR severity response.
+func TestValidateEntity_ErrorResponse(t *testing.T) {
+	callCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		if callCount == 1 {
+			// Login
+			http.SetCookie(w, &http.Cookie{Name: "cm-login-token", Value: "token"})
+			w.WriteHeader(http.StatusOK)
+			if _, err := w.Write([]byte("true")); err != nil {
+				t.Logf("Failed to write login response: %v", err)
+			}
+		} else {
+			// Validation error with ERROR severity
+			w.WriteHeader(http.StatusOK)
+			validationResponse := `[{
+				"baseType": "Validation",
+				"Field": "SOLSpeed",
+				"Message": "SOL speed must be one of: 9600, 19200, 38400, 57600, 115200",
+				"ErrorCode": "BAD_VALUE",
+				"Severity": "ERROR",
+				"EntityUUID": ""
+			}]`
+			if _, err := w.Write([]byte(validationResponse)); err != nil {
+				t.Logf("Failed to write validation response: %v", err)
+			}
+		}
+	}))
+	defer server.Close()
+
+	ctx := context.Background()
+	client, _ := NewBCMClient(ctx, server.URL, "user", "pass", true, 30)
+
+	entity := map[string]interface{}{"name": "test-image", "SOLSpeed": 999999}
+	validationErrors, err := client.ValidateEntity(ctx, "CMPart", "validateSoftwareImage", entity, true)
+
+	// Verify validation errors returned
+	if err != nil {
+		t.Fatalf("Expected no API error, got: %v", err)
+	}
+	if len(validationErrors) != 1 {
+		t.Fatalf("Expected 1 validation error, got %d", len(validationErrors))
+	}
+
+	// Verify error details
+	valErr := validationErrors[0]
+	if valErr.Field != "SOLSpeed" {
+		t.Errorf("Expected Field 'SOLSpeed', got '%s'", valErr.Field)
+	}
+	if valErr.Severity != "ERROR" {
+		t.Errorf("Expected Severity 'ERROR', got '%s'", valErr.Severity)
+	}
+	if !valErr.IsError() {
+		t.Error("Expected IsError() to return true for ERROR severity")
+	}
+	if valErr.IsWarning() {
+		t.Error("Expected IsWarning() to return false for ERROR severity")
+	}
+}
+
+// TestValidateEntity_WarningResponse tests validation with WARNING severity response.
+func TestValidateEntity_WarningResponse(t *testing.T) {
+	callCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		if callCount == 1 {
+			// Login
+			http.SetCookie(w, &http.Cookie{Name: "cm-login-token", Value: "token"})
+			w.WriteHeader(http.StatusOK)
+			if _, err := w.Write([]byte("true")); err != nil {
+				t.Logf("Failed to write login response: %v", err)
+			}
+		} else {
+			// Validation warning with WARNING severity
+			w.WriteHeader(http.StatusOK)
+			validationResponse := `[{
+				"baseType": "Validation",
+				"Field": "path",
+				"Message": "The software image path does not exist on the server",
+				"ErrorCode": "WARNING",
+				"Severity": "WARNING",
+				"EntityUUID": ""
+			}]`
+			if _, err := w.Write([]byte(validationResponse)); err != nil {
+				t.Logf("Failed to write validation response: %v", err)
+			}
+		}
+	}))
+	defer server.Close()
+
+	ctx := context.Background()
+	client, _ := NewBCMClient(ctx, server.URL, "user", "pass", true, 30)
+
+	entity := map[string]interface{}{"name": "test-image", "path": "/nonexistent/path"}
+	validationErrors, err := client.ValidateEntity(ctx, "CMPart", "validateSoftwareImage", entity, true)
+
+	// Verify validation warnings returned
+	if err != nil {
+		t.Fatalf("Expected no API error, got: %v", err)
+	}
+	if len(validationErrors) != 1 {
+		t.Fatalf("Expected 1 validation warning, got %d", len(validationErrors))
+	}
+
+	// Verify warning details
+	valErr := validationErrors[0]
+	if valErr.Field != "path" {
+		t.Errorf("Expected Field 'path', got '%s'", valErr.Field)
+	}
+	if valErr.Severity != "WARNING" {
+		t.Errorf("Expected Severity 'WARNING', got '%s'", valErr.Severity)
+	}
+	if valErr.IsError() {
+		t.Error("Expected IsError() to return false for WARNING severity")
+	}
+	if !valErr.IsWarning() {
+		t.Error("Expected IsWarning() to return true for WARNING severity")
+	}
+}
+
+// TestValidateEntity_ZeroUUIDFiltering tests Zero UUID filtering for CREATE operations.
+func TestValidateEntity_ZeroUUIDFiltering(t *testing.T) {
+	callCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		if callCount == 1 {
+			// Login
+			http.SetCookie(w, &http.Cookie{Name: "cm-login-token", Value: "token"})
+			w.WriteHeader(http.StatusOK)
+			if _, err := w.Write([]byte("true")); err != nil {
+				t.Logf("Failed to write login response: %v", err)
+			}
+		} else {
+			// Validation response with Zero UUID error (expected during CREATE)
+			w.WriteHeader(http.StatusOK)
+			validationResponse := `[
+				{
+					"baseType": "Validation",
+					"Field": "uuid",
+					"Message": "Zero UUID not allowed",
+					"ErrorCode": "NOT_NULL",
+					"Severity": "ERROR",
+					"EntityUUID": ""
+				},
+				{
+					"baseType": "Validation",
+					"Field": "path",
+					"Message": "Path is required",
+					"ErrorCode": "NOT_NULL",
+					"Severity": "ERROR",
+					"EntityUUID": ""
+				}
+			]`
+			if _, err := w.Write([]byte(validationResponse)); err != nil {
+				t.Logf("Failed to write validation response: %v", err)
+			}
+		}
+	}))
+	defer server.Close()
+
+	ctx := context.Background()
+	client, _ := NewBCMClient(ctx, server.URL, "user", "pass", true, 30)
+
+	entity := map[string]interface{}{"name": "test-image"}
+
+	// Test CREATE (isCreate=true) - should filter Zero UUID error
+	validationErrors, err := client.ValidateEntity(ctx, "CMPart", "validateSoftwareImage", entity, true)
+	if err != nil {
+		t.Fatalf("Expected no API error, got: %v", err)
+	}
+	if len(validationErrors) != 1 {
+		t.Fatalf("Expected 1 validation error after filtering, got %d", len(validationErrors))
+	}
+	if validationErrors[0].Field == "uuid" {
+		t.Error("Expected Zero UUID error to be filtered for CREATE operation")
+	}
+	if validationErrors[0].Field != "path" {
+		t.Errorf("Expected remaining error to be for 'path', got '%s'", validationErrors[0].Field)
+	}
+}
+
+// TestValidateEntity_MalformedResponse tests handling of malformed validation response.
+func TestValidateEntity_MalformedResponse(t *testing.T) {
+	callCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		if callCount == 1 {
+			// Login
+			http.SetCookie(w, &http.Cookie{Name: "cm-login-token", Value: "token"})
+			w.WriteHeader(http.StatusOK)
+			if _, err := w.Write([]byte("true")); err != nil {
+				t.Logf("Failed to write login response: %v", err)
+			}
+		} else {
+			// Malformed validation response (not an array)
+			w.WriteHeader(http.StatusOK)
+			if _, err := w.Write([]byte(`{"error": "unexpected"}`)); err != nil {
+				t.Logf("Failed to write malformed response: %v", err)
+			}
+		}
+	}))
+	defer server.Close()
+
+	ctx := context.Background()
+	client, _ := NewBCMClient(ctx, server.URL, "user", "pass", true, 30)
+
+	entity := map[string]interface{}{"name": "test-image"}
+	validationErrors, err := client.ValidateEntity(ctx, "CMPart", "validateSoftwareImage", entity, true)
+
+	// Verify error returned for malformed response
+	if err == nil {
+		t.Fatal("Expected error for malformed response, got nil")
+	}
+	if !strings.Contains(err.Error(), "expected array") && !strings.Contains(err.Error(), "unexpected") {
+		t.Errorf("Expected error to mention unexpected format, got: %v", err)
+	}
+	if len(validationErrors) != 0 {
+		t.Errorf("Expected 0 validation errors on API error, got %d", len(validationErrors))
+	}
+}

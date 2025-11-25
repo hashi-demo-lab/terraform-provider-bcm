@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-testing/compare"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
 	"github.com/hashicorp/terraform-plugin-testing/plancheck"
@@ -24,6 +25,9 @@ func TestAccCMDeviceDevice_Idempotency(t *testing.T) {
 	imageName := generateUniqueTestName("tftest-image-idempotent")
 	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 	mac := generateUniqueMAC()
+
+	// ID consistency tracking across test steps
+	compareID := statecheck.CompareValue(compare.ValuesSame())
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -59,6 +63,10 @@ func TestAccCMDeviceDevice_Idempotency(t *testing.T) {
 						tfjsonpath.New("category"),
 						knownvalue.NotNull(),
 					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Step 2: Verify idempotency - no changes expected
@@ -69,6 +77,12 @@ func TestAccCMDeviceDevice_Idempotency(t *testing.T) {
 						plancheck.ExpectEmptyPlan(),
 					},
 				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+					),
+				},
 			},
 			// Step 3: Another refresh to ensure stability
 			{
@@ -77,6 +91,12 @@ func TestAccCMDeviceDevice_Idempotency(t *testing.T) {
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
 					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 		},
@@ -89,6 +109,9 @@ func TestAccCMDeviceDevice_IdempotencyWithImport(t *testing.T) {
 	imageName := generateUniqueTestName("tftest-image-import")
 	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 	mac := generateUniqueMAC()
+
+	// ID consistency tracking across test steps
+	compareID := statecheck.CompareValue(compare.ValuesSame())
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -109,6 +132,10 @@ func TestAccCMDeviceDevice_IdempotencyWithImport(t *testing.T) {
 						tfjsonpath.New("id"),
 						knownvalue.NotNull(),
 					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Step 2: Import the device
@@ -124,6 +151,12 @@ func TestAccCMDeviceDevice_IdempotencyWithImport(t *testing.T) {
 					"power_control",        // BCM returns default "none" when not explicitly set
 					"default_gateway",      // BCM returns default "0.0.0.0" when not explicitly set
 				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+					),
+				},
 			},
 			// Step 3: Verify idempotency after import
 			{
@@ -132,6 +165,12 @@ func TestAccCMDeviceDevice_IdempotencyWithImport(t *testing.T) {
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
 					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 		},
@@ -144,6 +183,9 @@ func TestAccCMDeviceDevice_IdempotencyWithOptionalFields(t *testing.T) {
 	imageName := generateUniqueTestName("tftest-image-optional")
 	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 	mac := generateUniqueMAC()
+
+	// ID consistency tracking across test steps
+	compareID := statecheck.CompareValue(compare.ValuesSame())
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -174,6 +216,10 @@ func TestAccCMDeviceDevice_IdempotencyWithOptionalFields(t *testing.T) {
 						tfjsonpath.New("id"),
 						knownvalue.NotNull(),
 					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Step 2: Verify idempotency with optional fields
@@ -183,6 +229,12 @@ func TestAccCMDeviceDevice_IdempotencyWithOptionalFields(t *testing.T) {
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
 					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 		},
@@ -195,6 +247,9 @@ func TestAccCMDeviceDevice_IdempotencyAfterUpdate(t *testing.T) {
 	imageName := generateUniqueTestName("tftest-image-update")
 	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 	mac := generateUniqueMAC()
+
+	// ID consistency tracking across test steps
+	compareID := statecheck.CompareValue(compare.ValuesSame())
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -210,6 +265,10 @@ func TestAccCMDeviceDevice_IdempotencyAfterUpdate(t *testing.T) {
 						tfjsonpath.New("notes"),
 						knownvalue.StringExact("Initial notes"),
 					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Step 2: Verify idempotency after creation
@@ -219,6 +278,12 @@ func TestAccCMDeviceDevice_IdempotencyAfterUpdate(t *testing.T) {
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
 					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Step 3: Update device notes
@@ -230,6 +295,10 @@ func TestAccCMDeviceDevice_IdempotencyAfterUpdate(t *testing.T) {
 						tfjsonpath.New("notes"),
 						knownvalue.StringExact("Updated notes"),
 					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Step 4: Verify idempotency after update
@@ -239,6 +308,12 @@ func TestAccCMDeviceDevice_IdempotencyAfterUpdate(t *testing.T) {
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
 					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 		},
@@ -251,6 +326,9 @@ func TestAccCMDeviceDevice_IdempotencyDrift(t *testing.T) {
 	imageName := generateUniqueTestName("tftest-image-drift")
 	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 	mac := generateUniqueMAC()
+
+	// ID consistency tracking across test steps
+	compareID := statecheck.CompareValue(compare.ValuesSame())
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -275,6 +353,10 @@ func TestAccCMDeviceDevice_IdempotencyDrift(t *testing.T) {
 						"bcm_cmdevice_device.test",
 						tfjsonpath.New("id"),
 						knownvalue.NotNull(),
+					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
 					),
 				},
 			},
@@ -337,6 +419,12 @@ func TestAccCMDeviceDevice_IdempotencyDrift(t *testing.T) {
 						plancheck.ExpectNonEmptyPlan(),
 					},
 				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+					),
+				},
 			},
 			// Step 3: Terraform restores desired state
 			{
@@ -347,6 +435,10 @@ func TestAccCMDeviceDevice_IdempotencyDrift(t *testing.T) {
 						tfjsonpath.New("notes"),
 						knownvalue.StringExact("Initial notes"),
 					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Step 4: Verify idempotency after drift correction
@@ -356,6 +448,12 @@ func TestAccCMDeviceDevice_IdempotencyDrift(t *testing.T) {
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
 					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 		},
