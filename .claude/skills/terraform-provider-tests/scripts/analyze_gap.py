@@ -431,6 +431,16 @@ class TestFile:
                 (r'\bimage_name\s*=\s*"([^"]+)"', 'image_name'),
             ]
 
+            # Skip lines that use string concatenation with variables
+            # Pattern: `"` + varName + `"` indicates parameterized value from function argument
+            if re.search(r'"\s*\+\s*\w+\s*\+\s*"', line):
+                continue
+
+            # Skip lines that are clearly Go string concatenation in config helpers
+            # These pass parameters from test functions that use generateUniqueTestName
+            if '`' in line and '+' in line:
+                continue
+
             for pattern, field in hardcoded_patterns:
                 matches = re.finditer(pattern, line)
                 for match in matches:
