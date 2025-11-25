@@ -57,10 +57,11 @@ func testAccActionPreCheck(t *testing.T) {
 
 // testAccGetTestDeviceID returns a device ID for power action tests
 // Returns empty string if BCM_TEST_DEVICE_ID is not set (test will be skipped)
+// SAFETY: Excludes head nodes to prevent accidental disruption of cluster management
 func testAccGetTestDeviceID(t *testing.T) string {
 	deviceID := os.Getenv("BCM_TEST_DEVICE_ID")
 	if deviceID == "" {
-		// Try to find a device from the BCM cluster
+		// Try to find a safe device from the BCM cluster (not a head node)
 		client := createTestBCMClient(t)
 		ctx := context.Background()
 
@@ -77,15 +78,31 @@ func testAccGetTestDeviceID(t *testing.T) string {
 			return ""
 		}
 
-		// Find first available node with a UUID
+		// Find first available non-head node with a UUID
+		// SAFETY: Skip HeadNode types to prevent cluster management disruption
 		for _, node := range nodes {
+			childType, _ := node["childType"].(string)
+			hostname, _ := node["hostname"].(string)
+
+			// Skip head nodes - these manage the cluster
+			if childType == "HeadNode" {
+				t.Logf("Skipping head node: %s (safety)", hostname)
+				continue
+			}
+
+			// Skip nodes with "master" or "head" in name (additional safety)
+			if containsSubstr(hostname, "master") || containsSubstr(hostname, "head") {
+				t.Logf("Skipping potential management node: %s (safety)", hostname)
+				continue
+			}
+
 			if uuid, ok := node["uuid"].(string); ok && uuid != "" {
-				t.Logf("Using discovered device for test: %s (UUID: %s)", node["hostname"], uuid)
+				t.Logf("Using discovered device for test: %s (UUID: %s, type: %s)", hostname, uuid, childType)
 				return uuid
 			}
 		}
 
-		t.Log("No devices found in BCM cluster")
+		t.Log("No safe test devices found in BCM cluster (all are head nodes or no UUID)")
 		return ""
 	}
 	return deviceID
@@ -196,9 +213,10 @@ func TestAccCMDevicePowerAction_PowerOn(t *testing.T) {
 	// we'll call the BCM API directly to verify the operation
 	t.Logf("Testing power_on action for device: %s", deviceID)
 
-	// Call BCM API directly (mimicking what Invoke does)
+	// Call BCM API directly using CallJSONRPCArg (mimicking what Invoke does)
+	// BCM power methods use "arg" (single value) format
 	client := createTestBCMClient(t)
-	_, err := client.CallJSONRPC(ctx, "cmdevice", "powerOn", deviceID)
+	_, err := client.CallJSONRPCArg(ctx, "cmdevice", "powerOn", deviceID)
 	if err != nil {
 		// Log but don't fail - device might already be on or BMC unreachable
 		t.Logf("Power on operation returned error (may be expected): %v", err)
@@ -232,8 +250,8 @@ func TestAccCMDevicePowerAction_PowerOff(t *testing.T) {
 
 	t.Logf("Testing power_off action for device: %s", deviceID)
 
-	// Call BCM API directly to verify the operation
-	_, err := client.CallJSONRPC(ctx, "cmdevice", "powerOff", deviceID)
+	// Call BCM API directly using CallJSONRPCArg
+	_, err := client.CallJSONRPCArg(ctx, "cmdevice", "powerOff", deviceID)
 	if err != nil {
 		// Log but don't fail - device might already be off or BMC unreachable
 		t.Logf("Power off operation returned error (may be expected): %v", err)
@@ -256,8 +274,8 @@ func TestAccCMDevicePowerAction_Reboot(t *testing.T) {
 
 	t.Logf("Testing reboot action for device: %s", deviceID)
 
-	// Call BCM API directly to verify the operation
-	body, err := client.CallJSONRPC(ctx, "cmdevice", "reboot", deviceID)
+	// Call BCM API directly using CallJSONRPCArg (reboot uses "arg" format)
+	body, err := client.CallJSONRPCArg(ctx, "cmdevice", "reboot", deviceID)
 	if err != nil {
 		// Log but don't fail - device might be off or BMC unreachable
 		t.Logf("Reboot operation returned error (may be expected): %v", err)
@@ -281,8 +299,8 @@ func TestAccCMDevicePowerAction_PowerCycle(t *testing.T) {
 
 	t.Logf("Testing power_cycle action for device: %s", deviceID)
 
-	// Call BCM API directly to verify the operation
-	_, err := client.CallJSONRPC(ctx, "cmdevice", "powerCycle", deviceID)
+	// Call BCM API directly using CallJSONRPCArg
+	_, err := client.CallJSONRPCArg(ctx, "cmdevice", "powerCycle", deviceID)
 	if err != nil {
 		// Log but don't fail - device might be off or BMC unreachable
 		t.Logf("Power cycle operation returned error (may be expected): %v", err)
@@ -303,8 +321,8 @@ func TestAccCMDevicePowerAction_InvalidDevice(t *testing.T) {
 
 	t.Logf("Testing power_on action with invalid device: %s", invalidDeviceID)
 
-	// Call BCM API directly - should return an error
-	_, err := client.CallJSONRPC(ctx, "cmdevice", "powerOn", invalidDeviceID)
+	// Call BCM API directly using CallJSONRPCArg - should return an error
+	_, err := client.CallJSONRPCArg(ctx, "cmdevice", "powerOn", invalidDeviceID)
 	if err == nil {
 		t.Error("Expected error for invalid device, but got none")
 	} else {
@@ -445,7 +463,7 @@ func TestAccCMDevicePowerAction_VerifyBCMAPIMethods(t *testing.T) {
 		t.Run(method, func(t *testing.T) {
 			t.Logf("Verifying BCM API method: cmdevice.%s", method)
 
-			_, err := client.CallJSONRPC(ctx, "cmdevice", method, deviceID)
+			_, err := client.CallJSONRPCArg(ctx, "cmdevice", method, deviceID)
 			if err != nil {
 				// Check if it's a "method not found" error vs a runtime error
 				errStr := err.Error()

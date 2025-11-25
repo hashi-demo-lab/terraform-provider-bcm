@@ -54,6 +54,14 @@ type JSONRPCRequest struct {
 	Args    []interface{} `json:"args,omitempty"` // Optional arguments array
 }
 
+// JSONRPCRequestArg represents BCM JSON-RPC request with single "arg" field
+// Some BCM methods (like reboot) expect "arg" (single value) instead of "args" (array)
+type JSONRPCRequestArg struct {
+	Service string      `json:"service"`
+	Call    string      `json:"call"`
+	Arg     interface{} `json:"arg,omitempty"` // Optional single argument
+}
+
 // LoginRequest represents login API call request body.
 type LoginRequest struct {
 	Service  string `json:"service"` // Always "login"
@@ -223,6 +231,73 @@ func (c *BCMClient) CallJSONRPC(ctx context.Context, service, call string, args 
 	})
 
 	// Defensive error parsing (see section 3 of research.md)
+	if err := parseErrorResponse(resp.StatusCode, body); err != nil {
+		return nil, err
+	}
+
+	return body, nil
+}
+
+// CallJSONRPCArg executes JSON-RPC call with single "arg" parameter
+// Some BCM methods (like reboot) expect "arg" (single value) instead of "args" (array).
+// Use this method for power operations and other methods requiring single argument format.
+//
+// Examples:
+//
+//	CallJSONRPCArg(ctx, "cmdevice", "reboot", "node001") // Reboot specific node
+//	CallJSONRPCArg(ctx, "cmdevice", "reboot", hostname)  // Reboot by hostname
+func (c *BCMClient) CallJSONRPCArg(ctx context.Context, service, call string, arg interface{}) ([]byte, error) {
+	reqBody := JSONRPCRequestArg{
+		Service: service,
+		Call:    call,
+	}
+
+	// Only include arg field if argument provided
+	if arg != nil {
+		reqBody.Arg = arg
+	}
+
+	jsonBody, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal JSONRPC request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", c.Endpoint+"/json", bytes.NewReader(jsonBody))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create HTTP request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	// Cookie header with cm-login-token automatically added by cookie jar
+
+	logFields := map[string]interface{}{
+		"service":  service,
+		"call":     call,
+		"endpoint": c.Endpoint + "/json",
+	}
+	if arg != nil {
+		logFields["arg"] = arg
+	}
+
+	tflog.Trace(ctx, "JSONRPC request (arg format)", logFields)
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("JSONRPC call failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	tflog.Trace(ctx, "JSONRPC response", map[string]interface{}{
+		"status": resp.StatusCode,
+		"body":   string(body),
+	})
+
+	// Defensive error parsing
 	if err := parseErrorResponse(resp.StatusCode, body); err != nil {
 		return nil, err
 	}

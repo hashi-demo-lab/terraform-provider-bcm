@@ -153,11 +153,18 @@ func (a *CMDevicePowerAction) Invoke(ctx context.Context, req action.InvokeReque
 	})
 
 	// Execute power operation via BCM API
-	_, err := a.client.CallJSONRPC(ctx, "cmdevice", bcmMethod, deviceID)
+	// NOTE: BCM power methods (reboot, etc.) use "arg" (single value) format,
+	// not "args" (array) format used by other methods like getNode.
+	_, err := a.client.CallJSONRPCArg(ctx, "cmdevice", bcmMethod, deviceID)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Power Operation Failed",
-			fmt.Sprintf("Failed to execute %s on device %s: %s", powerAction, deviceID, err.Error()),
+			fmt.Sprintf("Failed to execute %s on device %s: %s\n\n"+
+				"Note: Power operations require:\n"+
+				"1. BCM power management enabled (IPMI/BMC/Redfish)\n"+
+				"2. Device with powerControl configured (not 'none')\n"+
+				"3. BCM version with power methods available",
+				powerAction, deviceID, err.Error()),
 		)
 		return
 	}
