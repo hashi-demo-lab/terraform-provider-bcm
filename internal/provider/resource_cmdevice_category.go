@@ -826,6 +826,7 @@ func (r *CMDeviceCategoryResource) Create(ctx context.Context, req resource.Crea
 	// BCM returns empty arrays for these fields even when we send data, so we preserve plan values
 	planStaticRoutes := plan.StaticRoutes
 	planFSExports := plan.FSExports
+	planFSMounts := plan.FSMounts // Issue #84: Preserve fsmounts
 	planRoles := plan.Roles
 	planGPUSettings := plan.GPUSettings
 	planServices := plan.Services
@@ -1050,6 +1051,10 @@ func (r *CMDeviceCategoryResource) Create(ctx context.Context, req resource.Crea
 	// This ensures Terraform state matches plan when BCM doesn't store these values
 	plan.StaticRoutes = planStaticRoutes
 	plan.FSExports = planFSExports
+	// Issue #84 FIX: Merge fsmounts instead of unconditional overwrite
+	// This preserves user config (device, mountpoint, filesystem, etc.) while populating
+	// computed values (uuid) from BCM API response
+	plan.FSMounts = mergeFSMountsWithAPIResponse(ctx, planFSMounts, plan.FSMounts)
 	// Issue #83 FIX: Merge roles instead of unconditional overwrite
 	// This preserves user config (name, child_type, add_services) while populating
 	// computed values (uuid) from BCM API response
@@ -1075,6 +1080,7 @@ func (r *CMDeviceCategoryResource) Read(ctx context.Context, req resource.ReadRe
 	originalSoftwareImageProxy := state.SoftwareImageProxy
 	originalStaticRoutes := state.StaticRoutes
 	originalFSExports := state.FSExports
+	originalFSMounts := state.FSMounts // Issue #84: Preserve fsmounts
 	originalRoles := state.Roles
 	originalGPUSettings := state.GPUSettings
 	originalServices := state.Services
@@ -1193,6 +1199,10 @@ func (r *CMDeviceCategoryResource) Read(ctx context.Context, req resource.ReadRe
 	// BCM API doesn't persist these fields for categories - preserve user's configured values
 	state.StaticRoutes = originalStaticRoutes
 	state.FSExports = originalFSExports
+	// Issue #84 FIX: Merge fsmounts instead of unconditional overwrite
+	// This preserves user config (device, mountpoint, filesystem, etc.) while populating
+	// computed values (uuid) from BCM API response
+	state.FSMounts = mergeFSMountsWithAPIResponse(ctx, originalFSMounts, state.FSMounts)
 	// Issue #83 FIX: Merge roles instead of unconditional overwrite
 	// This preserves user config (name, child_type, add_services) while populating
 	// computed values (uuid) from BCM API response
@@ -1319,6 +1329,7 @@ func (r *CMDeviceCategoryResource) Update(ctx context.Context, req resource.Upda
 	planSoftwareImageProxy := plan.SoftwareImageProxy
 	planStaticRoutes := plan.StaticRoutes
 	planFSExports := plan.FSExports
+	planFSMounts := plan.FSMounts // Issue #84: Preserve fsmounts
 	planRoles := plan.Roles
 	planGPUSettings := plan.GPUSettings
 	planServices := plan.Services
@@ -1388,6 +1399,10 @@ func (r *CMDeviceCategoryResource) Update(ctx context.Context, req resource.Upda
 	// BCM API doesn't persist these fields for categories - preserve user's configured values
 	plan.StaticRoutes = planStaticRoutes
 	plan.FSExports = planFSExports
+	// Issue #84 FIX: Merge fsmounts instead of unconditional overwrite
+	// This preserves user config (device, mountpoint, filesystem, etc.) while populating
+	// computed values (uuid) from BCM API response
+	plan.FSMounts = mergeFSMountsWithAPIResponse(ctx, planFSMounts, plan.FSMounts)
 	// Issue #83 FIX: Merge roles instead of unconditional overwrite
 	// This preserves user config (name, child_type, add_services) while populating
 	// computed values (uuid) from BCM API response
@@ -2022,8 +2037,42 @@ func (r *CMDeviceCategoryResource) buildAPIEntity(ctx context.Context, model *CM
 		entity["modules"] = moduleEntities
 	}
 
-	// TODO: Add remaining nested objects and arrays in Phase 6 (Comprehensive Schema)
-	// - fsmounts (array of FSMount)
+	// Serialize fsmounts (snake_case → camelCase for BCM API)
+	// Issue #84: Implement fsmounts field that was previously marked as Phase 6 TODO
+	if !model.FSMounts.IsNull() && !model.FSMounts.IsUnknown() {
+		var mounts []FSMountModel
+		diags := model.FSMounts.ElementsAs(ctx, &mounts, false)
+		if !diags.HasError() {
+			mountsList := make([]map[string]interface{}, 0, len(mounts))
+			for _, mount := range mounts {
+				mountMap := map[string]interface{}{
+					"baseType": "FSMount",
+					"device":   mount.Device.ValueString(),
+					"path":     mount.Mountpoint.ValueString(), // mountpoint -> path
+					"type":     mount.Filesystem.ValueString(), // filesystem -> type
+				}
+				// Include UUID if present (for updates), BCM assigns on create
+				if !mount.UUID.IsNull() && mount.UUID.ValueString() != "" {
+					mountMap["uuid"] = mount.UUID.ValueString()
+				}
+				// Handle optional fields
+				if !mount.MountOptions.IsNull() {
+					mountMap["options"] = mount.MountOptions.ValueString() // mountoptions -> options
+				}
+				if !mount.Fsck.IsNull() {
+					mountMap["fsck"] = mount.Fsck.ValueString()
+				}
+				if !mount.Dump.IsNull() {
+					mountMap["dump"] = mount.Dump.ValueBool()
+				}
+				if !mount.RDMA.IsNull() {
+					mountMap["rdma"] = mount.RDMA.ValueBool()
+				}
+				mountsList = append(mountsList, mountMap)
+			}
+			entity["fsmounts"] = mountsList
+		}
+	}
 
 	return entity
 }
@@ -2181,8 +2230,8 @@ func (r *CMDeviceCategoryResource) readCategory(ctx context.Context, model *CMDe
 	model.ExcludeListUpdate = getStringValue(categoryData, "excludeListUpdate")
 	model.ExcludeListManipulateScript = getStringValue(categoryData, "excludeListManipulateScript")
 
-	// Filesystem lists (set to null for now, Phase 6 will parse these)
-	// TODO Phase 6: Parse actual fsmounts from API
+	// Parse fsmounts from BCM API (camelCase → snake_case)
+	// Issue #84: Implement fsmounts parsing that was previously set to null
 	fsMountObjectType := types.ObjectType{AttrTypes: map[string]attr.Type{
 		"uuid":         types.StringType,
 		"device":       types.StringType,
@@ -2193,7 +2242,31 @@ func (r *CMDeviceCategoryResource) readCategory(ctx context.Context, model *CMDe
 		"dump":         types.BoolType,
 		"rdma":         types.BoolType,
 	}}
-	model.FSMounts = types.ListNull(fsMountObjectType)
+	if mountsData, ok := categoryData["fsmounts"].([]interface{}); ok && len(mountsData) > 0 {
+		// BCM returns array with data - convert to Terraform list
+		mountValues := make([]attr.Value, 0, len(mountsData))
+		for _, mountRaw := range mountsData {
+			if mountMap, ok := mountRaw.(map[string]interface{}); ok {
+				mountObj, objDiags := types.ObjectValue(fsMountObjectType.AttrTypes, map[string]attr.Value{
+					"uuid":         getStringValue(mountMap, "uuid"),
+					"device":       getStringValue(mountMap, "device"),
+					"mountpoint":   getStringValue(mountMap, "path"),    // path -> mountpoint
+					"filesystem":   getStringValue(mountMap, "type"),    // type -> filesystem
+					"mountoptions": getStringValue(mountMap, "options"), // options -> mountoptions
+					"fsck":         getStringValue(mountMap, "fsck"),
+					"dump":         getBoolValue(mountMap, "dump"),
+					"rdma":         getBoolValue(mountMap, "rdma"),
+				})
+				if !objDiags.HasError() {
+					mountValues = append(mountValues, mountObj)
+				}
+			}
+		}
+		model.FSMounts, _ = types.ListValue(fsMountObjectType, mountValues)
+	} else {
+		// Field not present in response or empty - set to null
+		model.FSMounts = types.ListNull(fsMountObjectType)
+	}
 
 	// Parse fsexports from BCM API (camelCase → snake_case)
 	fsExportObjectType := types.ObjectType{AttrTypes: map[string]attr.Type{
@@ -2560,6 +2633,197 @@ func mergeRolesWithAPIResponse(ctx context.Context, originalRoles types.List, ap
 // generateUUID creates a new UUID v4 string.
 func generateUUID() string {
 	return uuid.New().String()
+}
+
+// mergeFSMountsWithAPIResponse merges user-configured fsmount attributes with BCM API-computed values.
+// It matches mounts by device+mountpoint combination and:
+// - Preserves user-specified: device, mountpoint, filesystem, mountoptions, fsck, dump, rdma
+// - Populates computed: uuid from BCM API response
+//
+// This fixes issue #84 where fsmounts[].uuid was never populated because
+// the fsmounts field was always set to null.
+//
+// Parameters:
+//   - ctx: Context for logging
+//   - originalMounts: Mounts from Terraform plan/state (before API call)
+//   - apiMounts: Mounts parsed from BCM API response (contains computed UUIDs)
+//
+// Returns:
+//   - Merged list with user config + computed UUIDs
+func mergeFSMountsWithAPIResponse(ctx context.Context, originalMounts types.List, apiMounts types.List) types.List {
+	fsMountObjectType := types.ObjectType{AttrTypes: map[string]attr.Type{
+		"uuid":         types.StringType,
+		"device":       types.StringType,
+		"mountpoint":   types.StringType,
+		"filesystem":   types.StringType,
+		"mountoptions": types.StringType,
+		"fsck":         types.StringType,
+		"dump":         types.BoolType,
+		"rdma":         types.BoolType,
+	}}
+
+	// If no original mounts in plan (null), preserve null to avoid plan->state inconsistency
+	// BCM returns empty array [] for fsmounts even when user didn't specify any
+	if originalMounts.IsNull() {
+		tflog.Debug(ctx, "Original fsmounts is null, preserving null")
+		return types.ListNull(fsMountObjectType)
+	}
+
+	// If original is unknown (during plan), return API response if available
+	if originalMounts.IsUnknown() {
+		tflog.Debug(ctx, "Original fsmounts is unknown, using API response")
+		return apiMounts
+	}
+
+	// If API returned null/unknown, preserve original (handles API quirks)
+	if apiMounts.IsNull() || apiMounts.IsUnknown() {
+		tflog.Debug(ctx, "API returned null/unknown fsmounts, preserving original")
+		// Need to ensure UUIDs are populated for original mounts
+		var origMounts []FSMountModel
+		if diags := originalMounts.ElementsAs(ctx, &origMounts, false); diags.HasError() {
+			return originalMounts
+		}
+
+		// Generate UUIDs for mounts that don't have them
+		mountValues := make([]attr.Value, 0, len(origMounts))
+		for _, mount := range origMounts {
+			mountUUID := mount.UUID
+			if mount.UUID.IsNull() || mount.UUID.IsUnknown() || mount.UUID.ValueString() == "" {
+				mountUUID = types.StringValue(generateUUID())
+				tflog.Debug(ctx, "Generated UUID for fsmount (BCM didn't persist)", map[string]interface{}{
+					"device":     mount.Device.ValueString(),
+					"mountpoint": mount.Mountpoint.ValueString(),
+					"uuid":       mountUUID.ValueString(),
+				})
+			}
+
+			mountObj, diags := types.ObjectValue(fsMountObjectType.AttrTypes, map[string]attr.Value{
+				"uuid":         mountUUID,
+				"device":       mount.Device,
+				"mountpoint":   mount.Mountpoint,
+				"filesystem":   mount.Filesystem,
+				"mountoptions": mount.MountOptions,
+				"fsck":         mount.Fsck,
+				"dump":         mount.Dump,
+				"rdma":         mount.RDMA,
+			})
+			if !diags.HasError() {
+				mountValues = append(mountValues, mountObj)
+			}
+		}
+		result, _ := types.ListValue(fsMountObjectType, mountValues)
+		return result
+	}
+
+	// Extract mount models from both lists
+	var origMounts []FSMountModel
+	var apiMountsList []FSMountModel
+
+	if diags := originalMounts.ElementsAs(ctx, &origMounts, false); diags.HasError() {
+		tflog.Warn(ctx, "Failed to parse original fsmounts, preserving as-is", map[string]interface{}{
+			"errors": diags.Errors(),
+		})
+		return originalMounts
+	}
+	if diags := apiMounts.ElementsAs(ctx, &apiMountsList, false); diags.HasError() {
+		tflog.Warn(ctx, "Failed to parse API fsmounts, preserving original", map[string]interface{}{
+			"errors": diags.Errors(),
+		})
+		return originalMounts
+	}
+
+	// Build lookup map: device+mountpoint -> API mount (for efficient matching)
+	apiMountsByKey := make(map[string]FSMountModel)
+	for _, mount := range apiMountsList {
+		if !mount.Device.IsNull() && !mount.Device.IsUnknown() &&
+			!mount.Mountpoint.IsNull() && !mount.Mountpoint.IsUnknown() {
+			key := fmt.Sprintf("%s:%s", mount.Device.ValueString(), mount.Mountpoint.ValueString())
+			apiMountsByKey[key] = mount
+		}
+	}
+
+	// Merge: preserve user config fields + populate computed UUID from API
+	mergedMounts := make([]FSMountModel, 0, len(origMounts))
+	for _, origMount := range origMounts {
+		key := fmt.Sprintf("%s:%s", origMount.Device.ValueString(), origMount.Mountpoint.ValueString())
+		if apiMount, found := apiMountsByKey[key]; found {
+			// Match found - preserve user config, populate computed UUID from API
+			mergedMount := FSMountModel{
+				UUID:         apiMount.UUID,          // Populate from API
+				Device:       origMount.Device,       // Preserve user value
+				Mountpoint:   origMount.Mountpoint,   // Preserve user value
+				Filesystem:   origMount.Filesystem,   // Preserve user value
+				MountOptions: origMount.MountOptions, // Preserve user value
+				Fsck:         origMount.Fsck,         // Preserve user value
+				Dump:         origMount.Dump,         // Preserve user value
+				RDMA:         origMount.RDMA,         // Preserve user value
+			}
+			mergedMounts = append(mergedMounts, mergedMount)
+			tflog.Debug(ctx, "Merged fsmount with API UUID", map[string]interface{}{
+				"device":     origMount.Device.ValueString(),
+				"mountpoint": origMount.Mountpoint.ValueString(),
+				"uuid":       apiMount.UUID.ValueString(),
+			})
+		} else {
+			// Mount not found in API response - BCM doesn't persist category fsmounts
+			// Generate a UUID if one doesn't exist (handles Unknown/null UUIDs from plan)
+			mergedMount := FSMountModel{
+				Device:       origMount.Device,
+				Mountpoint:   origMount.Mountpoint,
+				Filesystem:   origMount.Filesystem,
+				MountOptions: origMount.MountOptions,
+				Fsck:         origMount.Fsck,
+				Dump:         origMount.Dump,
+				RDMA:         origMount.RDMA,
+			}
+
+			// Generate UUID if original doesn't have a known one
+			if origMount.UUID.IsNull() || origMount.UUID.IsUnknown() || origMount.UUID.ValueString() == "" {
+				newUUID := generateUUID()
+				mergedMount.UUID = types.StringValue(newUUID)
+				tflog.Debug(ctx, "Generated UUID for fsmount (BCM doesn't persist category fsmounts)", map[string]interface{}{
+					"device":     origMount.Device.ValueString(),
+					"mountpoint": origMount.Mountpoint.ValueString(),
+					"uuid":       newUUID,
+				})
+			} else {
+				// Preserve existing UUID (from previous state)
+				mergedMount.UUID = origMount.UUID
+				tflog.Debug(ctx, "Preserved existing UUID for fsmount", map[string]interface{}{
+					"device":     origMount.Device.ValueString(),
+					"mountpoint": origMount.Mountpoint.ValueString(),
+					"uuid":       origMount.UUID.ValueString(),
+				})
+			}
+			mergedMounts = append(mergedMounts, mergedMount)
+		}
+	}
+
+	// Convert back to types.List
+	mountValues := make([]attr.Value, 0, len(mergedMounts))
+	for _, mount := range mergedMounts {
+		mountObj, diags := types.ObjectValue(fsMountObjectType.AttrTypes, map[string]attr.Value{
+			"uuid":         mount.UUID,
+			"device":       mount.Device,
+			"mountpoint":   mount.Mountpoint,
+			"filesystem":   mount.Filesystem,
+			"mountoptions": mount.MountOptions,
+			"fsck":         mount.Fsck,
+			"dump":         mount.Dump,
+			"rdma":         mount.RDMA,
+		})
+		if !diags.HasError() {
+			mountValues = append(mountValues, mountObj)
+		}
+	}
+
+	result, _ := types.ListValue(fsMountObjectType, mountValues)
+	tflog.Debug(ctx, "FSMount merge complete", map[string]interface{}{
+		"original_count": len(origMounts),
+		"api_count":      len(apiMountsList),
+		"merged_count":   len(mergedMounts),
+	})
+	return result
 }
 
 // parseStringListValue parses a string array from API response into types.List.
