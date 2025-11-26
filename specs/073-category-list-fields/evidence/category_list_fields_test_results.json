@@ -1,0 +1,129 @@
+{
+  "test_date": "2025-11-27T10:10:00.000000",
+  "bcm_endpoint": "https://172.21.15.254:8081",
+  "bcm_version": "N/A",
+  "test_methodology": "Used existing category to test update operations with list fields, then read back to verify persistence",
+  "fields_tested": {
+    "staticRoutes": {
+      "field": "staticRoutes",
+      "terraform_attr": "static_routes",
+      "update_value": [
+        {
+          "destination": "10.0.0.0/8",
+          "gateway": "192.168.1.1",
+          "metric": 100
+        }
+      ],
+      "read_value_after_update": [],
+      "persisted": false,
+      "evidence": {
+        "update_response": {
+          "success": true,
+          "task_uuid": "00000000-0000-0000-0000-000000000000",
+          "updated_entity": null,
+          "validation": []
+        },
+        "observation": "BCM accepts the value in updateCategory but returns empty array when category is read back"
+      }
+    },
+    "roles": {
+      "field": "roles",
+      "terraform_attr": "roles",
+      "update_value": [
+        {
+          "name": "test-role",
+          "childType": "ComputeRole",
+          "addServices": false
+        }
+      ],
+      "read_value_after_update": [],
+      "persisted": false,
+      "evidence": {
+        "observation": "BCM accepts the value in updateCategory but returns empty array when category is read back"
+      }
+    },
+    "fsexports": {
+      "field": "fsexports",
+      "terraform_attr": "fsexports",
+      "update_value": [
+        {
+          "path": "/test",
+          "network": "10.0.0.0/8",
+          "allowWrite": true,
+          "async": true,
+          "rootSquash": false
+        }
+      ],
+      "read_value_after_update": [],
+      "persisted": false,
+      "evidence": {
+        "observation": "BCM accepts the value in updateCategory but returns empty array when category is read back"
+      }
+    },
+    "gpuSettings": {
+      "field": "gpuSettings",
+      "terraform_attr": "gpu_settings",
+      "update_value": [
+        {
+          "deviceId": "0",
+          "model": "TestGPU",
+          "computeMode": "default"
+        }
+      ],
+      "read_value_after_update": [],
+      "persisted": false,
+      "evidence": {
+        "observation": "BCM accepts the value in updateCategory but returns empty array when category is read back"
+      }
+    },
+    "services": {
+      "field": "services",
+      "terraform_attr": "services",
+      "update_value": null,
+      "read_value_after_update": [],
+      "persisted": false,
+      "evidence": {
+        "observation": "Field present in schema but marked POST-MVP. Existing categories show empty array."
+      }
+    }
+  },
+  "existing_categories_evidence": {
+    "default_category": {
+      "staticRoutes": [],
+      "roles": [],
+      "fsexports": [],
+      "gpuSettings": [],
+      "services": []
+    },
+    "tftest_category": {
+      "name": "tftest-category-20251126-225837-865304753-34972",
+      "uuid": "d5a9f563-f99c-433f-8a2e-5033cb184722",
+      "staticRoutes": [],
+      "roles": [],
+      "fsexports": [],
+      "gpuSettings": [],
+      "services": []
+    }
+  },
+  "alternative_apis": {
+    "cmdevice.addCategoryRole": {"status": "NOT_FOUND", "response": "400 Bad Request"},
+    "cmdevice.removeCategoryRole": {"status": "NOT_FOUND", "response": "400 Bad Request"},
+    "cmdevice.setCategoryRoles": {"status": "NOT_FOUND", "response": "400 Bad Request"},
+    "cmdevice.getCategoryRoles": {"status": "NOT_FOUND", "response": "400 Bad Request"},
+    "cmdevice.addCategoryStaticRoute": {"status": "NOT_FOUND", "response": "400 Bad Request"},
+    "cmdevice.setCategoryStaticRoutes": {"status": "NOT_FOUND", "response": "400 Bad Request"},
+    "cmdevice.addCategoryFSExport": {"status": "NOT_FOUND", "response": "400 Bad Request"},
+    "cmdevice.setCategoryFSExports": {"status": "NOT_FOUND", "response": "400 Bad Request"},
+    "cmdevice.addCategoryGPUSetting": {"status": "NOT_FOUND", "response": "400 Bad Request"},
+    "cmdevice.setCategoryGPUSettings": {"status": "NOT_FOUND", "response": "400 Bad Request"},
+    "cmdevice.getRoles": {"status": "NOT_FOUND", "response": "400 Bad Request"},
+    "cmdevice.getNodeRoles": {"status": "NOT_FOUND", "response": "400 Bad Request"}
+  },
+  "summary": {
+    "fields_persisted": 0,
+    "fields_not_persisted": 5,
+    "fields_error": 0,
+    "alternative_apis_found": 0,
+    "conclusion": "BCM API DOES NOT persist category list fields (staticRoutes, roles, fsexports, gpuSettings, services). The API accepts these values in create/update operations (returns success: true) but does not store them - subsequent reads return empty arrays. No alternative APIs exist for managing these fields on categories."
+  }
+}

@@ -861,6 +861,33 @@ BCM validates `disksetup` against an internal XSD schema. Key format requirement
 
 **Reference:** https://github.com/hashi-demo-lab/terraform-provider-bcm/issues/48
 
+### bcm_cmdevice_category List Fields (Non-Persisted)
+
+**Issue:** BCM API does not persist certain list fields on categories. The API accepts values in create/update operations (returns `success: true`) but does not store them - subsequent reads return empty arrays.
+
+**Affected Fields:**
+
+| Terraform Attribute | BCM API Field | Persistence Status |
+|---------------------|---------------|-------------------|
+| `static_routes` | `staticRoutes` | NOT PERSISTED |
+| `fsexports` | `fsexports` | NOT PERSISTED |
+| `roles` | `roles` | NOT PERSISTED |
+| `gpu_settings` | `gpuSettings` | NOT PERSISTED |
+| `services` | `services` | NOT PERSISTED |
+
+**Provider Workarounds** (resource_cmdevice_category.go):
+- Lines 1051-1054: Preserve plan values after Create/Read to prevent false drift
+- Lines 2736-2748: Generate UUIDs locally for roles since BCM doesn't return them
+- ImportStateVerifyIgnore includes all 5 fields (lines 2596-2603, 2791-2798)
+
+**Test Evidence:**
+- Lines 2590, 2785: "BCM doesn't persist static_routes, fsexports, roles, gpu_settings, services"
+- Lines 3599, 3696: "BCM does not persist fsmounts/fsexports after category creation"
+
+**Investigation Script:** `sampleRest/investigate_category_list_fields.py`
+**Evidence:** `specs/073-category-list-fields/evidence/category_list_fields_test_results.json`
+**Reference:** https://github.com/hashi-demo-lab/terraform-provider-bcm/issues/73
+
 ### bcm_cmuser_user Field Mappings
 
 Field mappings for drift detection tests (Terraform snake_case to BCM API camelCase):

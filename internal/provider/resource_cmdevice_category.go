@@ -437,7 +437,7 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 			},
 			"static_routes": schema.ListNestedAttribute{
 				Optional:            true,
-				MarkdownDescription: "Static network routes for nodes in this category",
+				MarkdownDescription: "Static network routes for nodes in this category. **Known Limitation**: BCM API does not persist this field - values are stored in Terraform state only. After import, re-apply configuration to restore values.",
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"destination": schema.StringAttribute{
@@ -517,7 +517,7 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 			},
 			"fsexports": schema.ListNestedAttribute{
 				Optional:            true,
-				MarkdownDescription: "NFS filesystem exports for nodes in this category",
+				MarkdownDescription: "NFS filesystem exports for nodes in this category. **Known Limitation**: BCM API does not persist this field - values are stored in Terraform state only. After import, re-apply configuration to restore values.",
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"path": schema.StringAttribute{
@@ -551,7 +551,7 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 			},
 			"roles": schema.ListNestedAttribute{
 				Optional:            true,
-				MarkdownDescription: "Service role assignments for nodes in this category",
+				MarkdownDescription: "Service role assignments for nodes in this category. **Known Limitation**: BCM API does not persist this field - values are stored in Terraform state only. Role UUIDs are generated locally by the provider. After import, re-apply configuration to restore values.",
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"name": schema.StringAttribute{
@@ -575,7 +575,7 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 			},
 			"services": schema.ListNestedAttribute{
 				Optional:            true,
-				MarkdownDescription: "Service configurations for nodes in this category (structure TBD - marked as POST-MVP)",
+				MarkdownDescription: "Service configurations for nodes in this category (structure TBD - marked as POST-MVP). **Known Limitation**: BCM API does not persist this field - values are stored in Terraform state only. After import, re-apply configuration to restore values.",
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						// TODO: Define service fields based on actual BCM API usage
@@ -638,7 +638,7 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 			},
 			"gpu_settings": schema.ListNestedAttribute{
 				Optional:            true,
-				MarkdownDescription: "GPU hardware configuration for nodes in this category",
+				MarkdownDescription: "GPU hardware configuration for nodes in this category. **Known Limitation**: BCM API does not persist this field - values are stored in Terraform state only. After import, re-apply configuration to restore values.",
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"device_id": schema.StringAttribute{
