@@ -4283,7 +4283,7 @@ func TestAccCMDeviceCategory_RolesImportUUID(t *testing.T) {
 }
 
 // ========================================
-// Issue #82: BMC Password Drift Fix Tests
+// Issue #82: BMC Password Drift Fix Tests.
 // ========================================
 
 // testAccCMDeviceCategoryResourceConfig_BMCPassword creates config with BMC settings including password.
@@ -4333,7 +4333,7 @@ resource "bcm_cmdevice_category" "test" {
 
 // TestAccCMDeviceCategory_BMCPasswordNoDrift tests that BMC password does not cause perpetual drift.
 // Issue #82: bmc_settings.password was causing drift because it was not preserved from state during Read.
-// User Story 1: Password Stability on Refresh
+// User Story 1: Password Stability on Refresh.
 func TestAccCMDeviceCategory_BMCPasswordNoDrift(t *testing.T) {
 	categoryName := generateUniqueTestName("tftest-bmc-nodrift")
 
@@ -4389,7 +4389,7 @@ func TestAccCMDeviceCategory_BMCPasswordNoDrift(t *testing.T) {
 
 // TestAccCMDeviceCategory_BMCPasswordUpdate tests that BMC password changes are detected and applied.
 // Issue #82: Ensures the fix does not break intentional password changes.
-// User Story 2: Password Update Detection
+// User Story 2: Password Update Detection.
 func TestAccCMDeviceCategory_BMCPasswordUpdate(t *testing.T) {
 	categoryName := generateUniqueTestName("tftest-bmc-update")
 
