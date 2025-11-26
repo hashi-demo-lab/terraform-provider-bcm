@@ -21,8 +21,8 @@ resource "bcm_cmuser_user" "developer" {
   EOT
 
   # Shadow password settings
-  shadow_max     = 90  # Password expires after 90 days
-  shadow_warning = 14  # Warn 14 days before expiration
+  shadow_max     = 90 # Password expires after 90 days
+  shadow_warning = 14 # Warn 14 days before expiration
 }
 
 # Service account with specific UID/GID

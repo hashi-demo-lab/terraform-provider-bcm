@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright (c) HashiCorp, Inc.
+# SPDX-License-Identifier: MPL-2.0
+
 """
 Test validation with GENERATED UUID (like the provider does)
 vs without UUID (like my previous test)
