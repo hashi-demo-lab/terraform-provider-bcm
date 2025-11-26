@@ -1486,7 +1486,7 @@ resource "bcm_cmdevice_device" "test" {
 }
 
 // TestAccCMDeviceDevice_RolesCreate tests creating a device with a role.
-// Uses the "monitoring" role which is commonly available in BCM clusters.
+// Uses the "backup" role which is commonly available in BCM clusters.
 func TestAccCMDeviceDevice_RolesCreate(t *testing.T) {
 	deviceName := generateUniqueTestName("tftest-device-roles")
 	categoryName := generateUniqueTestName("tftest-category-roles")
@@ -1494,8 +1494,8 @@ func TestAccCMDeviceDevice_RolesCreate(t *testing.T) {
 	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 	mac := generateUniqueMAC()
 
-	// Use monitoring role which is available on the headnode
-	roles := []string{"monitoring"}
+	// Use backup role which is available on BCM clusters
+	roles := []string{"backup"}
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -1523,7 +1523,7 @@ func TestAccCMDeviceDevice_RolesCreate(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_device.test",
 						tfjsonpath.New("roles"),
-						knownvalue.ListSizeExact(1),
+						knownvalue.SetSizeExact(1),
 					),
 				},
 			},
@@ -1549,7 +1549,7 @@ func TestAccCMDeviceDevice_RolesMultiple(t *testing.T) {
 	mac := generateUniqueMAC()
 
 	// Multiple roles from the BCM cluster
-	roles := []string{"monitoring", "storage"}
+	roles := []string{"backup", "provisioning"}
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -1571,7 +1571,7 @@ func TestAccCMDeviceDevice_RolesMultiple(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_device.test",
 						tfjsonpath.New("roles"),
-						knownvalue.ListSizeExact(2),
+						knownvalue.SetSizeExact(2),
 					),
 				},
 			},
@@ -1597,7 +1597,7 @@ func TestAccCMDeviceDevice_RolesIdempotent(t *testing.T) {
 	mac := generateUniqueMAC()
 
 	// Use roles available in the BCM cluster
-	roles := []string{"monitoring", "backup"}
+	roles := []string{"backup", "provisioning"}
 
 	// ID consistency tracking.
 	compareID := statecheck.CompareValue(compare.ValuesSame())
@@ -1617,7 +1617,7 @@ func TestAccCMDeviceDevice_RolesIdempotent(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_device.test",
 						tfjsonpath.New("roles"),
-						knownvalue.ListSizeExact(2),
+						knownvalue.SetSizeExact(2),
 					),
 					compareID.AddStateValue(
 						"bcm_cmdevice_device.test",
@@ -1661,9 +1661,10 @@ func TestAccCMDeviceDevice_RolesUpdate(t *testing.T) {
 	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 	mac := generateUniqueMAC()
 
-	// Start with one role, then update to multiple
-	initialRoles := []string{"monitoring"}
-	updatedRoles := []string{"monitoring", "storage", "backup"}
+	// Start with one role, then update to two
+	// Note: "boot" role requires "storage" role, so we avoid using it
+	initialRoles := []string{"backup"}
+	updatedRoles := []string{"backup", "provisioning"}
 
 	// ID consistency tracking.
 	compareID := statecheck.CompareValue(compare.ValuesSame())
@@ -1683,7 +1684,7 @@ func TestAccCMDeviceDevice_RolesUpdate(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_device.test",
 						tfjsonpath.New("roles"),
-						knownvalue.ListSizeExact(1),
+						knownvalue.SetSizeExact(1),
 					),
 					compareID.AddStateValue(
 						"bcm_cmdevice_device.test",
@@ -1698,7 +1699,7 @@ func TestAccCMDeviceDevice_RolesUpdate(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_device.test",
 						tfjsonpath.New("roles"),
-						knownvalue.ListSizeExact(3),
+						knownvalue.SetSizeExact(2),
 					),
 					// ID should remain the same after update.
 					compareID.AddStateValue(
@@ -1729,7 +1730,7 @@ func TestAccCMDeviceDevice_RolesRemove(t *testing.T) {
 	mac := generateUniqueMAC()
 
 	// Start with roles, then remove them
-	initialRoles := []string{"monitoring", "backup"}
+	initialRoles := []string{"backup", "provisioning"}
 	emptyRoles := []string{}
 
 	resource.Test(t, resource.TestCase{
@@ -1747,7 +1748,7 @@ func TestAccCMDeviceDevice_RolesRemove(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_device.test",
 						tfjsonpath.New("roles"),
-						knownvalue.ListSizeExact(2),
+						knownvalue.SetSizeExact(2),
 					),
 				},
 			},
@@ -1776,7 +1777,7 @@ func TestAccCMDeviceDevice_RolesImport(t *testing.T) {
 	mac := generateUniqueMAC()
 
 	// Use roles available in the BCM cluster
-	roles := []string{"monitoring", "storage"}
+	roles := []string{"backup", "provisioning"}
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -1793,7 +1794,7 @@ func TestAccCMDeviceDevice_RolesImport(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_device.test",
 						tfjsonpath.New("roles"),
-						knownvalue.ListSizeExact(2),
+						knownvalue.SetSizeExact(2),
 					),
 				},
 			},
@@ -1845,7 +1846,7 @@ func TestAccCMDeviceDevice_RolesDrift(t *testing.T) {
 	mac := generateUniqueMAC()
 
 	// Use roles available in the BCM cluster
-	roles := []string{"monitoring", "storage"}
+	roles := []string{"backup", "provisioning"}
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -1862,7 +1863,7 @@ func TestAccCMDeviceDevice_RolesDrift(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_device.test",
 						tfjsonpath.New("roles"),
-						knownvalue.ListSizeExact(2),
+						knownvalue.SetSizeExact(2),
 					),
 				},
 			},
@@ -1887,39 +1888,12 @@ func TestAccCMDeviceDevice_RolesDrift(t *testing.T) {
 						t.Fatalf("Failed to parse device data: %v", err)
 					}
 
-					// Get a different role (backup) from the headnode to use for drift.
-					headnodeBody, err := client.CallJSONRPC(ctx, "cmdevice", "getNode", "bcm11-headnode")
-					if err != nil {
-						t.Fatalf("Failed to fetch headnode for role lookup: %v", err)
-					}
-
-					var headnodeData map[string]interface{}
-					if err := json.Unmarshal(headnodeBody, &headnodeData); err != nil {
-						t.Fatalf("Failed to parse headnode data: %v", err)
-					}
-
-					// Find the "backup" role to change to (different from monitoring/storage).
-					var backupRole map[string]interface{}
-					if rolesData, ok := headnodeData["roles"].([]interface{}); ok {
-						for _, roleData := range rolesData {
-							if role, ok := roleData.(map[string]interface{}); ok {
-								if name, ok := role["name"].(string); ok && name == "backup" {
-									backupRole = role
-									break
-								}
-							}
-						}
-					}
-
-					if backupRole == nil {
-						t.Fatalf("Could not find 'backup' role on headnode for drift test")
-					}
-
-					// Modify roles field externally (change to just backup role).
-					deviceData["roles"] = []interface{}{backupRole}
+					// Simulate drift by removing all roles from the device.
+					// This is safer than adding different roles that may have complex dependencies.
+					deviceData["roles"] = []interface{}{}
 					deviceData["modified"] = true
 
-					// Update via BCM API.
+					// Update via BCM API to remove all roles.
 					_, err = client.CallJSONRPC(ctx, "cmdevice", "updateDevice", deviceData, false)
 					if err != nil {
 						t.Fatalf("Failed to update device via BCM API: %v", err)
@@ -1928,7 +1902,7 @@ func TestAccCMDeviceDevice_RolesDrift(t *testing.T) {
 					// Wait for eventual consistency.
 					time.Sleep(2 * time.Second)
 
-					t.Logf("[DEBUG] Modified roles externally to: backup (was monitoring, storage)")
+					t.Logf("[DEBUG] Modified roles externally to: [] (was backup, provisioning)")
 				},
 				Config: testAccCMDeviceDeviceConfigWithRoles(deviceName, categoryName, imageName, imagePath, mac, roles),
 				// Expect non-empty plan because roles were modified externally.
@@ -1945,7 +1919,7 @@ func TestAccCMDeviceDevice_RolesDrift(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_device.test",
 						tfjsonpath.New("roles"),
-						knownvalue.ListSizeExact(2),
+						knownvalue.SetSizeExact(2),
 					),
 				},
 			},

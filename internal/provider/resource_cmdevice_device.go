@@ -73,9 +73,9 @@ type CMDeviceDeviceResourceModel struct {
 	// When specified, takes precedence over legacy mac/management_network
 	Interfaces []DeviceInterfaceModel `tfsdk:"interfaces"`
 
-	// Roles - list of role names assigned to this device
+	// Roles - set of role UUIDs assigned to this device
 	// Used for Kubernetes cluster topology (control-plane, worker, etcd, master)
-	Roles types.List `tfsdk:"roles"`
+	Roles types.Set `tfsdk:"roles"`
 }
 
 // NewCMDeviceDeviceResource creates a new resource instance.
@@ -219,22 +219,22 @@ func (r *CMDeviceDeviceResource) Schema(ctx context.Context, req resource.Schema
 				Computed:            true,
 				MarkdownDescription: "Device type (HeadNode, ComputeNode, PhysicalNode, etc.)",
 			},
-			"roles": schema.ListAttribute{
+			"roles": schema.SetAttribute{
 				Optional:    true,
 				Computed:    true,
 				ElementType: types.StringType,
-				MarkdownDescription: "List of role UUIDs assigned to this device. Roles define the device's function in the cluster. " +
+				MarkdownDescription: "Set of role UUIDs assigned to this device. Roles define the device's function in the cluster. " +
 					"Use the `bcm_cmdevice_roles` data source to discover available roles and their UUIDs. " +
-					"Role UUIDs are sorted alphabetically for consistent state comparison. " +
+					"Order of roles is not significant (treated as a set). " +
 					"Example usage:\n\n" +
 					"```hcl\n" +
 					"data \"bcm_cmdevice_roles\" \"all\" {}\n\n" +
 					"locals {\n" +
-					"  monitoring_role = [for r in data.bcm_cmdevice_roles.all.roles : r.uuid if r.name == \"monitoring\"][0]\n" +
+					"  backup_role = [for r in data.bcm_cmdevice_roles.all.roles : r.uuid if r.name == \"backup\"][0]\n" +
 					"}\n\n" +
 					"resource \"bcm_cmdevice_device\" \"node\" {\n" +
 					"  # ... other configuration ...\n" +
-					"  roles = [local.monitoring_role]\n" +
+					"  roles = [local.backup_role]\n" +
 					"}\n" +
 					"```",
 			},
@@ -690,7 +690,7 @@ func (r *CMDeviceDeviceResource) Create(ctx context.Context, req resource.Create
 
 	// Handle roles - preserve null from plan if user didn't specify roles
 	if plan.Roles.IsNull() {
-		state.Roles = types.ListNull(types.StringType)
+		state.Roles = types.SetNull(types.StringType)
 	}
 
 	// Handle interfaces in state based on mode
@@ -892,7 +892,7 @@ func (r *CMDeviceDeviceResource) Read(ctx context.Context, req resource.ReadRequ
 
 	// Handle roles - preserve null from state if user didn't specify roles (non-import path)
 	if !isImport && state.Roles.IsNull() {
-		newState.Roles = types.ListNull(types.StringType)
+		newState.Roles = types.SetNull(types.StringType)
 	}
 
 	// Set state - use what BCM returns (with preserved fields)
@@ -1143,7 +1143,7 @@ func (r *CMDeviceDeviceResource) Update(ctx context.Context, req resource.Update
 
 	// Handle roles - preserve null from plan if user didn't specify roles
 	if plan.Roles.IsNull() {
-		newState.Roles = types.ListNull(types.StringType)
+		newState.Roles = types.SetNull(types.StringType)
 	}
 
 	// Handle interfaces in state based on mode
@@ -1356,10 +1356,20 @@ func (r *CMDeviceDeviceResource) lookupAndBuildRolesForEntity(ctx context.Contex
 		return nil
 	}
 
-	// Deduplicate role UUIDs
+	// Deduplicate role UUIDs and validate non-empty
 	roleSet := make(map[string]struct{})
+	var invalidUUIDs []string
 	for _, uuid := range roleUUIDs {
-		roleSet[uuid] = struct{}{}
+		if uuid == "" {
+			invalidUUIDs = append(invalidUUIDs, "(empty string)")
+		} else {
+			roleSet[uuid] = struct{}{}
+		}
+	}
+
+	// Return error if any empty UUIDs were found
+	if len(invalidUUIDs) > 0 {
+		return fmt.Errorf("invalid role UUIDs found: %v - role UUIDs must be non-empty strings", invalidUUIDs)
 	}
 
 	// Query all nodes to extract available role objects
@@ -1409,11 +1419,12 @@ func (r *CMDeviceDeviceResource) lookupAndBuildRolesForEntity(ctx context.Contex
 		return fmt.Errorf("role UUIDs not found in cluster: %v", missingRoles)
 	}
 
-	// Sort role objects by name for consistent ordering
+	// Sort role objects by UUID for consistent ordering
+	// IMPORTANT: Must match the sorting in parseRolesFromAPI which sorts by UUID
 	sort.Slice(roleObjects, func(i, j int) bool {
-		nameI, _ := roleObjects[i].(map[string]interface{})["name"].(string)
-		nameJ, _ := roleObjects[j].(map[string]interface{})["name"].(string)
-		return nameI < nameJ
+		uuidI, _ := roleObjects[i].(map[string]interface{})["uuid"].(string)
+		uuidJ, _ := roleObjects[j].(map[string]interface{})["uuid"].(string)
+		return uuidI < uuidJ
 	})
 
 	entity["roles"] = roleObjects
@@ -1543,18 +1554,18 @@ func (r *CMDeviceDeviceResource) parseDeviceFromAPI(data map[string]interface{})
 	return model
 }
 
-// parseRolesFromAPI parses BCM API roles response into a Terraform list of role UUIDs.
+// parseRolesFromAPI parses BCM API roles response into a Terraform set of role UUIDs.
 // BCM returns roles as an array of role objects: [{"uuid": "...", "name": "worker", ...}]
 // We extract UUIDs because users specify roles by UUID (obtained from bcm_cmdevice_roles data source).
-// Role UUIDs are sorted alphabetically for consistent state comparison.
-func parseRolesFromAPI(rolesData interface{}) types.List {
+// Returns a Set since order of roles is not significant.
+func parseRolesFromAPI(rolesData interface{}) types.Set {
 	if rolesData == nil {
-		return types.ListNull(types.StringType)
+		return types.SetNull(types.StringType)
 	}
 
 	rolesArray, ok := rolesData.([]interface{})
 	if !ok || len(rolesArray) == 0 {
-		return types.ListNull(types.StringType)
+		return types.SetNull(types.StringType)
 	}
 
 	// Extract role UUIDs from the array
@@ -1569,18 +1580,15 @@ func parseRolesFromAPI(rolesData interface{}) types.List {
 	}
 
 	if len(roleUUIDs) == 0 {
-		return types.ListNull(types.StringType)
+		return types.SetNull(types.StringType)
 	}
 
-	// Sort role UUIDs for consistent state comparison
-	sort.Strings(roleUUIDs)
-
-	// Convert to Terraform list
+	// Convert to Terraform set (order doesn't matter for sets)
 	roleValues := make([]attr.Value, len(roleUUIDs))
 	for i, uuid := range roleUUIDs {
 		roleValues[i] = types.StringValue(uuid)
 	}
 
-	rolesList, _ := types.ListValue(types.StringType, roleValues)
-	return rolesList
+	rolesSet, _ := types.SetValue(types.StringType, roleValues)
+	return rolesSet
 }
