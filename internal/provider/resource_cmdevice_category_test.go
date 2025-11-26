@@ -3194,13 +3194,9 @@ func TestAccCMDeviceCategoryResource_ExcludeLists(t *testing.T) {
 			// Step 1: Create with all exclude lists
 			{
 				Config: testAccCMDeviceCategoryResourceConfig_ExcludeLists(
-					categoryName,
-					excludeListFull,
-					excludeListGrab,
-					excludeListGrabnew,
-					excludeListSync,
-					excludeListUpdate,
-				),
+				categoryName,
+				excludeListFull,
+			),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_category.test",
@@ -3247,13 +3243,9 @@ func TestAccCMDeviceCategoryResource_ExcludeLists(t *testing.T) {
 			// Step 2: Idempotency check after Create
 			{
 				Config: testAccCMDeviceCategoryResourceConfig_ExcludeLists(
-					categoryName,
-					excludeListFull,
-					excludeListGrab,
-					excludeListGrabnew,
-					excludeListSync,
-					excludeListUpdate,
-				),
+				categoryName,
+				excludeListFull,
+			),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
@@ -3263,13 +3255,9 @@ func TestAccCMDeviceCategoryResource_ExcludeLists(t *testing.T) {
 			// Step 3: Update exclude_list_full
 			{
 				Config: testAccCMDeviceCategoryResourceConfig_ExcludeLists(
-					categoryName,
-					excludeListFullUpdated,
-					excludeListGrab,
-					excludeListGrabnew,
-					excludeListSync,
-					excludeListUpdate,
-				),
+				categoryName,
+				excludeListFullUpdated,
+			),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_category.test",
@@ -3286,13 +3274,9 @@ func TestAccCMDeviceCategoryResource_ExcludeLists(t *testing.T) {
 			// Step 4: Idempotency check after Update
 			{
 				Config: testAccCMDeviceCategoryResourceConfig_ExcludeLists(
-					categoryName,
-					excludeListFullUpdated,
-					excludeListGrab,
-					excludeListGrabnew,
-					excludeListSync,
-					excludeListUpdate,
-				),
+				categoryName,
+				excludeListFullUpdated,
+			),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
@@ -3302,13 +3286,9 @@ func TestAccCMDeviceCategoryResource_ExcludeLists(t *testing.T) {
 			// Step 5: Import and verify
 			{
 				Config: testAccCMDeviceCategoryResourceConfig_ExcludeLists(
-					categoryName,
-					excludeListFullUpdated,
-					excludeListGrab,
-					excludeListGrabnew,
-					excludeListSync,
-					excludeListUpdate,
-				),
+				categoryName,
+				excludeListFullUpdated,
+			),
 				ResourceName:            "bcm_cmdevice_category.test",
 				ImportState:             true,
 				ImportStateVerify:       true,
@@ -3325,7 +3305,7 @@ func TestAccCMDeviceCategoryResource_ExcludeLists(t *testing.T) {
 }
 
 // testAccCMDeviceCategoryResourceConfig_ExcludeLists creates config with exclude list fields.
-func testAccCMDeviceCategoryResourceConfig_ExcludeLists(name, excludeFull, excludeGrab, excludeGrabnew, excludeSync, excludeUpdate string) string {
+func testAccCMDeviceCategoryResourceConfig_ExcludeLists(name, excludeFull string) string {
 	return fmt.Sprintf(`
 provider "bcm" {
   endpoint             = %[1]q
@@ -3352,10 +3332,10 @@ resource "bcm_cmdevice_category" "test" {
   }
 
   exclude_list_full    = %[5]q
-  exclude_list_grab    = %[6]q
-  exclude_list_grabnew = %[7]q
-  exclude_list_sync    = %[8]q
-  exclude_list_update  = %[9]q
+  exclude_list_grab    = "/proc/*\n/sys/*"
+  exclude_list_grabnew = "/dev/*"
+  exclude_list_sync    = "/run/*\n/var/run/*"
+  exclude_list_update  = "/boot/grub/*"
 }
 `,
 		os.Getenv("BCM_ENDPOINT"),
@@ -3363,10 +3343,6 @@ resource "bcm_cmdevice_category" "test" {
 		os.Getenv("BCM_PASSWORD"),
 		name,
 		excludeFull,
-		excludeGrab,
-		excludeGrabnew,
-		excludeSync,
-		excludeUpdate,
 	)
 }
 
@@ -3619,95 +3595,6 @@ resource "bcm_cmdevice_category" "test" {
 	)
 }
 
-// testAccCMDeviceCategoryResourceConfig_BMCSettingsMinimal creates config with minimal BMC settings.
-// Uses only firmware_manage_mode to avoid password requirement.
-// Note: This config still fails due to provider bug with sensitive attributes.
-func testAccCMDeviceCategoryResourceConfig_BMCSettingsMinimal(name, firmwareMode string) string {
-	return fmt.Sprintf(`
-provider "bcm" {
-  endpoint             = %[1]q
-  username             = %[2]q
-  password             = %[3]q
-  insecure_skip_verify = true
-}
-
-data "bcm_cmdevice_categories" "all" {}
-data "bcm_cmpart_softwareimages" "all" {}
-
-locals {
-  management_network_uuid = length(data.bcm_cmdevice_categories.all.categories) > 0 ? data.bcm_cmdevice_categories.all.categories[0].management_network_id : "00000000-0000-0000-0000-000000000000"
-  software_image_uuid = length(data.bcm_cmpart_softwareimages.all.images) > 0 ? data.bcm_cmpart_softwareimages.all.images[0].uuid : "00000000-0000-0000-0000-000000000000"
-}
-
-resource "bcm_cmdevice_category" "test" {
-  name               = %[4]q
-  management_network = local.management_network_uuid
-  notes              = "BMC settings test (minimal)"
-
-  software_image_proxy = {
-    parent_software_image = local.software_image_uuid
-  }
-
-  bmc_settings = {
-    firmware_manage_mode = %[5]q
-  }
-}
-`,
-		os.Getenv("BCM_ENDPOINT"),
-		os.Getenv("BCM_USERNAME"),
-		os.Getenv("BCM_PASSWORD"),
-		name,
-		firmwareMode,
-	)
-}
-
-// testAccCMDeviceCategoryResourceConfig_BMCSettings creates config with full BMC settings.
-// Note: This helper requires password when user_name or user_id is set.
-func testAccCMDeviceCategoryResourceConfig_BMCSettings(name, userName, privilege, firmwareMode string) string {
-	return fmt.Sprintf(`
-provider "bcm" {
-  endpoint             = %[1]q
-  username             = %[2]q
-  password             = %[3]q
-  insecure_skip_verify = true
-}
-
-data "bcm_cmdevice_categories" "all" {}
-data "bcm_cmpart_softwareimages" "all" {}
-
-locals {
-  management_network_uuid = length(data.bcm_cmdevice_categories.all.categories) > 0 ? data.bcm_cmdevice_categories.all.categories[0].management_network_id : "00000000-0000-0000-0000-000000000000"
-  software_image_uuid = length(data.bcm_cmpart_softwareimages.all.images) > 0 ? data.bcm_cmpart_softwareimages.all.images[0].uuid : "00000000-0000-0000-0000-000000000000"
-}
-
-resource "bcm_cmdevice_category" "test" {
-  name               = %[4]q
-  management_network = local.management_network_uuid
-  notes              = "BMC settings test"
-
-  software_image_proxy = {
-    parent_software_image = local.software_image_uuid
-  }
-
-  bmc_settings = {
-    user_name            = %[5]q
-    privilege            = %[6]q
-    firmware_manage_mode = %[7]q
-    password             = "TestBMCPassword123!"
-    user_id              = 2
-  }
-}
-`,
-		os.Getenv("BCM_ENDPOINT"),
-		os.Getenv("BCM_USERNAME"),
-		os.Getenv("BCM_PASSWORD"),
-		name,
-		userName,
-		privilege,
-		firmwareMode,
-	)
-}
-
 // TestAccCMDeviceCategoryResource_FilesystemMounts tests the fsmounts list field.
 // Note: BCM does not persist fsmounts after category creation (returns null).
 // This test verifies that the config helper works and the category can be created,
@@ -3802,68 +3689,6 @@ resource "bcm_cmdevice_category" "test" {
 		os.Getenv("BCM_USERNAME"),
 		os.Getenv("BCM_PASSWORD"),
 		name,
-	)
-}
-
-// testAccCMDeviceCategoryResourceConfig_FilesystemMounts creates config with fsmounts.
-func testAccCMDeviceCategoryResourceConfig_FilesystemMounts(name string, mountCount int) string {
-	// Build fsmounts dynamically
-	mounts := ""
-	mountConfigs := []struct {
-		device       string
-		mountpoint   string
-		filesystem   string
-		mountoptions string
-	}{
-		{"head:/home", "/home", "nfs", "defaults,rw,noatime"},
-		{"head:/shared", "/shared", "nfs", "defaults,ro"},
-		{"head:/data", "/data", "nfs", "defaults,rw,sync"},
-	}
-	for i := 0; i < mountCount && i < len(mountConfigs); i++ {
-		cfg := mountConfigs[i]
-		mounts += fmt.Sprintf(`
-    {
-      device       = "%s"
-      mountpoint   = "%s"
-      filesystem   = "%s"
-      mountoptions = "%s"
-    },`, cfg.device, cfg.mountpoint, cfg.filesystem, cfg.mountoptions)
-	}
-
-	return fmt.Sprintf(`
-provider "bcm" {
-  endpoint             = %[1]q
-  username             = %[2]q
-  password             = %[3]q
-  insecure_skip_verify = true
-}
-
-data "bcm_cmdevice_categories" "all" {}
-data "bcm_cmpart_softwareimages" "all" {}
-
-locals {
-  management_network_uuid = length(data.bcm_cmdevice_categories.all.categories) > 0 ? data.bcm_cmdevice_categories.all.categories[0].management_network_id : "00000000-0000-0000-0000-000000000000"
-  software_image_uuid = length(data.bcm_cmpart_softwareimages.all.images) > 0 ? data.bcm_cmpart_softwareimages.all.images[0].uuid : "00000000-0000-0000-0000-000000000000"
-}
-
-resource "bcm_cmdevice_category" "test" {
-  name               = %[4]q
-  management_network = local.management_network_uuid
-  notes              = "Filesystem mounts test"
-
-  software_image_proxy = {
-    parent_software_image = local.software_image_uuid
-  }
-
-  fsmounts = [%[5]s
-  ]
-}
-`,
-		os.Getenv("BCM_ENDPOINT"),
-		os.Getenv("BCM_USERNAME"),
-		os.Getenv("BCM_PASSWORD"),
-		name,
-		mounts,
 	)
 }
 
@@ -4122,66 +3947,5 @@ resource "bcm_cmdevice_category" "test" {
 		os.Getenv("BCM_USERNAME"),
 		os.Getenv("BCM_PASSWORD"),
 		name,
-	)
-}
-
-// testAccCMDeviceCategoryResourceConfig_Roles creates config with roles.
-// Note: This config helper exists for documentation but BCM doesn't persist roles.
-func testAccCMDeviceCategoryResourceConfig_Roles(name string, roleCount int) string {
-	// Build roles dynamically
-	roles := ""
-	roleConfigs := []struct {
-		roleName    string
-		childType   string
-		addServices bool
-	}{
-		{"compute", "ComputeRole", true},
-		{"storage", "StorageRole", false},
-		{"backup", "BackupRole", true},
-	}
-	for i := 0; i < roleCount && i < len(roleConfigs); i++ {
-		cfg := roleConfigs[i]
-		roles += fmt.Sprintf(`
-    {
-      name         = "%s"
-      child_type   = "%s"
-      add_services = %t
-    },`, cfg.roleName, cfg.childType, cfg.addServices)
-	}
-
-	return fmt.Sprintf(`
-provider "bcm" {
-  endpoint             = %[1]q
-  username             = %[2]q
-  password             = %[3]q
-  insecure_skip_verify = true
-}
-
-data "bcm_cmdevice_categories" "all" {}
-data "bcm_cmpart_softwareimages" "all" {}
-
-locals {
-  management_network_uuid = length(data.bcm_cmdevice_categories.all.categories) > 0 ? data.bcm_cmdevice_categories.all.categories[0].management_network_id : "00000000-0000-0000-0000-000000000000"
-  software_image_uuid = length(data.bcm_cmpart_softwareimages.all.images) > 0 ? data.bcm_cmpart_softwareimages.all.images[0].uuid : "00000000-0000-0000-0000-000000000000"
-}
-
-resource "bcm_cmdevice_category" "test" {
-  name               = %[4]q
-  management_network = local.management_network_uuid
-  notes              = "Roles configuration test"
-
-  software_image_proxy = {
-    parent_software_image = local.software_image_uuid
-  }
-
-  roles = [%[5]s
-  ]
-}
-`,
-		os.Getenv("BCM_ENDPOINT"),
-		os.Getenv("BCM_USERNAME"),
-		os.Getenv("BCM_PASSWORD"),
-		name,
-		roles,
 	)
 }
