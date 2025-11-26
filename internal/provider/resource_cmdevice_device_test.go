@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/hashicorp/terraform-plugin-testing/compare"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
@@ -2295,8 +2296,10 @@ func TestAccCMDeviceDevice_InvalidRoleUUID(t *testing.T) {
 	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 	mac := generateUniqueMAC()
 
-	// UUID format is NOT accepted - it will be treated as invalid role name
-	invalidRoles := []string{"99999999-9999-9999-9999-999999999999"}
+	// Generate a random UUID to prove UUID format is NOT accepted
+	// It will be treated as an invalid role name
+	testUUID := uuid.New().String()
+	invalidRoles := []string{testUUID}
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -2306,7 +2309,7 @@ func TestAccCMDeviceDevice_InvalidRoleUUID(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config:      testAccCMDeviceDeviceConfigWithRoleNames(deviceName, categoryName, imageName, imagePath, mac, invalidRoles),
-				ExpectError: regexp.MustCompile(`99999999-9999-9999-9999-999999999999`),
+				ExpectError: regexp.MustCompile(`Roles not found`),
 			},
 		},
 	})
