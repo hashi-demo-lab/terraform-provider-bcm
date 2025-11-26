@@ -188,18 +188,17 @@ output "ipmi_devices" {
 - `part_number` (String) Hardware part number
 - `partition` (String) Partition UUID reference (uses category default if not specified)
 - `power_control` (String) Power control method (e.g., 'none', 'ipmi', 'ipdu', 'redfish')
-- `roles` (Set of String) Set of role UUIDs assigned to this device. Roles define the device's function in the cluster. Use the `bcm_cmdevice_roles` data source to discover available roles and their UUIDs. Order of roles is not significant (treated as a set). Example usage:
+- `roles` (Set of String) Set of role names assigned to this device. Roles define the device's function in the cluster (e.g., "backup", "provisioning", "boot"). Use the `bcm_cmdevice_roles` data source to discover available roles. **Only role names are accepted** (not UUIDs). Role names are case-sensitive.
+
+Example usage:
 
 ```hcl
+# Discover available roles
 data "bcm_cmdevice_roles" "all" {}
-
-locals {
-  backup_role = [for r in data.bcm_cmdevice_roles.all.roles : r.uuid if r.name == "backup"][0]
-}
 
 resource "bcm_cmdevice_device" "node" {
   # ... other configuration ...
-  roles = [local.backup_role]
+  roles = [data.bcm_cmdevice_roles.all.roles[0].name]
 }
 ```
 - `serial_number` (String) Hardware serial number

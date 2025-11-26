@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -223,18 +224,17 @@ func (r *CMDeviceDeviceResource) Schema(ctx context.Context, req resource.Schema
 				Optional:    true,
 				Computed:    true,
 				ElementType: types.StringType,
-				MarkdownDescription: "Set of role UUIDs assigned to this device. Roles define the device's function in the cluster. " +
-					"Use the `bcm_cmdevice_roles` data source to discover available roles and their UUIDs. " +
-					"Order of roles is not significant (treated as a set). " +
+				MarkdownDescription: "Set of role names assigned to this device. Roles define the device's function " +
+					"in the cluster (e.g., \"backup\", \"provisioning\", \"boot\"). Use the `bcm_cmdevice_roles` " +
+					"data source to discover available roles. **Only role names are accepted** (not UUIDs). " +
+					"Role names are case-sensitive.\n\n" +
 					"Example usage:\n\n" +
 					"```hcl\n" +
+					"# Discover available roles\n" +
 					"data \"bcm_cmdevice_roles\" \"all\" {}\n\n" +
-					"locals {\n" +
-					"  backup_role = [for r in data.bcm_cmdevice_roles.all.roles : r.uuid if r.name == \"backup\"][0]\n" +
-					"}\n\n" +
 					"resource \"bcm_cmdevice_device\" \"node\" {\n" +
 					"  # ... other configuration ...\n" +
-					"  roles = [local.backup_role]\n" +
+					"  roles = [data.bcm_cmdevice_roles.all.roles[0].name]\n" +
 					"}\n" +
 					"```",
 			},
@@ -1336,40 +1336,41 @@ func (r *CMDeviceDeviceResource) buildDeviceAPIEntityWithExisting(plan CMDeviceD
 	return entity
 }
 
-// lookupAndBuildRolesForEntity looks up role objects by UUID and adds them to the device entity.
-// BCM requires full role objects (not just UUIDs or names) when assigning roles to devices.
-// This function queries all nodes to extract available role objects, then matches them by UUID.
+// lookupAndBuildRolesForEntity looks up role objects by name and adds them to the device entity.
+// BCM requires full role objects (not just names) when assigning roles to devices.
+// This function queries all nodes to extract available role objects, then matches them by name.
+// Only role names are accepted - UUIDs are NOT supported (use role names for clarity).
 func (r *CMDeviceDeviceResource) lookupAndBuildRolesForEntity(ctx context.Context, plan CMDeviceDeviceResourceModel, entity map[string]interface{}) error {
 	if plan.Roles.IsNull() || plan.Roles.IsUnknown() {
 		return nil
 	}
 
-	var roleUUIDs []string
-	diags := plan.Roles.ElementsAs(ctx, &roleUUIDs, false)
+	var roleIdentifiers []string
+	diags := plan.Roles.ElementsAs(ctx, &roleIdentifiers, false)
 	if diags.HasError() {
-		return fmt.Errorf("failed to extract role UUIDs from plan")
+		return fmt.Errorf("failed to extract role identifiers from plan")
 	}
 
 	// If empty list, set empty roles (explicit removal)
-	if len(roleUUIDs) == 0 {
+	if len(roleIdentifiers) == 0 {
 		entity["roles"] = []interface{}{}
 		return nil
 	}
 
-	// Deduplicate role UUIDs and validate non-empty
+	// Deduplicate role identifiers and validate non-empty
 	roleSet := make(map[string]struct{})
-	var invalidUUIDs []string
-	for _, uuid := range roleUUIDs {
-		if uuid == "" {
-			invalidUUIDs = append(invalidUUIDs, "(empty string)")
+	var invalidIdentifiers []string
+	for _, id := range roleIdentifiers {
+		if id == "" {
+			invalidIdentifiers = append(invalidIdentifiers, "(empty string)")
 		} else {
-			roleSet[uuid] = struct{}{}
+			roleSet[id] = struct{}{}
 		}
 	}
 
-	// Return error if any empty UUIDs were found
-	if len(invalidUUIDs) > 0 {
-		return fmt.Errorf("invalid role UUIDs found: %v - role UUIDs must be non-empty strings", invalidUUIDs)
+	// Return error if any empty identifiers were found
+	if len(invalidIdentifiers) > 0 {
+		return fmt.Errorf("invalid role identifiers found: %v - role identifiers must be non-empty strings", invalidIdentifiers)
 	}
 
 	// Query all nodes to extract available role objects
@@ -1384,26 +1385,29 @@ func (r *CMDeviceDeviceResource) lookupAndBuildRolesForEntity(ctx context.Contex
 		return fmt.Errorf("failed to parse nodes response: %w", err)
 	}
 
-	// Build a map of all available role objects by UUID
-	availableRoles := make(map[string]map[string]interface{})
+	// Build map of all available role objects by name
+	rolesByName := make(map[string]map[string]interface{})
 	for _, node := range nodes {
 		if rolesData, ok := node["roles"].([]interface{}); ok {
 			for _, roleData := range rolesData {
 				if role, ok := roleData.(map[string]interface{}); ok {
-					if uuid, ok := role["uuid"].(string); ok && uuid != "" {
-						availableRoles[uuid] = role
+					if name, ok := role["name"].(string); ok && name != "" {
+						rolesByName[name] = role
 					}
 				}
 			}
 		}
 	}
 
-	// Match requested role UUIDs to full role objects
+	// Match requested role identifiers to full role objects
 	roleObjects := make([]interface{}, 0, len(roleSet))
 	var missingRoles []string
 
-	for uuid := range roleSet {
-		if role, ok := availableRoles[uuid]; ok {
+	for identifier := range roleSet {
+		// Only lookup by name - UUIDs are NOT supported
+		role, found := rolesByName[identifier]
+
+		if found {
 			// Create a copy of the role object for this assignment
 			roleCopy := make(map[string]interface{})
 			for k, v := range role {
@@ -1411,20 +1415,32 @@ func (r *CMDeviceDeviceResource) lookupAndBuildRolesForEntity(ctx context.Contex
 			}
 			roleObjects = append(roleObjects, roleCopy)
 		} else {
-			missingRoles = append(missingRoles, uuid)
+			missingRoles = append(missingRoles, identifier)
 		}
 	}
 
 	if len(missingRoles) > 0 {
-		return fmt.Errorf("role UUIDs not found in cluster: %v", missingRoles)
+		// Build list of available role names for helpful error message
+		availableNames := make([]string, 0, len(rolesByName))
+		for name := range rolesByName {
+			availableNames = append(availableNames, name)
+		}
+		sort.Strings(availableNames)
+		sort.Strings(missingRoles)
+
+		return fmt.Errorf(
+			"Roles not found in cluster: %s\nAvailable roles: %s\nUse the `bcm_cmdevice_roles` data source to discover available roles.",
+			strings.Join(missingRoles, ", "),
+			strings.Join(availableNames, ", "),
+		)
 	}
 
 	// Sort role objects by UUID for consistent ordering
-	// IMPORTANT: Must match the sorting in parseRolesFromAPI which sorts by UUID
+	// IMPORTANT: Must match the sorting in parseRolesFromAPI which sorts by name
 	sort.Slice(roleObjects, func(i, j int) bool {
-		uuidI, _ := roleObjects[i].(map[string]interface{})["uuid"].(string)
-		uuidJ, _ := roleObjects[j].(map[string]interface{})["uuid"].(string)
-		return uuidI < uuidJ
+		nameI, _ := roleObjects[i].(map[string]interface{})["name"].(string)
+		nameJ, _ := roleObjects[j].(map[string]interface{})["name"].(string)
+		return nameI < nameJ
 	})
 
 	entity["roles"] = roleObjects
@@ -1554,9 +1570,9 @@ func (r *CMDeviceDeviceResource) parseDeviceFromAPI(data map[string]interface{})
 	return model
 }
 
-// parseRolesFromAPI parses BCM API roles response into a Terraform set of role UUIDs.
-// BCM returns roles as an array of role objects: [{"uuid": "...", "name": "worker", ...}]
-// We extract UUIDs because users specify roles by UUID (obtained from bcm_cmdevice_roles data source).
+// parseRolesFromAPI parses BCM API roles response into a Terraform set of role names.
+// BCM returns roles as an array of role objects: [{"uuid": "...", "name": "backup", ...}]
+// We extract names because users configure roles by name (the recommended approach).
 // Returns a Set since order of roles is not significant.
 func parseRolesFromAPI(rolesData interface{}) types.Set {
 	if rolesData == nil {
@@ -1568,25 +1584,25 @@ func parseRolesFromAPI(rolesData interface{}) types.Set {
 		return types.SetNull(types.StringType)
 	}
 
-	// Extract role UUIDs from the array
-	roleUUIDs := make([]string, 0, len(rolesArray))
+	// Extract role names from the array
+	roleNames := make([]string, 0, len(rolesArray))
 	for _, roleItem := range rolesArray {
 		if role, ok := roleItem.(map[string]interface{}); ok {
-			// Role object with "uuid" field
-			if uuid, ok := role["uuid"].(string); ok && uuid != "" {
-				roleUUIDs = append(roleUUIDs, uuid)
+			// Role object with "name" field
+			if name, ok := role["name"].(string); ok && name != "" {
+				roleNames = append(roleNames, name)
 			}
 		}
 	}
 
-	if len(roleUUIDs) == 0 {
+	if len(roleNames) == 0 {
 		return types.SetNull(types.StringType)
 	}
 
 	// Convert to Terraform set (order doesn't matter for sets)
-	roleValues := make([]attr.Value, len(roleUUIDs))
-	for i, uuid := range roleUUIDs {
-		roleValues[i] = types.StringValue(uuid)
+	roleValues := make([]attr.Value, len(roleNames))
+	for i, name := range roleNames {
+		roleValues[i] = types.StringValue(name)
 	}
 
 	rolesSet, _ := types.SetValue(types.StringType, roleValues)

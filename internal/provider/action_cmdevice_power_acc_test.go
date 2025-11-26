@@ -186,6 +186,7 @@ func buildActionConfig(t *testing.T, deviceID, powerAction string, waitForComple
 //
 //nolint:unused // Reserved for future use when terraform-plugin-testing supports Actions
 type action_schema_StringAttribute = interface{ IsRequired() bool }
+
 //nolint:unused // Reserved for future use when terraform-plugin-testing supports Actions
 type action_schema_BoolAttribute = interface{ IsOptional() bool }
 
