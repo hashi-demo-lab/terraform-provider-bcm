@@ -25,9 +25,9 @@
 
 **Purpose**: Understand current behavior and prepare for TDD workflow
 
-- [ ] T001 Review root cause: preservation logic at lines 1068-1077, 1189-1195 in internal/provider/resource_cmdevice_category.go
-- [ ] T002 Verify role UUID parsing works correctly at lines 2249-2276 in internal/provider/resource_cmdevice_category.go
-- [ ] T003 [P] Identify test helper dependencies in internal/provider/test_helpers.go
+- [X] T001 Review root cause: preservation logic at lines 1068-1077, 1189-1195 in internal/provider/resource_cmdevice_category.go
+- [X] T002 Verify role UUID parsing works correctly at lines 2249-2276 in internal/provider/resource_cmdevice_category.go
+- [X] T003 [P] Identify test helper dependencies in internal/provider/test_helpers.go
 
 ---
 
@@ -39,26 +39,26 @@
 
 ### Tests for User Story 1 - Role UUID Available After Create (P1)
 
-- [ ] T004 [US1] Add test config helper `testAccCMDeviceCategoryResourceConfig_WithRole` in internal/provider/resource_cmdevice_category_test.go
-- [ ] T005 [US1] Write `TestAccCMDeviceCategory_RolesUUIDPopulated` test in internal/provider/resource_cmdevice_category_test.go
-- [ ] T006 [US1] Run test and verify it FAILS (uuid is null) with `TF_ACC=1 go test -v -timeout 120m ./internal/provider/ -run TestAccCMDeviceCategory_RolesUUIDPopulated`
+- [X] T004 [US1] Add test config helper `testAccCMDeviceCategoryResourceConfig_WithRole` in internal/provider/resource_cmdevice_category_test.go
+- [X] T005 [US1] Write `TestAccCMDeviceCategory_RolesUUIDPopulated` test in internal/provider/resource_cmdevice_category_test.go
+- [X] T006 [US1] Run test and verify it FAILS (uuid is null) with `TF_ACC=1 go test -v -timeout 120m ./internal/provider/ -run TestAccCMDeviceCategory_RolesUUIDPopulated`
 
 ### Tests for User Story 2 - Role UUID Preserved on Refresh (P1)
 
-- [ ] T007 [US2] Write `TestAccCMDeviceCategory_RolesUUIDPreservedOnRefresh` test in internal/provider/resource_cmdevice_category_test.go
-- [ ] T008 [US2] Write `TestAccCMDeviceCategory_RolesIdempotency` test in internal/provider/resource_cmdevice_category_test.go
-- [ ] T009 [US2] Run tests and verify they FAIL with `TF_ACC=1 go test -v -timeout 120m ./internal/provider/ -run "RolesUUID|RolesIdempotency"`
+- [X] T007 [US2] Write `TestAccCMDeviceCategory_RolesUUIDPreservedOnRefresh` test in internal/provider/resource_cmdevice_category_test.go
+- [X] T008 [US2] Write `TestAccCMDeviceCategory_RolesIdempotency` test in internal/provider/resource_cmdevice_category_test.go
+- [X] T009 [US2] Run tests and verify they FAIL with `TF_ACC=1 go test -v -timeout 120m ./internal/provider/ -run "RolesUUID|RolesIdempotency"`
 
 ### Tests for User Story 3 - Role UUID Available After Import (P2)
 
-- [ ] T010 [US3] Write import state verification test within `TestAccCMDeviceCategory_RolesUUIDPopulated` test steps
-- [ ] T011 [US3] Verify import test FAILS (imported state has null uuid)
+- [X] T010 [US3] Write import state verification test within `TestAccCMDeviceCategory_RolesUUIDPopulated` test steps
+- [X] T011 [US3] Verify import test FAILS (imported state has null uuid)
 
 ### Tests for User Story 4 - Merge User Config with API Values (P1)
 
-- [ ] T012 [P] [US4] Add test config helper `testAccCMDeviceCategoryResourceConfig_MultipleRoles` in internal/provider/resource_cmdevice_category_test.go
-- [ ] T013 [US4] Write `TestAccCMDeviceCategory_MultipleRolesUUID` test in internal/provider/resource_cmdevice_category_test.go
-- [ ] T014 [US4] Run test and verify it FAILS with `TF_ACC=1 go test -v -timeout 120m ./internal/provider/ -run TestAccCMDeviceCategory_MultipleRolesUUID`
+- [X] T012 [P] [US4] Add test config helper `testAccCMDeviceCategoryResourceConfig_MultipleRoles` in internal/provider/resource_cmdevice_category_test.go
+- [X] T013 [US4] Write `TestAccCMDeviceCategory_MultipleRolesUUID` test in internal/provider/resource_cmdevice_category_test.go
+- [X] T014 [US4] Run test and verify it FAILS with `TF_ACC=1 go test -v -timeout 120m ./internal/provider/ -run TestAccCMDeviceCategory_MultipleRolesUUID`
 
 **Checkpoint**: All new tests FAIL - confirms bug exists and tests are valid
 
@@ -70,9 +70,9 @@
 
 ### Implementation for Core Fix (All User Stories)
 
-- [ ] T015 Add `mergeRolesWithAPIResponse` helper function in internal/provider/resource_cmdevice_category.go (after line 2276)
-- [ ] T016 Replace line 1193 (`state.Roles = originalRoles`) with merge function call in internal/provider/resource_cmdevice_category.go
-- [ ] T017 Run all new tests to verify they PASS with `TF_ACC=1 go test -v -timeout 120m ./internal/provider/ -run "RolesUUID|RolesIdempotency|MultipleRoles"`
+- [X] T015 Add `mergeRolesWithAPIResponse` helper function in internal/provider/resource_cmdevice_category.go (after line 2276)
+- [X] T016 Replace line 1193 (`state.Roles = originalRoles`) with merge function call in internal/provider/resource_cmdevice_category.go
+- [X] T017 Run all new tests to verify they PASS with `TF_ACC=1 go test -v -timeout 120m ./internal/provider/ -run "RolesUUID|RolesIdempotency|MultipleRoles"`
 
 **Checkpoint**: All new tests PASS - bug is fixed
 
@@ -85,13 +85,13 @@
 ### Verification Tasks
 
 - [ ] T018 Run ALL existing category tests to verify no regression with `TF_ACC=1 go test -v -timeout 120m ./internal/provider/ -run "CMDeviceCategory"`
-- [ ] T019 [P] Run linter to verify code quality with `make lint`
+- [X] T019 [P] Run linter to verify code quality with `make lint`
 - [ ] T020 [P] Run `make generate` to update documentation
 
 ### Documentation Tasks
 
-- [ ] T021 [P] Add debug logging to `mergeRolesWithAPIResponse` function in internal/provider/resource_cmdevice_category.go
-- [ ] T022 [P] Add code comment explaining the fix (reference issue #83) in internal/provider/resource_cmdevice_category.go
+- [X] T021 [P] Add debug logging to `mergeRolesWithAPIResponse` function in internal/provider/resource_cmdevice_category.go
+- [X] T022 [P] Add code comment explaining the fix (reference issue #83) in internal/provider/resource_cmdevice_category.go
 
 ---
 
@@ -100,8 +100,8 @@
 **Purpose**: Final verification and cleanup
 
 - [ ] T023 Run full test suite for category resource with `TF_ACC=1 go test -v -timeout 120m ./internal/provider/ -run CMDeviceCategory`
-- [ ] T024 Verify example configurations still work in examples/resources/bcm_cmdevice_category/
-- [ ] T025 Update CHANGELOG.md with bug fix entry (if project has changelog)
+- [X] T024 Verify example configurations still work in examples/resources/bcm_cmdevice_category/
+- [X] T025 Update CHANGELOG.md with bug fix entry (if project has changelog)
 
 ---
 

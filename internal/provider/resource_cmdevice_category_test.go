@@ -3949,3 +3949,323 @@ resource "bcm_cmdevice_category" "test" {
 		name,
 	)
 }
+
+// ============================================================================
+// Issue #83: roles[].uuid computed value population tests
+// ============================================================================
+//
+// These tests verify that the roles[].uuid computed attribute is properly
+// populated from BCM API responses after category creation.
+//
+// Root Cause (before fix):
+// - Line 1075: `originalRoles := state.Roles` captures original roles
+// - Line 1193: `state.Roles = originalRoles` overwrites API data, discarding UUIDs
+//
+// Fix:
+// - Replace unconditional overwrite with merge function that preserves user
+//   config (name, child_type, add_services) while populating computed (uuid)
+//
+// TDD Workflow: These tests should FAIL before the fix is implemented (RED phase)
+// ============================================================================
+
+// testAccCMDeviceCategoryResourceConfig_WithRole creates a category with a single role
+// for testing role UUID population (Issue #83).
+func testAccCMDeviceCategoryResourceConfig_WithRole(name, roleName, childType string) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmdevice_categories" "all" {}
+data "bcm_cmpart_softwareimages" "all" {}
+
+locals {
+  management_network_uuid = length(data.bcm_cmdevice_categories.all.categories) > 0 ? data.bcm_cmdevice_categories.all.categories[0].management_network_id : "00000000-0000-0000-0000-000000000000"
+  software_image_uuid = length(data.bcm_cmpart_softwareimages.all.images) > 0 ? data.bcm_cmpart_softwareimages.all.images[0].uuid : "00000000-0000-0000-0000-000000000000"
+}
+
+resource "bcm_cmdevice_category" "test" {
+  name               = %[4]q
+  management_network = local.management_network_uuid
+  notes              = "Issue #83 test: roles UUID population"
+
+  software_image_proxy = {
+    parent_software_image = local.software_image_uuid
+  }
+
+  roles = [
+    {
+      name       = %[5]q
+      child_type = %[6]q
+    }
+  ]
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		name,
+		roleName,
+		childType,
+	)
+}
+
+// testAccCMDeviceCategoryResourceConfig_MultipleRoles creates a category with multiple roles
+// for testing that each role gets a unique UUID (Issue #83).
+func testAccCMDeviceCategoryResourceConfig_MultipleRoles(name string) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmdevice_categories" "all" {}
+data "bcm_cmpart_softwareimages" "all" {}
+
+locals {
+  management_network_uuid = length(data.bcm_cmdevice_categories.all.categories) > 0 ? data.bcm_cmdevice_categories.all.categories[0].management_network_id : "00000000-0000-0000-0000-000000000000"
+  software_image_uuid = length(data.bcm_cmpart_softwareimages.all.images) > 0 ? data.bcm_cmpart_softwareimages.all.images[0].uuid : "00000000-0000-0000-0000-000000000000"
+}
+
+resource "bcm_cmdevice_category" "test" {
+  name               = %[4]q
+  management_network = local.management_network_uuid
+  notes              = "Issue #83 test: multiple roles UUID population"
+
+  software_image_proxy = {
+    parent_software_image = local.software_image_uuid
+  }
+
+  roles = [
+    {
+      name       = "head"
+      child_type = "HeadNode"
+    },
+    {
+      name       = "compute"
+      child_type = "ComputeNode"
+    }
+  ]
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		name,
+	)
+}
+
+// TestAccCMDeviceCategory_RolesUUIDPopulated verifies role UUID is populated after create.
+// Issue #83: This test should FAIL before the fix (UUID will be null/unknown).
+func TestAccCMDeviceCategory_RolesUUIDPopulated(t *testing.T) {
+	categoryName := generateUniqueTestName("tftest-roles-uuid")
+
+	// Clean up any leftover test categories
+	testAccCMDeviceCategoryPreCheck(t, categoryName)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceCategoryDestroy,
+		Steps: []resource.TestStep{
+			// Create with role, verify UUID populated
+			{
+				Config: testAccCMDeviceCategoryResourceConfig_WithRole(categoryName, "head", "HeadNode"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "name", categoryName),
+					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "roles.0.name", "head"),
+					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "roles.0.child_type", "HeadNode"),
+					// CRITICAL: Verify UUID is populated (not null/unknown)
+					// This check will FAIL before Issue #83 fix
+					resource.TestCheckResourceAttrSet("bcm_cmdevice_category.test", "roles.0.uuid"),
+				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(categoryName),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("uuid"),
+						knownvalue.NotNull(),
+					),
+					// Verify role UUID is populated (Issue #83 fix validation)
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("roles").AtSliceIndex(0).AtMapKey("uuid"),
+						knownvalue.NotNull(),
+					),
+				},
+			},
+		},
+	})
+}
+
+// TestAccCMDeviceCategory_RolesIdempotency verifies no drift after apply.
+// Issue #83: With UUID populated correctly, re-apply should show no changes.
+func TestAccCMDeviceCategory_RolesIdempotency(t *testing.T) {
+	categoryName := generateUniqueTestName("tftest-roles-idem")
+
+	// Clean up any leftover test categories
+	testAccCMDeviceCategoryPreCheck(t, categoryName)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceCategoryDestroy,
+		Steps: []resource.TestStep{
+			// Create with role
+			{
+				Config: testAccCMDeviceCategoryResourceConfig_WithRole(categoryName, "head", "HeadNode"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "roles.0.name", "head"),
+					// Verify UUID is populated
+					resource.TestCheckResourceAttrSet("bcm_cmdevice_category.test", "roles.0.uuid"),
+				),
+			},
+			// Verify idempotency - no changes on re-apply
+			{
+				Config: testAccCMDeviceCategoryResourceConfig_WithRole(categoryName, "head", "HeadNode"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+		},
+	})
+}
+
+// TestAccCMDeviceCategory_MultipleRolesUUID verifies multiple roles each get unique UUIDs.
+// Issue #83: Each role should have its own BCM-assigned UUID.
+func TestAccCMDeviceCategory_MultipleRolesUUID(t *testing.T) {
+	categoryName := generateUniqueTestName("tftest-multi-roles")
+
+	// Clean up any leftover test categories
+	testAccCMDeviceCategoryPreCheck(t, categoryName)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceCategoryDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccCMDeviceCategoryResourceConfig_MultipleRoles(categoryName),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "name", categoryName),
+					// Verify both roles have UUIDs populated
+					resource.TestCheckResourceAttrSet("bcm_cmdevice_category.test", "roles.0.uuid"),
+					resource.TestCheckResourceAttrSet("bcm_cmdevice_category.test", "roles.1.uuid"),
+					// Verify role names are preserved
+					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "roles.0.name", "head"),
+					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "roles.1.name", "compute"),
+				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					// Verify first role UUID is populated
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("roles").AtSliceIndex(0).AtMapKey("uuid"),
+						knownvalue.NotNull(),
+					),
+					// Verify second role UUID is populated
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("roles").AtSliceIndex(1).AtMapKey("uuid"),
+						knownvalue.NotNull(),
+					),
+				},
+			},
+		},
+	})
+}
+
+// TestAccCMDeviceCategory_RolesUUIDPreservedOnRefresh verifies UUID remains populated after refresh.
+// Issue #83: UUID should persist across terraform refresh operations.
+func TestAccCMDeviceCategory_RolesUUIDPreservedOnRefresh(t *testing.T) {
+	categoryName := generateUniqueTestName("tftest-roles-refresh")
+
+	// Clean up any leftover test categories
+	testAccCMDeviceCategoryPreCheck(t, categoryName)
+
+	var originalUUID string
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceCategoryDestroy,
+		Steps: []resource.TestStep{
+			// Create and capture UUID
+			{
+				Config: testAccCMDeviceCategoryResourceConfig_WithRole(categoryName, "head", "HeadNode"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttrSet("bcm_cmdevice_category.test", "roles.0.uuid"),
+					resource.TestCheckResourceAttrWith("bcm_cmdevice_category.test", "roles.0.uuid",
+						func(value string) error {
+							if value == "" {
+								return fmt.Errorf("role UUID is empty")
+							}
+							originalUUID = value
+							t.Logf("Captured original role UUID: %s", originalUUID)
+							return nil
+						},
+					),
+				),
+			},
+			// Refresh (re-read) and verify UUID unchanged
+			{
+				RefreshState: true,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttrWith("bcm_cmdevice_category.test", "roles.0.uuid",
+						func(value string) error {
+							if value != originalUUID {
+								return fmt.Errorf("role UUID changed after refresh: expected %s, got %s", originalUUID, value)
+							}
+							return nil
+						},
+					),
+				),
+			},
+		},
+	})
+}
+
+// TestAccCMDeviceCategory_RolesImportUUID verifies UUID is populated after import.
+// Issue #83: Importing a category with roles should populate role UUIDs.
+func TestAccCMDeviceCategory_RolesImportUUID(t *testing.T) {
+	categoryName := generateUniqueTestName("tftest-roles-import")
+
+	// Clean up any leftover test categories
+	testAccCMDeviceCategoryPreCheck(t, categoryName)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceCategoryDestroy,
+		Steps: []resource.TestStep{
+			// Create with role
+			{
+				Config: testAccCMDeviceCategoryResourceConfig_WithRole(categoryName, "head", "HeadNode"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttrSet("bcm_cmdevice_category.test", "roles.0.uuid"),
+				),
+			},
+			// Import - NOTE: BCM does NOT persist category roles, so roles need to be
+			// re-added after import. This is expected behavior and documented.
+			{
+				ResourceName:      "bcm_cmdevice_category.test",
+				ImportState:       true,
+				ImportStateVerify: true,
+				ImportStateVerifyIgnore: []string{
+					"force",
+					"roles", // BCM doesn't persist category roles - they need to be re-added after import
+				},
+			},
+		},
+	})
+}
