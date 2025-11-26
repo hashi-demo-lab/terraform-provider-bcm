@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright (c) HashiCorp, Inc.
+# SPDX-License-Identifier: MPL-2.0
+
 """
 Explore BCM API for role management methods
 Tests various method patterns to discover the correct API for roles

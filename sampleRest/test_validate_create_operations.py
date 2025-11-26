@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright (c) HashiCorp, Inc.
+# SPDX-License-Identifier: MPL-2.0
+
 """
 Test if validation works for CREATE operations (before add* methods)
 Tests the "Zero UUID" limitation mentioned in the analysis

@@ -1,4 +1,7 @@
 #!/bin/bash
+# Copyright (c) HashiCorp, Inc.
+# SPDX-License-Identifier: MPL-2.0
+
 # Delete a specific BCM software image by UUID
 # Usage: ./delete_specific_image.sh <uuid>
 # Example: ./delete_specific_image.sh 128dbc2d-fa1c-4e9f-bbae-9e47ec400c6c
