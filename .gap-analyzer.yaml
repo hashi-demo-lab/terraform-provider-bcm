@@ -1,0 +1,46 @@
+# Gap Analyzer Configuration for terraform-provider-bcm
+# This extends the default configuration with BCM-specific settings
+
+rules:
+  hardcoded_names:
+    enabled: true
+    # BCM-specific domain names to allow
+    domain_allowlist:
+      # Linux network interfaces
+      - eth0
+      - eth1
+      - eth2
+      - eth3
+      - bond0
+      - bond1
+      # BMC interfaces (BCM cluster management)
+      - ipmi0
+      - ipmi1
+      - ilo0
+      - ilo1
+      - cimc0
+      - drac0
+      - rf0
+      # Common infrastructure names
+      - lo
+      - br0
+      - vlan0
+    prefix_allowlist:
+      - eth
+      - bond
+      - ipmi
+      - ilo
+      - cimc
+      - drac
+      - rf
+      - ens
+      - enp
+
+  # BCM provider has good optional field coverage already
+  optional_fields:
+    enabled: false
+
+  # All required fields should have validation tests
+  validation_tests:
+    enabled: true
+    required_only: true
