@@ -4123,11 +4123,19 @@ func TestAccCMDeviceCategory_RolesIdempotency(t *testing.T) {
 			// Create with role
 			{
 				Config: testAccCMDeviceCategoryResourceConfig_WithRole(categoryName, "head", "HeadNode"),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "roles.0.name", "head"),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("roles").AtSliceIndex(0).AtMapKey("name"),
+						knownvalue.StringExact("head"),
+					),
 					// Verify UUID is populated
-					resource.TestCheckResourceAttrSet("bcm_cmdevice_category.test", "roles.0.uuid"),
-				),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("roles").AtSliceIndex(0).AtMapKey("uuid"),
+						knownvalue.NotNull(),
+					),
+				},
 			},
 			// Verify idempotency - no changes on re-apply
 			{
@@ -4251,9 +4259,13 @@ func TestAccCMDeviceCategory_RolesImportUUID(t *testing.T) {
 			// Create with role
 			{
 				Config: testAccCMDeviceCategoryResourceConfig_WithRole(categoryName, "head", "HeadNode"),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttrSet("bcm_cmdevice_category.test", "roles.0.uuid"),
-				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("roles").AtSliceIndex(0).AtMapKey("uuid"),
+						knownvalue.NotNull(),
+					),
+				},
 			},
 			// Import - NOTE: BCM does NOT persist category roles, so roles need to be
 			// re-added after import. This is expected behavior and documented.
