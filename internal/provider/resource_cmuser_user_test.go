@@ -127,17 +127,17 @@ func testAccCheckCMUserUserDestroy(s *terraform.State) error {
 
 // generateUniqueUnixUsername creates a unique Unix-compliant username.
 // Unix usernames: 1-32 chars, must start with letter, alphanumeric + underscore only.
-func generateUniqueUnixUsername(prefix string) string {
+func generateUniqueUnixUsername() string {
 	now := time.Now()
-	// Use compact format: prefix + timestamp suffix (max 32 chars total)
-	// Format: prefix_YYMMDDHHmmss (14 chars for timestamp)
+	// Use compact format: tfu + timestamp suffix (max 32 chars total)
+	// Format: tfu_YYMMDDHHmmss (14 chars for timestamp)
 	timestamp := now.Format("060102150405")
-	return fmt.Sprintf("%s_%s", prefix, timestamp)
+	return fmt.Sprintf("tfu_%s", timestamp)
 }
 
 // TestAccCMUserUser_Basic tests basic user creation and deletion.
 func TestAccCMUserUser_Basic(t *testing.T) {
-	username := generateUniqueUnixUsername("tfu")
+	username := generateUniqueUnixUsername()
 	password := "TestPass123!"
 
 	resource.Test(t, resource.TestCase{
@@ -178,7 +178,7 @@ func TestAccCMUserUser_Basic(t *testing.T) {
 
 // TestAccCMUserUser_Complete tests user with all attributes.
 func TestAccCMUserUser_Complete(t *testing.T) {
-	username := generateUniqueUnixUsername("tfu")
+	username := generateUniqueUnixUsername()
 	password := "CompletePass123!"
 	shell := "/bin/zsh"
 	fullName := "Test User Complete"
@@ -226,7 +226,7 @@ func TestAccCMUserUser_Complete(t *testing.T) {
 
 // TestAccCMUserUser_Update tests user attribute updates.
 func TestAccCMUserUser_Update(t *testing.T) {
-	username := generateUniqueUnixUsername("tfu")
+	username := generateUniqueUnixUsername()
 	password := "UpdatePass123!"
 
 	resource.Test(t, resource.TestCase{
@@ -263,7 +263,7 @@ func TestAccCMUserUser_Update(t *testing.T) {
 
 // TestAccCMUserUser_Idempotent tests that reapplying the same config produces no changes.
 func TestAccCMUserUser_Idempotent(t *testing.T) {
-	username := generateUniqueUnixUsername("tfu")
+	username := generateUniqueUnixUsername()
 	password := "IdempotentPass123!"
 
 	resource.Test(t, resource.TestCase{
@@ -293,7 +293,7 @@ func TestAccCMUserUser_Idempotent(t *testing.T) {
 
 // TestAccCMUserUser_Import tests importing an existing user.
 func TestAccCMUserUser_Import(t *testing.T) {
-	username := generateUniqueUnixUsername("tfu")
+	username := generateUniqueUnixUsername()
 	password := "ImportPass123!"
 
 	resource.Test(t, resource.TestCase{
@@ -323,7 +323,7 @@ func TestAccCMUserUser_Import(t *testing.T) {
 
 // TestAccCMUserUser_DriftShell tests drift detection for shell attribute.
 func TestAccCMUserUser_DriftShell(t *testing.T) {
-	username := generateUniqueUnixUsername("tfu")
+	username := generateUniqueUnixUsername()
 	password := "DriftPass123!"
 
 	resource.Test(t, resource.TestCase{
@@ -390,7 +390,7 @@ func TestAccCMUserUser_DriftShell(t *testing.T) {
 
 // TestAccCMUserUser_DriftNotes tests drift detection for notes attribute.
 func TestAccCMUserUser_DriftNotes(t *testing.T) {
-	username := generateUniqueUnixUsername("tfu")
+	username := generateUniqueUnixUsername()
 	password := "DriftNotesPass123!"
 	initialNotes := "Initial notes"
 	driftNotes := "Externally modified notes"
@@ -459,7 +459,7 @@ func TestAccCMUserUser_DriftNotes(t *testing.T) {
 
 // TestAccCMUserUser_PasswordSensitive tests that password is not logged.
 func TestAccCMUserUser_PasswordSensitive(t *testing.T) {
-	username := generateUniqueUnixUsername("tfu")
+	username := generateUniqueUnixUsername()
 	password := "SensitivePass123!"
 
 	resource.Test(t, resource.TestCase{

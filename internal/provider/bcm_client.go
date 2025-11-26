@@ -54,8 +54,8 @@ type JSONRPCRequest struct {
 	Args    []interface{} `json:"args,omitempty"` // Optional arguments array
 }
 
-// JSONRPCRequestArg represents BCM JSON-RPC request with single "arg" field
-// Some BCM methods (like reboot) expect "arg" (single value) instead of "args" (array)
+// JSONRPCRequestArg represents BCM JSON-RPC request with single "arg" field.
+// Some BCM methods (like reboot) expect "arg" (single value) instead of "args" (array).
 type JSONRPCRequestArg struct {
 	Service string      `json:"service"`
 	Call    string      `json:"call"`

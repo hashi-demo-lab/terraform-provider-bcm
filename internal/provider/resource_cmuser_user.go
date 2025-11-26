@@ -275,7 +275,7 @@ func (r *CMUserUserResource) getNextAvailableUID(ctx context.Context) (int64, er
 	for _, user := range users {
 		if idStr, ok := user["ID"].(string); ok && idStr != "" {
 			var uid int64
-			fmt.Sscanf(idStr, "%d", &uid)
+			_, _ = fmt.Sscanf(idStr, "%d", &uid)
 			if uid > maxUID && uid < 65535 {
 				maxUID = uid
 			}
@@ -682,7 +682,7 @@ func (r *CMUserUserResource) readUser(ctx context.Context, model *CMUserUserReso
 	// Unix identity - BCM returns ID/groupID as strings
 	if idStr, ok := userData["ID"].(string); ok && idStr != "" {
 		var uid int64
-		fmt.Sscanf(idStr, "%d", &uid)
+		_, _ = fmt.Sscanf(idStr, "%d", &uid)
 		model.UID = types.Int64Value(uid)
 	} else {
 		model.UID = types.Int64Null()
@@ -690,7 +690,7 @@ func (r *CMUserUserResource) readUser(ctx context.Context, model *CMUserUserReso
 
 	if gidStr, ok := userData["groupID"].(string); ok && gidStr != "" {
 		var gid int64
-		fmt.Sscanf(gidStr, "%d", &gid)
+		_, _ = fmt.Sscanf(gidStr, "%d", &gid)
 		model.GID = types.Int64Value(gid)
 	} else {
 		model.GID = types.Int64Null()
@@ -733,7 +733,7 @@ func (r *CMUserUserResource) readUser(ctx context.Context, model *CMUserUserReso
 
 // buildAPIEntity constructs BCM API entity from Terraform model.
 // If uuid is provided, this is an update operation, otherwise it's a create.
-func (r *CMUserUserResource) buildAPIEntity(ctx context.Context, model *CMUserUserResourceModel, uuid string) map[string]interface{} {
+func (r *CMUserUserResource) buildAPIEntity(_ context.Context, model *CMUserUserResourceModel, uuid string) map[string]interface{} {
 	entity := map[string]interface{}{
 		"baseType":      "User",
 		"childType":     "",
