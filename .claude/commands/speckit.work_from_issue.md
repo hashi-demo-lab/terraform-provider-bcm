@@ -20,6 +20,6 @@ speckit will work from a new branch, the instructions are in the specify step.
 6. commit and update Git issue and continue to next stage
 7. `/speckit.analyze` - Analyze spec for TDD compliance
 8. commit and update Git issue and continue to next stage
-9. `/speckit.implement` - Execute all tasks to implement the feature, use tdd, make sure use terraform-provider-tests skill for concurrent tests per file changed
+9. `/speckit.implement` - Execute all tasks to implement the feature, use tdd, make sure you use terraform-provider-tests skill for concurrent tests per file changed
    use the terraform-provider-test skill to check test gaps, resolve issues independently, validate all tests passing, validate all examples passing, documentation generated validate linting and fix any linting issues
    when terraform tests have completed successfully create PR with short summary once all successful otherwise work to resolve issues, include test results.

@@ -1,0 +1,242 @@
+# BCM API Contract: FSMounts Field
+# Feature: 084-fsmounts-implementation
+# Date: 2025-11-26
+
+openapi: 3.0.3
+info:
+  title: BCM FSMounts API Contract
+  version: 1.0.0
+  description: |
+    API contract for fsmounts field in bcm_cmdevice_category resource.
+    This defines the structure for serialization (Terraform to BCM) and
+    parsing (BCM to Terraform) of filesystem mount configurations.
+
+components:
+  schemas:
+    # Terraform FSMountModel representation
+    TerraformFSMount:
+      type: object
+      description: Terraform representation of a filesystem mount
+      required:
+        - device
+        - mountpoint
+        - filesystem
+      properties:
+        uuid:
+          type: string
+          description: BCM-assigned unique identifier (computed)
+          example: "550e8400-e29b-41d4-a716-446655440000"
+          readOnly: true
+        device:
+          type: string
+          description: Device path or NFS export
+          example: "/dev/sdb1"
+        mountpoint:
+          type: string
+          description: Mount point path
+          example: "/data"
+        filesystem:
+          type: string
+          description: Filesystem type
+          example: "xfs"
+        mountoptions:
+          type: string
+          description: Mount options string
+          example: "defaults,noatime"
+        fsck:
+          type: string
+          description: Filesystem check mode
+          example: "0"
+        dump:
+          type: boolean
+          description: Enable dump backup
+          example: false
+        rdma:
+          type: boolean
+          description: Use RDMA for NFS
+          example: false
+
+    # BCM API FSMount representation
+    BCMFSMount:
+      type: object
+      description: BCM API representation of a filesystem mount
+      required:
+        - baseType
+        - device
+        - path
+        - type
+      properties:
+        baseType:
+          type: string
+          description: Entity type identifier
+          enum: ["FSMount"]
+          example: "FSMount"
+        uuid:
+          type: string
+          description: BCM-assigned unique identifier
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        device:
+          type: string
+          description: Device path or NFS export
+          example: "/dev/sdb1"
+        path:
+          type: string
+          description: Mount point path (maps to Terraform mountpoint)
+          example: "/data"
+        type:
+          type: string
+          description: Filesystem type (maps to Terraform filesystem)
+          example: "xfs"
+        options:
+          type: string
+          description: Mount options (maps to Terraform mountoptions)
+          example: "defaults,noatime"
+        fsck:
+          type: string
+          description: Filesystem check mode
+          example: "0"
+        dump:
+          type: boolean
+          description: Enable dump backup
+          example: false
+        rdma:
+          type: boolean
+          description: Use RDMA for NFS
+          example: false
+
+    # Category entity with fsmounts
+    CategoryWithFSMounts:
+      type: object
+      description: BCM Category entity containing fsmounts array
+      properties:
+        baseType:
+          type: string
+          enum: ["Category"]
+        uuid:
+          type: string
+        name:
+          type: string
+        fsmounts:
+          type: array
+          items:
+            $ref: '#/components/schemas/BCMFSMount'
+
+# Field mapping documentation
+x-field-mappings:
+  terraform-to-bcm:
+    - terraform: uuid
+      bcm: uuid
+      transform: direct
+    - terraform: device
+      bcm: device
+      transform: direct
+    - terraform: mountpoint
+      bcm: path
+      transform: rename
+    - terraform: filesystem
+      bcm: type
+      transform: rename
+    - terraform: mountoptions
+      bcm: options
+      transform: rename
+    - terraform: fsck
+      bcm: fsck
+      transform: direct
+    - terraform: dump
+      bcm: dump
+      transform: direct
+    - terraform: rdma
+      bcm: rdma
+      transform: direct
+
+# Serialization contract (Terraform -> BCM)
+x-serialization:
+  function: buildAPIEntity
+  location: internal/provider/resource_cmdevice_category.go
+  pattern: |
+    // Serialize fsmounts (snake_case -> camelCase for BCM API)
+    if !model.FSMounts.IsNull() && !model.FSMounts.IsUnknown() {
+        var mounts []FSMountModel
+        diags := model.FSMounts.ElementsAs(ctx, &mounts, false)
+        if !diags.HasError() {
+            mountsList := make([]map[string]interface{}, 0, len(mounts))
+            for _, mount := range mounts {
+                mountMap := map[string]interface{}{
+                    "baseType": "FSMount",
+                    "device":   mount.Device.ValueString(),
+                    "path":     mount.Mountpoint.ValueString(),
+                    "type":     mount.Filesystem.ValueString(),
+                }
+                // Include UUID if present (for updates)
+                if !mount.UUID.IsNull() && mount.UUID.ValueString() != "" {
+                    mountMap["uuid"] = mount.UUID.ValueString()
+                }
+                // Optional fields
+                if !mount.MountOptions.IsNull() {
+                    mountMap["options"] = mount.MountOptions.ValueString()
+                }
+                if !mount.Fsck.IsNull() {
+                    mountMap["fsck"] = mount.Fsck.ValueString()
+                }
+                if !mount.Dump.IsNull() {
+                    mountMap["dump"] = mount.Dump.ValueBool()
+                }
+                if !mount.RDMA.IsNull() {
+                    mountMap["rdma"] = mount.RDMA.ValueBool()
+                }
+                mountsList = append(mountsList, mountMap)
+            }
+            entity["fsmounts"] = mountsList
+        }
+    }
+
+# Parsing contract (BCM -> Terraform)
+x-parsing:
+  function: readCategory
+  location: internal/provider/resource_cmdevice_category.go
+  pattern: |
+    // Parse fsmounts from BCM API (camelCase -> snake_case)
+    fsMountObjectType := types.ObjectType{AttrTypes: map[string]attr.Type{
+        "uuid":         types.StringType,
+        "device":       types.StringType,
+        "mountpoint":   types.StringType,
+        "filesystem":   types.StringType,
+        "mountoptions": types.StringType,
+        "fsck":         types.StringType,
+        "dump":         types.BoolType,
+        "rdma":         types.BoolType,
+    }}
+    if mountsData, ok := categoryData["fsmounts"].([]interface{}); ok && len(mountsData) > 0 {
+        mountValues := make([]attr.Value, 0, len(mountsData))
+        for _, mountRaw := range mountsData {
+            if mountMap, ok := mountRaw.(map[string]interface{}); ok {
+                mountObj, objDiags := types.ObjectValue(fsMountObjectType.AttrTypes, map[string]attr.Value{
+                    "uuid":         getStringValue(mountMap, "uuid"),
+                    "device":       getStringValue(mountMap, "device"),
+                    "mountpoint":   getStringValue(mountMap, "path"),       // path -> mountpoint
+                    "filesystem":   getStringValue(mountMap, "type"),       // type -> filesystem
+                    "mountoptions": getStringValue(mountMap, "options"),    // options -> mountoptions
+                    "fsck":         getStringValue(mountMap, "fsck"),
+                    "dump":         getBoolValue(mountMap, "dump"),
+                    "rdma":         getBoolValue(mountMap, "rdma"),
+                })
+                if !objDiags.HasError() {
+                    mountValues = append(mountValues, mountObj)
+                }
+            }
+        }
+        model.FSMounts, _ = types.ListValue(fsMountObjectType, mountValues)
+    } else {
+        model.FSMounts = types.ListNull(fsMountObjectType)
+    }
+
+# Merge contract (for UUID population)
+x-merge:
+  function: mergeFSMountsWithAPIResponse
+  location: internal/provider/resource_cmdevice_category.go
+  match_key: device + mountpoint
+  description: |
+    Merges user-configured fsmount attributes with BCM API-computed values.
+    Matches mounts by device+mountpoint combination and:
+    - Preserves user-specified: device, mountpoint, filesystem, mountoptions, fsck, dump, rdma
+    - Populates computed: uuid from BCM API response
