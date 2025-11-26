@@ -18,6 +18,7 @@
 #   -t, --timeout DURATION  Timeout per test file (default: 30m)
 #   -f, --file FILE         Run only tests from specific file
 #   -C, --cleanup           Run cleanup before tests (requires BCM credentials)
+#   -S, --stagger SECONDS   Delay between starting each test file (default: 0)
 #   --resources-only        Run only resource tests
 #   --data-sources-only     Run only data source tests
 #   --verbose               Show detailed test output
@@ -80,6 +81,7 @@ CONCURRENCY=30
 TIMEOUT="30m"
 SPECIFIC_FILE=""
 CLEANUP=false
+STAGGER_DELAY=0
 RESOURCES_ONLY=false
 DATA_SOURCES_ONLY=false
 VERBOSE=false
@@ -111,6 +113,10 @@ while [[ $# -gt 0 ]]; do
         -C|--cleanup)
             CLEANUP=true
             shift
+            ;;
+        -S|--stagger)
+            STAGGER_DELAY="$2"
+            shift 2
             ;;
         --resources-only)
             RESOURCES_ONLY=true
@@ -218,6 +224,7 @@ echo "Test Directory: $TEST_DIR" | tee -a "$OUTPUT_LOG"
 echo "Test Pattern: $TEST_PATTERN" | tee -a "$OUTPUT_LOG"
 echo "Concurrency: $CONCURRENCY" | tee -a "$OUTPUT_LOG"
 echo "Timeout: $TIMEOUT" | tee -a "$OUTPUT_LOG"
+echo "Stagger Delay: ${STAGGER_DELAY}s" | tee -a "$OUTPUT_LOG"
 echo "Output Log: $OUTPUT_LOG" | tee -a "$OUTPUT_LOG"
 echo "" | tee -a "$OUTPUT_LOG"
 
@@ -313,9 +320,39 @@ export -f run_test_file
 export RESULTS_DIR TEST_DIR TEST_PATTERN TIMEOUT VERBOSE OUTPUT_LOG
 export GREEN RED YELLOW BLUE CYAN NC
 
-# Run tests in parallel using GNU parallel or xargs
-if command -v parallel &> /dev/null; then
-    # Use GNU parallel for better progress tracking
+# Run tests in parallel with optional stagger delay
+if [ "$STAGGER_DELAY" -gt 0 ]; then
+    # Run with stagger delay between starting each test file
+    echo -e "${YELLOW}Using stagger delay: ${STAGGER_DELAY}s between test file starts${NC}" | tee -a "$OUTPUT_LOG"
+
+    # Use background jobs with controlled delay
+    pids=()
+    test_count=0
+
+    for file in "${TEST_FILES[@]}"; do
+        # Wait for slot in concurrency limit
+        while [ "$(jobs -r | wc -l)" -ge "$CONCURRENCY" ]; do
+            sleep 0.5
+        done
+
+        # Stagger delay before starting (except for first file)
+        if [ $test_count -gt 0 ]; then
+            sleep "$STAGGER_DELAY"
+        fi
+        test_count=$((test_count + 1))
+
+        # Start test in background
+        run_test_file "$file" &
+        pids+=($!)
+    done
+
+    # Wait for all tests to complete
+    parallel_exit=0
+    for pid in "${pids[@]}"; do
+        wait "$pid" || parallel_exit=1
+    done
+elif command -v parallel &> /dev/null; then
+    # Use GNU parallel for better progress tracking (no stagger needed)
     printf '%s\n' "${TEST_FILES[@]}" | \
         parallel -j "$CONCURRENCY" --line-buffer run_test_file {}
     parallel_exit=$?

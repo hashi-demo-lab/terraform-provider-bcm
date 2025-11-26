@@ -8,19 +8,39 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"math/rand"
+	"net"
 	"net/http"
 	"net/http/cookiejar"
+	"strings"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
+// Retry configuration constants
+const (
+	// DefaultMaxRetries is the default number of retries for transient errors
+	DefaultMaxRetries = 3
+	// DefaultBaseDelay is the initial delay between retries
+	DefaultBaseDelay = 1 * time.Second
+	// DefaultMaxDelay is the maximum delay between retries
+	DefaultMaxDelay = 30 * time.Second
+	// DefaultJitterFactor adds randomness to prevent thundering herd (0.0-1.0)
+	DefaultJitterFactor = 0.2
+)
+
 // BCMClient handles JSON-RPC API calls to BCM with cookie-based authentication.
 type BCMClient struct {
-	HTTPClient *http.Client // Includes cookie jar for automatic cm-login-token management
-	Endpoint   string       // Base URL (e.g., https://172.21.15.254:8081)
+	HTTPClient   *http.Client  // Includes cookie jar for automatic cm-login-token management
+	Endpoint     string        // Base URL (e.g., https://172.21.15.254:8081)
+	MaxRetries   int           // Maximum number of retries for transient errors
+	BaseDelay    time.Duration // Initial delay between retries
+	MaxDelay     time.Duration // Maximum delay between retries
+	JitterFactor float64       // Randomness factor to prevent thundering herd (0.0-1.0)
 }
 
 // ValidationError represents a structured validation error from BCM API.
@@ -114,41 +134,87 @@ func NewBCMClient(ctx context.Context, endpoint, username, password string, inse
 		"username": username,
 	})
 
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("login API call failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read login response: %w", err)
-	}
-
-	// Verify HTTP status
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("login failed with HTTP %d: %s", resp.StatusCode, string(body))
-	}
-
-	// Verify response is boolean true
-	var loginSuccess bool
-	if err := json.Unmarshal(body, &loginSuccess); err != nil || !loginSuccess {
-		return nil, fmt.Errorf("login failed: expected boolean true, got: %s", string(body))
-	}
-
-	// Verify Set-Cookie header contains cm-login-token
-	cookies := resp.Cookies()
-	hasLoginToken := false
+	// Retry login with exponential backoff for transient errors
+	var resp *http.Response
+	var body []byte
+	var lastErr error
 	var loginCookie *http.Cookie
-	for _, cookie := range cookies {
-		if cookie.Name == "cm-login-token" {
-			hasLoginToken = true
-			loginCookie = cookie
-			break
+
+	for attempt := 0; attempt <= DefaultMaxRetries; attempt++ {
+		// Recreate request body for each attempt
+		if attempt > 0 {
+			req.Body = io.NopCloser(bytes.NewReader(jsonBody))
+			// Exponential backoff
+			backoff := DefaultBaseDelay * time.Duration(1<<uint(attempt-1))
+			if backoff > DefaultMaxDelay {
+				backoff = DefaultMaxDelay
+			}
+			// Add jitter
+			jitter := time.Duration(float64(backoff) * DefaultJitterFactor * rand.Float64())
+			backoff += jitter
+
+			tflog.Warn(ctx, "BCM login failed, retrying", map[string]interface{}{
+				"attempt":     attempt + 1,
+				"max_retries": DefaultMaxRetries,
+				"error":       lastErr.Error(),
+				"backoff_ms":  backoff.Milliseconds(),
+			})
+
+			select {
+			case <-time.After(backoff):
+			case <-ctx.Done():
+				return nil, fmt.Errorf("login cancelled: %w", ctx.Err())
+			}
 		}
-	}
-	if !hasLoginToken {
-		return nil, fmt.Errorf("login response missing cm-login-token cookie")
+
+		resp, lastErr = client.Do(req)
+		if lastErr != nil {
+			if isRetryableError(lastErr) && attempt < DefaultMaxRetries {
+				continue
+			}
+			return nil, fmt.Errorf("login API call failed after %d attempts: %w", attempt+1, lastErr)
+		}
+
+		body, lastErr = io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if lastErr != nil {
+			if isRetryableError(lastErr) && attempt < DefaultMaxRetries {
+				continue
+			}
+			return nil, fmt.Errorf("failed to read login response after %d attempts: %w", attempt+1, lastErr)
+		}
+
+		// Verify HTTP status - retry on 5xx errors
+		if resp.StatusCode >= 500 && attempt < DefaultMaxRetries {
+			lastErr = fmt.Errorf("login failed with HTTP %d: %s", resp.StatusCode, string(body))
+			continue
+		}
+		if resp.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("login failed with HTTP %d: %s", resp.StatusCode, string(body))
+		}
+
+		// Verify response is boolean true
+		var loginSuccess bool
+		if err := json.Unmarshal(body, &loginSuccess); err != nil || !loginSuccess {
+			return nil, fmt.Errorf("login failed: expected boolean true, got: %s", string(body))
+		}
+
+		// Verify Set-Cookie header contains cm-login-token
+		cookies := resp.Cookies()
+		hasLoginToken := false
+		for _, cookie := range cookies {
+			if cookie.Name == "cm-login-token" {
+				hasLoginToken = true
+				loginCookie = cookie
+				break
+			}
+		}
+		if !hasLoginToken {
+			return nil, fmt.Errorf("login response missing cm-login-token cookie")
+		}
+
+		// Login successful
+		break
 	}
 
 	// Log warning if security attributes are missing (production guidance)
@@ -167,13 +233,173 @@ func NewBCMClient(ctx context.Context, endpoint, username, password string, inse
 
 	// Return authenticated client (cookie jar now contains cm-login-token)
 	return &BCMClient{
-		HTTPClient: client,
-		Endpoint:   endpoint,
+		HTTPClient:   client,
+		Endpoint:     endpoint,
+		MaxRetries:   DefaultMaxRetries,
+		BaseDelay:    DefaultBaseDelay,
+		MaxDelay:     DefaultMaxDelay,
+		JitterFactor: DefaultJitterFactor,
 	}, nil
+}
+
+// isRetryableError determines if an error is transient and should be retried.
+// This includes connection refused, EOF, connection reset, timeout, and temporary network errors.
+func isRetryableError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	errStr := err.Error()
+
+	// Check for common transient error patterns
+	if strings.Contains(errStr, "connection refused") ||
+		strings.Contains(errStr, "connection reset") ||
+		strings.Contains(errStr, "EOF") ||
+		strings.Contains(errStr, "i/o timeout") ||
+		strings.Contains(errStr, "no such host") ||
+		strings.Contains(errStr, "connection timed out") ||
+		strings.Contains(errStr, "TLS handshake timeout") ||
+		strings.Contains(errStr, "server closed idle connection") {
+		return true
+	}
+
+	// Check for net.Error interface (includes timeout and temporary flags)
+	var netErr net.Error
+	if errors.As(err, &netErr) {
+		if netErr.Timeout() {
+			return true
+		}
+	}
+
+	// Check for specific network operation errors
+	var opErr *net.OpError
+	if errors.As(err, &opErr) {
+		return true
+	}
+
+	return false
+}
+
+// calculateBackoff calculates the delay for the next retry attempt with exponential backoff and jitter.
+// delay = min(maxDelay, baseDelay * 2^attempt) + random jitter
+func (c *BCMClient) calculateBackoff(attempt int) time.Duration {
+	// Exponential backoff: baseDelay * 2^attempt
+	delay := c.BaseDelay * time.Duration(1<<uint(attempt))
+
+	// Cap at max delay
+	if delay > c.MaxDelay {
+		delay = c.MaxDelay
+	}
+
+	// Add jitter to prevent thundering herd
+	if c.JitterFactor > 0 {
+		jitter := time.Duration(float64(delay) * c.JitterFactor * rand.Float64())
+		delay += jitter
+	}
+
+	return delay
+}
+
+// doHTTPRequest performs an HTTP request with retry logic for transient errors.
+// Returns the response body and any error encountered after all retries.
+func (c *BCMClient) doHTTPRequest(ctx context.Context, req *http.Request, jsonBody []byte, logPrefix string) ([]byte, error) {
+	var lastErr error
+
+	for attempt := 0; attempt <= c.MaxRetries; attempt++ {
+		// Recreate request body for each attempt (body is consumed after reading)
+		if attempt > 0 {
+			req.Body = io.NopCloser(bytes.NewReader(jsonBody))
+		}
+
+		resp, err := c.HTTPClient.Do(req)
+		if err != nil {
+			lastErr = err
+
+			// Check if error is retryable
+			if isRetryableError(err) && attempt < c.MaxRetries {
+				backoff := c.calculateBackoff(attempt)
+				tflog.Warn(ctx, fmt.Sprintf("%s request failed, retrying", logPrefix), map[string]interface{}{
+					"attempt":     attempt + 1,
+					"max_retries": c.MaxRetries,
+					"error":       err.Error(),
+					"backoff_ms":  backoff.Milliseconds(),
+				})
+
+				// Wait before retry (with context cancellation support)
+				select {
+				case <-time.After(backoff):
+					continue
+				case <-ctx.Done():
+					return nil, fmt.Errorf("%s call cancelled: %w", logPrefix, ctx.Err())
+				}
+			}
+
+			return nil, fmt.Errorf("%s call failed after %d attempts: %w", logPrefix, attempt+1, err)
+		}
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			lastErr = err
+
+			// Reading response body failed - may be retryable
+			if isRetryableError(err) && attempt < c.MaxRetries {
+				backoff := c.calculateBackoff(attempt)
+				tflog.Warn(ctx, fmt.Sprintf("%s response read failed, retrying", logPrefix), map[string]interface{}{
+					"attempt":     attempt + 1,
+					"max_retries": c.MaxRetries,
+					"error":       err.Error(),
+					"backoff_ms":  backoff.Milliseconds(),
+				})
+
+				select {
+				case <-time.After(backoff):
+					continue
+				case <-ctx.Done():
+					return nil, fmt.Errorf("%s call cancelled: %w", logPrefix, ctx.Err())
+				}
+			}
+
+			return nil, fmt.Errorf("failed to read response body after %d attempts: %w", attempt+1, err)
+		}
+
+		tflog.Trace(ctx, fmt.Sprintf("%s response", logPrefix), map[string]interface{}{
+			"status": resp.StatusCode,
+			"body":   string(body),
+		})
+
+		// Check for HTTP 5xx errors which may be retryable
+		if resp.StatusCode >= 500 && attempt < c.MaxRetries {
+			backoff := c.calculateBackoff(attempt)
+			tflog.Warn(ctx, fmt.Sprintf("%s server error, retrying", logPrefix), map[string]interface{}{
+				"attempt":     attempt + 1,
+				"max_retries": c.MaxRetries,
+				"status":      resp.StatusCode,
+				"backoff_ms":  backoff.Milliseconds(),
+			})
+
+			select {
+			case <-time.After(backoff):
+				continue
+			case <-ctx.Done():
+				return nil, fmt.Errorf("%s call cancelled: %w", logPrefix, ctx.Err())
+			}
+		}
+
+		// Defensive error parsing (see section 3 of research.md)
+		if err := parseErrorResponse(resp.StatusCode, body); err != nil {
+			return nil, err
+		}
+
+		return body, nil
+	}
+
+	return nil, fmt.Errorf("%s call failed after %d attempts: %w", logPrefix, c.MaxRetries+1, lastErr)
 }
 
 // CallJSONRPC executes JSON-RPC call using authenticated cookie jar
 // Supports optional variadic args parameter for parameterized API calls
+// Includes automatic retry with exponential backoff for transient errors
 // Examples:
 //
 //	CallJSONRPC(ctx, "CMPart", "getSoftwareImages") // No args
@@ -214,28 +440,9 @@ func (c *BCMClient) CallJSONRPC(ctx context.Context, service, call string, args 
 
 	tflog.Trace(ctx, "JSONRPC request", logFields)
 
-	resp, err := c.HTTPClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("JSONRPC call failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %w", err)
-	}
-
-	tflog.Trace(ctx, "JSONRPC response", map[string]interface{}{
-		"status": resp.StatusCode,
-		"body":   string(body),
-	})
-
-	// Defensive error parsing (see section 3 of research.md)
-	if err := parseErrorResponse(resp.StatusCode, body); err != nil {
-		return nil, err
-	}
-
-	return body, nil
+	// Use retry-enabled HTTP request
+	logPrefix := fmt.Sprintf("JSONRPC %s.%s", service, call)
+	return c.doHTTPRequest(ctx, req, jsonBody, logPrefix)
 }
 
 // CallJSONRPCArg executes JSON-RPC call with single "arg" parameter
@@ -281,28 +488,9 @@ func (c *BCMClient) CallJSONRPCArg(ctx context.Context, service, call string, ar
 
 	tflog.Trace(ctx, "JSONRPC request (arg format)", logFields)
 
-	resp, err := c.HTTPClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("JSONRPC call failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %w", err)
-	}
-
-	tflog.Trace(ctx, "JSONRPC response", map[string]interface{}{
-		"status": resp.StatusCode,
-		"body":   string(body),
-	})
-
-	// Defensive error parsing
-	if err := parseErrorResponse(resp.StatusCode, body); err != nil {
-		return nil, err
-	}
-
-	return body, nil
+	// Use retry-enabled HTTP request
+	logPrefix := fmt.Sprintf("JSONRPC %s.%s (arg)", service, call)
+	return c.doHTTPRequest(ctx, req, jsonBody, logPrefix)
 }
 
 // parseErrorResponse performs multi-layer error detection

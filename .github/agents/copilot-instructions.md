@@ -11,6 +11,7 @@ Auto-generated from all feature plans. Last updated: 2025-11-20
 - N/A (state managed by Terraform, data stored in BCM) (039-device-roles-block)
 - N/A (stateless API integration via BCM JSON-RPC) (068-cmuser-user-resource)
 - BCM JSON-RPC API (cookie-based auth) (070-category-optional-fields-tests)
+- Terraform state (password as sensitive attribute) (082-bmc-password-drift)
 - N/A (Terraform state management) (083-roles-uuid-computed)
 
 - Go 1.24.0 + terraform-plugin-framework v1.16.1, terraform-plugin-testing v1.13.3, terraform-plugin-log v0.10.0 (001-bcm-provider)
@@ -31,6 +32,7 @@ tests/
 Go 1.24.0: Follow standard conventions
 
 ## Recent Changes
+- 082-bmc-password-drift: Added Go 1.24.0 + terraform-plugin-framework v1.16.1, terraform-plugin-testing v1.13.3
 - 083-roles-uuid-computed: Added Go 1.24.0 + terraform-plugin-framework v1.16.1, terraform-plugin-testing v1.13.3
 - 070-category-optional-fields-tests: Added Go 1.24+ + terraform-plugin-framework v1.16.1, terraform-plugin-testing v1.13.3
 - 068-cmuser-user-resource: Added Go 1.24.0 + terraform-plugin-framework v1.16.1, terraform-plugin-testing v1.13.3

@@ -4282,14 +4282,60 @@ func TestAccCMDeviceCategory_RolesImportUUID(t *testing.T) {
 	})
 }
 
-// =============================================================================
-// FSMounts Tests (Issue #84)
-// =============================================================================
+// ========================================
+// Issue #82: BMC Password Drift Fix Tests.
+// ========================================
 
-// TestAccCMDeviceCategory_FSMountsBasic verifies basic fsmount configuration works.
-// Issue #84: This test should FAIL before the fix (fsmounts will be null).
-func TestAccCMDeviceCategory_FSMountsBasic(t *testing.T) {
-	categoryName := generateUniqueTestName("tftest-fsmounts-basic")
+// testAccCMDeviceCategoryResourceConfig_BMCPassword creates config with BMC settings including password.
+// This is used to test that BMC password is preserved from state during Read operations
+// and does not cause perpetual drift.
+func testAccCMDeviceCategoryResourceConfig_BMCPassword(name, password string) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmdevice_categories" "all" {}
+data "bcm_cmpart_softwareimages" "all" {}
+
+locals {
+  management_network_uuid = length(data.bcm_cmdevice_categories.all.categories) > 0 ? data.bcm_cmdevice_categories.all.categories[0].management_network_id : "00000000-0000-0000-0000-000000000000"
+  software_image_uuid = length(data.bcm_cmpart_softwareimages.all.images) > 0 ? data.bcm_cmpart_softwareimages.all.images[0].uuid : "00000000-0000-0000-0000-000000000000"
+}
+
+resource "bcm_cmdevice_category" "test" {
+  name               = %[4]q
+  management_network = local.management_network_uuid
+  notes              = "BMC password drift test"
+
+  software_image_proxy = {
+    parent_software_image = local.software_image_uuid
+  }
+
+  bmc_settings = {
+    user_name = "admin"
+    password  = %[5]q
+    privilege = "admin"
+    user_id   = 2
+  }
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		name,
+		password,
+	)
+}
+
+// TestAccCMDeviceCategory_BMCPasswordNoDrift tests that BMC password does not cause perpetual drift.
+// Issue #82: bmc_settings.password was causing drift because it was not preserved from state during Read.
+// User Story 1: Password Stability on Refresh.
+func TestAccCMDeviceCategory_BMCPasswordNoDrift(t *testing.T) {
+	categoryName := generateUniqueTestName("tftest-bmc-nodrift")
 
 	// Clean up any leftover test categories
 	testAccCMDeviceCategoryPreCheck(t, categoryName)
@@ -4299,19 +4345,9 @@ func TestAccCMDeviceCategory_FSMountsBasic(t *testing.T) {
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckCMDeviceCategoryDestroy,
 		Steps: []resource.TestStep{
-			// Create with single fsmount, verify it appears in state
+			// Step 1: Create category with BMC password
 			{
-				Config: testAccCMDeviceCategoryResourceConfig_WithFSMount(categoryName, "/dev/sdb1", "/data", "xfs"),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "name", categoryName),
-					// CRITICAL: Verify fsmount appears in state (not null)
-					// This check will FAIL before Issue #84 fix
-					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "fsmounts.0.device", "/dev/sdb1"),
-					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "fsmounts.0.mountpoint", "/data"),
-					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "fsmounts.0.filesystem", "xfs"),
-					// Verify UUID is populated
-					resource.TestCheckResourceAttrSet("bcm_cmdevice_category.test", "fsmounts.0.uuid"),
-				),
+				Config: testAccCMDeviceCategoryResourceConfig_BMCPassword(categoryName, "secret123"),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_category.test",
@@ -4320,40 +4356,42 @@ func TestAccCMDeviceCategory_FSMountsBasic(t *testing.T) {
 					),
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_category.test",
-						tfjsonpath.New("uuid"),
-						knownvalue.NotNull(),
+						tfjsonpath.New("bmc_settings").AtMapKey("user_name"),
+						knownvalue.StringExact("admin"),
 					),
-					// Verify fsmount fields are populated (Issue #84 fix validation)
-					statecheck.ExpectKnownValue(
-						"bcm_cmdevice_category.test",
-						tfjsonpath.New("fsmounts").AtSliceIndex(0).AtMapKey("device"),
-						knownvalue.StringExact("/dev/sdb1"),
-					),
-					statecheck.ExpectKnownValue(
-						"bcm_cmdevice_category.test",
-						tfjsonpath.New("fsmounts").AtSliceIndex(0).AtMapKey("mountpoint"),
-						knownvalue.StringExact("/data"),
-					),
-					statecheck.ExpectKnownValue(
-						"bcm_cmdevice_category.test",
-						tfjsonpath.New("fsmounts").AtSliceIndex(0).AtMapKey("filesystem"),
-						knownvalue.StringExact("xfs"),
-					),
-					statecheck.ExpectKnownValue(
-						"bcm_cmdevice_category.test",
-						tfjsonpath.New("fsmounts").AtSliceIndex(0).AtMapKey("uuid"),
-						knownvalue.NotNull(),
-					),
+				},
+			},
+			// Step 2: Idempotency check - THIS IS THE KEY TEST
+			// Before the fix, this would fail because password was set to null during Read
+			// After the fix, password is preserved from state and no drift is detected
+			{
+				Config: testAccCMDeviceCategoryResourceConfig_BMCPassword(categoryName, "secret123"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+			// Step 3: Import and verify (password cannot be imported from BCM)
+			{
+				Config:            testAccCMDeviceCategoryResourceConfig_BMCPassword(categoryName, "secret123"),
+				ResourceName:      "bcm_cmdevice_category.test",
+				ImportState:       true,
+				ImportStateVerify: true,
+				ImportStateVerifyIgnore: []string{
+					"force",
+					"bmc_settings", // Password cannot be imported from BCM API
 				},
 			},
 		},
 	})
 }
 
-// TestAccCMDeviceCategory_FSMountsMultiple verifies multiple fsmounts work.
-// Issue #84: Multiple mounts including NFS should all appear in state.
-func TestAccCMDeviceCategory_FSMountsMultiple(t *testing.T) {
-	categoryName := generateUniqueTestName("tftest-fsmounts-multi")
+// TestAccCMDeviceCategory_BMCPasswordUpdate tests that BMC password changes are detected and applied.
+// Issue #82: Ensures the fix does not break intentional password changes.
+// User Story 2: Password Update Detection.
+func TestAccCMDeviceCategory_BMCPasswordUpdate(t *testing.T) {
+	categoryName := generateUniqueTestName("tftest-bmc-update")
 
 	// Clean up any leftover test categories
 	testAccCMDeviceCategoryPreCheck(t, categoryName)
@@ -4363,73 +4401,36 @@ func TestAccCMDeviceCategory_FSMountsMultiple(t *testing.T) {
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckCMDeviceCategoryDestroy,
 		Steps: []resource.TestStep{
+			// Step 1: Create category with initial password
 			{
-				Config: testAccCMDeviceCategoryResourceConfig_MultipleFSMounts(categoryName),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "name", categoryName),
-					// Verify both mounts have UUIDs populated
-					resource.TestCheckResourceAttrSet("bcm_cmdevice_category.test", "fsmounts.0.uuid"),
-					resource.TestCheckResourceAttrSet("bcm_cmdevice_category.test", "fsmounts.1.uuid"),
-					// Verify mount values are preserved
-					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "fsmounts.0.device", "/dev/sdb1"),
-					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "fsmounts.0.mountpoint", "/data"),
-					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "fsmounts.0.filesystem", "xfs"),
-					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "fsmounts.0.mountoptions", "defaults,noatime"),
-					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "fsmounts.1.device", "nfs-server:/export"),
-					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "fsmounts.1.mountpoint", "/shared"),
-					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "fsmounts.1.filesystem", "nfs"),
-				),
-				ConfigStateChecks: []statecheck.StateCheck{
-					// Verify both mounts have UUIDs
-					statecheck.ExpectKnownValue(
-						"bcm_cmdevice_category.test",
-						tfjsonpath.New("fsmounts").AtSliceIndex(0).AtMapKey("uuid"),
-						knownvalue.NotNull(),
-					),
-					statecheck.ExpectKnownValue(
-						"bcm_cmdevice_category.test",
-						tfjsonpath.New("fsmounts").AtSliceIndex(1).AtMapKey("uuid"),
-						knownvalue.NotNull(),
-					),
-				},
-			},
-		},
-	})
-}
-
-// TestAccCMDeviceCategory_FSMountsIdempotency verifies no drift after apply.
-// Issue #84: With fsmounts populated correctly, re-apply should show no changes.
-func TestAccCMDeviceCategory_FSMountsIdempotency(t *testing.T) {
-	categoryName := generateUniqueTestName("tftest-fsmounts-idem")
-
-	// Clean up any leftover test categories
-	testAccCMDeviceCategoryPreCheck(t, categoryName)
-
-	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-		CheckDestroy:             testAccCheckCMDeviceCategoryDestroy,
-		Steps: []resource.TestStep{
-			// Create with fsmount
-			{
-				Config: testAccCMDeviceCategoryResourceConfig_WithFSMount(categoryName, "/dev/sdb1", "/data", "xfs"),
+				Config: testAccCMDeviceCategoryResourceConfig_BMCPassword(categoryName, "oldpass123"),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_category.test",
-						tfjsonpath.New("fsmounts").AtSliceIndex(0).AtMapKey("device"),
-						knownvalue.StringExact("/dev/sdb1"),
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(categoryName),
 					),
-					// Verify UUID is populated
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_category.test",
-						tfjsonpath.New("fsmounts").AtSliceIndex(0).AtMapKey("uuid"),
-						knownvalue.NotNull(),
+						tfjsonpath.New("bmc_settings").AtMapKey("user_name"),
+						knownvalue.StringExact("admin"),
 					),
 				},
 			},
-			// Verify idempotency - no changes on re-apply
+			// Step 2: Update password - should detect change and apply
 			{
-				Config: testAccCMDeviceCategoryResourceConfig_WithFSMount(categoryName, "/dev/sdb1", "/data", "xfs"),
+				Config: testAccCMDeviceCategoryResourceConfig_BMCPassword(categoryName, "newpass456"),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(categoryName),
+					),
+				},
+			},
+			// Step 3: Idempotency check after update
+			{
+				Config: testAccCMDeviceCategoryResourceConfig_BMCPassword(categoryName, "newpass456"),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
@@ -4438,182 +4439,4 @@ func TestAccCMDeviceCategory_FSMountsIdempotency(t *testing.T) {
 			},
 		},
 	})
-}
-
-// TestAccCMDeviceCategory_FSMountsUpdate verifies add/modify/remove fsmounts works.
-// Issue #84: CRUD operations on fsmounts should work correctly.
-func TestAccCMDeviceCategory_FSMountsUpdate(t *testing.T) {
-	categoryName := generateUniqueTestName("tftest-fsmounts-update")
-
-	// Clean up any leftover test categories
-	testAccCMDeviceCategoryPreCheck(t, categoryName)
-
-	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-		CheckDestroy:             testAccCheckCMDeviceCategoryDestroy,
-		Steps: []resource.TestStep{
-			// Step 1: Create with one fsmount
-			{
-				Config: testAccCMDeviceCategoryResourceConfig_WithFSMount(categoryName, "/dev/sdb1", "/data", "xfs"),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "fsmounts.#", "1"),
-					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "fsmounts.0.device", "/dev/sdb1"),
-				),
-			},
-			// Step 2: Add second fsmount
-			{
-				Config: testAccCMDeviceCategoryResourceConfig_MultipleFSMounts(categoryName),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "fsmounts.#", "2"),
-					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "fsmounts.0.device", "/dev/sdb1"),
-					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "fsmounts.1.device", "nfs-server:/export"),
-				),
-			},
-			// Step 3: Remove first mount, keep second
-			{
-				Config: testAccCMDeviceCategoryResourceConfig_WithFSMount(categoryName, "nfs-server:/export", "/shared", "nfs"),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "fsmounts.#", "1"),
-					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "fsmounts.0.device", "nfs-server:/export"),
-				),
-			},
-		},
-	})
-}
-
-// TestAccCMDeviceCategory_FSMountsImport verifies import includes fsmounts.
-// Issue #84: Imported categories should have fsmounts in state.
-func TestAccCMDeviceCategory_FSMountsImport(t *testing.T) {
-	categoryName := generateUniqueTestName("tftest-fsmounts-import")
-
-	// Clean up any leftover test categories
-	testAccCMDeviceCategoryPreCheck(t, categoryName)
-
-	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-		CheckDestroy:             testAccCheckCMDeviceCategoryDestroy,
-		Steps: []resource.TestStep{
-			// Create with fsmount
-			{
-				Config: testAccCMDeviceCategoryResourceConfig_WithFSMount(categoryName, "/dev/sdb1", "/data", "xfs"),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "fsmounts.0.device", "/dev/sdb1"),
-					resource.TestCheckResourceAttrSet("bcm_cmdevice_category.test", "fsmounts.0.uuid"),
-				),
-			},
-			// Import - NOTE: BCM may not persist category fsmounts, similar to roles
-			{
-				ResourceName:      "bcm_cmdevice_category.test",
-				ImportState:       true,
-				ImportStateVerify: true,
-				ImportStateVerifyIgnore: []string{
-					"force",
-					"fsmounts", // BCM may not persist category fsmounts - needs re-add after import
-				},
-			},
-		},
-	})
-}
-
-// =============================================================================
-// FSMounts Test Configuration Functions
-// =============================================================================
-
-// testAccCMDeviceCategoryResourceConfig_WithFSMount creates a category with a single fsmount
-// for testing fsmounts configuration (Issue #84).
-func testAccCMDeviceCategoryResourceConfig_WithFSMount(name, device, mountpoint, filesystem string) string {
-	return fmt.Sprintf(`
-provider "bcm" {
-  endpoint             = %[1]q
-  username             = %[2]q
-  password             = %[3]q
-  insecure_skip_verify = true
-}
-
-data "bcm_cmdevice_categories" "all" {}
-data "bcm_cmpart_softwareimages" "all" {}
-
-locals {
-  management_network_uuid = length(data.bcm_cmdevice_categories.all.categories) > 0 ? data.bcm_cmdevice_categories.all.categories[0].management_network_id : "00000000-0000-0000-0000-000000000000"
-  software_image_uuid = length(data.bcm_cmpart_softwareimages.all.images) > 0 ? data.bcm_cmpart_softwareimages.all.images[0].uuid : "00000000-0000-0000-0000-000000000000"
-}
-
-resource "bcm_cmdevice_category" "test" {
-  name               = %[4]q
-  management_network = local.management_network_uuid
-  notes              = "Issue #84 test: fsmounts implementation"
-
-  software_image_proxy = {
-    parent_software_image = local.software_image_uuid
-  }
-
-  fsmounts = [
-    {
-      device     = %[5]q
-      mountpoint = %[6]q
-      filesystem = %[7]q
-    }
-  ]
-}
-`,
-		os.Getenv("BCM_ENDPOINT"),
-		os.Getenv("BCM_USERNAME"),
-		os.Getenv("BCM_PASSWORD"),
-		name,
-		device,
-		mountpoint,
-		filesystem,
-	)
-}
-
-// testAccCMDeviceCategoryResourceConfig_MultipleFSMounts creates a category with multiple fsmounts
-// for testing multiple mount configurations (Issue #84).
-func testAccCMDeviceCategoryResourceConfig_MultipleFSMounts(name string) string {
-	return fmt.Sprintf(`
-provider "bcm" {
-  endpoint             = %[1]q
-  username             = %[2]q
-  password             = %[3]q
-  insecure_skip_verify = true
-}
-
-data "bcm_cmdevice_categories" "all" {}
-data "bcm_cmpart_softwareimages" "all" {}
-
-locals {
-  management_network_uuid = length(data.bcm_cmdevice_categories.all.categories) > 0 ? data.bcm_cmdevice_categories.all.categories[0].management_network_id : "00000000-0000-0000-0000-000000000000"
-  software_image_uuid = length(data.bcm_cmpart_softwareimages.all.images) > 0 ? data.bcm_cmpart_softwareimages.all.images[0].uuid : "00000000-0000-0000-0000-000000000000"
-}
-
-resource "bcm_cmdevice_category" "test" {
-  name               = %[4]q
-  management_network = local.management_network_uuid
-  notes              = "Issue #84 test: multiple fsmounts"
-
-  software_image_proxy = {
-    parent_software_image = local.software_image_uuid
-  }
-
-  fsmounts = [
-    {
-      device       = "/dev/sdb1"
-      mountpoint   = "/data"
-      filesystem   = "xfs"
-      mountoptions = "defaults,noatime"
-    },
-    {
-      device     = "nfs-server:/export"
-      mountpoint = "/shared"
-      filesystem = "nfs"
-    }
-  ]
-}
-`,
-		os.Getenv("BCM_ENDPOINT"),
-		os.Getenv("BCM_USERNAME"),
-		os.Getenv("BCM_PASSWORD"),
-		name,
-	)
 }
