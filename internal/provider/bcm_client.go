@@ -657,11 +657,12 @@ func (c *BCMClient) ValidateEntity(ctx context.Context, service, validateMethod 
 	var validationErrors []ValidationError
 	for _, item := range validationArray {
 		// Extract fields using null-safe helpers
-		field := getString(item, "Field")
-		message := getString(item, "Message")
-		errorCode := getString(item, "ErrorCode")
-		severity := getString(item, "Severity")
-		entityUUID := getString(item, "EntityUUID")
+		// BCM API returns lowercase field names: field, message, error_code, severity
+		field := getString(item, "field")
+		message := getString(item, "message")
+		errorCode := getString(item, "error_code")
+		severity := getString(item, "severity")
+		entityUUID := getString(item, "ref_entity_uuid")
 
 		// Create ValidationError struct
 		valErr := ValidationError{
