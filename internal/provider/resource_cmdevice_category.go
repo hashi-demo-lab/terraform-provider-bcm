@@ -829,6 +829,8 @@ func (r *CMDeviceCategoryResource) Create(ctx context.Context, req resource.Crea
 	planRoles := plan.Roles
 	planGPUSettings := plan.GPUSettings
 	planServices := plan.Services
+	// Issue #82: Preserve BMC settings (password is sensitive and not returned by API)
+	planBMCSettings := plan.BMCSettings
 
 	// Build API entity from plan
 	entity := r.buildAPIEntity(ctx, &plan, "")
@@ -1057,6 +1059,61 @@ func (r *CMDeviceCategoryResource) Create(ctx context.Context, req resource.Crea
 	plan.GPUSettings = planGPUSettings
 	plan.Services = planServices
 
+	// Issue #82 FIX: Preserve bmc_settings from plan for sensitive object consistency
+	// For objects containing sensitive attributes, Terraform requires the returned state
+	// to match the plan exactly (except for computed fields marked UseStateForUnknown).
+	// Since we can't mark individual nested attributes as UseStateForUnknown, we need to:
+	// 1. Use plan values for ALL user-configured fields (including password)
+	// 2. Use API values ONLY for computed fields (uuid)
+	// 3. Keep null values as null (don't replace with API defaults)
+	if !planBMCSettings.IsNull() && !planBMCSettings.IsUnknown() {
+		var planBMC BMCSettingsModel
+		planBMCSettings.As(ctx, &planBMC, basetypes.ObjectAsOptions{})
+
+		// Get API-returned values for computed fields only
+		var apiBMC BMCSettingsModel
+		if !plan.BMCSettings.IsNull() {
+			plan.BMCSettings.As(ctx, &apiBMC, basetypes.ObjectAsOptions{})
+		}
+
+		// Build merged model:
+		// - UUID: From API (computed)
+		// - ALL other fields: From plan (to ensure consistency with Terraform's expected values)
+		mergedBMC := BMCSettingsModel{
+			UUID:               apiBMC.UUID,                // Only computed field from API
+			UserName:           planBMC.UserName,           // From plan
+			Password:           planBMC.Password,           // From plan (sensitive)
+			Privilege:          planBMC.Privilege,          // From plan
+			UserID:             planBMC.UserID,             // From plan
+			FirmwareManageMode: planBMC.FirmwareManageMode, // From plan (null if not set)
+			LeakPolicy:         planBMC.LeakPolicy,         // From plan (null if not set)
+			LeakReactionDelay:  planBMC.LeakReactionDelay,  // From plan (null if not set)
+			PowerResetDelay:    planBMC.PowerResetDelay,    // From plan (null if not set)
+		}
+
+		// Convert back to types.Object
+		bmcSettingsObjectType := map[string]attr.Type{
+			"uuid":                 types.StringType,
+			"user_name":            types.StringType,
+			"password":             types.StringType,
+			"privilege":            types.StringType,
+			"user_id":              types.Int64Type,
+			"firmware_manage_mode": types.StringType,
+			"leak_policy":          types.StringType,
+			"leak_reaction_delay":  types.Float64Type,
+			"power_reset_delay":    types.Int64Type,
+		}
+
+		bmcObj, diagsBMC := types.ObjectValueFrom(ctx, bmcSettingsObjectType, mergedBMC)
+		if !diagsBMC.HasError() {
+			plan.BMCSettings = bmcObj
+			tflog.Debug(ctx, "Preserved bmc_settings from plan in Create", map[string]interface{}{
+				"has_password": !planBMC.Password.IsNull(),
+				"user_name":    planBMC.UserName.ValueString(),
+			})
+		}
+	}
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -1078,6 +1135,8 @@ func (r *CMDeviceCategoryResource) Read(ctx context.Context, req resource.ReadRe
 	originalRoles := state.Roles
 	originalGPUSettings := state.GPUSettings
 	originalServices := state.Services
+	// Issue #82: Preserve BMC settings (password is sensitive and not returned by API)
+	originalBMCSettings := state.BMCSettings
 
 	// Fetch current state from BCM API with retry for eventual consistency
 	// BCM may not return all computed fields immediately after create/update
@@ -1237,6 +1296,56 @@ func (r *CMDeviceCategoryResource) Read(ctx context.Context, req resource.ReadRe
 		}
 	}
 
+	// Issue #82 FIX: Preserve bmc_settings from state for consistency
+	// For objects containing sensitive attributes, we must preserve the state values
+	// to avoid drift detection. BCM API does not return password (sensitive).
+	if !originalBMCSettings.IsNull() && !originalBMCSettings.IsUnknown() {
+		var originalBMC BMCSettingsModel
+		originalBMCSettings.As(ctx, &originalBMC, basetypes.ObjectAsOptions{})
+
+		// Get API-returned values for computed fields only
+		var apiBMC BMCSettingsModel
+		if !state.BMCSettings.IsNull() {
+			state.BMCSettings.As(ctx, &apiBMC, basetypes.ObjectAsOptions{})
+		}
+
+		// Build merged model:
+		// - UUID: From API (computed)
+		// - ALL other fields: From prior state (to maintain consistency and avoid drift)
+		mergedBMC := BMCSettingsModel{
+			UUID:               apiBMC.UUID,                    // Only computed field from API
+			UserName:           originalBMC.UserName,           // From state
+			Password:           originalBMC.Password,           // From state (sensitive)
+			Privilege:          originalBMC.Privilege,          // From state
+			UserID:             originalBMC.UserID,             // From state
+			FirmwareManageMode: originalBMC.FirmwareManageMode, // From state
+			LeakPolicy:         originalBMC.LeakPolicy,         // From state
+			LeakReactionDelay:  originalBMC.LeakReactionDelay,  // From state
+			PowerResetDelay:    originalBMC.PowerResetDelay,    // From state
+		}
+
+		// Convert back to types.Object
+		bmcSettingsObjectType := map[string]attr.Type{
+			"uuid":                 types.StringType,
+			"user_name":            types.StringType,
+			"password":             types.StringType,
+			"privilege":            types.StringType,
+			"user_id":              types.Int64Type,
+			"firmware_manage_mode": types.StringType,
+			"leak_policy":          types.StringType,
+			"leak_reaction_delay":  types.Float64Type,
+			"power_reset_delay":    types.Int64Type,
+		}
+
+		bmcObj, diagsBMC := types.ObjectValueFrom(ctx, bmcSettingsObjectType, mergedBMC)
+		if !diagsBMC.HasError() {
+			state.BMCSettings = bmcObj
+			tflog.Debug(ctx, "Preserved bmc_settings from state in Read", map[string]interface{}{
+				"has_password": !originalBMC.Password.IsNull(),
+			})
+		}
+	}
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
@@ -1322,6 +1431,8 @@ func (r *CMDeviceCategoryResource) Update(ctx context.Context, req resource.Upda
 	planRoles := plan.Roles
 	planGPUSettings := plan.GPUSettings
 	planServices := plan.Services
+	// Issue #82: Preserve BMC settings (password is sensitive and not returned by API)
+	planBMCSettings := plan.BMCSettings
 
 	// Read back updated category with retry for eventual consistency
 	maxRetries := 5
@@ -1428,6 +1539,56 @@ func (r *CMDeviceCategoryResource) Update(ctx context.Context, req resource.Upda
 					"parent_software_image": planProxy.ParentSoftwareImage.ValueString(),
 				})
 			}
+		}
+	}
+
+	// Issue #82 FIX: Preserve bmc_settings from plan for consistency
+	// For objects containing sensitive attributes, we must preserve the plan values
+	// to avoid "inconsistent values for sensitive attribute" errors.
+	if !planBMCSettings.IsNull() && !planBMCSettings.IsUnknown() {
+		var planBMC BMCSettingsModel
+		planBMCSettings.As(ctx, &planBMC, basetypes.ObjectAsOptions{})
+
+		// Get API-returned values for computed fields only
+		var apiBMC BMCSettingsModel
+		if !plan.BMCSettings.IsNull() {
+			plan.BMCSettings.As(ctx, &apiBMC, basetypes.ObjectAsOptions{})
+		}
+
+		// Build merged model:
+		// - UUID: From API (computed)
+		// - ALL other fields: From plan (to ensure consistency)
+		mergedBMC := BMCSettingsModel{
+			UUID:               apiBMC.UUID,                // Only computed field from API
+			UserName:           planBMC.UserName,           // From plan
+			Password:           planBMC.Password,           // From plan (sensitive)
+			Privilege:          planBMC.Privilege,          // From plan
+			UserID:             planBMC.UserID,             // From plan
+			FirmwareManageMode: planBMC.FirmwareManageMode, // From plan
+			LeakPolicy:         planBMC.LeakPolicy,         // From plan
+			LeakReactionDelay:  planBMC.LeakReactionDelay,  // From plan
+			PowerResetDelay:    planBMC.PowerResetDelay,    // From plan
+		}
+
+		// Convert back to types.Object
+		bmcSettingsObjectType := map[string]attr.Type{
+			"uuid":                 types.StringType,
+			"user_name":            types.StringType,
+			"password":             types.StringType,
+			"privilege":            types.StringType,
+			"user_id":              types.Int64Type,
+			"firmware_manage_mode": types.StringType,
+			"leak_policy":          types.StringType,
+			"leak_reaction_delay":  types.Float64Type,
+			"power_reset_delay":    types.Int64Type,
+		}
+
+		bmcObj, diagsBMC := types.ObjectValueFrom(ctx, bmcSettingsObjectType, mergedBMC)
+		if !diagsBMC.HasError() {
+			plan.BMCSettings = bmcObj
+			tflog.Debug(ctx, "Preserved bmc_settings from plan in Update", map[string]interface{}{
+				"has_password": !planBMC.Password.IsNull(),
+			})
 		}
 	}
 
@@ -2579,4 +2740,40 @@ func parseStringListValue(ctx context.Context, data map[string]interface{}, key 
 		}
 	}
 	return types.ListNull(types.StringType)
+}
+
+// Issue #82: Coalesce helper functions for preserving plan values over API values
+// These return the first non-null, non-unknown value, preferring plan values
+
+// coalesceString returns the first non-null, non-unknown string value
+func coalesceString(values ...types.String) types.String {
+	for _, v := range values {
+		if !v.IsNull() && !v.IsUnknown() {
+			return v
+		}
+	}
+	// All values are null or unknown, return null
+	return types.StringNull()
+}
+
+// coalesceInt64 returns the first non-null, non-unknown int64 value
+func coalesceInt64(values ...types.Int64) types.Int64 {
+	for _, v := range values {
+		if !v.IsNull() && !v.IsUnknown() {
+			return v
+		}
+	}
+	// All values are null or unknown, return null
+	return types.Int64Null()
+}
+
+// coalesceFloat64 returns the first non-null, non-unknown float64 value
+func coalesceFloat64(values ...types.Float64) types.Float64 {
+	for _, v := range values {
+		if !v.IsNull() && !v.IsUnknown() {
+			return v
+		}
+	}
+	// All values are null or unknown, return null
+	return types.Float64Null()
 }
