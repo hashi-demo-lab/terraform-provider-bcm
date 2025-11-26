@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-testing/compare"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
 	"github.com/hashicorp/terraform-plugin-testing/plancheck"
@@ -140,6 +141,9 @@ func TestAccCMUserUser_Basic(t *testing.T) {
 	username := generateUniqueUnixUsername("tfu")
 	password := "TestPass123!"
 
+	// ID consistency tracking
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -148,12 +152,6 @@ func TestAccCMUserUser_Basic(t *testing.T) {
 			// Create and Read
 			{
 				Config: testAccCMUserUserConfig(username, password),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmuser_user.test", "username", username),
-					resource.TestCheckResourceAttrSet("bcm_cmuser_user.test", "uuid"),
-					resource.TestCheckResourceAttrSet("bcm_cmuser_user.test", "id"),
-					resource.TestCheckResourceAttr("bcm_cmuser_user.test", "shell", "/bin/bash"),
-				),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmuser_user.test",
@@ -167,8 +165,17 @@ func TestAccCMUserUser_Basic(t *testing.T) {
 					),
 					statecheck.ExpectKnownValue(
 						"bcm_cmuser_user.test",
+						tfjsonpath.New("id"),
+						knownvalue.NotNull(),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmuser_user.test",
 						tfjsonpath.New("shell"),
 						knownvalue.StringExact("/bin/bash"),
+					),
+					compareID.AddStateValue(
+						"bcm_cmuser_user.test",
+						tfjsonpath.New("id"),
 					),
 				},
 			},
@@ -185,6 +192,9 @@ func TestAccCMUserUser_Complete(t *testing.T) {
 	email := "testuser@example.com"
 	notes := "Complete test user"
 
+	// ID consistency tracking
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -193,16 +203,12 @@ func TestAccCMUserUser_Complete(t *testing.T) {
 			// Create with all attributes
 			{
 				Config: testAccCMUserUserConfigComplete(username, password, shell, fullName, email, notes),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmuser_user.test", "username", username),
-					resource.TestCheckResourceAttr("bcm_cmuser_user.test", "shell", shell),
-					resource.TestCheckResourceAttr("bcm_cmuser_user.test", "full_name", fullName),
-					resource.TestCheckResourceAttr("bcm_cmuser_user.test", "email", email),
-					resource.TestCheckResourceAttr("bcm_cmuser_user.test", "notes", notes),
-					resource.TestCheckResourceAttr("bcm_cmuser_user.test", "shadow_max", "90"),
-					resource.TestCheckResourceAttr("bcm_cmuser_user.test", "shadow_warning", "14"),
-				),
 				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmuser_user.test",
+						tfjsonpath.New("username"),
+						knownvalue.StringExact(username),
+					),
 					statecheck.ExpectKnownValue(
 						"bcm_cmuser_user.test",
 						tfjsonpath.New("shell"),
@@ -215,8 +221,27 @@ func TestAccCMUserUser_Complete(t *testing.T) {
 					),
 					statecheck.ExpectKnownValue(
 						"bcm_cmuser_user.test",
+						tfjsonpath.New("email"),
+						knownvalue.StringExact(email),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmuser_user.test",
+						tfjsonpath.New("notes"),
+						knownvalue.StringExact(notes),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmuser_user.test",
 						tfjsonpath.New("shadow_max"),
 						knownvalue.Int64Exact(90),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmuser_user.test",
+						tfjsonpath.New("shadow_warning"),
+						knownvalue.Int64Exact(14),
+					),
+					compareID.AddStateValue(
+						"bcm_cmuser_user.test",
+						tfjsonpath.New("id"),
 					),
 				},
 			},
@@ -229,6 +254,9 @@ func TestAccCMUserUser_Update(t *testing.T) {
 	username := generateUniqueUnixUsername("tfu")
 	password := "UpdatePass123!"
 
+	// ID consistency tracking
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -237,23 +265,40 @@ func TestAccCMUserUser_Update(t *testing.T) {
 			// Create with initial shell
 			{
 				Config: testAccCMUserUserConfigWithShell(username, password, "/bin/bash"),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmuser_user.test", "username", username),
-					resource.TestCheckResourceAttr("bcm_cmuser_user.test", "shell", "/bin/bash"),
-				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmuser_user.test",
+						tfjsonpath.New("username"),
+						knownvalue.StringExact(username),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmuser_user.test",
+						tfjsonpath.New("shell"),
+						knownvalue.StringExact("/bin/bash"),
+					),
+					compareID.AddStateValue(
+						"bcm_cmuser_user.test",
+						tfjsonpath.New("id"),
+					),
+				},
 			},
 			// Update shell
 			{
 				Config: testAccCMUserUserConfigWithShell(username, password, "/bin/sh"),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmuser_user.test", "username", username),
-					resource.TestCheckResourceAttr("bcm_cmuser_user.test", "shell", "/bin/sh"),
-				),
 				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmuser_user.test",
+						tfjsonpath.New("username"),
+						knownvalue.StringExact(username),
+					),
 					statecheck.ExpectKnownValue(
 						"bcm_cmuser_user.test",
 						tfjsonpath.New("shell"),
 						knownvalue.StringExact("/bin/sh"),
+					),
+					compareID.AddStateValue(
+						"bcm_cmuser_user.test",
+						tfjsonpath.New("id"),
 					),
 				},
 			},
@@ -266,6 +311,9 @@ func TestAccCMUserUser_Idempotent(t *testing.T) {
 	username := generateUniqueUnixUsername("tfu")
 	password := "IdempotentPass123!"
 
+	// ID consistency tracking
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -274,9 +322,17 @@ func TestAccCMUserUser_Idempotent(t *testing.T) {
 			// Create
 			{
 				Config: testAccCMUserUserConfig(username, password),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmuser_user.test", "username", username),
-				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmuser_user.test",
+						tfjsonpath.New("username"),
+						knownvalue.StringExact(username),
+					),
+					compareID.AddStateValue(
+						"bcm_cmuser_user.test",
+						tfjsonpath.New("id"),
+					),
+				},
 			},
 			// Verify idempotent - no plan changes
 			{
@@ -285,6 +341,12 @@ func TestAccCMUserUser_Idempotent(t *testing.T) {
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
 					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmuser_user.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 		},
@@ -296,6 +358,9 @@ func TestAccCMUserUser_Import(t *testing.T) {
 	username := generateUniqueUnixUsername("tfu")
 	password := "ImportPass123!"
 
+	// ID consistency tracking
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -304,10 +369,22 @@ func TestAccCMUserUser_Import(t *testing.T) {
 			// Create user first
 			{
 				Config: testAccCMUserUserConfig(username, password),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmuser_user.test", "username", username),
-					resource.TestCheckResourceAttrSet("bcm_cmuser_user.test", "id"),
-				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmuser_user.test",
+						tfjsonpath.New("username"),
+						knownvalue.StringExact(username),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmuser_user.test",
+						tfjsonpath.New("id"),
+						knownvalue.NotNull(),
+					),
+					compareID.AddStateValue(
+						"bcm_cmuser_user.test",
+						tfjsonpath.New("id"),
+					),
+				},
 			},
 			// Import by username
 			{
@@ -316,6 +393,12 @@ func TestAccCMUserUser_Import(t *testing.T) {
 				ImportStateId:           username,
 				ImportStateVerify:       true,
 				ImportStateVerifyIgnore: []string{"password", "force"}, // Password cannot be recovered
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmuser_user.test",
+						tfjsonpath.New("id"),
+					),
+				},
 			},
 		},
 	})
@@ -326,6 +409,9 @@ func TestAccCMUserUser_DriftShell(t *testing.T) {
 	username := generateUniqueUnixUsername("tfu")
 	password := "DriftPass123!"
 
+	// ID consistency tracking
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -334,9 +420,17 @@ func TestAccCMUserUser_DriftShell(t *testing.T) {
 			// Create with initial shell
 			{
 				Config: testAccCMUserUserConfigWithShell(username, password, "/bin/bash"),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmuser_user.test", "shell", "/bin/bash"),
-				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmuser_user.test",
+						tfjsonpath.New("shell"),
+						knownvalue.StringExact("/bin/bash"),
+					),
+					compareID.AddStateValue(
+						"bcm_cmuser_user.test",
+						tfjsonpath.New("id"),
+					),
+				},
 			},
 			// Modify shell externally via BCM API (drift)
 			{
@@ -376,13 +470,27 @@ func TestAccCMUserUser_DriftShell(t *testing.T) {
 						plancheck.ExpectNonEmptyPlan(), // Drift detected!
 					},
 				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmuser_user.test",
+						tfjsonpath.New("id"),
+					),
+				},
 			},
 			// Terraform restores desired state
 			{
 				Config: testAccCMUserUserConfigWithShell(username, password, "/bin/bash"),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmuser_user.test", "shell", "/bin/bash"),
-				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmuser_user.test",
+						tfjsonpath.New("shell"),
+						knownvalue.StringExact("/bin/bash"),
+					),
+					compareID.AddStateValue(
+						"bcm_cmuser_user.test",
+						tfjsonpath.New("id"),
+					),
+				},
 			},
 		},
 	})
@@ -395,6 +503,9 @@ func TestAccCMUserUser_DriftNotes(t *testing.T) {
 	initialNotes := "Initial notes"
 	driftNotes := "Externally modified notes"
 
+	// ID consistency tracking
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -403,9 +514,17 @@ func TestAccCMUserUser_DriftNotes(t *testing.T) {
 			// Create with initial notes
 			{
 				Config: testAccCMUserUserConfigComplete(username, password, "/bin/bash", "Test User", "test@example.com", initialNotes),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmuser_user.test", "notes", initialNotes),
-				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmuser_user.test",
+						tfjsonpath.New("notes"),
+						knownvalue.StringExact(initialNotes),
+					),
+					compareID.AddStateValue(
+						"bcm_cmuser_user.test",
+						tfjsonpath.New("id"),
+					),
+				},
 			},
 			// Modify notes externally via BCM API (drift)
 			{
@@ -445,13 +564,27 @@ func TestAccCMUserUser_DriftNotes(t *testing.T) {
 						plancheck.ExpectNonEmptyPlan(), // Drift detected!
 					},
 				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmuser_user.test",
+						tfjsonpath.New("id"),
+					),
+				},
 			},
 			// Terraform restores desired state
 			{
 				Config: testAccCMUserUserConfigComplete(username, password, "/bin/bash", "Test User", "test@example.com", initialNotes),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmuser_user.test", "notes", initialNotes),
-				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmuser_user.test",
+						tfjsonpath.New("notes"),
+						knownvalue.StringExact(initialNotes),
+					),
+					compareID.AddStateValue(
+						"bcm_cmuser_user.test",
+						tfjsonpath.New("id"),
+					),
+				},
 			},
 		},
 	})
@@ -462,6 +595,9 @@ func TestAccCMUserUser_PasswordSensitive(t *testing.T) {
 	username := generateUniqueUnixUsername("tfu")
 	password := "SensitivePass123!"
 
+	// ID consistency tracking
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -469,11 +605,23 @@ func TestAccCMUserUser_PasswordSensitive(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: testAccCMUserUserConfig(username, password),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmuser_user.test", "username", username),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmuser_user.test",
+						tfjsonpath.New("username"),
+						knownvalue.StringExact(username),
+					),
 					// Password should be set but marked sensitive
-					resource.TestCheckResourceAttrSet("bcm_cmuser_user.test", "password"),
-				),
+					statecheck.ExpectKnownValue(
+						"bcm_cmuser_user.test",
+						tfjsonpath.New("password"),
+						knownvalue.NotNull(),
+					),
+					compareID.AddStateValue(
+						"bcm_cmuser_user.test",
+						tfjsonpath.New("id"),
+					),
+				},
 			},
 		},
 	})
