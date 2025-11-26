@@ -35,12 +35,12 @@ const (
 
 // BCMClient handles JSON-RPC API calls to BCM with cookie-based authentication.
 type BCMClient struct {
-	HTTPClient   *http.Client // Includes cookie jar for automatic cm-login-token management
-	Endpoint     string       // Base URL (e.g., https://172.21.15.254:8081)
-	MaxRetries   int          // Maximum number of retries for transient errors
+	HTTPClient   *http.Client  // Includes cookie jar for automatic cm-login-token management
+	Endpoint     string        // Base URL (e.g., https://172.21.15.254:8081)
+	MaxRetries   int           // Maximum number of retries for transient errors
 	BaseDelay    time.Duration // Initial delay between retries
 	MaxDelay     time.Duration // Maximum delay between retries
-	JitterFactor float64      // Randomness factor to prevent thundering herd (0.0-1.0)
+	JitterFactor float64       // Randomness factor to prevent thundering herd (0.0-1.0)
 }
 
 // ValidationError represents a structured validation error from BCM API.
@@ -319,10 +319,10 @@ func (c *BCMClient) doHTTPRequest(ctx context.Context, req *http.Request, jsonBo
 			if isRetryableError(err) && attempt < c.MaxRetries {
 				backoff := c.calculateBackoff(attempt)
 				tflog.Warn(ctx, fmt.Sprintf("%s request failed, retrying", logPrefix), map[string]interface{}{
-					"attempt":      attempt + 1,
-					"max_retries":  c.MaxRetries,
-					"error":        err.Error(),
-					"backoff_ms":   backoff.Milliseconds(),
+					"attempt":     attempt + 1,
+					"max_retries": c.MaxRetries,
+					"error":       err.Error(),
+					"backoff_ms":  backoff.Milliseconds(),
 				})
 
 				// Wait before retry (with context cancellation support)
@@ -346,10 +346,10 @@ func (c *BCMClient) doHTTPRequest(ctx context.Context, req *http.Request, jsonBo
 			if isRetryableError(err) && attempt < c.MaxRetries {
 				backoff := c.calculateBackoff(attempt)
 				tflog.Warn(ctx, fmt.Sprintf("%s response read failed, retrying", logPrefix), map[string]interface{}{
-					"attempt":      attempt + 1,
-					"max_retries":  c.MaxRetries,
-					"error":        err.Error(),
-					"backoff_ms":   backoff.Milliseconds(),
+					"attempt":     attempt + 1,
+					"max_retries": c.MaxRetries,
+					"error":       err.Error(),
+					"backoff_ms":  backoff.Milliseconds(),
 				})
 
 				select {
@@ -372,10 +372,10 @@ func (c *BCMClient) doHTTPRequest(ctx context.Context, req *http.Request, jsonBo
 		if resp.StatusCode >= 500 && attempt < c.MaxRetries {
 			backoff := c.calculateBackoff(attempt)
 			tflog.Warn(ctx, fmt.Sprintf("%s server error, retrying", logPrefix), map[string]interface{}{
-				"attempt":      attempt + 1,
-				"max_retries":  c.MaxRetries,
-				"status":       resp.StatusCode,
-				"backoff_ms":   backoff.Milliseconds(),
+				"attempt":     attempt + 1,
+				"max_retries": c.MaxRetries,
+				"status":      resp.StatusCode,
+				"backoff_ms":  backoff.Milliseconds(),
 			})
 
 			select {
