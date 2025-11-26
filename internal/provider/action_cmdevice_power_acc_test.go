@@ -38,7 +38,7 @@ import (
 // WARNING: These tests execute real power operations on BCM devices!
 // Only run against test/development clusters.
 
-// testAccActionPreCheck verifies acceptance test prerequisites
+// testAccActionPreCheck verifies acceptance test prerequisites.
 func testAccActionPreCheck(t *testing.T) {
 	if os.Getenv("TF_ACC") == "" {
 		t.Skip("TF_ACC must be set for acceptance tests")
@@ -55,9 +55,9 @@ func testAccActionPreCheck(t *testing.T) {
 	}
 }
 
-// testAccGetTestDeviceID returns a device ID for power action tests
-// Returns empty string if BCM_TEST_DEVICE_ID is not set (test will be skipped)
-// SAFETY: Excludes head nodes to prevent accidental disruption of cluster management
+// testAccGetTestDeviceID returns a device ID for power action tests.
+// Returns empty string if BCM_TEST_DEVICE_ID is not set (test will be skipped).
+// SAFETY: Excludes head nodes to prevent accidental disruption of cluster management.
 func testAccGetTestDeviceID(t *testing.T) string {
 	deviceID := os.Getenv("BCM_TEST_DEVICE_ID")
 	if deviceID == "" {
@@ -108,7 +108,7 @@ func testAccGetTestDeviceID(t *testing.T) string {
 	return deviceID
 }
 
-// createTestActionWithClient creates a CMDevicePowerAction with configured BCM client
+// createTestActionWithClient creates a CMDevicePowerAction with configured BCM client.
 func createTestActionWithClient(t *testing.T) *CMDevicePowerAction {
 	client := createTestBCMClient(t)
 
@@ -128,7 +128,9 @@ func createTestActionWithClient(t *testing.T) *CMDevicePowerAction {
 	return a
 }
 
-// buildActionConfig creates a tfsdk.Config for testing action invocation
+// buildActionConfig creates a tfsdk.Config for testing action invocation.
+//
+//nolint:unused // Reserved for future use when terraform-plugin-testing supports Actions
 func buildActionConfig(t *testing.T, deviceID, powerAction string, waitForCompletion bool, timeout string) tfsdk.Config {
 	// Get schema for the action
 	a := NewCMDevicePowerAction()
@@ -179,16 +181,19 @@ func buildActionConfig(t *testing.T, deviceID, powerAction string, waitForComple
 	}
 }
 
-// Placeholder types to satisfy type assertions in buildActionConfig
-// These are used only for type checking in the switch statement
+// Placeholder types to satisfy type assertions in buildActionConfig.
+// These are used only for type checking in the switch statement.
+//
+//nolint:unused // Reserved for future use when terraform-plugin-testing supports Actions
 type action_schema_StringAttribute = interface{ IsRequired() bool }
+//nolint:unused // Reserved for future use when terraform-plugin-testing supports Actions
 type action_schema_BoolAttribute = interface{ IsOptional() bool }
 
 // ============================================================================
 // Acceptance Tests
 // ============================================================================
 
-// TestAccCMDevicePowerAction_PowerOn tests the power_on action
+// TestAccCMDevicePowerAction_PowerOn tests the power_on action.
 func TestAccCMDevicePowerAction_PowerOn(t *testing.T) {
 	testAccActionPreCheck(t)
 
@@ -236,7 +241,7 @@ func TestAccCMDevicePowerAction_PowerOn(t *testing.T) {
 	_ = a // Ensure action was created
 }
 
-// TestAccCMDevicePowerAction_PowerOff tests the power_off action
+// TestAccCMDevicePowerAction_PowerOff tests the power_off action.
 func TestAccCMDevicePowerAction_PowerOff(t *testing.T) {
 	testAccActionPreCheck(t)
 
@@ -260,7 +265,7 @@ func TestAccCMDevicePowerAction_PowerOff(t *testing.T) {
 	}
 }
 
-// TestAccCMDevicePowerAction_Reboot tests the reboot action
+// TestAccCMDevicePowerAction_Reboot tests the reboot action.
 func TestAccCMDevicePowerAction_Reboot(t *testing.T) {
 	testAccActionPreCheck(t)
 
@@ -285,7 +290,7 @@ func TestAccCMDevicePowerAction_Reboot(t *testing.T) {
 	}
 }
 
-// TestAccCMDevicePowerAction_PowerCycle tests the power_cycle action
+// TestAccCMDevicePowerAction_PowerCycle tests the power_cycle action.
 func TestAccCMDevicePowerAction_PowerCycle(t *testing.T) {
 	testAccActionPreCheck(t)
 
@@ -309,7 +314,7 @@ func TestAccCMDevicePowerAction_PowerCycle(t *testing.T) {
 	}
 }
 
-// TestAccCMDevicePowerAction_InvalidDevice tests error handling for invalid device
+// TestAccCMDevicePowerAction_InvalidDevice tests error handling for invalid device.
 func TestAccCMDevicePowerAction_InvalidDevice(t *testing.T) {
 	testAccActionPreCheck(t)
 
@@ -330,7 +335,7 @@ func TestAccCMDevicePowerAction_InvalidDevice(t *testing.T) {
 	}
 }
 
-// TestAccCMDevicePowerAction_ActionWithConfigure tests Configure interface
+// TestAccCMDevicePowerAction_ActionWithConfigure tests Configure interface.
 func TestAccCMDevicePowerAction_ActionWithConfigure(t *testing.T) {
 	testAccActionPreCheck(t)
 
@@ -360,7 +365,7 @@ func TestAccCMDevicePowerAction_ActionWithConfigure(t *testing.T) {
 	t.Log("ActionWithConfigure interface test passed")
 }
 
-// TestAccCMDevicePowerAction_PowerMethodMapping tests method mapping with real API
+// TestAccCMDevicePowerAction_PowerMethodMapping tests method mapping with real API.
 func TestAccCMDevicePowerAction_PowerMethodMapping(t *testing.T) {
 	testAccActionPreCheck(t)
 
@@ -386,7 +391,7 @@ func TestAccCMDevicePowerAction_PowerMethodMapping(t *testing.T) {
 	}
 }
 
-// TestAccCMDevicePowerAction_SchemaValidation tests schema with real provider
+// TestAccCMDevicePowerAction_SchemaValidation tests schema with real provider.
 func TestAccCMDevicePowerAction_SchemaValidation(t *testing.T) {
 	testAccActionPreCheck(t)
 
@@ -421,7 +426,7 @@ func TestAccCMDevicePowerAction_SchemaValidation(t *testing.T) {
 	t.Log("Schema validation passed")
 }
 
-// TestAccCMDevicePowerAction_Metadata tests metadata with real provider
+// TestAccCMDevicePowerAction_Metadata tests metadata with real provider.
 func TestAccCMDevicePowerAction_Metadata(t *testing.T) {
 	testAccActionPreCheck(t)
 
@@ -443,7 +448,7 @@ func TestAccCMDevicePowerAction_Metadata(t *testing.T) {
 	t.Logf("Action type name: %s", metadataResp.TypeName)
 }
 
-// TestAccCMDevicePowerAction_VerifyBCMAPIMethods tests that BCM API methods exist
+// TestAccCMDevicePowerAction_VerifyBCMAPIMethods tests that BCM API methods exist.
 func TestAccCMDevicePowerAction_VerifyBCMAPIMethods(t *testing.T) {
 	testAccActionPreCheck(t)
 
@@ -480,8 +485,8 @@ func TestAccCMDevicePowerAction_VerifyBCMAPIMethods(t *testing.T) {
 	}
 }
 
-// Note: Using the contains function from bcm_client.go
-// containsSubstr checks if a string contains a substring
+// Note: Using the contains function from bcm_client.go.
+// containsSubstr checks if a string contains a substring.
 func containsSubstr(s, substr string) bool {
 	return len(s) >= len(substr) && findSubstr(s, substr)
 }

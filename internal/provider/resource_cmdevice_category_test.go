@@ -2521,7 +2521,7 @@ resource "bcm_cmdevice_category" "test" {
 // Static Routes Tests
 // ============================================================================
 
-// TestAccCMDeviceCategory_StaticRoutesBasicCRUD tests create, update of static routes
+// TestAccCMDeviceCategory_StaticRoutesBasicCRUD tests create, update of static routes.
 func TestAccCMDeviceCategory_StaticRoutesBasicCRUD(t *testing.T) {
 	categoryName := generateUniqueTestName("staticroutes-test")
 
@@ -2606,7 +2606,7 @@ func TestAccCMDeviceCategory_StaticRoutesBasicCRUD(t *testing.T) {
 	})
 }
 
-// TestAccCMDeviceCategory_StaticRoutesValidation tests CIDR and IP format validation
+// TestAccCMDeviceCategory_StaticRoutesValidation tests CIDR and IP format validation.
 func TestAccCMDeviceCategory_StaticRoutesValidation(t *testing.T) {
 	categoryName := generateUniqueTestName("staticroutes-invalid")
 
@@ -2628,7 +2628,7 @@ func TestAccCMDeviceCategory_StaticRoutesValidation(t *testing.T) {
 	})
 }
 
-// testAccCMDeviceCategoryConfig_StaticRoutes creates config with N static routes
+// testAccCMDeviceCategoryConfig_StaticRoutes creates config with N static routes.
 func testAccCMDeviceCategoryConfig_StaticRoutes(name string, routeCount int) string {
 	// Build routes dynamically
 	routes := ""
@@ -2678,7 +2678,7 @@ resource "bcm_cmdevice_category" "test" {
 	)
 }
 
-// testAccCMDeviceCategoryConfig_StaticRoutesInvalid creates config with invalid static route
+// testAccCMDeviceCategoryConfig_StaticRoutesInvalid creates config with invalid static route.
 func testAccCMDeviceCategoryConfig_StaticRoutesInvalid(name, destination, gateway string) string {
 	return fmt.Sprintf(`
 provider "bcm" {
@@ -2725,7 +2725,7 @@ resource "bcm_cmdevice_category" "test" {
 // GPU Settings Tests
 // ============================================================================
 
-// TestAccCMDeviceCategory_GPUSettingsBasicCRUD tests create, update of GPU settings
+// TestAccCMDeviceCategory_GPUSettingsBasicCRUD tests create, update of GPU settings.
 func TestAccCMDeviceCategory_GPUSettingsBasicCRUD(t *testing.T) {
 	categoryName := generateUniqueTestName("gpusettings-test")
 
@@ -2801,7 +2801,7 @@ func TestAccCMDeviceCategory_GPUSettingsBasicCRUD(t *testing.T) {
 	})
 }
 
-// testAccCMDeviceCategoryConfig_GPUSettings creates config with N GPU settings
+// testAccCMDeviceCategoryConfig_GPUSettings creates config with N GPU settings.
 func testAccCMDeviceCategoryConfig_GPUSettings(name string, gpuCount int) string {
 	// Build GPU settings dynamically
 	gpuSettings := ""

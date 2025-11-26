@@ -8,9 +8,10 @@
 data "bcm_cmdevice_roles" "all" {}
 
 # Extract specific role UUIDs by name
+# Available roles vary by BCM cluster - common ones include: backup, provisioning, boot
 locals {
-  monitoring_role = [for r in data.bcm_cmdevice_roles.all.roles : r.uuid if r.name == "monitoring"][0]
-  storage_role    = [for r in data.bcm_cmdevice_roles.all.roles : r.uuid if r.name == "storage"][0]
+  backup_role       = [for r in data.bcm_cmdevice_roles.all.roles : r.uuid if r.name == "backup"][0]
+  provisioning_role = [for r in data.bcm_cmdevice_roles.all.roles : r.uuid if r.name == "provisioning"][0]
 }
 
 # Generate unique suffix for this test run
@@ -54,11 +55,11 @@ resource "bcm_cmdevice_device" "with_roles" {
 
   # Assign multiple roles using UUIDs from the data source
   roles = [
-    local.monitoring_role,
-    local.storage_role,
+    local.backup_role,
+    local.provisioning_role,
   ]
 
-  notes = "Device with monitoring and storage roles (run: ${local.test_suffix})"
+  notes = "Device with backup and provisioning roles (run: ${local.test_suffix})"
 
   depends_on = [bcm_cmdevice_category.roles_category, data.bcm_cmdevice_roles.all]
 }
