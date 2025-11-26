@@ -3194,9 +3194,9 @@ func TestAccCMDeviceCategoryResource_ExcludeLists(t *testing.T) {
 			// Step 1: Create with all exclude lists
 			{
 				Config: testAccCMDeviceCategoryResourceConfig_ExcludeLists(
-				categoryName,
-				excludeListFull,
-			),
+					categoryName,
+					excludeListFull,
+				),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_category.test",
@@ -3243,9 +3243,9 @@ func TestAccCMDeviceCategoryResource_ExcludeLists(t *testing.T) {
 			// Step 2: Idempotency check after Create
 			{
 				Config: testAccCMDeviceCategoryResourceConfig_ExcludeLists(
-				categoryName,
-				excludeListFull,
-			),
+					categoryName,
+					excludeListFull,
+				),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
@@ -3255,9 +3255,9 @@ func TestAccCMDeviceCategoryResource_ExcludeLists(t *testing.T) {
 			// Step 3: Update exclude_list_full
 			{
 				Config: testAccCMDeviceCategoryResourceConfig_ExcludeLists(
-				categoryName,
-				excludeListFullUpdated,
-			),
+					categoryName,
+					excludeListFullUpdated,
+				),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_category.test",
@@ -3274,9 +3274,9 @@ func TestAccCMDeviceCategoryResource_ExcludeLists(t *testing.T) {
 			// Step 4: Idempotency check after Update
 			{
 				Config: testAccCMDeviceCategoryResourceConfig_ExcludeLists(
-				categoryName,
-				excludeListFullUpdated,
-			),
+					categoryName,
+					excludeListFullUpdated,
+				),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
@@ -3286,9 +3286,9 @@ func TestAccCMDeviceCategoryResource_ExcludeLists(t *testing.T) {
 			// Step 5: Import and verify
 			{
 				Config: testAccCMDeviceCategoryResourceConfig_ExcludeLists(
-				categoryName,
-				excludeListFullUpdated,
-			),
+					categoryName,
+					excludeListFullUpdated,
+				),
 				ResourceName:            "bcm_cmdevice_category.test",
 				ImportState:             true,
 				ImportStateVerify:       true,
