@@ -33,7 +33,7 @@
 
 **Purpose**: Add test configuration helper that both user stories depend on
 
-- [ ] T001 Add `testAccCMDeviceCategoryResourceConfig_BMCPassword` helper function in `internal/provider/resource_cmdevice_category_test.go`
+- [X] T001 Add `testAccCMDeviceCategoryResourceConfig_BMCPassword` helper function in `internal/provider/resource_cmdevice_category_test.go`
 
 **Checkpoint**: Test helper ready - acceptance tests can now be written
 
@@ -49,21 +49,21 @@
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T002 [US1] Write `TestAccCMDeviceCategory_BMCPasswordNoDrift` acceptance test in `internal/provider/resource_cmdevice_category_test.go`
+- [X] T002 [US1] Write `TestAccCMDeviceCategory_BMCPasswordNoDrift` acceptance test in `internal/provider/resource_cmdevice_category_test.go`
   - Step 1: Create category with BMC password `"secret123"`
   - Step 2: Idempotency check with `plancheck.ExpectEmptyPlan()` - THIS SHOULD FAIL initially
   - Step 3: Import and verify (ignore `bmc_settings` as password cannot be imported)
-- [ ] T003 [US1] Run acceptance test to confirm it FAILS (RED phase verification) using `TF_ACC=1 go test -v -timeout 120m ./internal/provider/ -run TestAccCMDeviceCategory_BMCPasswordNoDrift`
+- [X] T003 [US1] Run acceptance test to confirm it FAILS (RED phase verification) using `TF_ACC=1 go test -v -timeout 120m ./internal/provider/ -run TestAccCMDeviceCategory_BMCPasswordNoDrift`
 
 ### GREEN Phase: Implement Fix for User Story 1
 
-- [ ] T004 [US1] Add `originalBMCSettings` capture before `readCategory()` call at line ~1077 in `internal/provider/resource_cmdevice_category.go`
-- [ ] T005 [US1] Add BMC password preservation logic after `readCategory()` call at line ~1196 in `internal/provider/resource_cmdevice_category.go`
+- [X] T004 [US1] Add `originalBMCSettings` capture before `readCategory()` call at line ~1077 in `internal/provider/resource_cmdevice_category.go`
+- [X] T005 [US1] Add BMC password preservation logic after `readCategory()` call at line ~1196 in `internal/provider/resource_cmdevice_category.go`
   - Extract original password from `originalBMCSettings` using `basetypes.ObjectAsOptions{}`
   - Build merged BMC model with API values + preserved password
   - Convert back to `types.Object` and set on state
   - Add `tflog.Debug` for observability
-- [ ] T006 [US1] Run acceptance test to confirm it PASSES (GREEN phase verification) using `TF_ACC=1 go test -v -timeout 120m ./internal/provider/ -run TestAccCMDeviceCategory_BMCPasswordNoDrift`
+- [X] T006 [US1] Run acceptance test to confirm it PASSES (GREEN phase verification) using `TF_ACC=1 go test -v -timeout 120m ./internal/provider/ -run TestAccCMDeviceCategory_BMCPasswordNoDrift`
 
 **Checkpoint**: User Story 1 complete - no drift on `terraform plan` after apply with BMC password
 
@@ -80,11 +80,11 @@
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 > **NOTE: If implementation from US1 is already in place, this test should PASS immediately (same fix covers both stories)**
 
-- [ ] T007 [US2] Write `TestAccCMDeviceCategory_BMCPasswordUpdate` acceptance test in `internal/provider/resource_cmdevice_category_test.go`
+- [X] T007 [US2] Write `TestAccCMDeviceCategory_BMCPasswordUpdate` acceptance test in `internal/provider/resource_cmdevice_category_test.go`
   - Step 1: Create category with initial password `"oldpass123"`
   - Step 2: Update password to `"newpass456"` - verify change applied
   - Step 3: Idempotency check with `plancheck.ExpectEmptyPlan()`
-- [ ] T008 [US2] Run acceptance test to verify it PASSES (since fix from US1 covers this case) using `TF_ACC=1 go test -v -timeout 120m ./internal/provider/ -run TestAccCMDeviceCategory_BMCPasswordUpdate`
+- [X] T008 [US2] Run acceptance test to verify it PASSES (since fix from US1 covers this case) using `TF_ACC=1 go test -v -timeout 120m ./internal/provider/ -run TestAccCMDeviceCategory_BMCPasswordUpdate`
 
 **Checkpoint**: User Story 2 complete - password changes detected and applied correctly
 
@@ -98,7 +98,7 @@
 
 **NOTE**: This is covered by the import step in `TestAccCMDeviceCategory_BMCPasswordNoDrift` (T002). No additional implementation needed - import naturally works with the state preservation pattern.
 
-- [ ] T009 [US3] Verify import behavior in existing test by reviewing Step 3 of `TestAccCMDeviceCategory_BMCPasswordNoDrift` output
+- [X] T009 [US3] Verify import behavior in existing test by reviewing Step 3 of `TestAccCMDeviceCategory_BMCPasswordNoDrift` output
 
 **Checkpoint**: User Story 3 verified - import works correctly with password handling
 
@@ -110,19 +110,19 @@
 
 ### Regression Testing
 
-- [ ] T010 [P] Run full acceptance test suite for `bcm_cmdevice_category` resource using `TF_ACC=1 go test -v -timeout 120m ./internal/provider/ -run TestAccCMDeviceCategory`
-- [ ] T011 [P] Run unit tests to ensure no regressions using `make test`
-- [ ] T012 [P] Run linting and formatting using `make fmt && make lint`
+- [X] T010 [P] Run full acceptance test suite for `bcm_cmdevice_category` resource using `TF_ACC=1 go test -v -timeout 120m ./internal/provider/ -run TestAccCMDeviceCategory`
+- [X] T011 [P] Run unit tests to ensure no regressions using `make test`
+- [X] T012 [P] Run linting and formatting using `make fmt && make lint`
 
 ### Documentation Updates
 
-- [ ] T013 Generate provider documentation using `make generate`
-- [ ] T014 Update or remove skip comment on existing `TestAccCMDeviceCategoryResource_BMCSettings` test if present in `internal/provider/resource_cmdevice_category_test.go`
+- [X] T013 Generate provider documentation using `make generate`
+- [X] T014 Update or remove skip comment on existing `TestAccCMDeviceCategoryResource_BMCSettings` test if present in `internal/provider/resource_cmdevice_category_test.go`
 
 ### Final Validation
 
-- [ ] T015 Review code changes against spec.md success criteria (SC-001 through SC-004)
-- [ ] T016 Verify all edge cases from spec.md are handled:
+- [X] T015 Review code changes against spec.md success criteria (SC-001 through SC-004)
+- [X] T016 Verify all edge cases from spec.md are handled:
   - `bmc_settings` null in state - skip preservation
   - `bmc_settings` added first time - password from plan, preserved on subsequent reads
   - Password empty string `""` - preserved as empty string (not converted to null)

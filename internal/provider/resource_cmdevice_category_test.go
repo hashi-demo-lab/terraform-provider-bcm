@@ -3949,3 +3949,162 @@ resource "bcm_cmdevice_category" "test" {
 		name,
 	)
 }
+
+// ========================================
+// Issue #82: BMC Password Drift Fix Tests
+// ========================================
+
+// testAccCMDeviceCategoryResourceConfig_BMCPassword creates config with BMC settings including password.
+// This is used to test that BMC password is preserved from state during Read operations
+// and does not cause perpetual drift.
+func testAccCMDeviceCategoryResourceConfig_BMCPassword(name, password string) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmdevice_categories" "all" {}
+data "bcm_cmpart_softwareimages" "all" {}
+
+locals {
+  management_network_uuid = length(data.bcm_cmdevice_categories.all.categories) > 0 ? data.bcm_cmdevice_categories.all.categories[0].management_network_id : "00000000-0000-0000-0000-000000000000"
+  software_image_uuid = length(data.bcm_cmpart_softwareimages.all.images) > 0 ? data.bcm_cmpart_softwareimages.all.images[0].uuid : "00000000-0000-0000-0000-000000000000"
+}
+
+resource "bcm_cmdevice_category" "test" {
+  name               = %[4]q
+  management_network = local.management_network_uuid
+  notes              = "BMC password drift test"
+
+  software_image_proxy = {
+    parent_software_image = local.software_image_uuid
+  }
+
+  bmc_settings = {
+    user_name = "admin"
+    password  = %[5]q
+    privilege = "admin"
+    user_id   = 2
+  }
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		name,
+		password,
+	)
+}
+
+// TestAccCMDeviceCategory_BMCPasswordNoDrift tests that BMC password does not cause perpetual drift.
+// Issue #82: bmc_settings.password was causing drift because it was not preserved from state during Read.
+// User Story 1: Password Stability on Refresh
+func TestAccCMDeviceCategory_BMCPasswordNoDrift(t *testing.T) {
+	categoryName := generateUniqueTestName("tftest-bmc-nodrift")
+
+	// Clean up any leftover test categories
+	testAccCMDeviceCategoryPreCheck(t, categoryName)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceCategoryDestroy,
+		Steps: []resource.TestStep{
+			// Step 1: Create category with BMC password
+			{
+				Config: testAccCMDeviceCategoryResourceConfig_BMCPassword(categoryName, "secret123"),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(categoryName),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("bmc_settings").AtMapKey("user_name"),
+						knownvalue.StringExact("admin"),
+					),
+				},
+			},
+			// Step 2: Idempotency check - THIS IS THE KEY TEST
+			// Before the fix, this would fail because password was set to null during Read
+			// After the fix, password is preserved from state and no drift is detected
+			{
+				Config: testAccCMDeviceCategoryResourceConfig_BMCPassword(categoryName, "secret123"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+			// Step 3: Import and verify (password cannot be imported from BCM)
+			{
+				Config:            testAccCMDeviceCategoryResourceConfig_BMCPassword(categoryName, "secret123"),
+				ResourceName:      "bcm_cmdevice_category.test",
+				ImportState:       true,
+				ImportStateVerify: true,
+				ImportStateVerifyIgnore: []string{
+					"force",
+					"bmc_settings", // Password cannot be imported from BCM API
+				},
+			},
+		},
+	})
+}
+
+// TestAccCMDeviceCategory_BMCPasswordUpdate tests that BMC password changes are detected and applied.
+// Issue #82: Ensures the fix does not break intentional password changes.
+// User Story 2: Password Update Detection
+func TestAccCMDeviceCategory_BMCPasswordUpdate(t *testing.T) {
+	categoryName := generateUniqueTestName("tftest-bmc-update")
+
+	// Clean up any leftover test categories
+	testAccCMDeviceCategoryPreCheck(t, categoryName)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceCategoryDestroy,
+		Steps: []resource.TestStep{
+			// Step 1: Create category with initial password
+			{
+				Config: testAccCMDeviceCategoryResourceConfig_BMCPassword(categoryName, "oldpass123"),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(categoryName),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("bmc_settings").AtMapKey("user_name"),
+						knownvalue.StringExact("admin"),
+					),
+				},
+			},
+			// Step 2: Update password - should detect change and apply
+			{
+				Config: testAccCMDeviceCategoryResourceConfig_BMCPassword(categoryName, "newpass456"),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(categoryName),
+					),
+				},
+			},
+			// Step 3: Idempotency check after update
+			{
+				Config: testAccCMDeviceCategoryResourceConfig_BMCPassword(categoryName, "newpass456"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+		},
+	})
+}
