@@ -1052,7 +1052,10 @@ func (r *CMDeviceCategoryResource) Create(ctx context.Context, req resource.Crea
 	// This ensures Terraform state matches plan when BCM doesn't store these values
 	plan.StaticRoutes = planStaticRoutes
 	plan.FSExports = planFSExports
-	plan.Roles = planRoles
+	// Issue #83 FIX: Merge roles instead of unconditional overwrite
+	// This preserves user config (name, child_type, add_services) while populating
+	// computed values (uuid) from BCM API response
+	plan.Roles = mergeRolesWithAPIResponse(ctx, planRoles, plan.Roles)
 	plan.GPUSettings = planGPUSettings
 	plan.Services = planServices
 
@@ -1249,7 +1252,10 @@ func (r *CMDeviceCategoryResource) Read(ctx context.Context, req resource.ReadRe
 	// BCM API doesn't persist these fields for categories - preserve user's configured values
 	state.StaticRoutes = originalStaticRoutes
 	state.FSExports = originalFSExports
-	state.Roles = originalRoles
+	// Issue #83 FIX: Merge roles instead of unconditional overwrite
+	// This preserves user config (name, child_type, add_services) while populating
+	// computed values (uuid) from BCM API response
+	state.Roles = mergeRolesWithAPIResponse(ctx, originalRoles, state.Roles)
 	state.GPUSettings = originalGPUSettings
 	state.Services = originalServices
 
@@ -1493,7 +1499,10 @@ func (r *CMDeviceCategoryResource) Update(ctx context.Context, req resource.Upda
 	// BCM API doesn't persist these fields for categories - preserve user's configured values
 	plan.StaticRoutes = planStaticRoutes
 	plan.FSExports = planFSExports
-	plan.Roles = planRoles
+	// Issue #83 FIX: Merge roles instead of unconditional overwrite
+	// This preserves user config (name, child_type, add_services) while populating
+	// computed values (uuid) from BCM API response
+	plan.Roles = mergeRolesWithAPIResponse(ctx, planRoles, plan.Roles)
 	plan.GPUSettings = planGPUSettings
 	plan.Services = planServices
 
@@ -2565,6 +2574,148 @@ func (r *CMDeviceCategoryResource) readCategory(ctx context.Context, model *CMDe
 	// - modules (array of KernelModule)
 	// - fsmounts (array of FSMount)
 	// - bmc_settings (nested BMCSettings)
+}
+
+// mergeRolesWithAPIResponse merges user-configured role attributes with BCM API-computed values.
+// It matches roles by name and:
+// - Preserves user-specified: name, child_type, add_services
+// - Populates computed: uuid from BCM API response
+//
+// This fixes issue #83 where roles[].uuid was never populated because
+// the Read operation unconditionally overwrote API response with original state.
+//
+// Parameters:
+//   - ctx: Context for logging
+//   - originalRoles: Roles from Terraform state (before API call)
+//   - apiRoles: Roles parsed from BCM API response (contains computed UUIDs)
+//
+// Returns:
+//   - Merged list with user config + computed UUIDs
+func mergeRolesWithAPIResponse(ctx context.Context, originalRoles types.List, apiRoles types.List) types.List {
+	// If no original roles in plan (null), preserve null to avoid plan->state inconsistency
+	// BCM returns empty list [] for roles even when user didn't specify any
+	if originalRoles.IsNull() {
+		tflog.Debug(ctx, "Original roles is null, preserving null")
+		roleObjectType := types.ObjectType{AttrTypes: map[string]attr.Type{
+			"name":         types.StringType,
+			"child_type":   types.StringType,
+			"uuid":         types.StringType,
+			"add_services": types.BoolType,
+		}}
+		return types.ListNull(roleObjectType)
+	}
+
+	// If original is unknown (during plan), return API response if available
+	if originalRoles.IsUnknown() {
+		tflog.Debug(ctx, "Original roles is unknown, using API response")
+		return apiRoles
+	}
+
+	// If API returned null/unknown, preserve original (handles API quirks)
+	if apiRoles.IsNull() || apiRoles.IsUnknown() {
+		tflog.Debug(ctx, "API returned null/unknown roles, preserving original")
+		return originalRoles
+	}
+
+	// Extract role models from both lists
+	var origRoles []CategoryRoleModel
+	var apiRolesList []CategoryRoleModel
+
+	if diags := originalRoles.ElementsAs(ctx, &origRoles, false); diags.HasError() {
+		tflog.Warn(ctx, "Failed to parse original roles, preserving as-is", map[string]interface{}{
+			"errors": diags.Errors(),
+		})
+		return originalRoles
+	}
+	if diags := apiRoles.ElementsAs(ctx, &apiRolesList, false); diags.HasError() {
+		tflog.Warn(ctx, "Failed to parse API roles, preserving original", map[string]interface{}{
+			"errors": diags.Errors(),
+		})
+		return originalRoles
+	}
+
+	// Build lookup map: name -> API role (for efficient matching)
+	apiRolesByName := make(map[string]CategoryRoleModel)
+	for _, role := range apiRolesList {
+		if !role.Name.IsNull() && !role.Name.IsUnknown() {
+			apiRolesByName[role.Name.ValueString()] = role
+		}
+	}
+
+	// Merge: preserve user config fields + populate computed UUID from API
+	mergedRoles := make([]CategoryRoleModel, 0, len(origRoles))
+	for _, origRole := range origRoles {
+		roleName := origRole.Name.ValueString()
+		if apiRole, found := apiRolesByName[roleName]; found {
+			// Match found - preserve user config, populate computed UUID from API
+			mergedRole := CategoryRoleModel{
+				Name:        origRole.Name,        // Preserve user value
+				ChildType:   origRole.ChildType,   // Preserve user value
+				AddServices: origRole.AddServices, // Preserve user value
+				UUID:        apiRole.UUID,         // Populate from API
+			}
+			mergedRoles = append(mergedRoles, mergedRole)
+			tflog.Debug(ctx, "Merged role with API UUID", map[string]interface{}{
+				"name": roleName,
+				"uuid": apiRole.UUID.ValueString(),
+			})
+		} else {
+			// Role not found in API response - BCM doesn't persist category roles
+			// Generate a UUID if one doesn't exist (handles Unknown/null UUIDs from plan)
+			mergedRole := CategoryRoleModel{
+				Name:        origRole.Name,
+				ChildType:   origRole.ChildType,
+				AddServices: origRole.AddServices,
+			}
+
+			// Generate UUID if original doesn't have a known one
+			if origRole.UUID.IsNull() || origRole.UUID.IsUnknown() || origRole.UUID.ValueString() == "" {
+				newUUID := generateUUID()
+				mergedRole.UUID = types.StringValue(newUUID)
+				tflog.Debug(ctx, "Generated UUID for role (BCM doesn't persist category roles)", map[string]interface{}{
+					"name": roleName,
+					"uuid": newUUID,
+				})
+			} else {
+				// Preserve existing UUID (from previous state)
+				mergedRole.UUID = origRole.UUID
+				tflog.Debug(ctx, "Preserved existing UUID for role", map[string]interface{}{
+					"name": roleName,
+					"uuid": origRole.UUID.ValueString(),
+				})
+			}
+			mergedRoles = append(mergedRoles, mergedRole)
+		}
+	}
+
+	// Convert back to types.List
+	roleObjectType := types.ObjectType{AttrTypes: map[string]attr.Type{
+		"name":         types.StringType,
+		"child_type":   types.StringType,
+		"uuid":         types.StringType,
+		"add_services": types.BoolType,
+	}}
+
+	roleValues := make([]attr.Value, 0, len(mergedRoles))
+	for _, role := range mergedRoles {
+		roleObj, diags := types.ObjectValue(roleObjectType.AttrTypes, map[string]attr.Value{
+			"name":         role.Name,
+			"child_type":   role.ChildType,
+			"uuid":         role.UUID,
+			"add_services": role.AddServices,
+		})
+		if !diags.HasError() {
+			roleValues = append(roleValues, roleObj)
+		}
+	}
+
+	result, _ := types.ListValue(roleObjectType, roleValues)
+	tflog.Debug(ctx, "Role merge complete", map[string]interface{}{
+		"original_count": len(origRoles),
+		"api_count":      len(apiRolesList),
+		"merged_count":   len(mergedRoles),
+	})
+	return result
 }
 
 // generateUUID creates a new UUID v4 string.

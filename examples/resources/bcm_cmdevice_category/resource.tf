@@ -171,7 +171,42 @@ resource "bcm_cmdevice_category" "with_force" {
   force = true
 }
 
-# Example 9: Comprehensive category with multiple features
+# Example 9: Category with roles configuration
+# Configure roles for the category - each role gets a BCM-assigned UUID after creation
+resource "bcm_cmdevice_category" "with_roles" {
+  name               = "roles-category"
+  management_network = "84d8d82b-3ae7-4433-a793-bb44d5c3b4fe"
+  notes              = "Category with role definitions"
+
+  software_image_proxy = {
+    parent_software_image = "f8e9a7b6-4c3d-2e1f-0a9b-8c7d6e5f4a3b"
+  }
+
+  # Role definitions - BCM will assign UUIDs to each role after creation
+  roles = [
+    {
+      name       = "head"
+      child_type = "HeadNode"
+    },
+    {
+      name       = "compute"
+      child_type = "ComputeNode"
+    }
+  ]
+}
+
+# Output role UUIDs after creation (populated from BCM API)
+output "head_role_uuid" {
+  value       = bcm_cmdevice_category.with_roles.roles[0].uuid
+  description = "BCM-assigned UUID for the head role"
+}
+
+output "compute_role_uuid" {
+  value       = bcm_cmdevice_category.with_roles.roles[1].uuid
+  description = "BCM-assigned UUID for the compute role"
+}
+
+# Example 10: Comprehensive category with multiple features
 # This example shows many features combined
 resource "bcm_cmdevice_category" "comprehensive" {
   name               = "production-gpu-cluster"
