@@ -1358,28 +1358,14 @@ func TestAccCMDeviceDevice_PartitionErrorRecovery(t *testing.T) {
 // testAccCMDeviceDeviceConfigWithRoles returns device config with roles assignment.
 // roleNames is a list of role names (e.g., "monitoring", "storage") that will be looked up via data source.
 func testAccCMDeviceDeviceConfigWithRoles(hostname, categoryName, imageName, imagePath, mac string, roleNames []string) string {
+	// Build roles HCL using role names directly (not UUIDs)
 	rolesStr := ""
 	if len(roleNames) > 0 {
-		// Build roles lookup using data source
-		roleFilters := ""
-		roleRefs := make([]string, len(roleNames))
+		quoted := make([]string, len(roleNames))
 		for i, name := range roleNames {
-			roleRefs[i] = fmt.Sprintf("local.role_%s", name)
+			quoted[i] = fmt.Sprintf(`"%s"`, name)
 		}
-		rolesStr = fmt.Sprintf("roles = [%s]", strings.Join(roleRefs, ", "))
-
-		// Build locals block to extract role UUIDs
-		localsEntries := make([]string, len(roleNames))
-		for i, name := range roleNames {
-			localsEntries[i] = fmt.Sprintf("    role_%s = [for r in data.bcm_cmdevice_roles.all.roles : r.uuid if r.name == %q][0]", name, name)
-		}
-		roleFilters = fmt.Sprintf(`
-data "bcm_cmdevice_roles" "all" {}
-
-locals {
-%s
-}
-`, strings.Join(localsEntries, "\n"))
+		rolesStr = fmt.Sprintf("roles = [%s]", strings.Join(quoted, ", "))
 
 		return fmt.Sprintf(`
 provider "bcm" {
@@ -1394,7 +1380,7 @@ data "bcm_cmnet_networks" "management" {
     name_pattern = "managementnet"
   }
 }
-%[10]s
+
 resource "bcm_cmpart_softwareimage" "test" {
   name = %[4]q
   path = %[5]q
@@ -1418,7 +1404,7 @@ resource "bcm_cmdevice_device" "test" {
   management_network = data.bcm_cmnet_networks.management.networks[0].id
   %[9]s
 
-  depends_on = [bcm_cmdevice_category.test, data.bcm_cmdevice_roles.all]
+  depends_on = [bcm_cmdevice_category.test]
 }
 `,
 			os.Getenv("BCM_ENDPOINT"),
@@ -1430,7 +1416,6 @@ resource "bcm_cmdevice_device" "test" {
 			hostname,
 			mac,
 			rolesStr,
-			roleFilters,
 		)
 	}
 
@@ -1486,7 +1471,7 @@ resource "bcm_cmdevice_device" "test" {
 }
 
 // TestAccCMDeviceDevice_RolesCreate tests creating a device with a role.
-// Uses the "backup" role which is commonly available in BCM clusters.
+// Uses the "boot" role which is commonly available in BCM clusters.
 func TestAccCMDeviceDevice_RolesCreate(t *testing.T) {
 	deviceName := generateUniqueTestName("tftest-device-roles")
 	categoryName := generateUniqueTestName("tftest-category-roles")
@@ -1494,8 +1479,8 @@ func TestAccCMDeviceDevice_RolesCreate(t *testing.T) {
 	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 	mac := generateUniqueMAC()
 
-	// Use backup role which is available on BCM clusters
-	roles := []string{"backup"}
+	// Use boot role which is available on BCM clusters
+	roles := []string{"boot"}
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -1549,7 +1534,7 @@ func TestAccCMDeviceDevice_RolesMultiple(t *testing.T) {
 	mac := generateUniqueMAC()
 
 	// Multiple roles from the BCM cluster
-	roles := []string{"backup", "provisioning"}
+	roles := []string{"boot", "headnode"}
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -1597,7 +1582,7 @@ func TestAccCMDeviceDevice_RolesIdempotent(t *testing.T) {
 	mac := generateUniqueMAC()
 
 	// Use roles available in the BCM cluster
-	roles := []string{"backup", "provisioning"}
+	roles := []string{"boot", "headnode"}
 
 	// ID consistency tracking.
 	compareID := statecheck.CompareValue(compare.ValuesSame())
@@ -1663,8 +1648,8 @@ func TestAccCMDeviceDevice_RolesUpdate(t *testing.T) {
 
 	// Start with one role, then update to two
 	// Note: "boot" role requires "storage" role, so we avoid using it
-	initialRoles := []string{"backup"}
-	updatedRoles := []string{"backup", "provisioning"}
+	initialRoles := []string{"boot"}
+	updatedRoles := []string{"boot", "headnode"}
 
 	// ID consistency tracking.
 	compareID := statecheck.CompareValue(compare.ValuesSame())
@@ -1730,7 +1715,7 @@ func TestAccCMDeviceDevice_RolesRemove(t *testing.T) {
 	mac := generateUniqueMAC()
 
 	// Start with roles, then remove them
-	initialRoles := []string{"backup", "provisioning"}
+	initialRoles := []string{"boot", "headnode"}
 	emptyRoles := []string{}
 
 	resource.Test(t, resource.TestCase{
@@ -1777,7 +1762,7 @@ func TestAccCMDeviceDevice_RolesImport(t *testing.T) {
 	mac := generateUniqueMAC()
 
 	// Use roles available in the BCM cluster
-	roles := []string{"backup", "provisioning"}
+	roles := []string{"boot", "headnode"}
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -1846,7 +1831,7 @@ func TestAccCMDeviceDevice_RolesDrift(t *testing.T) {
 	mac := generateUniqueMAC()
 
 	// Use roles available in the BCM cluster
-	roles := []string{"backup", "provisioning"}
+	roles := []string{"boot", "headnode"}
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -1921,6 +1906,561 @@ func TestAccCMDeviceDevice_RolesDrift(t *testing.T) {
 						tfjsonpath.New("roles"),
 						knownvalue.SetSizeExact(2),
 					),
+				},
+			},
+		},
+	})
+}
+
+// ========================================
+// Phase 6: Role by Name Tests (GitHub Issue #86)
+// ========================================
+
+// testAccCMDeviceDeviceConfigWithRoleNames returns device config using role NAMES directly (not UUIDs).
+// This is the new simplified approach - no data source lookup required.
+func testAccCMDeviceDeviceConfigWithRoleNames(hostname, categoryName, imageName, imagePath, mac string, roleNames []string) string {
+	rolesHCL := "[]"
+	if len(roleNames) > 0 {
+		quoted := make([]string, len(roleNames))
+		for i, name := range roleNames {
+			quoted[i] = fmt.Sprintf(`"%s"`, name)
+		}
+		rolesHCL = fmt.Sprintf("[%s]", strings.Join(quoted, ", "))
+	}
+
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmnet_networks" "management" {
+  filter {
+    name_pattern = "managementnet"
+  }
+}
+
+resource "bcm_cmpart_softwareimage" "test" {
+  name = %[4]q
+  path = %[5]q
+}
+
+resource "bcm_cmdevice_category" "test" {
+  name               = %[6]q
+  management_network = data.bcm_cmnet_networks.management.networks[0].id
+
+  software_image_proxy = {
+    parent_software_image = bcm_cmpart_softwareimage.test.id
+  }
+
+  depends_on = [bcm_cmpart_softwareimage.test]
+}
+
+resource "bcm_cmdevice_device" "test" {
+  hostname           = %[7]q
+  mac                = %[8]q
+  category           = bcm_cmdevice_category.test.id
+  management_network = data.bcm_cmnet_networks.management.networks[0].id
+  roles              = %[9]s
+
+  depends_on = [bcm_cmdevice_category.test]
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		imageName,
+		imagePath,
+		categoryName,
+		hostname,
+		mac,
+		rolesHCL,
+	)
+}
+
+// TestAccCMDeviceDevice_RolesByName tests creating a device with roles specified by name.
+// This is the new simplified approach - users can just specify role names directly.
+func TestAccCMDeviceDevice_RolesByName(t *testing.T) {
+	deviceName := generateUniqueTestName("tftest-roles-name")
+	categoryName := generateUniqueTestName("tftest-cat-roles-name")
+	imageName := generateUniqueTestName("tftest-img-roles-name")
+	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
+	mac := generateUniqueMAC()
+
+	// Use role names directly (not UUIDs)
+	roleNames := []string{"boot", "headnode"}
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+			testAccCMDeviceDevicePreCheck(t, deviceName)
+		},
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceDeviceDestroy,
+		Steps: []resource.TestStep{
+			// Create device with roles specified by name.
+			{
+				Config: testAccCMDeviceDeviceConfigWithRoleNames(deviceName, categoryName, imageName, imagePath, mac, roleNames),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("hostname"),
+						knownvalue.StringExact(deviceName),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("uuid"),
+						knownvalue.NotNull(),
+					),
+					// Roles should be stored as names in state
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("roles"),
+						knownvalue.SetSizeExact(2),
+					),
+				},
+			},
+			// Idempotency check - should produce empty plan.
+			{
+				Config: testAccCMDeviceDeviceConfigWithRoleNames(deviceName, categoryName, imageName, imagePath, mac, roleNames),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+		},
+	})
+}
+
+// TestAccCMDeviceDevice_RolesImportByName tests importing a device with roles shows role names.
+// After import, the roles attribute should contain role names (not UUIDs).
+func TestAccCMDeviceDevice_RolesImportByName(t *testing.T) {
+	deviceName := generateUniqueTestName("tftest-roles-import-name")
+	categoryName := generateUniqueTestName("tftest-cat-import-name")
+	imageName := generateUniqueTestName("tftest-img-import-name")
+	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
+	mac := generateUniqueMAC()
+
+	roleNames := []string{"boot", "headnode"}
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+			testAccCMDeviceDevicePreCheck(t, deviceName)
+		},
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceDeviceDestroy,
+		Steps: []resource.TestStep{
+			// Create device with roles.
+			{
+				Config: testAccCMDeviceDeviceConfigWithRoleNames(deviceName, categoryName, imageName, imagePath, mac, roleNames),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("roles"),
+						knownvalue.SetSizeExact(2),
+					),
+				},
+			},
+			// Import and verify roles are returned as names.
+			{
+				ResourceName:      "bcm_cmdevice_device.test",
+				ImportState:       true,
+				ImportStateVerify: true,
+				ImportStateVerifyIgnore: []string{
+					"force",
+					"management_network",
+					"boot_loader",
+					"boot_loader_protocol",
+					"partition",
+					"power_control",
+					"default_gateway",
+					"default_gateway_metric",
+					"serial_number",
+					"part_number",
+					"interfaces.#",
+					"interfaces.0.%",
+					"interfaces.0.base_type",
+					"interfaces.0.bootable",
+					"interfaces.0.cardtype",
+					"interfaces.0.child_type",
+					"interfaces.0.dhcp",
+					"interfaces.0.mac",
+					"interfaces.0.name",
+					"interfaces.0.network",
+					"interfaces.0.start_if",
+					"interfaces.0.type",
+					"interfaces.0.uuid",
+					"interfaces.0.bond_mode",
+					"interfaces.0.ip",
+					"interfaces.0.ipv6_ip",
+					"interfaces.0.members.#",
+				},
+			},
+		},
+	})
+}
+
+// TestAccCMDeviceDevice_RolesUpdateByName tests updating roles using role names.
+func TestAccCMDeviceDevice_RolesUpdateByName(t *testing.T) {
+	deviceName := generateUniqueTestName("tftest-roles-update-name")
+	categoryName := generateUniqueTestName("tftest-cat-update-name")
+	imageName := generateUniqueTestName("tftest-img-update-name")
+	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
+	mac := generateUniqueMAC()
+
+	initialRoles := []string{"boot"}
+	updatedRoles := []string{"boot", "headnode"}
+
+	// ID consistency tracking.
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+			testAccCMDeviceDevicePreCheck(t, deviceName)
+		},
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceDeviceDestroy,
+		Steps: []resource.TestStep{
+			// Create with initial roles.
+			{
+				Config: testAccCMDeviceDeviceConfigWithRoleNames(deviceName, categoryName, imageName, imagePath, mac, initialRoles),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("roles"),
+						knownvalue.SetSizeExact(1),
+					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+			// Update roles by adding one more.
+			{
+				Config: testAccCMDeviceDeviceConfigWithRoleNames(deviceName, categoryName, imageName, imagePath, mac, updatedRoles),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("roles"),
+						knownvalue.SetSizeExact(2),
+					),
+					// ID should remain the same after update.
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+			// Idempotency check after update.
+			{
+				Config: testAccCMDeviceDeviceConfigWithRoleNames(deviceName, categoryName, imageName, imagePath, mac, updatedRoles),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+		},
+	})
+}
+
+// TestAccCMDeviceDevice_RolesDriftByName tests drift detection for roles using role names.
+func TestAccCMDeviceDevice_RolesDriftByName(t *testing.T) {
+	deviceName := generateUniqueTestName("tftest-roles-drift-name")
+	categoryName := generateUniqueTestName("tftest-cat-drift-name")
+	imageName := generateUniqueTestName("tftest-img-drift-name")
+	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
+	mac := generateUniqueMAC()
+
+	roleNames := []string{"boot", "headnode"}
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+			testAccCMDeviceDevicePreCheck(t, deviceName)
+		},
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceDeviceDestroy,
+		Steps: []resource.TestStep{
+			// Create device with roles.
+			{
+				Config: testAccCMDeviceDeviceConfigWithRoleNames(deviceName, categoryName, imageName, imagePath, mac, roleNames),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("roles"),
+						knownvalue.SetSizeExact(2),
+					),
+				},
+			},
+			// Modify roles externally via BCM API.
+			{
+				PreConfig: func() {
+					client := createTestBCMClient(t)
+					ctx := context.Background()
+
+					// Get device UUID by hostname.
+					deviceUUID := getResourceUUIDByName(t, "cmdevice", "getDevice", deviceName)
+
+					// Fetch full device data.
+					body, err := client.CallJSONRPC(ctx, "cmdevice", "getDevice", deviceUUID)
+					if err != nil {
+						t.Fatalf("Failed to fetch device for drift modification: %v", err)
+					}
+
+					var deviceData map[string]interface{}
+					if err := json.Unmarshal(body, &deviceData); err != nil {
+						t.Fatalf("Failed to parse device data: %v", err)
+					}
+
+					// Remove all roles externally (drift).
+					deviceData["roles"] = []interface{}{}
+					deviceData["modified"] = true
+
+					// Update via BCM API.
+					_, err = client.CallJSONRPC(ctx, "cmdevice", "updateDevice", deviceData, false)
+					if err != nil {
+						t.Fatalf("Failed to update device via BCM API: %v", err)
+					}
+
+					// Wait for eventual consistency.
+					time.Sleep(2 * time.Second)
+					t.Logf("[DEBUG] Removed roles externally (drift)")
+				},
+				Config: testAccCMDeviceDeviceConfigWithRoleNames(deviceName, categoryName, imageName, imagePath, mac, roleNames),
+				// Expect non-empty plan because roles were modified externally.
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectNonEmptyPlan(),
+					},
+				},
+			},
+			// Terraform restores desired state.
+			{
+				Config: testAccCMDeviceDeviceConfigWithRoleNames(deviceName, categoryName, imageName, imagePath, mac, roleNames),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("roles"),
+						knownvalue.SetSizeExact(2),
+					),
+				},
+			},
+		},
+	})
+}
+
+// ========================================
+// Phase 7: Client-Side Validation Tests (GitHub Issue #86)
+// ========================================
+
+// TestAccCMDeviceDevice_InvalidRoleName tests clear error message for non-existent role name.
+func TestAccCMDeviceDevice_InvalidRoleName(t *testing.T) {
+	deviceName := generateUniqueTestName("tftest-invalid-role")
+	categoryName := generateUniqueTestName("tftest-cat-invalid-role")
+	imageName := generateUniqueTestName("tftest-img-invalid-role")
+	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
+	mac := generateUniqueMAC()
+
+	// Use a non-existent role name
+	invalidRoles := []string{"nonexistent-role-xyz123"}
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+		},
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config:      testAccCMDeviceDeviceConfigWithRoleNames(deviceName, categoryName, imageName, imagePath, mac, invalidRoles),
+				ExpectError: regexp.MustCompile(`nonexistent-role-xyz123`),
+			},
+		},
+	})
+}
+
+// TestAccCMDeviceDevice_InvalidRoleUUID tests that UUIDs are NOT accepted as role input.
+// Since we only accept role names now, a UUID should be treated as an invalid role name
+// and produce an error listing the UUID in the "Roles not found" message.
+func TestAccCMDeviceDevice_InvalidRoleUUID(t *testing.T) {
+	deviceName := generateUniqueTestName("tftest-invalid-uuid")
+	categoryName := generateUniqueTestName("tftest-cat-invalid-uuid")
+	imageName := generateUniqueTestName("tftest-img-invalid-uuid")
+	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
+	mac := generateUniqueMAC()
+
+	// UUID format is NOT accepted - it will be treated as invalid role name
+	invalidRoles := []string{"99999999-9999-9999-9999-999999999999"}
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+		},
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config:      testAccCMDeviceDeviceConfigWithRoleNames(deviceName, categoryName, imageName, imagePath, mac, invalidRoles),
+				ExpectError: regexp.MustCompile(`99999999-9999-9999-9999-999999999999`),
+			},
+		},
+	})
+}
+
+// TestAccCMDeviceDevice_EmptyRoleString tests error handling for empty string in roles list.
+func TestAccCMDeviceDevice_EmptyRoleString(t *testing.T) {
+	deviceName := generateUniqueTestName("tftest-empty-role")
+	categoryName := generateUniqueTestName("tftest-cat-empty-role")
+	imageName := generateUniqueTestName("tftest-img-empty-role")
+	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
+	mac := generateUniqueMAC()
+
+	// Config with empty string in roles (need custom config for this edge case)
+	config := fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmnet_networks" "management" {
+  filter {
+    name_pattern = "managementnet"
+  }
+}
+
+resource "bcm_cmpart_softwareimage" "test" {
+  name = %[4]q
+  path = %[5]q
+}
+
+resource "bcm_cmdevice_category" "test" {
+  name               = %[6]q
+  management_network = data.bcm_cmnet_networks.management.networks[0].id
+
+  software_image_proxy = {
+    parent_software_image = bcm_cmpart_softwareimage.test.id
+  }
+
+  depends_on = [bcm_cmpart_softwareimage.test]
+}
+
+resource "bcm_cmdevice_device" "test" {
+  hostname           = %[7]q
+  mac                = %[8]q
+  category           = bcm_cmdevice_category.test.id
+  management_network = data.bcm_cmnet_networks.management.networks[0].id
+  roles              = [""]
+
+  depends_on = [bcm_cmdevice_category.test]
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		imageName,
+		imagePath,
+		categoryName,
+		deviceName,
+		mac,
+	)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+		},
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config:      config,
+				ExpectError: regexp.MustCompile(`invalid role identifiers found.*empty string`),
+			},
+		},
+	})
+}
+
+// TestAccCMDeviceDevice_MultipleInvalidRoles tests error message lists all invalid roles.
+func TestAccCMDeviceDevice_MultipleInvalidRoles(t *testing.T) {
+	deviceName := generateUniqueTestName("tftest-multi-invalid")
+	categoryName := generateUniqueTestName("tftest-cat-multi-invalid")
+	imageName := generateUniqueTestName("tftest-img-multi-invalid")
+	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
+	mac := generateUniqueMAC()
+
+	// Use multiple non-existent role names
+	invalidRoles := []string{"invalid-role-1", "invalid-role-2", "boot"}
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+		},
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccCMDeviceDeviceConfigWithRoleNames(deviceName, categoryName, imageName, imagePath, mac, invalidRoles),
+				// Error should list both invalid roles (boot is valid, so only invalid-role-1 and invalid-role-2 should be listed)
+				ExpectError: regexp.MustCompile(`invalid-role-1`),
+			},
+		},
+	})
+}
+
+// ========================================
+// Phase 8: Additional Role Tests (GitHub Issue #86)
+// ========================================
+
+// TestAccCMDeviceDevice_RolesAddMultiple tests adding multiple roles at once.
+// This validates that the provider correctly handles multiple role names.
+func TestAccCMDeviceDevice_RolesAddMultiple(t *testing.T) {
+	deviceName := generateUniqueTestName("tftest-roles-multi")
+	categoryName := generateUniqueTestName("tftest-cat-roles-multi")
+	imageName := generateUniqueTestName("tftest-img-roles-multi")
+	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
+	mac := generateUniqueMAC()
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+			testAccCMDeviceDevicePreCheck(t, deviceName)
+		},
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceDeviceDestroy,
+		Steps: []resource.TestStep{
+			// Create with role names.
+			{
+				Config: testAccCMDeviceDeviceConfigWithRoleNames(deviceName, categoryName, imageName, imagePath, mac, []string{"boot"}),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("roles"),
+						knownvalue.SetSizeExact(1),
+					),
+				},
+			},
+			// Update to add more roles.
+			{
+				Config: testAccCMDeviceDeviceConfigWithRoleNames(deviceName, categoryName, imageName, imagePath, mac, []string{"boot", "headnode"}),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("roles"),
+						knownvalue.SetSizeExact(2),
+					),
+				},
+			},
+			// Idempotency check.
+			{
+				Config: testAccCMDeviceDeviceConfigWithRoleNames(deviceName, categoryName, imageName, imagePath, mac, []string{"boot", "headnode"}),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
 				},
 			},
 		},

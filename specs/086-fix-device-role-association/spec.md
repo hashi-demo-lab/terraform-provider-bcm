@@ -53,7 +53,7 @@ As a new Terraform user learning to use the BCM provider, I want the example cod
 
 **Acceptance Scenarios**:
 
-1. **Given** the example file `examples/resources/bcm_cmdevice_device/with_roles.tf`, **When** I review it, **Then** it shows `roles = ["backup", "provisioning"]` instead of UUID lookups.
+1. **Given** the example file `examples/resources/bcm_cmdevice_device/with_roles.tf`, **When** I review it, **Then** it shows role assignment by name using the `bcm_cmdevice_roles` data source to reference `role.name` (not UUID).
 
 2. **Given** the updated example, **When** terraform validate is run, **Then** it passes validation.
 
@@ -61,19 +61,21 @@ As a new Terraform user learning to use the BCM provider, I want the example cod
 
 ---
 
-### User Story 4 - Backward Compatibility with UUID Input (Priority: P3)
+### User Story 4 - UUIDs NOT Supported (Breaking Change) (Priority: P3)
 
-As a user with existing Terraform configurations that use role UUIDs, I want the provider to continue accepting UUIDs as a fallback, so that my existing configurations do not break immediately.
+**BREAKING CHANGE**: The provider now ONLY accepts role names - UUIDs are NOT supported.
 
-**Why this priority**: Backward compatibility ensures existing users are not disrupted. However, this is lower priority than fixing the primary issue.
+As a Terraform administrator, I want clear error messages when invalid role identifiers are provided, so that I can quickly update legacy configurations that may have used UUIDs.
 
-**Independent Test**: Can be tested by creating a device with both role names and role UUIDs to verify both formats are accepted.
+**Why this decision**: UUIDs are not user-friendly and cause confusion. By only accepting role names, we ensure configurations are readable and maintainable. Users with existing UUID-based configurations must update to use role names (which is straightforward using the `bcm_cmdevice_roles` data source to discover role names).
+
+**Independent Test**: Can be tested by attempting to create a device with a UUID and verifying it produces a clear error.
 
 **Acceptance Scenarios**:
 
-1. **Given** an existing Terraform configuration using role UUIDs, **When** I apply it with the updated provider, **Then** it continues to work without modification.
+1. **Given** a role UUID from the cluster, **When** I specify `roles = ["<uuid>"]`, **Then** I receive an error stating the role was not found, with a list of available role names.
 
-2. **Given** a role UUID that exists in the cluster, **When** I specify `roles = ["<uuid>"]`, **Then** the role is correctly associated (though a deprecation warning may be shown).
+2. **Given** a legacy configuration using UUIDs, **When** I run terraform plan, **Then** I receive a clear error message guiding me to use role names instead.
 
 ---
 
@@ -106,7 +108,7 @@ As a user with existing Terraform configurations that use role UUIDs, I want the
 
 - **FR-004**: The provider MUST query the BCM cluster to resolve role names to their corresponding role objects for the API request (BCM API requires full role objects, not names).
 
-- **FR-005**: The provider MUST continue to accept role UUIDs as input for backward compatibility.
+- **FR-005**: The provider MUST ONLY accept role names as input. UUIDs are NOT supported - if a UUID is provided, the provider will treat it as an invalid role name and return an error with available role names.
 
 - **FR-006**: When reading device state, the provider MUST return role names (not UUIDs) in the `roles` attribute.
 
@@ -130,7 +132,7 @@ As a user with existing Terraform configurations that use role UUIDs, I want the
 
 - **SC-002**: Invalid role names produce clear validation errors within 2 seconds of plan/apply (client-side validation).
 
-- **SC-003**: 100% of existing Terraform configurations using role UUIDs continue to work without modification (backward compatibility).
+- **SC-003**: Configurations using role UUIDs will receive clear error messages with available role names listed (breaking change by design).
 
 - **SC-004**: Example code demonstrates the simplified, correct approach for role assignment.
 

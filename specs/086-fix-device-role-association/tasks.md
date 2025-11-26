@@ -25,8 +25,8 @@
 
 **Purpose**: Foundation changes that support all user stories
 
-- [ ] T001 Add `regexp` and `sort` imports to internal/provider/resource_cmdevice_device.go (if not present)
-- [ ] T002 Add `isUUID()` helper function for UUID format detection in internal/provider/resource_cmdevice_device.go
+- [X] T001 Add `regexp` and `sort` imports to internal/provider/resource_cmdevice_device.go (if not present)
+- [X] T002 Add `isUUID()` helper function for UUID format detection in internal/provider/resource_cmdevice_device.go
 
 ---
 
@@ -36,10 +36,10 @@
 
 **CRITICAL**: No user story tests can pass until this phase is complete
 
-- [ ] T003 Modify `lookupAndBuildRolesForEntity()` to build both rolesByName and rolesByUUID maps in internal/provider/resource_cmdevice_device.go
-- [ ] T004 Modify `lookupAndBuildRolesForEntity()` to resolve identifiers by name or UUID based on format in internal/provider/resource_cmdevice_device.go
-- [ ] T005 Modify `lookupAndBuildRolesForEntity()` to return clear error messages with available roles list in internal/provider/resource_cmdevice_device.go
-- [ ] T006 Modify `parseRolesFromAPI()` to return role names instead of UUIDs in internal/provider/resource_cmdevice_device.go
+- [X] T003 Modify `lookupAndBuildRolesForEntity()` to build both rolesByName and rolesByUUID maps in internal/provider/resource_cmdevice_device.go
+- [X] T004 Modify `lookupAndBuildRolesForEntity()` to resolve identifiers by name or UUID based on format in internal/provider/resource_cmdevice_device.go
+- [X] T005 Modify `lookupAndBuildRolesForEntity()` to return clear error messages with available roles list in internal/provider/resource_cmdevice_device.go
+- [X] T006 Modify `parseRolesFromAPI()` to return role names instead of UUIDs in internal/provider/resource_cmdevice_device.go
 
 **Checkpoint**: Foundation ready - acceptance tests can now be written and should pass after this phase
 
@@ -55,11 +55,11 @@
 
 > **NOTE: Write these tests FIRST (TDD RED phase), then verify implementation passes them**
 
-- [ ] T007 [P] [US1] Write acceptance test `TestAccCMDeviceDevice_RolesByName` in internal/provider/resource_cmdevice_device_test.go
-- [ ] T008 [P] [US1] Write test helper `testAccCMDeviceDeviceConfigWithRoles()` in internal/provider/resource_cmdevice_device_test.go
-- [ ] T009 [P] [US1] Write acceptance test `TestAccCMDeviceDevice_RolesImport` to verify imported devices show role names in internal/provider/resource_cmdevice_device_test.go
-- [ ] T010 [P] [US1] Write acceptance test `TestAccCMDeviceDevice_RolesUpdate` to verify role changes work correctly in internal/provider/resource_cmdevice_device_test.go
-- [ ] T011 [P] [US1] Write acceptance test `TestAccCMDeviceDevice_RolesDrift` to verify drift detection for externally changed roles in internal/provider/resource_cmdevice_device_test.go
+- [X] T007 [P] [US1] Write acceptance test `TestAccCMDeviceDevice_RolesByName` in internal/provider/resource_cmdevice_device_test.go
+- [X] T008 [P] [US1] Write test helper `testAccCMDeviceDeviceConfigWithRoles()` in internal/provider/resource_cmdevice_device_test.go
+- [X] T009 [P] [US1] Write acceptance test `TestAccCMDeviceDevice_RolesImport` to verify imported devices show role names in internal/provider/resource_cmdevice_device_test.go
+- [X] T010 [P] [US1] Write acceptance test `TestAccCMDeviceDevice_RolesUpdate` to verify role changes work correctly in internal/provider/resource_cmdevice_device_test.go
+- [X] T011 [P] [US1] Write acceptance test `TestAccCMDeviceDevice_RolesDrift` to verify drift detection for externally changed roles in internal/provider/resource_cmdevice_device_test.go
 
 ### Verification for User Story 1
 
@@ -80,10 +80,10 @@
 
 ### Tests for User Story 2
 
-- [ ] T016 [P] [US2] Write acceptance test `TestAccCMDeviceDevice_InvalidRoleName` in internal/provider/resource_cmdevice_device_test.go
-- [ ] T017 [P] [US2] Write acceptance test `TestAccCMDeviceDevice_InvalidRoleUUID` in internal/provider/resource_cmdevice_device_test.go
-- [ ] T018 [P] [US2] Write acceptance test `TestAccCMDeviceDevice_EmptyRoleString` in internal/provider/resource_cmdevice_device_test.go
-- [ ] T019 [P] [US2] Write acceptance test `TestAccCMDeviceDevice_MultipleInvalidRoles` in internal/provider/resource_cmdevice_device_test.go
+- [X] T016 [P] [US2] Write acceptance test `TestAccCMDeviceDevice_InvalidRoleName` in internal/provider/resource_cmdevice_device_test.go
+- [X] T017 [P] [US2] Write acceptance test `TestAccCMDeviceDevice_InvalidRoleUUID` in internal/provider/resource_cmdevice_device_test.go
+- [X] T018 [P] [US2] Write acceptance test `TestAccCMDeviceDevice_EmptyRoleString` in internal/provider/resource_cmdevice_device_test.go
+- [X] T019 [P] [US2] Write acceptance test `TestAccCMDeviceDevice_MultipleInvalidRoles` in internal/provider/resource_cmdevice_device_test.go
 
 ### Verification for User Story 2
 
@@ -104,9 +104,9 @@
 
 ### Implementation for User Story 3
 
-- [ ] T024 [P] [US3] Update example file examples/resources/bcm_cmdevice_device/with_roles.tf to use role names directly
-- [ ] T025 [US3] Update `roles` attribute MarkdownDescription in Schema() method in internal/provider/resource_cmdevice_device.go
-- [ ] T026 [US3] Run `make generate` to regenerate documentation in docs/
+- [X] T024 [P] [US3] Update example file examples/resources/bcm_cmdevice_device/with_roles.tf to use role names directly
+- [X] T025 [US3] Update `roles` attribute MarkdownDescription in Schema() method in internal/provider/resource_cmdevice_device.go
+- [X] T026 [US3] Run `make generate` to regenerate documentation in docs/
 
 ### Verification for User Story 3
 
@@ -125,8 +125,8 @@
 
 ### Tests for User Story 4
 
-- [ ] T029 [P] [US4] Write acceptance test `TestAccCMDeviceDevice_RolesByUUID` in internal/provider/resource_cmdevice_device_test.go
-- [ ] T030 [P] [US4] Write acceptance test `TestAccCMDeviceDevice_RolesMixedInput` for combined name and UUID input in internal/provider/resource_cmdevice_device_test.go
+- [X] T029 [P] [US4] Write acceptance test `TestAccCMDeviceDevice_RolesByUUID` in internal/provider/resource_cmdevice_device_test.go
+- [X] T030 [P] [US4] Write acceptance test `TestAccCMDeviceDevice_RolesMixedInput` for combined name and UUID input in internal/provider/resource_cmdevice_device_test.go
 
 ### Verification for User Story 4
 
@@ -141,8 +141,8 @@
 
 **Purpose**: Final validation and quality checks
 
-- [ ] T033 Run `make lint` and fix any linting errors
-- [ ] T034 Run `pre-commit run --all-files` and ensure all checks pass
+- [X] T033 Run `make lint` and fix any linting errors
+- [X] T034 Run `pre-commit run --all-files` and ensure all checks pass
 - [ ] T035 Run full acceptance test suite: `TF_ACC=1 go test -v -timeout 120m ./internal/provider/ -run "TestAccCMDeviceDevice_Roles"`
 - [ ] T036 Verify example file works end-to-end: `./scripts/test-examples.sh --resources-only`
 - [ ] T037 Run quickstart.md verification checklist
