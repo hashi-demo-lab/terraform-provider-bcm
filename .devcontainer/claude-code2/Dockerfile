@@ -7,6 +7,7 @@ FROM node:22-slim
 ARG TZ \
     USERNAME=node \
     GO_VERSION="1.24.0" \
+    GOLANGCI_LINT_VERSION="2.6.2" \
     TERRAFORM_VERSION="1.14.0" \
     TERRAFORM_DOCS_VERSION="0.20.0" \
     TFSEC_VERSION="1.28.14" \
@@ -45,6 +46,8 @@ RUN apt update && apt install -y --no-install-recommends \
     wget -q "https://go.dev/dl/go${GO_VERSION}.linux-${GO_ARCH}.tar.gz" && \
     tar -C /usr/local -xzf "go${GO_VERSION}.linux-${GO_ARCH}.tar.gz" && \
     rm "go${GO_VERSION}.linux-${GO_ARCH}.tar.gz" && \
+    # Install golangci-lint
+    curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b /usr/local/go/bin v${GOLANGCI_LINT_VERSION} && \
     # Clean up apt cache
     rm -rf /var/lib/apt/lists/*
 
