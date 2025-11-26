@@ -64,6 +64,10 @@ NO_CLEANUP="${NO_CLEANUP:-false}"
 DATA_SOURCES_ONLY="${DATA_SOURCES_ONLY:-false}"
 RESOURCES_ONLY="${RESOURCES_ONLY:-false}"
 
+# Dev overrides detection
+DEV_OVERRIDES_PATH=""
+USE_DEV_OVERRIDES=false
+
 # Test results tracking
 PASSED_COUNT=0
 FAILED_COUNT=0
@@ -209,6 +213,35 @@ log_debug() {
     fi
 }
 
+#############################################################################
+# Detect dev_overrides in .terraformrc
+#############################################################################
+
+detect_dev_overrides() {
+    local terraformrc="$HOME/.terraformrc"
+
+    if [ ! -f "$terraformrc" ]; then
+        log_debug "No .terraformrc found, using standard plugin directory"
+        return
+    fi
+
+    # Check for hashicorp/bcm dev_overrides
+    if grep -q '"hashicorp/bcm"' "$terraformrc" 2>/dev/null; then
+        # Extract the dev_overrides path
+        DEV_OVERRIDES_PATH=$(grep -A1 '"hashicorp/bcm"' "$terraformrc" | grep -oE '= ".*"' | sed 's/= "//;s/"$//' | head -1)
+
+        if [ -z "$DEV_OVERRIDES_PATH" ]; then
+            # Try alternate format: hashicorp/bcm = "/path"
+            DEV_OVERRIDES_PATH=$(grep '"hashicorp/bcm"' "$terraformrc" | grep -oE '= ".*"' | sed 's/= "//;s/"$//')
+        fi
+
+        if [ -n "$DEV_OVERRIDES_PATH" ]; then
+            USE_DEV_OVERRIDES=true
+            log_debug "Detected dev_overrides for hashicorp/bcm: $DEV_OVERRIDES_PATH"
+        fi
+    fi
+}
+
 validate_environment() {
     # Validate flag combinations first
     if [ "$DATA_SOURCES_ONLY" = true ] && [ "$RESOURCES_ONLY" = true ]; then
@@ -287,6 +320,13 @@ validate_environment() {
         exit "$EXIT_CONFIG_ERROR"
     fi
 
+    # Detect dev_overrides configuration
+    detect_dev_overrides
+    if [ "$USE_DEV_OVERRIDES" = true ]; then
+        log_info "✓ dev_overrides detected: $DEV_OVERRIDES_PATH"
+        log_info "  (terraform init will be skipped)"
+    fi
+
     log_info ""
 }
 
@@ -362,12 +402,21 @@ build_provider() {
     log_info "✓ Provider built successfully ($binary_size)"
     log_debug "Binary path: /workspace/$binary_name"
 
-    # Install to plugin directory (minimal - just in workspace for GREEN phase)
-    local plugin_dir="$HOME/.terraform.d/plugins/registry.terraform.io/hashicorp/bcm/${PROVIDER_VERSION}/${os}_${arch}"
-    log_debug "Plugin directory: $plugin_dir"
-    mkdir -p "$plugin_dir"
-    cp "$binary_name" "$plugin_dir/"
-    log_info "✓ Installed to: $plugin_dir"
+    # Install to appropriate directory based on dev_overrides configuration
+    if [ "$USE_DEV_OVERRIDES" = true ] && [ -n "$DEV_OVERRIDES_PATH" ]; then
+        # Install to dev_overrides path (no version suffix needed)
+        local install_path="$DEV_OVERRIDES_PATH"
+        mkdir -p "$install_path"
+        cp "$binary_name" "$install_path/terraform-provider-bcm"
+        log_info "✓ Installed to dev_overrides: $install_path/terraform-provider-bcm"
+    else
+        # Install to plugin directory (standard path)
+        local plugin_dir="$HOME/.terraform.d/plugins/registry.terraform.io/hashicorp/bcm/${PROVIDER_VERSION}/${os}_${arch}"
+        log_debug "Plugin directory: $plugin_dir"
+        mkdir -p "$plugin_dir"
+        cp "$binary_name" "$plugin_dir/"
+        log_info "✓ Installed to: $plugin_dir"
+    fi
 
     local build_end
     build_end=$(date +%s)
@@ -474,11 +523,15 @@ EOF
     local error_output=""
     local failed_phase=""
 
-    # Run terraform init
-    log_debug "  ├─ terraform init..."
-    if ! error_output=$(terraform init -backend=false 2>&1); then
-        failed_phase="terraform init"
-        test_passed=false
+    # Run terraform init (skip if using dev_overrides)
+    if [ "$USE_DEV_OVERRIDES" = true ]; then
+        log_debug "  ├─ terraform init (skipped - using dev_overrides)"
+    else
+        log_debug "  ├─ terraform init..."
+        if ! error_output=$(terraform init -backend=false 2>&1); then
+            failed_phase="terraform init"
+            test_passed=false
+        fi
     fi
 
     # Run terraform validate
@@ -605,10 +658,12 @@ EOF
     local test_passed=true
     local error_output=""
 
-    # Run terraform init
-    if ! error_output=$(terraform init -backend=false 2>&1); then
-        echo "FAIL|$example_name|terraform init failed: $error_output" > "$result_file"
-        test_passed=false
+    # Run terraform init (skip if using dev_overrides)
+    if [ "$USE_DEV_OVERRIDES" != true ]; then
+        if ! error_output=$(terraform init -backend=false 2>&1); then
+            echo "FAIL|$example_name|terraform init failed: $error_output" > "$result_file"
+            test_passed=false
+        fi
     fi
 
     # Run terraform validate

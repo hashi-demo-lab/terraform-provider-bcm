@@ -42,16 +42,19 @@ variable "user_password" {
   description = "Password for the test user"
   type        = string
   sensitive   = true
+  default     = "TestUser123!"
 }
 
 variable "developer_password" {
   description = "Password for the developer user"
   type        = string
   sensitive   = true
+  default     = "DevUser123!"
 }
 
 variable "service_password" {
   description = "Password for the service account"
   type        = string
   sensitive   = true
+  default     = "SvcAccount123!"
 }
