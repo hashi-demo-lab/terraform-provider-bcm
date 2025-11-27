@@ -1,6 +1,6 @@
 @user=root
 @password=Hashicorp123!
-@cookie=cm-login-token=C2nfLtXRlODdutKtaHg7eJ7D8DKSb30W
+@cookie=cm-login-token=5dkhG3oHemlCRMYoRmXuMknwY8256oDK
 
 ### login
 POST https://172.21.15.254:8081/json
@@ -13,6 +13,33 @@ Connection: close
 Content-Length: 4
 Content-Type: application/json
 Set-cookie: cm-login-token=SyaFbfeiKbS4uWycyTOfZ4OgSCyJFVEk;path=/;Secure;httponly
+
+###
+POST https://172.21.15.254:8081/json
+Cookie: {{cookie}}
+
+{
+  "service": "cmpart",
+  "call": "getBasicEntityInformation"
+}
+
+###
+POST https://172.21.15.254:8081/json
+Cookie: {{cookie}}
+
+{
+  "service": "cmpart",
+  "call": "findBasicEntityInformation"
+}
+
+###
+POST https://172.21.15.254:8081/json
+Cookie: {{cookie}}
+
+{
+  "service": "cmpart",
+  "call": "getBasicEntityCounts"
+}
 
 ####
 POST https://172.21.15.254:8081/json

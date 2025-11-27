@@ -18,7 +18,7 @@
 #   -t, --timeout DURATION  Timeout per test file (default: 30m)
 #   -f, --file FILE         Run only tests from specific file
 #   -C, --cleanup           Run cleanup before tests (requires BCM credentials)
-#   -S, --stagger SECONDS   Delay between starting each test file (default: 0)
+#   -S, --stagger SECONDS   Delay between starting each test file (default: 2)
 #   --resources-only        Run only resource tests
 #   --data-sources-only     Run only data source tests
 #   --verbose               Show detailed test output
@@ -81,7 +81,7 @@ CONCURRENCY=30
 TIMEOUT="30m"
 SPECIFIC_FILE=""
 CLEANUP=false
-STAGGER_DELAY=0
+STAGGER_DELAY=2
 RESOURCES_ONLY=false
 DATA_SOURCES_ONLY=false
 VERBOSE=false

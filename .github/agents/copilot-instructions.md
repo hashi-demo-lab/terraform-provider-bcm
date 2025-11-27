@@ -13,6 +13,8 @@ Auto-generated from all feature plans. Last updated: 2025-11-20
 - BCM JSON-RPC API (cookie-based auth) (070-category-optional-fields-tests)
 - Terraform state (password as sensitive attribute) (082-bmc-password-drift)
 - N/A (Terraform state management) (083-roles-uuid-computed)
+- Go 1.24+ (Terraform provider), Python 3.x (investigation scripts) + terraform-plugin-framework v1.16.1, terraform-plugin-testing v1.13.3, requests (Python) (073-category-list-fields)
+- N/A (BCM API is external system) (073-category-list-fields)
 
 - Go 1.24.0 + terraform-plugin-framework v1.16.1, terraform-plugin-testing v1.13.3, terraform-plugin-log v0.10.0 (001-bcm-provider)
 
@@ -32,10 +34,9 @@ tests/
 Go 1.24.0: Follow standard conventions
 
 ## Recent Changes
+- 073-category-list-fields: Added Go 1.24+ (Terraform provider), Python 3.x (investigation scripts) + terraform-plugin-framework v1.16.1, terraform-plugin-testing v1.13.3, requests (Python)
 - 082-bmc-password-drift: Added Go 1.24.0 + terraform-plugin-framework v1.16.1, terraform-plugin-testing v1.13.3
 - 083-roles-uuid-computed: Added Go 1.24.0 + terraform-plugin-framework v1.16.1, terraform-plugin-testing v1.13.3
-- 070-category-optional-fields-tests: Added Go 1.24+ + terraform-plugin-framework v1.16.1, terraform-plugin-testing v1.13.3
-- 068-cmuser-user-resource: Added Go 1.24.0 + terraform-plugin-framework v1.16.1, terraform-plugin-testing v1.13.3
 
 
 <!-- MANUAL ADDITIONS START -->

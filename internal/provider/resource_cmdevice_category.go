@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/hashicorp/terraform-plugin-framework-validators/float64validator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -174,19 +176,44 @@ type KernelModuleCategoryModel struct {
 }
 
 // StaticRouteModel describes a static route nested object.
+// Based on BCM StaticRoute entity structure.
 type StaticRouteModel struct {
-	Destination types.String `tfsdk:"destination"` // Required, CIDR notation
-	Gateway     types.String `tfsdk:"gateway"`     // Required, IPv4 address
-	Metric      types.Int64  `tfsdk:"metric"`      // Optional, route priority
+	UUID              types.String `tfsdk:"uuid"`                // Computed, BCM-assigned
+	Name              types.String `tfsdk:"name"`                // Required, route name identifier
+	IP                types.String `tfsdk:"ip"`                  // Required, destination IP address
+	NetmaskBits       types.Int64  `tfsdk:"netmask_bits"`        // Required, subnet mask in CIDR bits (0-32)
+	Gateway           types.String `tfsdk:"gateway"`             // Required, gateway IPv4 address
+	Metric            types.Int64  `tfsdk:"metric"`              // Optional, route priority (lower = preferred)
+	Network           types.String `tfsdk:"network"`             // Required, network UUID reference
+	NetworkDeviceName types.String `tfsdk:"network_device_name"` // Optional, specific network device
+	Notes             types.String `tfsdk:"notes"`               // Optional, user notes
 }
 
 // FSExportModel describes an NFS filesystem export nested object.
+// Based on BCM FSExport entity schema extracted from API documentation.
 type FSExportModel struct {
-	Path       types.String `tfsdk:"path"`        // Required, export path
-	Network    types.String `tfsdk:"network"`     // Required, network UUID reference
-	AllowWrite types.Bool   `tfsdk:"allow_write"` // Optional, write access
-	RootSquash types.Bool   `tfsdk:"root_squash"` // Optional, root squash security
-	Async      types.Bool   `tfsdk:"async"`       // Optional, async mode
+	// Required fields
+	Name    types.String `tfsdk:"name"`    // Required (unique), export name (often same as path)
+	Path    types.String `tfsdk:"path"`    // Required, path to export
+	Network types.String `tfsdk:"network"` // Required, network UUID reference
+
+	// Optional string fields
+	Hosts        types.String `tfsdk:"hosts"`         // Optional, extra hosts-range allowed access (space separated)
+	ExtraOptions types.String `tfsdk:"extra_options"` // Optional, extra NFS options
+
+	// Optional boolean fields
+	AllowWrite types.Bool `tfsdk:"allow_write"` // Optional, allow writing
+	Async      types.Bool `tfsdk:"async"`       // Optional (default: true), async NFS operations
+	RootSquash types.Bool `tfsdk:"root_squash"` // Optional, map uid/gid 0 to anonymous
+	AllSquash  types.Bool `tfsdk:"all_squash"`  // Optional, map all uids/gids to anonymous
+	RDMA       types.Bool `tfsdk:"rdma"`        // Optional, enable NFS over RDMA
+	Disabled   types.Bool `tfsdk:"disabled"`    // Optional, disable the export
+	CheckTree  types.Bool `tfsdk:"check_tree"`  // Optional, check tree
+
+	// Optional numeric fields
+	AnonUID types.Int64 `tfsdk:"anon_uid"` // Optional (default: 65534), anonymous UID
+	AnonGID types.Int64 `tfsdk:"anon_gid"` // Optional (default: 65534), anonymous GID
+	FSID    types.Int64 `tfsdk:"fsid"`     // Optional, file system id for failover
 }
 
 // CategoryRoleModel describes a service role assignment nested object for categories.
@@ -199,17 +226,57 @@ type CategoryRoleModel struct {
 }
 
 // GPUSettingModel describes a GPU hardware configuration nested object.
+// Supports both NvidiaGPUSettings and AMDGPUSettings based on child_type.
 type GPUSettingModel struct {
-	DeviceID    types.String `tfsdk:"device_id"`    // Required, GPU device ID
-	Model       types.String `tfsdk:"model"`        // Optional, GPU model name
-	ComputeMode types.String `tfsdk:"compute_mode"` // Optional, compute mode
+	// Base GPUSettings fields (common to all types)
+	UUID      types.String `tfsdk:"uuid"`       // Computed, BCM-assigned UUID
+	Name      types.String `tfsdk:"name"`       // Required, GPU range (e.g., "0", "0-3")
+	ChildType types.String `tfsdk:"child_type"` // Required, "nvidia" or "amd"
+
+	// NvidiaGPUSettings fields
+	PowerLimit                    types.Int64  `tfsdk:"power_limit"`                      // Power limit in Watts
+	EccMode                       types.String `tfsdk:"ecc_mode"`                         // ECC mode: DISABLED, ENABLED, NONE
+	ComputeMode                   types.String `tfsdk:"compute_mode"`                     // Compute mode
+	ClockSyncBoostMode            types.String `tfsdk:"clock_sync_boost_mode"`            // Clock sync boost mode
+	MultiProcessorClockSpeed      types.Int64  `tfsdk:"multiprocessor_clock_speed"`       // MP clock speed (Hz)
+	MemoryClockSpeed              types.Int64  `tfsdk:"memory_clock_speed"`               // Memory clock speed (Hz)
+	MigProfiles                   types.List   `tfsdk:"mig_profiles"`                     // MIG profiles (list of strings)
+	WorkloadPowerProfile          types.String `tfsdk:"workload_power_profile"`           // Workload power profile
+	SecondaryWorkloadPowerProfile types.String `tfsdk:"secondary_workload_power_profile"` // Secondary workload power profile
+
+	// AMDGPUSettings fields
+	GpuClockLevel      types.Int64   `tfsdk:"gpu_clock_level"`      // GPU clock level (0-7)
+	MemoryClockLevel   types.Int64   `tfsdk:"memory_clock_level"`   // Memory clock level (0-3)
+	PowerPlay          types.String  `tfsdk:"power_play"`           // Power play mode
+	GpuOverDrive       types.Float64 `tfsdk:"gpu_overdrive"`        // GPU overdrive percentage
+	MemoryOverDrive    types.Float64 `tfsdk:"memory_overdrive"`     // Memory overdrive percentage
+	FanSpeed           types.Int64   `tfsdk:"fan_speed"`            // Fan speed (0-255)
+	MinimalGpuClock    types.Int64   `tfsdk:"minimal_gpu_clock"`    // Minimum GPU clock (Hz)
+	MinimalMemoryClock types.Int64   `tfsdk:"minimal_memory_clock"` // Minimum memory clock (Hz)
+	ActivityThreshold  types.Float64 `tfsdk:"activity_threshold"`   // Activity threshold percentage
+	HysteresisUp       types.Float64 `tfsdk:"hysteresis_up"`        // Hysteresis up delay (seconds)
+	HysteresisDown     types.Float64 `tfsdk:"hysteresis_down"`      // Hysteresis down delay (seconds)
 }
 
-// ServiceModel describes a service configuration nested object.
-// Structure based on BCM API - currently empty array in default category.
+// ServiceModel describes an OS service configuration nested object.
+// Based on BCM OSServiceConfig entity schema extracted from API documentation.
 type ServiceModel struct {
-	// TODO: Define fields based on actual BCM API usage
-	// Marked as POST-MVP until actual service structure is documented
+	// Required fields
+	Name types.String `tfsdk:"name"` // Required (unique), service name (max 64 chars)
+
+	// Optional boolean fields
+	Monitored types.Bool `tfsdk:"monitored"` // Optional, CMDaemon will periodically check if the service is running
+	Autostart types.Bool `tfsdk:"autostart"` // Optional, CMDaemon will restart a failed service
+	Managed   types.Bool `tfsdk:"managed"`   // Optional, manage config files from cmd (if any)
+
+	// Optional string fields
+	RunIf               types.String `tfsdk:"run_if"`                // Optional (default: ALWAYS), only run in specified state
+	SicknessCheckScript types.String `tfsdk:"sickness_check_script"` // Optional, script for sickness checking
+
+	// Optional numeric fields
+	SicknessCheckScriptTimeout types.Int64 `tfsdk:"sickness_check_script_timeout"` // Optional (default: 10), timeout for sickness check script
+	SicknessCheckInterval      types.Int64 `tfsdk:"sickness_check_interval"`       // Optional (default: 60), sickness checks interval (rounded up to 30s)
+	ScriptTimeout              types.Int64 `tfsdk:"script_timeout"`                // Optional (default: -1), service operation timeout
 }
 
 // NewCMDeviceCategoryResource creates a new resource instance.
@@ -437,22 +504,43 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 			},
 			"static_routes": schema.ListNestedAttribute{
 				Optional:            true,
-				MarkdownDescription: "Static network routes for nodes in this category",
+				MarkdownDescription: "Static network routes for nodes in this category.",
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
-						"destination": schema.StringAttribute{
+						"uuid": schema.StringAttribute{
+							Computed:            true,
+							MarkdownDescription: "Unique identifier assigned by BCM",
+							PlanModifiers: []planmodifier.String{
+								stringplanmodifier.UseStateForUnknown(),
+							},
+						},
+						"name": schema.StringAttribute{
 							Required:            true,
-							MarkdownDescription: "Destination network in CIDR notation (e.g., 192.168.1.0/24)",
+							MarkdownDescription: "Route name identifier (e.g., 'default-route', 'internal-net')",
+							Validators: []validator.String{
+								stringvalidator.LengthBetween(1, 255),
+							},
+						},
+						"ip": schema.StringAttribute{
+							Required:            true,
+							MarkdownDescription: "Destination IP address (e.g., '0.0.0.0' for default route, '192.168.1.0' for specific network)",
 							Validators: []validator.String{
 								stringvalidator.RegexMatches(
-									regexp.MustCompile(`^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$`),
-									"must be valid CIDR notation (e.g., 192.168.1.0/24)",
+									regexp.MustCompile(`^([0-9]{1,3}\.){3}[0-9]{1,3}$`),
+									"must be valid IPv4 address",
 								),
+							},
+						},
+						"netmask_bits": schema.Int64Attribute{
+							Required:            true,
+							MarkdownDescription: "Network mask in CIDR notation bits (0-32, e.g., 0 for default route, 24 for /24 subnet)",
+							Validators: []validator.Int64{
+								int64validator.Between(0, 32),
 							},
 						},
 						"gateway": schema.StringAttribute{
 							Required:            true,
-							MarkdownDescription: "Gateway IP address (e.g., 10.0.0.1)",
+							MarkdownDescription: "Gateway IPv4 address (e.g., '10.0.0.1')",
 							Validators: []validator.String{
 								stringvalidator.RegexMatches(
 									regexp.MustCompile(`^([0-9]{1,3}\.){3}[0-9]{1,3}$`),
@@ -462,7 +550,25 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 						},
 						"metric": schema.Int64Attribute{
 							Optional:            true,
-							MarkdownDescription: "Route metric (priority, lower is preferred)",
+							MarkdownDescription: "Route metric (priority, lower is preferred). Defaults to 0 if not specified.",
+						},
+						"network": schema.StringAttribute{
+							Required:            true,
+							MarkdownDescription: "Network UUID reference for this route (must be valid RFC 4122 UUID)",
+							Validators: []validator.String{
+								stringvalidator.RegexMatches(
+									regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`),
+									"must be a valid RFC 4122 UUID format",
+								),
+							},
+						},
+						"network_device_name": schema.StringAttribute{
+							Optional:            true,
+							MarkdownDescription: "Specific network device name for this route (optional, leave empty for auto-selection)",
+						},
+						"notes": schema.StringAttribute{
+							Optional:            true,
+							MarkdownDescription: "User notes for this route",
 						},
 					},
 				},
@@ -517,12 +623,17 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 			},
 			"fsexports": schema.ListNestedAttribute{
 				Optional:            true,
-				MarkdownDescription: "NFS filesystem exports for nodes in this category",
+				MarkdownDescription: "NFS filesystem exports for nodes in this category. Configures entries for /etc/exports.",
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
+						"name": schema.StringAttribute{
+							Optional:            true,
+							Computed:            true,
+							MarkdownDescription: "Export name (unique). If not specified, defaults to the path value.",
+						},
 						"path": schema.StringAttribute{
 							Required:            true,
-							MarkdownDescription: "Export path (e.g., /home, /shared)",
+							MarkdownDescription: "Path to export (e.g., /home, /shared)",
 						},
 						"network": schema.StringAttribute{
 							Required:            true,
@@ -534,24 +645,60 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 								),
 							},
 						},
+						"hosts": schema.StringAttribute{
+							Optional:            true,
+							MarkdownDescription: "Extra hosts-range allowed access to this export (space separated)",
+						},
+						"extra_options": schema.StringAttribute{
+							Optional:            true,
+							MarkdownDescription: "Extra NFS options to be added to this export",
+						},
 						"allow_write": schema.BoolAttribute{
 							Optional:            true,
 							MarkdownDescription: "Allow write access (default: false)",
 						},
-						"root_squash": schema.BoolAttribute{
-							Optional:            true,
-							MarkdownDescription: "Enable root squash security (default: false)",
-						},
 						"async": schema.BoolAttribute{
 							Optional:            true,
-							MarkdownDescription: "Use async mode for writes (default: false)",
+							MarkdownDescription: "Allow async NFS operations (default: true). When true, the NFS server can reply to requests before changes are committed to stable storage.",
+						},
+						"root_squash": schema.BoolAttribute{
+							Optional:            true,
+							MarkdownDescription: "Map requests from uid/gid 0 to the anonymous uid/gid (default: false)",
+						},
+						"all_squash": schema.BoolAttribute{
+							Optional:            true,
+							MarkdownDescription: "Map all uids and gids to the anonymous user (default: false)",
+						},
+						"rdma": schema.BoolAttribute{
+							Optional:            true,
+							MarkdownDescription: "Enable NFS over RDMA (default: false)",
+						},
+						"disabled": schema.BoolAttribute{
+							Optional:            true,
+							MarkdownDescription: "Disable the export (default: false)",
+						},
+						"check_tree": schema.BoolAttribute{
+							Optional:            true,
+							MarkdownDescription: "Check tree (default: false)",
+						},
+						"anon_uid": schema.Int64Attribute{
+							Optional:            true,
+							MarkdownDescription: "Anonymous account user id number (default: 65534)",
+						},
+						"anon_gid": schema.Int64Attribute{
+							Optional:            true,
+							MarkdownDescription: "Anonymous account group id number (default: 65534)",
+						},
+						"fsid": schema.Int64Attribute{
+							Optional:            true,
+							MarkdownDescription: "File system id for exports used in failover setup. Make sure these are identical for failover pairs.",
 						},
 					},
 				},
 			},
 			"roles": schema.ListNestedAttribute{
 				Optional:            true,
-				MarkdownDescription: "Service role assignments for nodes in this category",
+				MarkdownDescription: "Service role assignments for nodes in this category. **Known Limitation**: BCM API does not persist this field - values are stored in Terraform state only. Role UUIDs are generated locally by the provider. After import, re-apply configuration to restore values.",
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"name": schema.StringAttribute{
@@ -575,11 +722,57 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 			},
 			"services": schema.ListNestedAttribute{
 				Optional:            true,
-				MarkdownDescription: "Service configurations for nodes in this category (structure TBD - marked as POST-MVP)",
+				MarkdownDescription: "OS service configurations for nodes in this category. Defines which services should be monitored and managed by CMDaemon. **Known Limitation**: BCM API may not persist this field consistently - values are stored in Terraform state. After import, re-apply configuration to restore values.",
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
-						// TODO: Define service fields based on actual BCM API usage
-						// Placeholder for now - services field structure needs investigation
+						"name": schema.StringAttribute{
+							Required:            true,
+							MarkdownDescription: "Service name (max 64 characters). Must be unique within the category.",
+							Validators: []validator.String{
+								stringvalidator.LengthAtMost(64),
+							},
+						},
+						"monitored": schema.BoolAttribute{
+							Optional:            true,
+							MarkdownDescription: "If true, CMDaemon will periodically check if the service is running.",
+						},
+						"autostart": schema.BoolAttribute{
+							Optional:            true,
+							MarkdownDescription: "If true, CMDaemon will automatically restart a failed service.",
+						},
+						"managed": schema.BoolAttribute{
+							Optional:            true,
+							MarkdownDescription: "If true, manage config files from cmd (if any).",
+						},
+						"run_if": schema.StringAttribute{
+							Optional:            true,
+							MarkdownDescription: "Condition for running the service. Valid values: ALWAYS (default), or other BCM-defined states.",
+							Validators: []validator.String{
+								stringvalidator.OneOf("ALWAYS"),
+							},
+						},
+						"sickness_check_script": schema.StringAttribute{
+							Optional:            true,
+							MarkdownDescription: "Script path for sickness checking. The script is executed periodically to determine service health.",
+						},
+						"sickness_check_script_timeout": schema.Int64Attribute{
+							Optional:            true,
+							MarkdownDescription: "Timeout in seconds after which the sickness check script is killed. Default: 10 seconds.",
+							Validators: []validator.Int64{
+								int64validator.AtLeast(1),
+							},
+						},
+						"sickness_check_interval": schema.Int64Attribute{
+							Optional:            true,
+							MarkdownDescription: "Interval in seconds between sickness checks. Rounded up to 30-second monitoring intervals. Default: 60 seconds.",
+							Validators: []validator.Int64{
+								int64validator.AtLeast(1),
+							},
+						},
+						"script_timeout": schema.Int64Attribute{
+							Optional:            true,
+							MarkdownDescription: "Service operation timeout in seconds. Use -1 for no timeout (default).",
+						},
 					},
 				},
 			},
@@ -638,20 +831,128 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 			},
 			"gpu_settings": schema.ListNestedAttribute{
 				Optional:            true,
-				MarkdownDescription: "GPU hardware configuration for nodes in this category",
+				MarkdownDescription: "GPU hardware configuration for nodes in this category. Supports Nvidia and AMD GPUs with vendor-specific settings. **Known Limitation**: BCM API does not persist this field - values are stored in Terraform state only. After import, re-apply configuration to restore values.",
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
-						"device_id": schema.StringAttribute{
-							Required:            true,
-							MarkdownDescription: "GPU device ID (e.g., 0, 1, 2)",
+						// Base GPUSettings fields
+						"uuid": schema.StringAttribute{
+							Computed:            true,
+							MarkdownDescription: "BCM-assigned UUID for this GPU settings entry.",
 						},
-						"model": schema.StringAttribute{
+						"name": schema.StringAttribute{
+							Required:            true,
+							MarkdownDescription: "GPU range for which these settings apply (e.g., '0', '0-3', '0,1,2').",
+						},
+						"child_type": schema.StringAttribute{
+							Required:            true,
+							MarkdownDescription: "GPU vendor type: 'nvidia' or 'amd'.",
+							Validators: []validator.String{
+								stringvalidator.OneOf("nvidia", "amd"),
+							},
+						},
+						// NvidiaGPUSettings fields
+						"power_limit": schema.Int64Attribute{
 							Optional:            true,
-							MarkdownDescription: "GPU model name (e.g., Tesla V100, A100)",
+							MarkdownDescription: "Power limit in Watts (Nvidia only).",
+						},
+						"ecc_mode": schema.StringAttribute{
+							Optional:            true,
+							MarkdownDescription: "ECC mode: DISABLED, ENABLED, NONE (Nvidia only).",
+							Validators: []validator.String{
+								stringvalidator.OneOf("DISABLED", "ENABLED", "NONE"),
+							},
 						},
 						"compute_mode": schema.StringAttribute{
 							Optional:            true,
-							MarkdownDescription: "Compute mode (default, exclusive, prohibited)",
+							MarkdownDescription: "Compute mode (Nvidia only).",
+						},
+						"clock_sync_boost_mode": schema.StringAttribute{
+							Optional:            true,
+							MarkdownDescription: "Clock sync boost mode among GPUs in group (Nvidia only).",
+						},
+						"multiprocessor_clock_speed": schema.Int64Attribute{
+							Optional:            true,
+							MarkdownDescription: "Streaming multiprocessor clock speed in Hz (Nvidia only).",
+						},
+						"memory_clock_speed": schema.Int64Attribute{
+							Optional:            true,
+							MarkdownDescription: "Memory clock speed in Hz (Nvidia only).",
+						},
+						"mig_profiles": schema.ListAttribute{
+							Optional:            true,
+							ElementType:         types.StringType,
+							MarkdownDescription: "MIG profiles that will be applied to the GPU (Nvidia only).",
+						},
+						"workload_power_profile": schema.StringAttribute{
+							Optional:            true,
+							MarkdownDescription: "Workload power profile (Nvidia only).",
+						},
+						"secondary_workload_power_profile": schema.StringAttribute{
+							Optional:            true,
+							MarkdownDescription: "Secondary workload power profile (Nvidia only).",
+						},
+						// AMDGPUSettings fields
+						"gpu_clock_level": schema.Int64Attribute{
+							Optional:            true,
+							MarkdownDescription: "GPU clock frequency level 0-7 (AMD only).",
+							Validators: []validator.Int64{
+								int64validator.Between(0, 7),
+							},
+						},
+						"memory_clock_level": schema.Int64Attribute{
+							Optional:            true,
+							MarkdownDescription: "Memory clock frequency level 0-3 (AMD only).",
+							Validators: []validator.Int64{
+								int64validator.Between(0, 3),
+							},
+						},
+						"power_play": schema.StringAttribute{
+							Optional:            true,
+							MarkdownDescription: "Power play mode (AMD only).",
+						},
+						"gpu_overdrive": schema.Float64Attribute{
+							Optional:            true,
+							MarkdownDescription: "GPU overdrive percentage 0-0.2 (AMD only).",
+							Validators: []validator.Float64{
+								float64validator.Between(0, 0.2),
+							},
+						},
+						"memory_overdrive": schema.Float64Attribute{
+							Optional:            true,
+							MarkdownDescription: "Memory overdrive percentage 0-0.2 (AMD only).",
+							Validators: []validator.Float64{
+								float64validator.Between(0, 0.2),
+							},
+						},
+						"fan_speed": schema.Int64Attribute{
+							Optional:            true,
+							MarkdownDescription: "Fan speed value 0-255 (AMD only).",
+							Validators: []validator.Int64{
+								int64validator.Between(0, 255),
+							},
+						},
+						"minimal_gpu_clock": schema.Int64Attribute{
+							Optional:            true,
+							MarkdownDescription: "Minimum GPU clock speed in Hz (AMD only).",
+						},
+						"minimal_memory_clock": schema.Int64Attribute{
+							Optional:            true,
+							MarkdownDescription: "Minimum memory clock speed in Hz (AMD only).",
+						},
+						"activity_threshold": schema.Float64Attribute{
+							Optional:            true,
+							MarkdownDescription: "Activity threshold percentage 0-1 (AMD only).",
+							Validators: []validator.Float64{
+								float64validator.Between(0, 1),
+							},
+						},
+						"hysteresis_up": schema.Float64Attribute{
+							Optional:            true,
+							MarkdownDescription: "Delay in seconds before clock level is increased (AMD only).",
+						},
+						"hysteresis_down": schema.Float64Attribute{
+							Optional:            true,
+							MarkdownDescription: "Delay in seconds before clock level is decreased (AMD only).",
 						},
 					},
 				},
@@ -1048,11 +1349,12 @@ func (r *CMDeviceCategoryResource) Create(ctx context.Context, req resource.Crea
 		"uuid": createdUUID,
 	})
 
-	// Restore plan values for optional list fields that BCM doesn't persist
-	// BCM returns empty arrays for these fields, so we preserve what the user configured
-	// This ensures Terraform state matches plan when BCM doesn't store these values
-	plan.StaticRoutes = planStaticRoutes
-	plan.FSExports = planFSExports
+	// Restore plan values for optional list fields, merging with API response for computed fields
+	// This ensures Terraform state matches plan while populating computed UUIDs from BCM
+	plan.StaticRoutes = mergeStaticRoutesWithAPIResponse(ctx, planStaticRoutes, plan.StaticRoutes)
+	// Issue #73 FIX: Merge fsexports instead of unconditional overwrite
+	// This preserves user config while handling API response and Unknown values
+	plan.FSExports = mergeFSExportsWithAPIResponse(ctx, planFSExports, plan.FSExports)
 	// Issue #84 FIX: Merge fsmounts instead of unconditional overwrite
 	// This preserves user config (device, mountpoint, filesystem, etc.) while populating
 	// computed values (uuid) from BCM API response
@@ -1061,8 +1363,10 @@ func (r *CMDeviceCategoryResource) Create(ctx context.Context, req resource.Crea
 	// This preserves user config (name, child_type, add_services) while populating
 	// computed values (uuid) from BCM API response
 	plan.Roles = mergeRolesWithAPIResponse(ctx, planRoles, plan.Roles)
-	plan.GPUSettings = planGPUSettings
-	plan.Services = planServices
+	plan.GPUSettings = mergeGPUSettingsWithAPIResponse(ctx, planGPUSettings)
+	// Issue #73 FIX: Merge services instead of unconditional overwrite
+	// This preserves user config while handling API response and Unknown values
+	plan.Services = mergeServicesWithAPIResponse(ctx, planServices, plan.Services)
 
 	// Issue #82 FIX: Preserve bmc_settings from plan for sensitive object consistency
 	// For objects containing sensitive attributes, Terraform requires the returned state
@@ -1506,10 +1810,12 @@ func (r *CMDeviceCategoryResource) Update(ctx context.Context, req resource.Upda
 		plan.BootLoader = planBootLoader
 	}
 
-	// CRITICAL FIX: Restore optional list fields from plan
-	// BCM API doesn't persist these fields for categories - preserve user's configured values
-	plan.StaticRoutes = planStaticRoutes
-	plan.FSExports = planFSExports
+	// CRITICAL FIX: Restore optional list fields from plan, merging with API response for computed fields
+	// This ensures Terraform state matches plan while populating computed UUIDs from BCM
+	plan.StaticRoutes = mergeStaticRoutesWithAPIResponse(ctx, planStaticRoutes, plan.StaticRoutes)
+	// Issue #73 FIX: Merge fsexports instead of unconditional overwrite
+	// This preserves user config while handling API response and Unknown values
+	plan.FSExports = mergeFSExportsWithAPIResponse(ctx, planFSExports, plan.FSExports)
 	// Issue #84 FIX: Merge fsmounts instead of unconditional overwrite
 	// This preserves user config (device, mountpoint, filesystem, etc.) while populating
 	// computed values (uuid) from BCM API response
@@ -1518,8 +1824,10 @@ func (r *CMDeviceCategoryResource) Update(ctx context.Context, req resource.Upda
 	// This preserves user config (name, child_type, add_services) while populating
 	// computed values (uuid) from BCM API response
 	plan.Roles = mergeRolesWithAPIResponse(ctx, planRoles, plan.Roles)
-	plan.GPUSettings = planGPUSettings
-	plan.Services = planServices
+	plan.GPUSettings = mergeGPUSettingsWithAPIResponse(ctx, planGPUSettings)
+	// Issue #73 FIX: Merge services instead of unconditional overwrite
+	// This preserves user config while handling API response and Unknown values
+	plan.Services = mergeServicesWithAPIResponse(ctx, planServices, plan.Services)
 
 	// CRITICAL FIX: Preserve parent_software_image from plan while keeping computed fields
 	// BCM API may return different parent_software_image UUID on reads
@@ -2007,12 +2315,36 @@ func (r *CMDeviceCategoryResource) buildAPIEntity(ctx context.Context, model *CM
 		if !diags.HasError() {
 			routesList := make([]map[string]interface{}, 0, len(routes))
 			for _, route := range routes {
+				// Generate UUID client-side if not present (for new routes)
+				routeUUID := route.UUID.ValueString()
+				if route.UUID.IsNull() || route.UUID.IsUnknown() || routeUUID == "" {
+					routeUUID = generateUUID()
+				}
 				routeMap := map[string]interface{}{
-					"destination": route.Destination.ValueString(),
-					"gateway":     route.Gateway.ValueString(),
+					"baseType":          "StaticRoute",
+					"childType":         "",
+					"to_be_removed":     false,
+					"modified":          false,
+					"revision":          "",
+					"uuid":              routeUUID,
+					"name":              route.Name.ValueString(),
+					"ip":                route.IP.ValueString(),
+					"netmaskBits":       route.NetmaskBits.ValueInt64(),
+					"gateway":           route.Gateway.ValueString(),
+					"network":           route.Network.ValueString(),
+					"networkDeviceName": "",
+					"notes":             "",
 				}
 				if !route.Metric.IsNull() {
 					routeMap["metric"] = route.Metric.ValueInt64()
+				} else {
+					routeMap["metric"] = int64(0)
+				}
+				if !route.NetworkDeviceName.IsNull() && route.NetworkDeviceName.ValueString() != "" {
+					routeMap["networkDeviceName"] = route.NetworkDeviceName.ValueString()
+				}
+				if !route.Notes.IsNull() && route.Notes.ValueString() != "" {
+					routeMap["notes"] = route.Notes.ValueString()
 				}
 				routesList = append(routesList, routeMap)
 			}
@@ -2027,19 +2359,55 @@ func (r *CMDeviceCategoryResource) buildAPIEntity(ctx context.Context, model *CM
 		if !diags.HasError() {
 			exportsList := make([]map[string]interface{}, 0, len(exports))
 			for _, export := range exports {
+				// Use path as name if name is not specified (backwards compatibility)
+				exportName := export.Name.ValueString()
+				if export.Name.IsNull() || export.Name.IsUnknown() || exportName == "" {
+					exportName = export.Path.ValueString()
+				}
 				exportMap := map[string]interface{}{
 					"baseType": "FSExport",
+					"name":     exportName,
 					"path":     export.Path.ValueString(),
 					"network":  export.Network.ValueString(),
 				}
+				// Optional string fields
+				if !export.Hosts.IsNull() && export.Hosts.ValueString() != "" {
+					exportMap["hosts"] = export.Hosts.ValueString()
+				}
+				if !export.ExtraOptions.IsNull() && export.ExtraOptions.ValueString() != "" {
+					exportMap["extraOptions"] = export.ExtraOptions.ValueString()
+				}
+				// Optional boolean fields
 				if !export.AllowWrite.IsNull() {
 					exportMap["allowWrite"] = export.AllowWrite.ValueBool()
+				}
+				if !export.Async.IsNull() {
+					exportMap["async"] = export.Async.ValueBool()
 				}
 				if !export.RootSquash.IsNull() {
 					exportMap["rootSquash"] = export.RootSquash.ValueBool()
 				}
-				if !export.Async.IsNull() {
-					exportMap["async"] = export.Async.ValueBool()
+				if !export.AllSquash.IsNull() {
+					exportMap["allSquash"] = export.AllSquash.ValueBool()
+				}
+				if !export.RDMA.IsNull() {
+					exportMap["rdma"] = export.RDMA.ValueBool()
+				}
+				if !export.Disabled.IsNull() {
+					exportMap["disabled"] = export.Disabled.ValueBool()
+				}
+				if !export.CheckTree.IsNull() {
+					exportMap["checkTree"] = export.CheckTree.ValueBool()
+				}
+				// Optional numeric fields
+				if !export.AnonUID.IsNull() {
+					exportMap["anonUid"] = export.AnonUID.ValueInt64()
+				}
+				if !export.AnonGID.IsNull() {
+					exportMap["anonGid"] = export.AnonGID.ValueInt64()
+				}
+				if !export.FSID.IsNull() {
+					exportMap["fsid"] = export.FSID.ValueInt64()
 				}
 				exportsList = append(exportsList, exportMap)
 			}
@@ -2079,26 +2447,147 @@ func (r *CMDeviceCategoryResource) buildAPIEntity(ctx context.Context, model *CM
 		if !diags.HasError() {
 			gpuList := make([]map[string]interface{}, 0, len(gpuSettings))
 			for _, gpu := range gpuSettings {
+				// Determine childType from child_type field
+				childType := "NvidiaGPUSettings"
+				if gpu.ChildType.ValueString() == "amd" {
+					childType = "AMDGPUSettings"
+				}
+
+				// Generate UUID client-side if not present
+				gpuUUID := gpu.UUID.ValueString()
+				if gpu.UUID.IsNull() || gpu.UUID.IsUnknown() || gpuUUID == "" {
+					gpuUUID = generateUUID()
+				}
+
 				gpuMap := map[string]interface{}{
-					"baseType": "GPUSetting",
-					"deviceId": gpu.DeviceID.ValueString(),
+					"baseType":      "GPUSettings",
+					"childType":     childType,
+					"uuid":          gpuUUID,
+					"name":          gpu.Name.ValueString(),
+					"modified":      true,
+					"to_be_removed": false,
+					"revision":      "",
 				}
-				if !gpu.Model.IsNull() {
-					gpuMap["model"] = gpu.Model.ValueString()
+
+				// Add Nvidia-specific fields
+				if childType == "NvidiaGPUSettings" {
+					if !gpu.PowerLimit.IsNull() && !gpu.PowerLimit.IsUnknown() {
+						gpuMap["powerLimit"] = gpu.PowerLimit.ValueInt64()
+					}
+					if !gpu.EccMode.IsNull() && !gpu.EccMode.IsUnknown() {
+						gpuMap["eccMode"] = gpu.EccMode.ValueString()
+					}
+					if !gpu.ComputeMode.IsNull() && !gpu.ComputeMode.IsUnknown() {
+						gpuMap["computeMode"] = gpu.ComputeMode.ValueString()
+					}
+					if !gpu.ClockSyncBoostMode.IsNull() && !gpu.ClockSyncBoostMode.IsUnknown() {
+						gpuMap["clockSyncBoostMode"] = gpu.ClockSyncBoostMode.ValueString()
+					}
+					if !gpu.MultiProcessorClockSpeed.IsNull() && !gpu.MultiProcessorClockSpeed.IsUnknown() {
+						gpuMap["multiProcessorClockSpeed"] = gpu.MultiProcessorClockSpeed.ValueInt64()
+					}
+					if !gpu.MemoryClockSpeed.IsNull() && !gpu.MemoryClockSpeed.IsUnknown() {
+						gpuMap["memoryClockSpeed"] = gpu.MemoryClockSpeed.ValueInt64()
+					}
+					if !gpu.MigProfiles.IsNull() && !gpu.MigProfiles.IsUnknown() {
+						var profiles []string
+						gpu.MigProfiles.ElementsAs(ctx, &profiles, false)
+						gpuMap["migProfiles"] = profiles
+					}
+					if !gpu.WorkloadPowerProfile.IsNull() && !gpu.WorkloadPowerProfile.IsUnknown() {
+						gpuMap["workloadPowerProfile"] = gpu.WorkloadPowerProfile.ValueString()
+					}
+					if !gpu.SecondaryWorkloadPowerProfile.IsNull() && !gpu.SecondaryWorkloadPowerProfile.IsUnknown() {
+						gpuMap["secondaryWorkloadPowerProfile"] = gpu.SecondaryWorkloadPowerProfile.ValueString()
+					}
 				}
-				if !gpu.ComputeMode.IsNull() {
-					gpuMap["computeMode"] = gpu.ComputeMode.ValueString()
+
+				// Add AMD-specific fields
+				if childType == "AMDGPUSettings" {
+					if !gpu.GpuClockLevel.IsNull() && !gpu.GpuClockLevel.IsUnknown() {
+						gpuMap["gpuClockLevel"] = gpu.GpuClockLevel.ValueInt64()
+					}
+					if !gpu.MemoryClockLevel.IsNull() && !gpu.MemoryClockLevel.IsUnknown() {
+						gpuMap["memoryClockLevel"] = gpu.MemoryClockLevel.ValueInt64()
+					}
+					if !gpu.PowerPlay.IsNull() && !gpu.PowerPlay.IsUnknown() {
+						gpuMap["powerPlay"] = gpu.PowerPlay.ValueString()
+					}
+					if !gpu.GpuOverDrive.IsNull() && !gpu.GpuOverDrive.IsUnknown() {
+						gpuMap["gpuOverDrive"] = gpu.GpuOverDrive.ValueFloat64()
+					}
+					if !gpu.MemoryOverDrive.IsNull() && !gpu.MemoryOverDrive.IsUnknown() {
+						gpuMap["memoryOverDrive"] = gpu.MemoryOverDrive.ValueFloat64()
+					}
+					if !gpu.FanSpeed.IsNull() && !gpu.FanSpeed.IsUnknown() {
+						gpuMap["fanSpeed"] = gpu.FanSpeed.ValueInt64()
+					}
+					if !gpu.MinimalGpuClock.IsNull() && !gpu.MinimalGpuClock.IsUnknown() {
+						gpuMap["minimalGPUClock"] = gpu.MinimalGpuClock.ValueInt64()
+					}
+					if !gpu.MinimalMemoryClock.IsNull() && !gpu.MinimalMemoryClock.IsUnknown() {
+						gpuMap["minimalMemoryClock"] = gpu.MinimalMemoryClock.ValueInt64()
+					}
+					if !gpu.ActivityThreshold.IsNull() && !gpu.ActivityThreshold.IsUnknown() {
+						gpuMap["activityThreshold"] = gpu.ActivityThreshold.ValueFloat64()
+					}
+					if !gpu.HysteresisUp.IsNull() && !gpu.HysteresisUp.IsUnknown() {
+						gpuMap["hysteresisUp"] = gpu.HysteresisUp.ValueFloat64()
+					}
+					if !gpu.HysteresisDown.IsNull() && !gpu.HysteresisDown.IsUnknown() {
+						gpuMap["hysteresisDown"] = gpu.HysteresisDown.ValueFloat64()
+					}
 				}
+
 				gpuList = append(gpuList, gpuMap)
 			}
 			entity["gpuSettings"] = gpuList
 		}
 	}
 
-	// Serialize services (POST-MVP - currently empty list or null)
+	// Serialize services (snake_case → camelCase for BCM API)
+	// Based on BCM OSServiceConfig entity schema
 	if !model.Services.IsNull() && !model.Services.IsUnknown() {
-		// Services field structure is TBD - send empty array if set
-		entity["services"] = []map[string]interface{}{}
+		var services []ServiceModel
+		diags := model.Services.ElementsAs(ctx, &services, false)
+		if !diags.HasError() {
+			servicesList := make([]map[string]interface{}, 0, len(services))
+			for _, service := range services {
+				serviceMap := map[string]interface{}{
+					"baseType": "OSServiceConfig",
+					"name":     service.Name.ValueString(),
+				}
+				// Optional boolean fields
+				if !service.Monitored.IsNull() {
+					serviceMap["monitored"] = service.Monitored.ValueBool()
+				}
+				if !service.Autostart.IsNull() {
+					serviceMap["autostart"] = service.Autostart.ValueBool()
+				}
+				if !service.Managed.IsNull() {
+					serviceMap["managed"] = service.Managed.ValueBool()
+				}
+				// Optional string fields
+				if !service.RunIf.IsNull() && service.RunIf.ValueString() != "" {
+					serviceMap["runIf"] = service.RunIf.ValueString()
+				}
+				if !service.SicknessCheckScript.IsNull() && service.SicknessCheckScript.ValueString() != "" {
+					serviceMap["sicknessCheckScript"] = service.SicknessCheckScript.ValueString()
+				}
+				// Optional numeric fields
+				if !service.SicknessCheckScriptTimeout.IsNull() {
+					serviceMap["sicknessCheckScriptTimeout"] = service.SicknessCheckScriptTimeout.ValueInt64()
+				}
+				if !service.SicknessCheckInterval.IsNull() {
+					serviceMap["sicknessCheckInterval"] = service.SicknessCheckInterval.ValueInt64()
+				}
+				if !service.ScriptTimeout.IsNull() {
+					serviceMap["scriptTimeout"] = service.ScriptTimeout.ValueInt64()
+				}
+				servicesList = append(servicesList, serviceMap)
+			}
+			entity["services"] = servicesList
+		}
 	}
 
 	// Provisioning scripts
@@ -2334,9 +2823,15 @@ func (r *CMDeviceCategoryResource) readCategory(ctx context.Context, model *CMDe
 
 	// Parse static_routes from BCM API (camelCase → snake_case)
 	staticRouteObjectType := types.ObjectType{AttrTypes: map[string]attr.Type{
-		"destination": types.StringType,
-		"gateway":     types.StringType,
-		"metric":      types.Int64Type,
+		"uuid":                types.StringType,
+		"name":                types.StringType,
+		"ip":                  types.StringType,
+		"netmask_bits":        types.Int64Type,
+		"gateway":             types.StringType,
+		"metric":              types.Int64Type,
+		"network":             types.StringType,
+		"network_device_name": types.StringType,
+		"notes":               types.StringType,
 	}}
 	if routesData, ok := categoryData["staticRoutes"].([]interface{}); ok {
 		// BCM returns array (empty or with data) - convert to Terraform list
@@ -2344,9 +2839,15 @@ func (r *CMDeviceCategoryResource) readCategory(ctx context.Context, model *CMDe
 		for _, routeRaw := range routesData {
 			if routeMap, ok := routeRaw.(map[string]interface{}); ok {
 				routeObj, objDiags := types.ObjectValue(staticRouteObjectType.AttrTypes, map[string]attr.Value{
-					"destination": getStringValue(routeMap, "destination"),
-					"gateway":     getStringValue(routeMap, "gateway"),
-					"metric":      getInt64Value(routeMap, "metric"),
+					"uuid":                getStringValue(routeMap, "uuid"),
+					"name":                getStringValue(routeMap, "name"),
+					"ip":                  getStringValue(routeMap, "ip"),
+					"netmask_bits":        getInt64Value(routeMap, "netmaskBits"),
+					"gateway":             getStringValue(routeMap, "gateway"),
+					"metric":              getInt64Value(routeMap, "metric"),
+					"network":             getStringValue(routeMap, "network"),
+					"network_device_name": getStringValue(routeMap, "networkDeviceName"),
+					"notes":               getStringValue(routeMap, "notes"),
 				})
 				if !objDiags.HasError() {
 					routeValues = append(routeValues, routeObj)
@@ -2430,12 +2931,27 @@ func (r *CMDeviceCategoryResource) readCategory(ctx context.Context, model *CMDe
 	}
 
 	// Parse fsexports from BCM API (camelCase → snake_case)
+	// Based on BCM FSExport entity schema with all fields
 	fsExportObjectType := types.ObjectType{AttrTypes: map[string]attr.Type{
-		"path":        types.StringType,
-		"network":     types.StringType,
+		// Required fields
+		"name":    types.StringType,
+		"path":    types.StringType,
+		"network": types.StringType,
+		// Optional string fields
+		"hosts":         types.StringType,
+		"extra_options": types.StringType,
+		// Optional boolean fields
 		"allow_write": types.BoolType,
-		"root_squash": types.BoolType,
 		"async":       types.BoolType,
+		"root_squash": types.BoolType,
+		"all_squash":  types.BoolType,
+		"rdma":        types.BoolType,
+		"disabled":    types.BoolType,
+		"check_tree":  types.BoolType,
+		// Optional numeric fields
+		"anon_uid": types.Int64Type,
+		"anon_gid": types.Int64Type,
+		"fsid":     types.Int64Type,
 	}}
 	if exportsData, ok := categoryData["fsexports"].([]interface{}); ok {
 		// BCM returns array (empty or with data) - convert to Terraform list
@@ -2443,11 +2959,25 @@ func (r *CMDeviceCategoryResource) readCategory(ctx context.Context, model *CMDe
 		for _, exportRaw := range exportsData {
 			if exportMap, ok := exportRaw.(map[string]interface{}); ok {
 				exportObj, objDiags := types.ObjectValue(fsExportObjectType.AttrTypes, map[string]attr.Value{
-					"path":        getStringValue(exportMap, "path"),
-					"network":     getStringValue(exportMap, "network"),
+					// Required fields
+					"name":    getStringValue(exportMap, "name"),
+					"path":    getStringValue(exportMap, "path"),
+					"network": getStringValue(exportMap, "network"),
+					// Optional string fields
+					"hosts":         getStringValue(exportMap, "hosts"),
+					"extra_options": getStringValue(exportMap, "extraOptions"),
+					// Optional boolean fields (camelCase → snake_case)
 					"allow_write": getBoolValue(exportMap, "allowWrite"),
-					"root_squash": getBoolValue(exportMap, "rootSquash"),
 					"async":       getBoolValue(exportMap, "async"),
+					"root_squash": getBoolValue(exportMap, "rootSquash"),
+					"all_squash":  getBoolValue(exportMap, "allSquash"),
+					"rdma":        getBoolValue(exportMap, "rdma"),
+					"disabled":    getBoolValue(exportMap, "disabled"),
+					"check_tree":  getBoolValue(exportMap, "checkTree"),
+					// Optional numeric fields
+					"anon_uid": getInt64Value(exportMap, "anonUid"),
+					"anon_gid": getInt64Value(exportMap, "anonGid"),
+					"fsid":     getInt64Value(exportMap, "fsid"),
 				})
 				if !objDiags.HasError() {
 					exportValues = append(exportValues, exportObj)
@@ -2518,13 +3048,49 @@ func (r *CMDeviceCategoryResource) readCategory(ctx context.Context, model *CMDe
 		model.Roles = types.ListNull(roleObjectType)
 	}
 
-	// Parse services from BCM API (POST-MVP - structure TBD)
+	// Parse services from BCM API (camelCase → snake_case)
+	// Based on BCM OSServiceConfig entity schema
 	serviceObjectType := types.ObjectType{AttrTypes: map[string]attr.Type{
-		// Empty for now - services field structure is TBD
+		// Required fields
+		"name": types.StringType,
+		// Optional boolean fields
+		"monitored": types.BoolType,
+		"autostart": types.BoolType,
+		"managed":   types.BoolType,
+		// Optional string fields
+		"run_if":                types.StringType,
+		"sickness_check_script": types.StringType,
+		// Optional numeric fields
+		"sickness_check_script_timeout": types.Int64Type,
+		"sickness_check_interval":       types.Int64Type,
+		"script_timeout":                types.Int64Type,
 	}}
-	if _, ok := categoryData["services"].([]interface{}); ok {
-		// BCM returns array (empty or with data) - set to empty list
-		model.Services, _ = types.ListValue(serviceObjectType, []attr.Value{})
+	if servicesData, ok := categoryData["services"].([]interface{}); ok {
+		// BCM returns array (empty or with data) - convert to Terraform list
+		serviceValues := make([]attr.Value, 0, len(servicesData))
+		for _, serviceRaw := range servicesData {
+			if serviceMap, ok := serviceRaw.(map[string]interface{}); ok {
+				serviceObj, objDiags := types.ObjectValue(serviceObjectType.AttrTypes, map[string]attr.Value{
+					// Required fields
+					"name": getStringValue(serviceMap, "name"),
+					// Optional boolean fields (camelCase → snake_case)
+					"monitored": getBoolValue(serviceMap, "monitored"),
+					"autostart": getBoolValue(serviceMap, "autostart"),
+					"managed":   getBoolValue(serviceMap, "managed"),
+					// Optional string fields
+					"run_if":                getStringValue(serviceMap, "runIf"),
+					"sickness_check_script": getStringValue(serviceMap, "sicknessCheckScript"),
+					// Optional numeric fields
+					"sickness_check_script_timeout": getInt64Value(serviceMap, "sicknessCheckScriptTimeout"),
+					"sickness_check_interval":       getInt64Value(serviceMap, "sicknessCheckInterval"),
+					"script_timeout":                getInt64Value(serviceMap, "scriptTimeout"),
+				})
+				if !objDiags.HasError() {
+					serviceValues = append(serviceValues, serviceObj)
+				}
+			}
+		}
+		model.Services, _ = types.ListValue(serviceObjectType, serviceValues)
 	} else {
 		// Field not present in response - set to null
 		model.Services = types.ListNull(serviceObjectType)
@@ -2532,19 +3098,85 @@ func (r *CMDeviceCategoryResource) readCategory(ctx context.Context, model *CMDe
 
 	// Parse gpu_settings from BCM API (camelCase → snake_case)
 	gpuSettingObjectType := types.ObjectType{AttrTypes: map[string]attr.Type{
-		"device_id":    types.StringType,
-		"model":        types.StringType,
-		"compute_mode": types.StringType,
+		// Base GPUSettings fields
+		"uuid":       types.StringType,
+		"name":       types.StringType,
+		"child_type": types.StringType,
+		// Nvidia fields
+		"power_limit":                      types.Int64Type,
+		"ecc_mode":                         types.StringType,
+		"compute_mode":                     types.StringType,
+		"clock_sync_boost_mode":            types.StringType,
+		"multiprocessor_clock_speed":       types.Int64Type,
+		"memory_clock_speed":               types.Int64Type,
+		"mig_profiles":                     types.ListType{ElemType: types.StringType},
+		"workload_power_profile":           types.StringType,
+		"secondary_workload_power_profile": types.StringType,
+		// AMD fields
+		"gpu_clock_level":      types.Int64Type,
+		"memory_clock_level":   types.Int64Type,
+		"power_play":           types.StringType,
+		"gpu_overdrive":        types.Float64Type,
+		"memory_overdrive":     types.Float64Type,
+		"fan_speed":            types.Int64Type,
+		"minimal_gpu_clock":    types.Int64Type,
+		"minimal_memory_clock": types.Int64Type,
+		"activity_threshold":   types.Float64Type,
+		"hysteresis_up":        types.Float64Type,
+		"hysteresis_down":      types.Float64Type,
 	}}
 	if gpuData, ok := categoryData["gpuSettings"].([]interface{}); ok {
 		// BCM returns array (empty or with data) - convert to Terraform list
 		gpuValues := make([]attr.Value, 0, len(gpuData))
 		for _, gpuRaw := range gpuData {
 			if gpuMap, ok := gpuRaw.(map[string]interface{}); ok {
+				// Determine child_type from BCM childType field
+				childType := "nvidia" // default
+				if ct, ok := gpuMap["childType"].(string); ok {
+					if ct == "AMDGPUSettings" {
+						childType = "amd"
+					}
+				}
+
+				// Parse mig_profiles array
+				var migProfilesVal attr.Value = types.ListNull(types.StringType)
+				if migProfiles, ok := gpuMap["migProfiles"].([]interface{}); ok {
+					profiles := make([]attr.Value, 0, len(migProfiles))
+					for _, p := range migProfiles {
+						if ps, ok := p.(string); ok {
+							profiles = append(profiles, types.StringValue(ps))
+						}
+					}
+					migProfilesVal, _ = types.ListValue(types.StringType, profiles)
+				}
+
 				gpuObj, objDiags := types.ObjectValue(gpuSettingObjectType.AttrTypes, map[string]attr.Value{
-					"device_id":    getStringValue(gpuMap, "deviceId"),
-					"model":        getStringValue(gpuMap, "model"),
-					"compute_mode": getStringValue(gpuMap, "computeMode"),
+					// Base fields
+					"uuid":       getStringValue(gpuMap, "uuid"),
+					"name":       getStringValue(gpuMap, "name"),
+					"child_type": types.StringValue(childType),
+					// Nvidia fields
+					"power_limit":                      getInt64Value(gpuMap, "powerLimit"),
+					"ecc_mode":                         getStringValue(gpuMap, "eccMode"),
+					"compute_mode":                     getStringValue(gpuMap, "computeMode"),
+					"clock_sync_boost_mode":            getStringValue(gpuMap, "clockSyncBoostMode"),
+					"multiprocessor_clock_speed":       getInt64Value(gpuMap, "multiProcessorClockSpeed"),
+					"memory_clock_speed":               getInt64Value(gpuMap, "memoryClockSpeed"),
+					"mig_profiles":                     migProfilesVal,
+					"workload_power_profile":           getStringValue(gpuMap, "workloadPowerProfile"),
+					"secondary_workload_power_profile": getStringValue(gpuMap, "secondaryWorkloadPowerProfile"),
+					// AMD fields
+					"gpu_clock_level":      getInt64Value(gpuMap, "gpuClockLevel"),
+					"memory_clock_level":   getInt64Value(gpuMap, "memoryClockLevel"),
+					"power_play":           getStringValue(gpuMap, "powerPlay"),
+					"gpu_overdrive":        getFloat64Value(gpuMap, "gpuOverDrive"),
+					"memory_overdrive":     getFloat64Value(gpuMap, "memoryOverDrive"),
+					"fan_speed":            getInt64Value(gpuMap, "fanSpeed"),
+					"minimal_gpu_clock":    getInt64Value(gpuMap, "minimalGPUClock"),
+					"minimal_memory_clock": getInt64Value(gpuMap, "minimalMemoryClock"),
+					"activity_threshold":   getFloat64Value(gpuMap, "activityThreshold"),
+					"hysteresis_up":        getFloat64Value(gpuMap, "hysteresisUp"),
+					"hysteresis_down":      getFloat64Value(gpuMap, "hysteresisDown"),
 				})
 				if !objDiags.HasError() {
 					gpuValues = append(gpuValues, gpuObj)
@@ -2791,9 +3423,653 @@ func mergeRolesWithAPIResponse(ctx context.Context, originalRoles types.List, ap
 	return result
 }
 
+// mergeStaticRoutesWithAPIResponse merges user-configured static route attributes with BCM API-computed values.
+// It matches routes by name and:
+// - Preserves user-specified: name, ip, netmask_bits, gateway, metric, network, network_device_name, notes
+// - Populates computed: uuid from BCM API response
+//
+// Parameters:
+//   - ctx: Context for logging
+//   - originalRoutes: Routes from Terraform plan (before API call)
+//   - apiRoutes: Routes parsed from BCM API response (contains computed UUIDs)
+//
+// Returns:
+//   - Merged list with user config + computed UUIDs
+func mergeStaticRoutesWithAPIResponse(ctx context.Context, originalRoutes types.List, apiRoutes types.List) types.List {
+	staticRouteObjectType := types.ObjectType{AttrTypes: map[string]attr.Type{
+		"uuid":                types.StringType,
+		"name":                types.StringType,
+		"ip":                  types.StringType,
+		"netmask_bits":        types.Int64Type,
+		"gateway":             types.StringType,
+		"metric":              types.Int64Type,
+		"network":             types.StringType,
+		"network_device_name": types.StringType,
+		"notes":               types.StringType,
+	}}
+
+	// If no original routes in plan (null), preserve null to avoid plan->state inconsistency
+	if originalRoutes.IsNull() {
+		tflog.Debug(ctx, "Original static routes is null, preserving null")
+		return types.ListNull(staticRouteObjectType)
+	}
+
+	// If original is unknown (during plan), return API response if available
+	if originalRoutes.IsUnknown() {
+		tflog.Debug(ctx, "Original static routes is unknown, using API response")
+		return apiRoutes
+	}
+
+	// If API returned null/unknown, preserve original (handles API quirks)
+	if apiRoutes.IsNull() || apiRoutes.IsUnknown() {
+		tflog.Debug(ctx, "API returned null/unknown static routes, preserving original")
+		return originalRoutes
+	}
+
+	// Extract route models from both lists
+	var origRoutes []StaticRouteModel
+	var apiRoutesList []StaticRouteModel
+
+	if diags := originalRoutes.ElementsAs(ctx, &origRoutes, false); diags.HasError() {
+		tflog.Warn(ctx, "Failed to parse original static routes, preserving as-is", map[string]interface{}{
+			"errors": diags.Errors(),
+		})
+		return originalRoutes
+	}
+	if diags := apiRoutes.ElementsAs(ctx, &apiRoutesList, false); diags.HasError() {
+		tflog.Warn(ctx, "Failed to parse API static routes, preserving original", map[string]interface{}{
+			"errors": diags.Errors(),
+		})
+		return originalRoutes
+	}
+
+	// Build lookup map: name -> API route (for efficient matching)
+	apiRoutesByName := make(map[string]StaticRouteModel)
+	for _, route := range apiRoutesList {
+		if !route.Name.IsNull() && !route.Name.IsUnknown() {
+			apiRoutesByName[route.Name.ValueString()] = route
+		}
+	}
+
+	// Merge: preserve user config fields + populate computed UUID from API
+	mergedRoutes := make([]StaticRouteModel, 0, len(origRoutes))
+	for _, origRoute := range origRoutes {
+		routeName := origRoute.Name.ValueString()
+		if _, found := apiRoutesByName[routeName]; found {
+			// Match found - preserve user config, use null for UUID to avoid inconsistency
+			// Note: UUID is populated on refresh, not immediately after create/update
+			// Convert Unknown to null (Unknown not allowed in state)
+			uuid := origRoute.UUID
+			if uuid.IsUnknown() {
+				uuid = types.StringNull()
+			}
+			mergedRoute := StaticRouteModel{
+				Name:              origRoute.Name,              // Preserve user value
+				IP:                origRoute.IP,                // Preserve user value
+				NetmaskBits:       origRoute.NetmaskBits,       // Preserve user value
+				Gateway:           origRoute.Gateway,           // Preserve user value
+				Metric:            origRoute.Metric,            // Preserve user value
+				Network:           origRoute.Network,           // Preserve user value
+				NetworkDeviceName: origRoute.NetworkDeviceName, // Preserve user value
+				Notes:             origRoute.Notes,             // Preserve user value
+				UUID:              uuid,                        // Use null for new routes (populated on refresh)
+			}
+			tflog.Debug(ctx, "Merged static route, UUID for state", map[string]interface{}{
+				"name":      routeName,
+				"uuid_null": uuid.IsNull(),
+			})
+			mergedRoutes = append(mergedRoutes, mergedRoute)
+		} else {
+			// Route not found in API response - use null UUID
+			// Convert Unknown to null (Unknown not allowed in state)
+			uuid := origRoute.UUID
+			if uuid.IsUnknown() {
+				uuid = types.StringNull()
+			}
+			mergedRoute := StaticRouteModel{
+				Name:              origRoute.Name,
+				IP:                origRoute.IP,
+				NetmaskBits:       origRoute.NetmaskBits,
+				Gateway:           origRoute.Gateway,
+				Metric:            origRoute.Metric,
+				Network:           origRoute.Network,
+				NetworkDeviceName: origRoute.NetworkDeviceName,
+				Notes:             origRoute.Notes,
+				UUID:              uuid, // Null for new routes (populated on refresh)
+			}
+			tflog.Debug(ctx, "Static route not found in API response, using null UUID", map[string]interface{}{
+				"name":      routeName,
+				"uuid_null": uuid.IsNull(),
+			})
+			mergedRoutes = append(mergedRoutes, mergedRoute)
+		}
+	}
+
+	// Convert back to types.List
+	routeValues := make([]attr.Value, 0, len(mergedRoutes))
+	for _, route := range mergedRoutes {
+		routeObj, diags := types.ObjectValue(staticRouteObjectType.AttrTypes, map[string]attr.Value{
+			"uuid":                route.UUID,
+			"name":                route.Name,
+			"ip":                  route.IP,
+			"netmask_bits":        route.NetmaskBits,
+			"gateway":             route.Gateway,
+			"metric":              route.Metric,
+			"network":             route.Network,
+			"network_device_name": route.NetworkDeviceName,
+			"notes":               route.Notes,
+		})
+		if !diags.HasError() {
+			routeValues = append(routeValues, routeObj)
+		}
+	}
+
+	result, _ := types.ListValue(staticRouteObjectType, routeValues)
+	tflog.Debug(ctx, "Static route merge complete", map[string]interface{}{
+		"original_count": len(origRoutes),
+		"api_count":      len(apiRoutesList),
+		"merged_count":   len(mergedRoutes),
+	})
+	return result
+}
+
+// mergeGPUSettingsWithAPIResponse merges GPU settings by converting Unknown UUIDs to null.
+// Since BCM doesn't persist GPU settings (returns empty array), we just need to ensure
+// no Unknown values remain in state.
+func mergeGPUSettingsWithAPIResponse(ctx context.Context, originalGPU types.List) types.List {
+	gpuSettingObjectType := types.ObjectType{AttrTypes: map[string]attr.Type{
+		"uuid":                             types.StringType,
+		"name":                             types.StringType,
+		"child_type":                       types.StringType,
+		"power_limit":                      types.Int64Type,
+		"ecc_mode":                         types.StringType,
+		"compute_mode":                     types.StringType,
+		"clock_sync_boost_mode":            types.StringType,
+		"multiprocessor_clock_speed":       types.Int64Type,
+		"memory_clock_speed":               types.Int64Type,
+		"mig_profiles":                     types.ListType{ElemType: types.StringType},
+		"workload_power_profile":           types.StringType,
+		"secondary_workload_power_profile": types.StringType,
+		"gpu_clock_level":                  types.Int64Type,
+		"memory_clock_level":               types.Int64Type,
+		"power_play":                       types.StringType,
+		"gpu_overdrive":                    types.Float64Type,
+		"memory_overdrive":                 types.Float64Type,
+		"fan_speed":                        types.Int64Type,
+		"minimal_gpu_clock":                types.Int64Type,
+		"minimal_memory_clock":             types.Int64Type,
+		"activity_threshold":               types.Float64Type,
+		"hysteresis_up":                    types.Float64Type,
+		"hysteresis_down":                  types.Float64Type,
+	}}
+
+	if originalGPU.IsNull() {
+		return types.ListNull(gpuSettingObjectType)
+	}
+
+	if originalGPU.IsUnknown() {
+		return types.ListNull(gpuSettingObjectType)
+	}
+
+	var gpuSettings []GPUSettingModel
+	if diags := originalGPU.ElementsAs(ctx, &gpuSettings, false); diags.HasError() {
+		return originalGPU
+	}
+
+	// Convert Unknown UUIDs to null (Unknown not allowed in state)
+	gpuValues := make([]attr.Value, 0, len(gpuSettings))
+	for _, gpu := range gpuSettings {
+		uuid := gpu.UUID
+		if uuid.IsUnknown() {
+			uuid = types.StringNull()
+		}
+
+		// Handle MIG profiles list
+		var migProfilesVal attr.Value = types.ListNull(types.StringType)
+		if !gpu.MigProfiles.IsNull() && !gpu.MigProfiles.IsUnknown() {
+			migProfilesVal = gpu.MigProfiles
+		}
+
+		gpuObj, diags := types.ObjectValue(gpuSettingObjectType.AttrTypes, map[string]attr.Value{
+			"uuid":                             uuid,
+			"name":                             gpu.Name,
+			"child_type":                       gpu.ChildType,
+			"power_limit":                      gpu.PowerLimit,
+			"ecc_mode":                         gpu.EccMode,
+			"compute_mode":                     gpu.ComputeMode,
+			"clock_sync_boost_mode":            gpu.ClockSyncBoostMode,
+			"multiprocessor_clock_speed":       gpu.MultiProcessorClockSpeed,
+			"memory_clock_speed":               gpu.MemoryClockSpeed,
+			"mig_profiles":                     migProfilesVal,
+			"workload_power_profile":           gpu.WorkloadPowerProfile,
+			"secondary_workload_power_profile": gpu.SecondaryWorkloadPowerProfile,
+			"gpu_clock_level":                  gpu.GpuClockLevel,
+			"memory_clock_level":               gpu.MemoryClockLevel,
+			"power_play":                       gpu.PowerPlay,
+			"gpu_overdrive":                    gpu.GpuOverDrive,
+			"memory_overdrive":                 gpu.MemoryOverDrive,
+			"fan_speed":                        gpu.FanSpeed,
+			"minimal_gpu_clock":                gpu.MinimalGpuClock,
+			"minimal_memory_clock":             gpu.MinimalMemoryClock,
+			"activity_threshold":               gpu.ActivityThreshold,
+			"hysteresis_up":                    gpu.HysteresisUp,
+			"hysteresis_down":                  gpu.HysteresisDown,
+		})
+		if !diags.HasError() {
+			gpuValues = append(gpuValues, gpuObj)
+		}
+	}
+
+	result, _ := types.ListValue(gpuSettingObjectType, gpuValues)
+	return result
+}
+
+// mergeFSExportsWithAPIResponse merges FSExport settings by preserving user config and
+// handling Unknown values (not allowed in state). Since BCM may not persist all FSExport
+// fields consistently, we preserve user config and convert Unknown to null.
+func mergeFSExportsWithAPIResponse(ctx context.Context, originalExports types.List, apiExports types.List) types.List {
+	fsExportObjectType := types.ObjectType{AttrTypes: map[string]attr.Type{
+		// Required fields
+		"name":    types.StringType,
+		"path":    types.StringType,
+		"network": types.StringType,
+		// Optional string fields
+		"hosts":         types.StringType,
+		"extra_options": types.StringType,
+		// Optional boolean fields
+		"allow_write": types.BoolType,
+		"async":       types.BoolType,
+		"root_squash": types.BoolType,
+		"all_squash":  types.BoolType,
+		"rdma":        types.BoolType,
+		"disabled":    types.BoolType,
+		"check_tree":  types.BoolType,
+		// Optional numeric fields
+		"anon_uid": types.Int64Type,
+		"anon_gid": types.Int64Type,
+		"fsid":     types.Int64Type,
+	}}
+
+	// If no original exports in plan (null), preserve null to avoid plan->state inconsistency
+	if originalExports.IsNull() {
+		tflog.Debug(ctx, "Original fsexports is null, preserving null")
+		return types.ListNull(fsExportObjectType)
+	}
+
+	// If original is unknown (during plan), return API response if available
+	if originalExports.IsUnknown() {
+		tflog.Debug(ctx, "Original fsexports is unknown, using API response")
+		if !apiExports.IsNull() && !apiExports.IsUnknown() {
+			return apiExports
+		}
+		return types.ListNull(fsExportObjectType)
+	}
+
+	// Extract export models from original plan
+	var origExports []FSExportModel
+	if diags := originalExports.ElementsAs(ctx, &origExports, false); diags.HasError() {
+		tflog.Warn(ctx, "Failed to parse original fsexports, preserving as-is", map[string]interface{}{
+			"errors": diags.Errors(),
+		})
+		return originalExports
+	}
+
+	// Build lookup map: name -> API export (for efficient matching)
+	apiExportsByName := make(map[string]FSExportModel)
+	if !apiExports.IsNull() && !apiExports.IsUnknown() {
+		var apiExportsList []FSExportModel
+		if diags := apiExports.ElementsAs(ctx, &apiExportsList, false); !diags.HasError() {
+			for _, export := range apiExportsList {
+				if !export.Name.IsNull() && !export.Name.IsUnknown() {
+					apiExportsByName[export.Name.ValueString()] = export
+				}
+			}
+		}
+	}
+
+	// Merge: preserve user config fields, convert Unknown to null
+	mergedExports := make([]FSExportModel, 0, len(origExports))
+	for _, origExport := range origExports {
+		// Use path as name if name is null/unknown/empty (backwards compatibility)
+		exportName := origExport.Name.ValueString()
+		if origExport.Name.IsNull() || origExport.Name.IsUnknown() || exportName == "" {
+			exportName = origExport.Path.ValueString()
+		}
+		// Determine the name to use in merged export (use path as default)
+		mergedName := origExport.Name
+		if mergedName.IsNull() || mergedName.IsUnknown() || mergedName.ValueString() == "" {
+			mergedName = types.StringValue(origExport.Path.ValueString())
+		}
+		if apiExport, found := apiExportsByName[exportName]; found {
+			// Match found - merge API values with user config
+			// For fields that user specified, preserve user value
+			// For computed/default values, use API response
+			mergedExport := FSExportModel{
+				Name:         mergedName,         // Use name (or default to path)
+				Path:         origExport.Path,    // Preserve user value
+				Network:      origExport.Network, // Preserve user value
+				Hosts:        mergeStringValue(origExport.Hosts, apiExport.Hosts),
+				ExtraOptions: mergeStringValue(origExport.ExtraOptions, apiExport.ExtraOptions),
+				AllowWrite:   mergeBoolValue(origExport.AllowWrite, apiExport.AllowWrite),
+				Async:        mergeBoolValue(origExport.Async, apiExport.Async),
+				RootSquash:   mergeBoolValue(origExport.RootSquash, apiExport.RootSquash),
+				AllSquash:    mergeBoolValue(origExport.AllSquash, apiExport.AllSquash),
+				RDMA:         mergeBoolValue(origExport.RDMA, apiExport.RDMA),
+				Disabled:     mergeBoolValue(origExport.Disabled, apiExport.Disabled),
+				CheckTree:    mergeBoolValue(origExport.CheckTree, apiExport.CheckTree),
+				AnonUID:      mergeInt64Value(origExport.AnonUID, apiExport.AnonUID),
+				AnonGID:      mergeInt64Value(origExport.AnonGID, apiExport.AnonGID),
+				FSID:         mergeInt64Value(origExport.FSID, apiExport.FSID),
+			}
+			tflog.Debug(ctx, "Merged fsexport with API response", map[string]interface{}{
+				"name": exportName,
+			})
+			mergedExports = append(mergedExports, mergedExport)
+		} else {
+			// Export not found in API response - preserve user config, convert Unknown to null
+			mergedExport := FSExportModel{
+				Name:         mergedName, // Use name (or default to path)
+				Path:         origExport.Path,
+				Network:      origExport.Network,
+				Hosts:        unknownToNull(origExport.Hosts),
+				ExtraOptions: unknownToNull(origExport.ExtraOptions),
+				AllowWrite:   unknownBoolToNull(origExport.AllowWrite),
+				Async:        unknownBoolToNull(origExport.Async),
+				RootSquash:   unknownBoolToNull(origExport.RootSquash),
+				AllSquash:    unknownBoolToNull(origExport.AllSquash),
+				RDMA:         unknownBoolToNull(origExport.RDMA),
+				Disabled:     unknownBoolToNull(origExport.Disabled),
+				CheckTree:    unknownBoolToNull(origExport.CheckTree),
+				AnonUID:      unknownInt64ToNull(origExport.AnonUID),
+				AnonGID:      unknownInt64ToNull(origExport.AnonGID),
+				FSID:         unknownInt64ToNull(origExport.FSID),
+			}
+			tflog.Debug(ctx, "FSExport not found in API response, preserving user config", map[string]interface{}{
+				"name": exportName,
+			})
+			mergedExports = append(mergedExports, mergedExport)
+		}
+	}
+
+	// Convert back to types.List
+	exportValues := make([]attr.Value, 0, len(mergedExports))
+	for _, export := range mergedExports {
+		exportObj, diags := types.ObjectValue(fsExportObjectType.AttrTypes, map[string]attr.Value{
+			"name":          export.Name,
+			"path":          export.Path,
+			"network":       export.Network,
+			"hosts":         export.Hosts,
+			"extra_options": export.ExtraOptions,
+			"allow_write":   export.AllowWrite,
+			"async":         export.Async,
+			"root_squash":   export.RootSquash,
+			"all_squash":    export.AllSquash,
+			"rdma":          export.RDMA,
+			"disabled":      export.Disabled,
+			"check_tree":    export.CheckTree,
+			"anon_uid":      export.AnonUID,
+			"anon_gid":      export.AnonGID,
+			"fsid":          export.FSID,
+		})
+		if !diags.HasError() {
+			exportValues = append(exportValues, exportObj)
+		}
+	}
+
+	result, _ := types.ListValue(fsExportObjectType, exportValues)
+	tflog.Debug(ctx, "FSExport merge complete", map[string]interface{}{
+		"original_count": len(origExports),
+		"api_count":      len(apiExportsByName),
+		"merged_count":   len(mergedExports),
+	})
+	return result
+}
+
+// mergeServicesWithAPIResponse merges Service settings by preserving user config and
+// handling Unknown values (not allowed in state). Since BCM may not persist all Service
+// fields consistently, we preserve user config and convert Unknown to null.
+func mergeServicesWithAPIResponse(ctx context.Context, originalServices types.List, apiServices types.List) types.List {
+	serviceObjectType := types.ObjectType{AttrTypes: map[string]attr.Type{
+		// Required fields
+		"name": types.StringType,
+		// Optional boolean fields
+		"monitored": types.BoolType,
+		"autostart": types.BoolType,
+		"managed":   types.BoolType,
+		// Optional string fields
+		"run_if":                types.StringType,
+		"sickness_check_script": types.StringType,
+		// Optional numeric fields
+		"sickness_check_script_timeout": types.Int64Type,
+		"sickness_check_interval":       types.Int64Type,
+		"script_timeout":                types.Int64Type,
+	}}
+
+	// If no original services in plan (null), preserve null to avoid plan->state inconsistency
+	if originalServices.IsNull() {
+		tflog.Debug(ctx, "Original services is null, preserving null")
+		return types.ListNull(serviceObjectType)
+	}
+
+	// If original is unknown (during plan), return API response if available
+	if originalServices.IsUnknown() {
+		tflog.Debug(ctx, "Original services is unknown, using API response")
+		if !apiServices.IsNull() && !apiServices.IsUnknown() {
+			return apiServices
+		}
+		return types.ListNull(serviceObjectType)
+	}
+
+	// Extract service models from original plan
+	var origServices []ServiceModel
+	if diags := originalServices.ElementsAs(ctx, &origServices, false); diags.HasError() {
+		tflog.Warn(ctx, "Failed to parse original services, preserving as-is", map[string]interface{}{
+			"errors": diags.Errors(),
+		})
+		return originalServices
+	}
+
+	// Build lookup map: name -> API service (for efficient matching)
+	apiServicesByName := make(map[string]ServiceModel)
+	if !apiServices.IsNull() && !apiServices.IsUnknown() {
+		var apiServicesList []ServiceModel
+		if diags := apiServices.ElementsAs(ctx, &apiServicesList, false); !diags.HasError() {
+			for _, service := range apiServicesList {
+				if !service.Name.IsNull() && !service.Name.IsUnknown() {
+					apiServicesByName[service.Name.ValueString()] = service
+				}
+			}
+		}
+	}
+
+	// Merge: preserve user config fields, convert Unknown to null
+	mergedServices := make([]ServiceModel, 0, len(origServices))
+	for _, origService := range origServices {
+		serviceName := origService.Name.ValueString()
+		if apiService, found := apiServicesByName[serviceName]; found {
+			// Match found - merge API values with user config
+			mergedService := ServiceModel{
+				Name:                       origService.Name, // Preserve user value
+				Monitored:                  mergeBoolValue(origService.Monitored, apiService.Monitored),
+				Autostart:                  mergeBoolValue(origService.Autostart, apiService.Autostart),
+				Managed:                    mergeBoolValue(origService.Managed, apiService.Managed),
+				RunIf:                      mergeStringValue(origService.RunIf, apiService.RunIf),
+				SicknessCheckScript:        mergeStringValue(origService.SicknessCheckScript, apiService.SicknessCheckScript),
+				SicknessCheckScriptTimeout: mergeInt64Value(origService.SicknessCheckScriptTimeout, apiService.SicknessCheckScriptTimeout),
+				SicknessCheckInterval:      mergeInt64Value(origService.SicknessCheckInterval, apiService.SicknessCheckInterval),
+				ScriptTimeout:              mergeInt64Value(origService.ScriptTimeout, apiService.ScriptTimeout),
+			}
+			tflog.Debug(ctx, "Merged service with API response", map[string]interface{}{
+				"name": serviceName,
+			})
+			mergedServices = append(mergedServices, mergedService)
+		} else {
+			// Service not found in API response - preserve user config, convert Unknown to null
+			mergedService := ServiceModel{
+				Name:                       origService.Name,
+				Monitored:                  unknownBoolToNull(origService.Monitored),
+				Autostart:                  unknownBoolToNull(origService.Autostart),
+				Managed:                    unknownBoolToNull(origService.Managed),
+				RunIf:                      unknownToNull(origService.RunIf),
+				SicknessCheckScript:        unknownToNull(origService.SicknessCheckScript),
+				SicknessCheckScriptTimeout: unknownInt64ToNull(origService.SicknessCheckScriptTimeout),
+				SicknessCheckInterval:      unknownInt64ToNull(origService.SicknessCheckInterval),
+				ScriptTimeout:              unknownInt64ToNull(origService.ScriptTimeout),
+			}
+			tflog.Debug(ctx, "Service not found in API response, preserving user config", map[string]interface{}{
+				"name": serviceName,
+			})
+			mergedServices = append(mergedServices, mergedService)
+		}
+	}
+
+	// Convert back to types.List
+	serviceValues := make([]attr.Value, 0, len(mergedServices))
+	for _, service := range mergedServices {
+		serviceObj, diags := types.ObjectValue(serviceObjectType.AttrTypes, map[string]attr.Value{
+			"name":                          service.Name,
+			"monitored":                     service.Monitored,
+			"autostart":                     service.Autostart,
+			"managed":                       service.Managed,
+			"run_if":                        service.RunIf,
+			"sickness_check_script":         service.SicknessCheckScript,
+			"sickness_check_script_timeout": service.SicknessCheckScriptTimeout,
+			"sickness_check_interval":       service.SicknessCheckInterval,
+			"script_timeout":                service.ScriptTimeout,
+		})
+		if !diags.HasError() {
+			serviceValues = append(serviceValues, serviceObj)
+		}
+	}
+
+	result, _ := types.ListValue(serviceObjectType, serviceValues)
+	tflog.Debug(ctx, "Service merge complete", map[string]interface{}{
+		"original_count": len(origServices),
+		"api_count":      len(apiServicesByName),
+		"merged_count":   len(mergedServices),
+	})
+	return result
+}
+
+// Helper functions for merging values (prefer user config, fallback to API)
+func mergeStringValue(userVal, apiVal types.String) types.String {
+	if userVal.IsUnknown() {
+		if apiVal.IsNull() || apiVal.IsUnknown() {
+			return types.StringNull()
+		}
+		return apiVal
+	}
+	return userVal
+}
+
+func mergeBoolValue(userVal, apiVal types.Bool) types.Bool {
+	if userVal.IsUnknown() {
+		if apiVal.IsNull() || apiVal.IsUnknown() {
+			return types.BoolNull()
+		}
+		return apiVal
+	}
+	return userVal
+}
+
+func mergeInt64Value(userVal, apiVal types.Int64) types.Int64 {
+	if userVal.IsUnknown() {
+		if apiVal.IsNull() || apiVal.IsUnknown() {
+			return types.Int64Null()
+		}
+		return apiVal
+	}
+	return userVal
+}
+
+func unknownToNull(val types.String) types.String {
+	if val.IsUnknown() {
+		return types.StringNull()
+	}
+	return val
+}
+
+func unknownBoolToNull(val types.Bool) types.Bool {
+	if val.IsUnknown() {
+		return types.BoolNull()
+	}
+	return val
+}
+
+func unknownInt64ToNull(val types.Int64) types.Int64 {
+	if val.IsUnknown() {
+		return types.Int64Null()
+	}
+	return val
+}
+
 // generateUUID creates a new UUID v4 string.
 func generateUUID() string {
 	return uuid.New().String()
+}
+
+// generateStaticRouteUUIDs generates UUIDs for any routes that don't have one.
+// This ensures the plan has UUIDs before buildAPIEntity and avoids "inconsistent result" errors.
+func generateStaticRouteUUIDs(ctx context.Context, routes types.List) types.List {
+	staticRouteObjectType := types.ObjectType{AttrTypes: map[string]attr.Type{
+		"uuid":                types.StringType,
+		"name":                types.StringType,
+		"ip":                  types.StringType,
+		"netmask_bits":        types.Int64Type,
+		"gateway":             types.StringType,
+		"metric":              types.Int64Type,
+		"network":             types.StringType,
+		"network_device_name": types.StringType,
+		"notes":               types.StringType,
+	}}
+
+	if routes.IsNull() || routes.IsUnknown() {
+		return routes
+	}
+
+	var routeModels []StaticRouteModel
+	if diags := routes.ElementsAs(ctx, &routeModels, false); diags.HasError() {
+		return routes
+	}
+
+	// Generate UUIDs for routes without them
+	modified := false
+	for i := range routeModels {
+		if routeModels[i].UUID.IsNull() || routeModels[i].UUID.IsUnknown() || routeModels[i].UUID.ValueString() == "" {
+			routeModels[i].UUID = types.StringValue(generateUUID())
+			modified = true
+			tflog.Debug(ctx, "Generated UUID for static route", map[string]interface{}{
+				"name": routeModels[i].Name.ValueString(),
+				"uuid": routeModels[i].UUID.ValueString(),
+			})
+		}
+	}
+
+	if !modified {
+		return routes
+	}
+
+	// Convert back to types.List
+	routeValues := make([]attr.Value, 0, len(routeModels))
+	for _, route := range routeModels {
+		routeObj, diags := types.ObjectValue(staticRouteObjectType.AttrTypes, map[string]attr.Value{
+			"uuid":                route.UUID,
+			"name":                route.Name,
+			"ip":                  route.IP,
+			"netmask_bits":        route.NetmaskBits,
+			"gateway":             route.Gateway,
+			"metric":              route.Metric,
+			"network":             route.Network,
+			"network_device_name": route.NetworkDeviceName,
+			"notes":               route.Notes,
+		})
+		if !diags.HasError() {
+			routeValues = append(routeValues, routeObj)
+		}
+	}
+
+	result, _ := types.ListValue(staticRouteObjectType, routeValues)
+	return result
 }
 
 // mergeFSMountsWithAPIResponse merges user-configured fsmount attributes with BCM API-computed values.
