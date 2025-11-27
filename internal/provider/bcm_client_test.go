@@ -675,14 +675,15 @@ func TestValidateEntity_ErrorResponse(t *testing.T) {
 			}
 		} else {
 			// Validation error with ERROR severity
+			// BCM API returns lowercase field names
 			w.WriteHeader(http.StatusOK)
 			validationResponse := `[{
 				"baseType": "Validation",
-				"Field": "SOLSpeed",
-				"Message": "SOL speed must be one of: 9600, 19200, 38400, 57600, 115200",
-				"ErrorCode": "BAD_VALUE",
-				"Severity": "ERROR",
-				"EntityUUID": ""
+				"field": "SOLSpeed",
+				"message": "SOL speed must be one of: 9600, 19200, 38400, 57600, 115200",
+				"error_code": "BAD_VALUE",
+				"severity": "ERROR",
+				"ref_entity_uuid": ""
 			}]`
 			if _, err := w.Write([]byte(validationResponse)); err != nil {
 				t.Logf("Failed to write validation response: %v", err)
@@ -735,14 +736,15 @@ func TestValidateEntity_WarningResponse(t *testing.T) {
 			}
 		} else {
 			// Validation warning with WARNING severity
+			// BCM API returns lowercase field names
 			w.WriteHeader(http.StatusOK)
 			validationResponse := `[{
 				"baseType": "Validation",
-				"Field": "path",
-				"Message": "The software image path does not exist on the server",
-				"ErrorCode": "WARNING",
-				"Severity": "WARNING",
-				"EntityUUID": ""
+				"field": "path",
+				"message": "The software image path does not exist on the server",
+				"error_code": "WARNING",
+				"severity": "WARNING",
+				"ref_entity_uuid": ""
 			}]`
 			if _, err := w.Write([]byte(validationResponse)); err != nil {
 				t.Logf("Failed to write validation response: %v", err)
@@ -795,23 +797,24 @@ func TestValidateEntity_ZeroUUIDFiltering(t *testing.T) {
 			}
 		} else {
 			// Validation response with Zero UUID error (expected during CREATE)
+			// BCM API returns lowercase field names
 			w.WriteHeader(http.StatusOK)
 			validationResponse := `[
 				{
 					"baseType": "Validation",
-					"Field": "uuid",
-					"Message": "Zero UUID not allowed",
-					"ErrorCode": "NOT_NULL",
-					"Severity": "ERROR",
-					"EntityUUID": ""
+					"field": "uuid",
+					"message": "Zero UUID not allowed",
+					"error_code": "NOT_NULL",
+					"severity": "ERROR",
+					"ref_entity_uuid": ""
 				},
 				{
 					"baseType": "Validation",
-					"Field": "path",
-					"Message": "Path is required",
-					"ErrorCode": "NOT_NULL",
-					"Severity": "ERROR",
-					"EntityUUID": ""
+					"field": "path",
+					"message": "Path is required",
+					"error_code": "NOT_NULL",
+					"severity": "ERROR",
+					"ref_entity_uuid": ""
 				}
 			]`
 			if _, err := w.Write([]byte(validationResponse)); err != nil {
