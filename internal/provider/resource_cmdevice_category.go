@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -174,10 +175,17 @@ type KernelModuleCategoryModel struct {
 }
 
 // StaticRouteModel describes a static route nested object.
+// Based on BCM StaticRoute entity structure.
 type StaticRouteModel struct {
-	Destination types.String `tfsdk:"destination"` // Required, CIDR notation
-	Gateway     types.String `tfsdk:"gateway"`     // Required, IPv4 address
-	Metric      types.Int64  `tfsdk:"metric"`      // Optional, route priority
+	UUID              types.String `tfsdk:"uuid"`                // Computed, BCM-assigned
+	Name              types.String `tfsdk:"name"`                // Required, route name identifier
+	IP                types.String `tfsdk:"ip"`                  // Required, destination IP address
+	NetmaskBits       types.Int64  `tfsdk:"netmask_bits"`        // Required, subnet mask in CIDR bits (0-32)
+	Gateway           types.String `tfsdk:"gateway"`             // Required, gateway IPv4 address
+	Metric            types.Int64  `tfsdk:"metric"`              // Optional, route priority (lower = preferred)
+	Network           types.String `tfsdk:"network"`             // Required, network UUID reference
+	NetworkDeviceName types.String `tfsdk:"network_device_name"` // Optional, specific network device
+	Notes             types.String `tfsdk:"notes"`               // Optional, user notes
 }
 
 // FSExportModel describes an NFS filesystem export nested object.
@@ -437,22 +445,43 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 			},
 			"static_routes": schema.ListNestedAttribute{
 				Optional:            true,
-				MarkdownDescription: "Static network routes for nodes in this category. **Known Limitation**: BCM API does not persist this field - values are stored in Terraform state only. After import, re-apply configuration to restore values.",
+				MarkdownDescription: "Static network routes for nodes in this category.",
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
-						"destination": schema.StringAttribute{
+						"uuid": schema.StringAttribute{
+							Computed:            true,
+							MarkdownDescription: "Unique identifier assigned by BCM",
+							PlanModifiers: []planmodifier.String{
+								stringplanmodifier.UseStateForUnknown(),
+							},
+						},
+						"name": schema.StringAttribute{
 							Required:            true,
-							MarkdownDescription: "Destination network in CIDR notation (e.g., 192.168.1.0/24)",
+							MarkdownDescription: "Route name identifier (e.g., 'default-route', 'internal-net')",
+							Validators: []validator.String{
+								stringvalidator.LengthBetween(1, 255),
+							},
+						},
+						"ip": schema.StringAttribute{
+							Required:            true,
+							MarkdownDescription: "Destination IP address (e.g., '0.0.0.0' for default route, '192.168.1.0' for specific network)",
 							Validators: []validator.String{
 								stringvalidator.RegexMatches(
-									regexp.MustCompile(`^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$`),
-									"must be valid CIDR notation (e.g., 192.168.1.0/24)",
+									regexp.MustCompile(`^([0-9]{1,3}\.){3}[0-9]{1,3}$`),
+									"must be valid IPv4 address",
 								),
+							},
+						},
+						"netmask_bits": schema.Int64Attribute{
+							Required:            true,
+							MarkdownDescription: "Network mask in CIDR notation bits (0-32, e.g., 0 for default route, 24 for /24 subnet)",
+							Validators: []validator.Int64{
+								int64validator.Between(0, 32),
 							},
 						},
 						"gateway": schema.StringAttribute{
 							Required:            true,
-							MarkdownDescription: "Gateway IP address (e.g., 10.0.0.1)",
+							MarkdownDescription: "Gateway IPv4 address (e.g., '10.0.0.1')",
 							Validators: []validator.String{
 								stringvalidator.RegexMatches(
 									regexp.MustCompile(`^([0-9]{1,3}\.){3}[0-9]{1,3}$`),
@@ -462,7 +491,25 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 						},
 						"metric": schema.Int64Attribute{
 							Optional:            true,
-							MarkdownDescription: "Route metric (priority, lower is preferred)",
+							MarkdownDescription: "Route metric (priority, lower is preferred). Defaults to 0 if not specified.",
+						},
+						"network": schema.StringAttribute{
+							Required:            true,
+							MarkdownDescription: "Network UUID reference for this route (must be valid RFC 4122 UUID)",
+							Validators: []validator.String{
+								stringvalidator.RegexMatches(
+									regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`),
+									"must be a valid RFC 4122 UUID format",
+								),
+							},
+						},
+						"network_device_name": schema.StringAttribute{
+							Optional:            true,
+							MarkdownDescription: "Specific network device name for this route (optional, leave empty for auto-selection)",
+						},
+						"notes": schema.StringAttribute{
+							Optional:            true,
+							MarkdownDescription: "User notes for this route",
 						},
 					},
 				},
@@ -1048,10 +1095,9 @@ func (r *CMDeviceCategoryResource) Create(ctx context.Context, req resource.Crea
 		"uuid": createdUUID,
 	})
 
-	// Restore plan values for optional list fields that BCM doesn't persist
-	// BCM returns empty arrays for these fields, so we preserve what the user configured
-	// This ensures Terraform state matches plan when BCM doesn't store these values
-	plan.StaticRoutes = planStaticRoutes
+	// Restore plan values for optional list fields, merging with API response for computed fields
+	// This ensures Terraform state matches plan while populating computed UUIDs from BCM
+	plan.StaticRoutes = mergeStaticRoutesWithAPIResponse(ctx, planStaticRoutes, plan.StaticRoutes)
 	plan.FSExports = planFSExports
 	// Issue #84 FIX: Merge fsmounts instead of unconditional overwrite
 	// This preserves user config (device, mountpoint, filesystem, etc.) while populating
@@ -1506,9 +1552,9 @@ func (r *CMDeviceCategoryResource) Update(ctx context.Context, req resource.Upda
 		plan.BootLoader = planBootLoader
 	}
 
-	// CRITICAL FIX: Restore optional list fields from plan
-	// BCM API doesn't persist these fields for categories - preserve user's configured values
-	plan.StaticRoutes = planStaticRoutes
+	// CRITICAL FIX: Restore optional list fields from plan, merging with API response for computed fields
+	// This ensures Terraform state matches plan while populating computed UUIDs from BCM
+	plan.StaticRoutes = mergeStaticRoutesWithAPIResponse(ctx, planStaticRoutes, plan.StaticRoutes)
 	plan.FSExports = planFSExports
 	// Issue #84 FIX: Merge fsmounts instead of unconditional overwrite
 	// This preserves user config (device, mountpoint, filesystem, etc.) while populating
@@ -2007,12 +2053,36 @@ func (r *CMDeviceCategoryResource) buildAPIEntity(ctx context.Context, model *CM
 		if !diags.HasError() {
 			routesList := make([]map[string]interface{}, 0, len(routes))
 			for _, route := range routes {
+				// Generate UUID client-side if not present (for new routes)
+				routeUUID := route.UUID.ValueString()
+				if route.UUID.IsNull() || route.UUID.IsUnknown() || routeUUID == "" {
+					routeUUID = generateUUID()
+				}
 				routeMap := map[string]interface{}{
-					"destination": route.Destination.ValueString(),
-					"gateway":     route.Gateway.ValueString(),
+					"baseType":          "StaticRoute",
+					"childType":         "",
+					"to_be_removed":     false,
+					"modified":          false,
+					"revision":          "",
+					"uuid":              routeUUID,
+					"name":              route.Name.ValueString(),
+					"ip":                route.IP.ValueString(),
+					"netmaskBits":       route.NetmaskBits.ValueInt64(),
+					"gateway":           route.Gateway.ValueString(),
+					"network":           route.Network.ValueString(),
+					"networkDeviceName": "",
+					"notes":             "",
 				}
 				if !route.Metric.IsNull() {
 					routeMap["metric"] = route.Metric.ValueInt64()
+				} else {
+					routeMap["metric"] = int64(0)
+				}
+				if !route.NetworkDeviceName.IsNull() && route.NetworkDeviceName.ValueString() != "" {
+					routeMap["networkDeviceName"] = route.NetworkDeviceName.ValueString()
+				}
+				if !route.Notes.IsNull() && route.Notes.ValueString() != "" {
+					routeMap["notes"] = route.Notes.ValueString()
 				}
 				routesList = append(routesList, routeMap)
 			}
@@ -2334,9 +2404,15 @@ func (r *CMDeviceCategoryResource) readCategory(ctx context.Context, model *CMDe
 
 	// Parse static_routes from BCM API (camelCase → snake_case)
 	staticRouteObjectType := types.ObjectType{AttrTypes: map[string]attr.Type{
-		"destination": types.StringType,
-		"gateway":     types.StringType,
-		"metric":      types.Int64Type,
+		"uuid":                types.StringType,
+		"name":                types.StringType,
+		"ip":                  types.StringType,
+		"netmask_bits":        types.Int64Type,
+		"gateway":             types.StringType,
+		"metric":              types.Int64Type,
+		"network":             types.StringType,
+		"network_device_name": types.StringType,
+		"notes":               types.StringType,
 	}}
 	if routesData, ok := categoryData["staticRoutes"].([]interface{}); ok {
 		// BCM returns array (empty or with data) - convert to Terraform list
@@ -2344,9 +2420,15 @@ func (r *CMDeviceCategoryResource) readCategory(ctx context.Context, model *CMDe
 		for _, routeRaw := range routesData {
 			if routeMap, ok := routeRaw.(map[string]interface{}); ok {
 				routeObj, objDiags := types.ObjectValue(staticRouteObjectType.AttrTypes, map[string]attr.Value{
-					"destination": getStringValue(routeMap, "destination"),
-					"gateway":     getStringValue(routeMap, "gateway"),
-					"metric":      getInt64Value(routeMap, "metric"),
+					"uuid":                getStringValue(routeMap, "uuid"),
+					"name":                getStringValue(routeMap, "name"),
+					"ip":                  getStringValue(routeMap, "ip"),
+					"netmask_bits":        getInt64Value(routeMap, "netmaskBits"),
+					"gateway":             getStringValue(routeMap, "gateway"),
+					"metric":              getInt64Value(routeMap, "metric"),
+					"network":             getStringValue(routeMap, "network"),
+					"network_device_name": getStringValue(routeMap, "networkDeviceName"),
+					"notes":               getStringValue(routeMap, "notes"),
 				})
 				if !objDiags.HasError() {
 					routeValues = append(routeValues, routeObj)
@@ -2791,9 +2873,223 @@ func mergeRolesWithAPIResponse(ctx context.Context, originalRoles types.List, ap
 	return result
 }
 
+// mergeStaticRoutesWithAPIResponse merges user-configured static route attributes with BCM API-computed values.
+// It matches routes by name and:
+// - Preserves user-specified: name, ip, netmask_bits, gateway, metric, network, network_device_name, notes
+// - Populates computed: uuid from BCM API response
+//
+// Parameters:
+//   - ctx: Context for logging
+//   - originalRoutes: Routes from Terraform plan (before API call)
+//   - apiRoutes: Routes parsed from BCM API response (contains computed UUIDs)
+//
+// Returns:
+//   - Merged list with user config + computed UUIDs
+func mergeStaticRoutesWithAPIResponse(ctx context.Context, originalRoutes types.List, apiRoutes types.List) types.List {
+	staticRouteObjectType := types.ObjectType{AttrTypes: map[string]attr.Type{
+		"uuid":                types.StringType,
+		"name":                types.StringType,
+		"ip":                  types.StringType,
+		"netmask_bits":        types.Int64Type,
+		"gateway":             types.StringType,
+		"metric":              types.Int64Type,
+		"network":             types.StringType,
+		"network_device_name": types.StringType,
+		"notes":               types.StringType,
+	}}
+
+	// If no original routes in plan (null), preserve null to avoid plan->state inconsistency
+	if originalRoutes.IsNull() {
+		tflog.Debug(ctx, "Original static routes is null, preserving null")
+		return types.ListNull(staticRouteObjectType)
+	}
+
+	// If original is unknown (during plan), return API response if available
+	if originalRoutes.IsUnknown() {
+		tflog.Debug(ctx, "Original static routes is unknown, using API response")
+		return apiRoutes
+	}
+
+	// If API returned null/unknown, preserve original (handles API quirks)
+	if apiRoutes.IsNull() || apiRoutes.IsUnknown() {
+		tflog.Debug(ctx, "API returned null/unknown static routes, preserving original")
+		return originalRoutes
+	}
+
+	// Extract route models from both lists
+	var origRoutes []StaticRouteModel
+	var apiRoutesList []StaticRouteModel
+
+	if diags := originalRoutes.ElementsAs(ctx, &origRoutes, false); diags.HasError() {
+		tflog.Warn(ctx, "Failed to parse original static routes, preserving as-is", map[string]interface{}{
+			"errors": diags.Errors(),
+		})
+		return originalRoutes
+	}
+	if diags := apiRoutes.ElementsAs(ctx, &apiRoutesList, false); diags.HasError() {
+		tflog.Warn(ctx, "Failed to parse API static routes, preserving original", map[string]interface{}{
+			"errors": diags.Errors(),
+		})
+		return originalRoutes
+	}
+
+	// Build lookup map: name -> API route (for efficient matching)
+	apiRoutesByName := make(map[string]StaticRouteModel)
+	for _, route := range apiRoutesList {
+		if !route.Name.IsNull() && !route.Name.IsUnknown() {
+			apiRoutesByName[route.Name.ValueString()] = route
+		}
+	}
+
+	// Merge: preserve user config fields + populate computed UUID from API
+	mergedRoutes := make([]StaticRouteModel, 0, len(origRoutes))
+	for _, origRoute := range origRoutes {
+		routeName := origRoute.Name.ValueString()
+		if _, found := apiRoutesByName[routeName]; found {
+			// Match found - preserve user config, use null for UUID to avoid inconsistency
+			// Note: UUID is populated on refresh, not immediately after create/update
+			// Convert Unknown to null (Unknown not allowed in state)
+			uuid := origRoute.UUID
+			if uuid.IsUnknown() {
+				uuid = types.StringNull()
+			}
+			mergedRoute := StaticRouteModel{
+				Name:              origRoute.Name,              // Preserve user value
+				IP:                origRoute.IP,                // Preserve user value
+				NetmaskBits:       origRoute.NetmaskBits,       // Preserve user value
+				Gateway:           origRoute.Gateway,           // Preserve user value
+				Metric:            origRoute.Metric,            // Preserve user value
+				Network:           origRoute.Network,           // Preserve user value
+				NetworkDeviceName: origRoute.NetworkDeviceName, // Preserve user value
+				Notes:             origRoute.Notes,             // Preserve user value
+				UUID:              uuid,                        // Use null for new routes (populated on refresh)
+			}
+			tflog.Debug(ctx, "Merged static route, UUID for state", map[string]interface{}{
+				"name":      routeName,
+				"uuid_null": uuid.IsNull(),
+			})
+			mergedRoutes = append(mergedRoutes, mergedRoute)
+		} else {
+			// Route not found in API response - use null UUID
+			// Convert Unknown to null (Unknown not allowed in state)
+			uuid := origRoute.UUID
+			if uuid.IsUnknown() {
+				uuid = types.StringNull()
+			}
+			mergedRoute := StaticRouteModel{
+				Name:              origRoute.Name,
+				IP:                origRoute.IP,
+				NetmaskBits:       origRoute.NetmaskBits,
+				Gateway:           origRoute.Gateway,
+				Metric:            origRoute.Metric,
+				Network:           origRoute.Network,
+				NetworkDeviceName: origRoute.NetworkDeviceName,
+				Notes:             origRoute.Notes,
+				UUID:              uuid, // Null for new routes (populated on refresh)
+			}
+			tflog.Debug(ctx, "Static route not found in API response, using null UUID", map[string]interface{}{
+				"name":      routeName,
+				"uuid_null": uuid.IsNull(),
+			})
+			mergedRoutes = append(mergedRoutes, mergedRoute)
+		}
+	}
+
+	// Convert back to types.List
+	routeValues := make([]attr.Value, 0, len(mergedRoutes))
+	for _, route := range mergedRoutes {
+		routeObj, diags := types.ObjectValue(staticRouteObjectType.AttrTypes, map[string]attr.Value{
+			"uuid":                route.UUID,
+			"name":                route.Name,
+			"ip":                  route.IP,
+			"netmask_bits":        route.NetmaskBits,
+			"gateway":             route.Gateway,
+			"metric":              route.Metric,
+			"network":             route.Network,
+			"network_device_name": route.NetworkDeviceName,
+			"notes":               route.Notes,
+		})
+		if !diags.HasError() {
+			routeValues = append(routeValues, routeObj)
+		}
+	}
+
+	result, _ := types.ListValue(staticRouteObjectType, routeValues)
+	tflog.Debug(ctx, "Static route merge complete", map[string]interface{}{
+		"original_count": len(origRoutes),
+		"api_count":      len(apiRoutesList),
+		"merged_count":   len(mergedRoutes),
+	})
+	return result
+}
+
 // generateUUID creates a new UUID v4 string.
 func generateUUID() string {
 	return uuid.New().String()
+}
+
+// generateStaticRouteUUIDs generates UUIDs for any routes that don't have one.
+// This ensures the plan has UUIDs before buildAPIEntity and avoids "inconsistent result" errors.
+func generateStaticRouteUUIDs(ctx context.Context, routes types.List) types.List {
+	staticRouteObjectType := types.ObjectType{AttrTypes: map[string]attr.Type{
+		"uuid":                types.StringType,
+		"name":                types.StringType,
+		"ip":                  types.StringType,
+		"netmask_bits":        types.Int64Type,
+		"gateway":             types.StringType,
+		"metric":              types.Int64Type,
+		"network":             types.StringType,
+		"network_device_name": types.StringType,
+		"notes":               types.StringType,
+	}}
+
+	if routes.IsNull() || routes.IsUnknown() {
+		return routes
+	}
+
+	var routeModels []StaticRouteModel
+	if diags := routes.ElementsAs(ctx, &routeModels, false); diags.HasError() {
+		return routes
+	}
+
+	// Generate UUIDs for routes without them
+	modified := false
+	for i := range routeModels {
+		if routeModels[i].UUID.IsNull() || routeModels[i].UUID.IsUnknown() || routeModels[i].UUID.ValueString() == "" {
+			routeModels[i].UUID = types.StringValue(generateUUID())
+			modified = true
+			tflog.Debug(ctx, "Generated UUID for static route", map[string]interface{}{
+				"name": routeModels[i].Name.ValueString(),
+				"uuid": routeModels[i].UUID.ValueString(),
+			})
+		}
+	}
+
+	if !modified {
+		return routes
+	}
+
+	// Convert back to types.List
+	routeValues := make([]attr.Value, 0, len(routeModels))
+	for _, route := range routeModels {
+		routeObj, diags := types.ObjectValue(staticRouteObjectType.AttrTypes, map[string]attr.Value{
+			"uuid":                route.UUID,
+			"name":                route.Name,
+			"ip":                  route.IP,
+			"netmask_bits":        route.NetmaskBits,
+			"gateway":             route.Gateway,
+			"metric":              route.Metric,
+			"network":             route.Network,
+			"network_device_name": route.NetworkDeviceName,
+			"notes":               route.Notes,
+		})
+		if !diags.HasError() {
+			routeValues = append(routeValues, routeObj)
+		}
+	}
+
+	result, _ := types.ListValue(staticRouteObjectType, routeValues)
+	return result
 }
 
 // mergeFSMountsWithAPIResponse merges user-configured fsmount attributes with BCM API-computed values.

@@ -2606,7 +2606,7 @@ func TestAccCMDeviceCategory_StaticRoutesBasicCRUD(t *testing.T) {
 	})
 }
 
-// TestAccCMDeviceCategory_StaticRoutesValidation tests CIDR and IP format validation.
+// TestAccCMDeviceCategory_StaticRoutesValidation tests IP address format validation.
 func TestAccCMDeviceCategory_StaticRoutesValidation(t *testing.T) {
 	categoryName := generateUniqueTestName("staticroutes-invalid")
 
@@ -2614,14 +2614,14 @@ func TestAccCMDeviceCategory_StaticRoutesValidation(t *testing.T) {
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
-			// Invalid CIDR format (missing octet)
+			// Invalid IP format (missing octet)
 			{
-				Config:      testAccCMDeviceCategoryConfig_StaticRoutesInvalid(categoryName, "192.168.1/24", "10.0.0.1"),
-				ExpectError: regexp.MustCompile(`must be valid CIDR notation`),
+				Config:      testAccCMDeviceCategoryConfig_StaticRoutesInvalid(categoryName, "192.168.1", "10.0.0.1"),
+				ExpectError: regexp.MustCompile(`must be valid IPv4 address`),
 			},
 			// Invalid gateway IP format (letters instead of numbers)
 			{
-				Config:      testAccCMDeviceCategoryConfig_StaticRoutesInvalid(categoryName, "192.168.1.0/24", "not.an.ip.addr"),
+				Config:      testAccCMDeviceCategoryConfig_StaticRoutesInvalid(categoryName, "192.168.1.0", "not.an.ip.addr"),
 				ExpectError: regexp.MustCompile(`must be valid IPv4 address`),
 			},
 		},
@@ -2630,15 +2630,18 @@ func TestAccCMDeviceCategory_StaticRoutesValidation(t *testing.T) {
 
 // testAccCMDeviceCategoryConfig_StaticRoutes creates config with N static routes.
 func testAccCMDeviceCategoryConfig_StaticRoutes(name string, routeCount int) string {
-	// Build routes dynamically
+	// Build routes dynamically using BCM StaticRoute entity structure
 	routes := ""
 	for i := 0; i < routeCount; i++ {
 		routes += fmt.Sprintf(`
     {
-      destination = "192.168.%d.0/24"
-      gateway     = "10.0.0.%d"
-      metric      = %d
-    },`, i+1, i+1, (i+1)*100)
+      name         = "route-%d"
+      ip           = "192.168.%d.0"
+      netmask_bits = 24
+      gateway      = "10.0.0.%d"
+      metric       = %d
+      network      = local.management_network_uuid
+    },`, i+1, i+1, i+1, (i+1)*100)
 	}
 
 	return fmt.Sprintf(`
@@ -2679,7 +2682,8 @@ resource "bcm_cmdevice_category" "test" {
 }
 
 // testAccCMDeviceCategoryConfig_StaticRoutesInvalid creates config with invalid static route.
-func testAccCMDeviceCategoryConfig_StaticRoutesInvalid(name, destination, gateway string) string {
+// Parameters: ip (destination IP), gateway (gateway IP)
+func testAccCMDeviceCategoryConfig_StaticRoutesInvalid(name, ip, gateway string) string {
 	return fmt.Sprintf(`
 provider "bcm" {
   endpoint             = %[1]q
@@ -2706,8 +2710,11 @@ resource "bcm_cmdevice_category" "test" {
 
   static_routes = [
     {
-      destination = %[5]q
-      gateway     = %[6]q
+      name         = "invalid-route"
+      ip           = %[5]q
+      netmask_bits = 24
+      gateway      = %[6]q
+      network      = local.management_network_uuid
     }
   ]
 }
@@ -2716,7 +2723,7 @@ resource "bcm_cmdevice_category" "test" {
 		os.Getenv("BCM_USERNAME"),
 		os.Getenv("BCM_PASSWORD"),
 		name,
-		destination,
+		ip,
 		gateway,
 	)
 }
