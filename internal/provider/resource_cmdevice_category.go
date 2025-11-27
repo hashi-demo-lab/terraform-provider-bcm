@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/hashicorp/terraform-plugin-framework-validators/float64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
@@ -207,10 +208,36 @@ type CategoryRoleModel struct {
 }
 
 // GPUSettingModel describes a GPU hardware configuration nested object.
+// Supports both NvidiaGPUSettings and AMDGPUSettings based on child_type.
 type GPUSettingModel struct {
-	DeviceID    types.String `tfsdk:"device_id"`    // Required, GPU device ID
-	Model       types.String `tfsdk:"model"`        // Optional, GPU model name
-	ComputeMode types.String `tfsdk:"compute_mode"` // Optional, compute mode
+	// Base GPUSettings fields (common to all types)
+	UUID      types.String `tfsdk:"uuid"`       // Computed, BCM-assigned UUID
+	Name      types.String `tfsdk:"name"`       // Required, GPU range (e.g., "0", "0-3")
+	ChildType types.String `tfsdk:"child_type"` // Required, "nvidia" or "amd"
+
+	// NvidiaGPUSettings fields
+	PowerLimit                    types.Int64  `tfsdk:"power_limit"`                       // Power limit in Watts
+	EccMode                       types.String `tfsdk:"ecc_mode"`                          // ECC mode: DISABLED, ENABLED, NONE
+	ComputeMode                   types.String `tfsdk:"compute_mode"`                      // Compute mode
+	ClockSyncBoostMode            types.String `tfsdk:"clock_sync_boost_mode"`             // Clock sync boost mode
+	MultiProcessorClockSpeed      types.Int64  `tfsdk:"multiprocessor_clock_speed"`        // MP clock speed (Hz)
+	MemoryClockSpeed              types.Int64  `tfsdk:"memory_clock_speed"`                // Memory clock speed (Hz)
+	MigProfiles                   types.List   `tfsdk:"mig_profiles"`                      // MIG profiles (list of strings)
+	WorkloadPowerProfile          types.String `tfsdk:"workload_power_profile"`            // Workload power profile
+	SecondaryWorkloadPowerProfile types.String `tfsdk:"secondary_workload_power_profile"`  // Secondary workload power profile
+
+	// AMDGPUSettings fields
+	GpuClockLevel      types.Int64   `tfsdk:"gpu_clock_level"`      // GPU clock level (0-7)
+	MemoryClockLevel   types.Int64   `tfsdk:"memory_clock_level"`   // Memory clock level (0-3)
+	PowerPlay          types.String  `tfsdk:"power_play"`           // Power play mode
+	GpuOverDrive       types.Float64 `tfsdk:"gpu_overdrive"`        // GPU overdrive percentage
+	MemoryOverDrive    types.Float64 `tfsdk:"memory_overdrive"`     // Memory overdrive percentage
+	FanSpeed           types.Int64   `tfsdk:"fan_speed"`            // Fan speed (0-255)
+	MinimalGpuClock    types.Int64   `tfsdk:"minimal_gpu_clock"`    // Minimum GPU clock (Hz)
+	MinimalMemoryClock types.Int64   `tfsdk:"minimal_memory_clock"` // Minimum memory clock (Hz)
+	ActivityThreshold  types.Float64 `tfsdk:"activity_threshold"`   // Activity threshold percentage
+	HysteresisUp       types.Float64 `tfsdk:"hysteresis_up"`        // Hysteresis up delay (seconds)
+	HysteresisDown     types.Float64 `tfsdk:"hysteresis_down"`      // Hysteresis down delay (seconds)
 }
 
 // ServiceModel describes a service configuration nested object.
@@ -685,20 +712,128 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 			},
 			"gpu_settings": schema.ListNestedAttribute{
 				Optional:            true,
-				MarkdownDescription: "GPU hardware configuration for nodes in this category. **Known Limitation**: BCM API does not persist this field - values are stored in Terraform state only. After import, re-apply configuration to restore values.",
+				MarkdownDescription: "GPU hardware configuration for nodes in this category. Supports Nvidia and AMD GPUs with vendor-specific settings. **Known Limitation**: BCM API does not persist this field - values are stored in Terraform state only. After import, re-apply configuration to restore values.",
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
-						"device_id": schema.StringAttribute{
-							Required:            true,
-							MarkdownDescription: "GPU device ID (e.g., 0, 1, 2)",
+						// Base GPUSettings fields
+						"uuid": schema.StringAttribute{
+							Computed:            true,
+							MarkdownDescription: "BCM-assigned UUID for this GPU settings entry.",
 						},
-						"model": schema.StringAttribute{
+						"name": schema.StringAttribute{
+							Required:            true,
+							MarkdownDescription: "GPU range for which these settings apply (e.g., '0', '0-3', '0,1,2').",
+						},
+						"child_type": schema.StringAttribute{
+							Required:            true,
+							MarkdownDescription: "GPU vendor type: 'nvidia' or 'amd'.",
+							Validators: []validator.String{
+								stringvalidator.OneOf("nvidia", "amd"),
+							},
+						},
+						// NvidiaGPUSettings fields
+						"power_limit": schema.Int64Attribute{
 							Optional:            true,
-							MarkdownDescription: "GPU model name (e.g., Tesla V100, A100)",
+							MarkdownDescription: "Power limit in Watts (Nvidia only).",
+						},
+						"ecc_mode": schema.StringAttribute{
+							Optional:            true,
+							MarkdownDescription: "ECC mode: DISABLED, ENABLED, NONE (Nvidia only).",
+							Validators: []validator.String{
+								stringvalidator.OneOf("DISABLED", "ENABLED", "NONE"),
+							},
 						},
 						"compute_mode": schema.StringAttribute{
 							Optional:            true,
-							MarkdownDescription: "Compute mode (default, exclusive, prohibited)",
+							MarkdownDescription: "Compute mode (Nvidia only).",
+						},
+						"clock_sync_boost_mode": schema.StringAttribute{
+							Optional:            true,
+							MarkdownDescription: "Clock sync boost mode among GPUs in group (Nvidia only).",
+						},
+						"multiprocessor_clock_speed": schema.Int64Attribute{
+							Optional:            true,
+							MarkdownDescription: "Streaming multiprocessor clock speed in Hz (Nvidia only).",
+						},
+						"memory_clock_speed": schema.Int64Attribute{
+							Optional:            true,
+							MarkdownDescription: "Memory clock speed in Hz (Nvidia only).",
+						},
+						"mig_profiles": schema.ListAttribute{
+							Optional:            true,
+							ElementType:         types.StringType,
+							MarkdownDescription: "MIG profiles that will be applied to the GPU (Nvidia only).",
+						},
+						"workload_power_profile": schema.StringAttribute{
+							Optional:            true,
+							MarkdownDescription: "Workload power profile (Nvidia only).",
+						},
+						"secondary_workload_power_profile": schema.StringAttribute{
+							Optional:            true,
+							MarkdownDescription: "Secondary workload power profile (Nvidia only).",
+						},
+						// AMDGPUSettings fields
+						"gpu_clock_level": schema.Int64Attribute{
+							Optional:            true,
+							MarkdownDescription: "GPU clock frequency level 0-7 (AMD only).",
+							Validators: []validator.Int64{
+								int64validator.Between(0, 7),
+							},
+						},
+						"memory_clock_level": schema.Int64Attribute{
+							Optional:            true,
+							MarkdownDescription: "Memory clock frequency level 0-3 (AMD only).",
+							Validators: []validator.Int64{
+								int64validator.Between(0, 3),
+							},
+						},
+						"power_play": schema.StringAttribute{
+							Optional:            true,
+							MarkdownDescription: "Power play mode (AMD only).",
+						},
+						"gpu_overdrive": schema.Float64Attribute{
+							Optional:            true,
+							MarkdownDescription: "GPU overdrive percentage 0-0.2 (AMD only).",
+							Validators: []validator.Float64{
+								float64validator.Between(0, 0.2),
+							},
+						},
+						"memory_overdrive": schema.Float64Attribute{
+							Optional:            true,
+							MarkdownDescription: "Memory overdrive percentage 0-0.2 (AMD only).",
+							Validators: []validator.Float64{
+								float64validator.Between(0, 0.2),
+							},
+						},
+						"fan_speed": schema.Int64Attribute{
+							Optional:            true,
+							MarkdownDescription: "Fan speed value 0-255 (AMD only).",
+							Validators: []validator.Int64{
+								int64validator.Between(0, 255),
+							},
+						},
+						"minimal_gpu_clock": schema.Int64Attribute{
+							Optional:            true,
+							MarkdownDescription: "Minimum GPU clock speed in Hz (AMD only).",
+						},
+						"minimal_memory_clock": schema.Int64Attribute{
+							Optional:            true,
+							MarkdownDescription: "Minimum memory clock speed in Hz (AMD only).",
+						},
+						"activity_threshold": schema.Float64Attribute{
+							Optional:            true,
+							MarkdownDescription: "Activity threshold percentage 0-1 (AMD only).",
+							Validators: []validator.Float64{
+								float64validator.Between(0, 1),
+							},
+						},
+						"hysteresis_up": schema.Float64Attribute{
+							Optional:            true,
+							MarkdownDescription: "Delay in seconds before clock level is increased (AMD only).",
+						},
+						"hysteresis_down": schema.Float64Attribute{
+							Optional:            true,
+							MarkdownDescription: "Delay in seconds before clock level is decreased (AMD only).",
 						},
 					},
 				},
@@ -1107,7 +1242,7 @@ func (r *CMDeviceCategoryResource) Create(ctx context.Context, req resource.Crea
 	// This preserves user config (name, child_type, add_services) while populating
 	// computed values (uuid) from BCM API response
 	plan.Roles = mergeRolesWithAPIResponse(ctx, planRoles, plan.Roles)
-	plan.GPUSettings = planGPUSettings
+	plan.GPUSettings = mergeGPUSettingsWithAPIResponse(ctx, planGPUSettings)
 	plan.Services = planServices
 
 	// Issue #82 FIX: Preserve bmc_settings from plan for sensitive object consistency
@@ -1564,7 +1699,7 @@ func (r *CMDeviceCategoryResource) Update(ctx context.Context, req resource.Upda
 	// This preserves user config (name, child_type, add_services) while populating
 	// computed values (uuid) from BCM API response
 	plan.Roles = mergeRolesWithAPIResponse(ctx, planRoles, plan.Roles)
-	plan.GPUSettings = planGPUSettings
+	plan.GPUSettings = mergeGPUSettingsWithAPIResponse(ctx, planGPUSettings)
 	plan.Services = planServices
 
 	// CRITICAL FIX: Preserve parent_software_image from plan while keeping computed fields
@@ -2149,16 +2284,98 @@ func (r *CMDeviceCategoryResource) buildAPIEntity(ctx context.Context, model *CM
 		if !diags.HasError() {
 			gpuList := make([]map[string]interface{}, 0, len(gpuSettings))
 			for _, gpu := range gpuSettings {
+				// Determine childType from child_type field
+				childType := "NvidiaGPUSettings"
+				if gpu.ChildType.ValueString() == "amd" {
+					childType = "AMDGPUSettings"
+				}
+
+				// Generate UUID client-side if not present
+				gpuUUID := gpu.UUID.ValueString()
+				if gpu.UUID.IsNull() || gpu.UUID.IsUnknown() || gpuUUID == "" {
+					gpuUUID = generateUUID()
+				}
+
 				gpuMap := map[string]interface{}{
-					"baseType": "GPUSetting",
-					"deviceId": gpu.DeviceID.ValueString(),
+					"baseType":      "GPUSettings",
+					"childType":     childType,
+					"uuid":          gpuUUID,
+					"name":          gpu.Name.ValueString(),
+					"modified":      true,
+					"to_be_removed": false,
+					"revision":      "",
 				}
-				if !gpu.Model.IsNull() {
-					gpuMap["model"] = gpu.Model.ValueString()
+
+				// Add Nvidia-specific fields
+				if childType == "NvidiaGPUSettings" {
+					if !gpu.PowerLimit.IsNull() && !gpu.PowerLimit.IsUnknown() {
+						gpuMap["powerLimit"] = gpu.PowerLimit.ValueInt64()
+					}
+					if !gpu.EccMode.IsNull() && !gpu.EccMode.IsUnknown() {
+						gpuMap["eccMode"] = gpu.EccMode.ValueString()
+					}
+					if !gpu.ComputeMode.IsNull() && !gpu.ComputeMode.IsUnknown() {
+						gpuMap["computeMode"] = gpu.ComputeMode.ValueString()
+					}
+					if !gpu.ClockSyncBoostMode.IsNull() && !gpu.ClockSyncBoostMode.IsUnknown() {
+						gpuMap["clockSyncBoostMode"] = gpu.ClockSyncBoostMode.ValueString()
+					}
+					if !gpu.MultiProcessorClockSpeed.IsNull() && !gpu.MultiProcessorClockSpeed.IsUnknown() {
+						gpuMap["multiProcessorClockSpeed"] = gpu.MultiProcessorClockSpeed.ValueInt64()
+					}
+					if !gpu.MemoryClockSpeed.IsNull() && !gpu.MemoryClockSpeed.IsUnknown() {
+						gpuMap["memoryClockSpeed"] = gpu.MemoryClockSpeed.ValueInt64()
+					}
+					if !gpu.MigProfiles.IsNull() && !gpu.MigProfiles.IsUnknown() {
+						var profiles []string
+						gpu.MigProfiles.ElementsAs(ctx, &profiles, false)
+						gpuMap["migProfiles"] = profiles
+					}
+					if !gpu.WorkloadPowerProfile.IsNull() && !gpu.WorkloadPowerProfile.IsUnknown() {
+						gpuMap["workloadPowerProfile"] = gpu.WorkloadPowerProfile.ValueString()
+					}
+					if !gpu.SecondaryWorkloadPowerProfile.IsNull() && !gpu.SecondaryWorkloadPowerProfile.IsUnknown() {
+						gpuMap["secondaryWorkloadPowerProfile"] = gpu.SecondaryWorkloadPowerProfile.ValueString()
+					}
 				}
-				if !gpu.ComputeMode.IsNull() {
-					gpuMap["computeMode"] = gpu.ComputeMode.ValueString()
+
+				// Add AMD-specific fields
+				if childType == "AMDGPUSettings" {
+					if !gpu.GpuClockLevel.IsNull() && !gpu.GpuClockLevel.IsUnknown() {
+						gpuMap["gpuClockLevel"] = gpu.GpuClockLevel.ValueInt64()
+					}
+					if !gpu.MemoryClockLevel.IsNull() && !gpu.MemoryClockLevel.IsUnknown() {
+						gpuMap["memoryClockLevel"] = gpu.MemoryClockLevel.ValueInt64()
+					}
+					if !gpu.PowerPlay.IsNull() && !gpu.PowerPlay.IsUnknown() {
+						gpuMap["powerPlay"] = gpu.PowerPlay.ValueString()
+					}
+					if !gpu.GpuOverDrive.IsNull() && !gpu.GpuOverDrive.IsUnknown() {
+						gpuMap["gpuOverDrive"] = gpu.GpuOverDrive.ValueFloat64()
+					}
+					if !gpu.MemoryOverDrive.IsNull() && !gpu.MemoryOverDrive.IsUnknown() {
+						gpuMap["memoryOverDrive"] = gpu.MemoryOverDrive.ValueFloat64()
+					}
+					if !gpu.FanSpeed.IsNull() && !gpu.FanSpeed.IsUnknown() {
+						gpuMap["fanSpeed"] = gpu.FanSpeed.ValueInt64()
+					}
+					if !gpu.MinimalGpuClock.IsNull() && !gpu.MinimalGpuClock.IsUnknown() {
+						gpuMap["minimalGPUClock"] = gpu.MinimalGpuClock.ValueInt64()
+					}
+					if !gpu.MinimalMemoryClock.IsNull() && !gpu.MinimalMemoryClock.IsUnknown() {
+						gpuMap["minimalMemoryClock"] = gpu.MinimalMemoryClock.ValueInt64()
+					}
+					if !gpu.ActivityThreshold.IsNull() && !gpu.ActivityThreshold.IsUnknown() {
+						gpuMap["activityThreshold"] = gpu.ActivityThreshold.ValueFloat64()
+					}
+					if !gpu.HysteresisUp.IsNull() && !gpu.HysteresisUp.IsUnknown() {
+						gpuMap["hysteresisUp"] = gpu.HysteresisUp.ValueFloat64()
+					}
+					if !gpu.HysteresisDown.IsNull() && !gpu.HysteresisDown.IsUnknown() {
+						gpuMap["hysteresisDown"] = gpu.HysteresisDown.ValueFloat64()
+					}
 				}
+
 				gpuList = append(gpuList, gpuMap)
 			}
 			entity["gpuSettings"] = gpuList
@@ -2614,19 +2831,85 @@ func (r *CMDeviceCategoryResource) readCategory(ctx context.Context, model *CMDe
 
 	// Parse gpu_settings from BCM API (camelCase → snake_case)
 	gpuSettingObjectType := types.ObjectType{AttrTypes: map[string]attr.Type{
-		"device_id":    types.StringType,
-		"model":        types.StringType,
-		"compute_mode": types.StringType,
+		// Base GPUSettings fields
+		"uuid":       types.StringType,
+		"name":       types.StringType,
+		"child_type": types.StringType,
+		// Nvidia fields
+		"power_limit":                       types.Int64Type,
+		"ecc_mode":                          types.StringType,
+		"compute_mode":                      types.StringType,
+		"clock_sync_boost_mode":             types.StringType,
+		"multiprocessor_clock_speed":        types.Int64Type,
+		"memory_clock_speed":                types.Int64Type,
+		"mig_profiles":                      types.ListType{ElemType: types.StringType},
+		"workload_power_profile":            types.StringType,
+		"secondary_workload_power_profile":  types.StringType,
+		// AMD fields
+		"gpu_clock_level":      types.Int64Type,
+		"memory_clock_level":   types.Int64Type,
+		"power_play":           types.StringType,
+		"gpu_overdrive":        types.Float64Type,
+		"memory_overdrive":     types.Float64Type,
+		"fan_speed":            types.Int64Type,
+		"minimal_gpu_clock":    types.Int64Type,
+		"minimal_memory_clock": types.Int64Type,
+		"activity_threshold":   types.Float64Type,
+		"hysteresis_up":        types.Float64Type,
+		"hysteresis_down":      types.Float64Type,
 	}}
 	if gpuData, ok := categoryData["gpuSettings"].([]interface{}); ok {
 		// BCM returns array (empty or with data) - convert to Terraform list
 		gpuValues := make([]attr.Value, 0, len(gpuData))
 		for _, gpuRaw := range gpuData {
 			if gpuMap, ok := gpuRaw.(map[string]interface{}); ok {
+				// Determine child_type from BCM childType field
+				childType := "nvidia" // default
+				if ct, ok := gpuMap["childType"].(string); ok {
+					if ct == "AMDGPUSettings" {
+						childType = "amd"
+					}
+				}
+
+				// Parse mig_profiles array
+				var migProfilesVal attr.Value = types.ListNull(types.StringType)
+				if migProfiles, ok := gpuMap["migProfiles"].([]interface{}); ok {
+					profiles := make([]attr.Value, 0, len(migProfiles))
+					for _, p := range migProfiles {
+						if ps, ok := p.(string); ok {
+							profiles = append(profiles, types.StringValue(ps))
+						}
+					}
+					migProfilesVal, _ = types.ListValue(types.StringType, profiles)
+				}
+
 				gpuObj, objDiags := types.ObjectValue(gpuSettingObjectType.AttrTypes, map[string]attr.Value{
-					"device_id":    getStringValue(gpuMap, "deviceId"),
-					"model":        getStringValue(gpuMap, "model"),
-					"compute_mode": getStringValue(gpuMap, "computeMode"),
+					// Base fields
+					"uuid":       getStringValue(gpuMap, "uuid"),
+					"name":       getStringValue(gpuMap, "name"),
+					"child_type": types.StringValue(childType),
+					// Nvidia fields
+					"power_limit":                      getInt64Value(gpuMap, "powerLimit"),
+					"ecc_mode":                         getStringValue(gpuMap, "eccMode"),
+					"compute_mode":                     getStringValue(gpuMap, "computeMode"),
+					"clock_sync_boost_mode":            getStringValue(gpuMap, "clockSyncBoostMode"),
+					"multiprocessor_clock_speed":       getInt64Value(gpuMap, "multiProcessorClockSpeed"),
+					"memory_clock_speed":               getInt64Value(gpuMap, "memoryClockSpeed"),
+					"mig_profiles":                     migProfilesVal,
+					"workload_power_profile":           getStringValue(gpuMap, "workloadPowerProfile"),
+					"secondary_workload_power_profile": getStringValue(gpuMap, "secondaryWorkloadPowerProfile"),
+					// AMD fields
+					"gpu_clock_level":      getInt64Value(gpuMap, "gpuClockLevel"),
+					"memory_clock_level":   getInt64Value(gpuMap, "memoryClockLevel"),
+					"power_play":           getStringValue(gpuMap, "powerPlay"),
+					"gpu_overdrive":        getFloat64Value(gpuMap, "gpuOverDrive"),
+					"memory_overdrive":     getFloat64Value(gpuMap, "memoryOverDrive"),
+					"fan_speed":            getInt64Value(gpuMap, "fanSpeed"),
+					"minimal_gpu_clock":    getInt64Value(gpuMap, "minimalGPUClock"),
+					"minimal_memory_clock": getInt64Value(gpuMap, "minimalMemoryClock"),
+					"activity_threshold":   getFloat64Value(gpuMap, "activityThreshold"),
+					"hysteresis_up":        getFloat64Value(gpuMap, "hysteresisUp"),
+					"hysteresis_down":      getFloat64Value(gpuMap, "hysteresisDown"),
 				})
 				if !objDiags.HasError() {
 					gpuValues = append(gpuValues, gpuObj)
@@ -3020,6 +3303,97 @@ func mergeStaticRoutesWithAPIResponse(ctx context.Context, originalRoutes types.
 		"api_count":      len(apiRoutesList),
 		"merged_count":   len(mergedRoutes),
 	})
+	return result
+}
+
+// mergeGPUSettingsWithAPIResponse merges GPU settings by converting Unknown UUIDs to null.
+// Since BCM doesn't persist GPU settings (returns empty array), we just need to ensure
+// no Unknown values remain in state.
+func mergeGPUSettingsWithAPIResponse(ctx context.Context, originalGPU types.List) types.List {
+	gpuSettingObjectType := types.ObjectType{AttrTypes: map[string]attr.Type{
+		"uuid":                              types.StringType,
+		"name":                              types.StringType,
+		"child_type":                        types.StringType,
+		"power_limit":                       types.Int64Type,
+		"ecc_mode":                          types.StringType,
+		"compute_mode":                      types.StringType,
+		"clock_sync_boost_mode":             types.StringType,
+		"multiprocessor_clock_speed":        types.Int64Type,
+		"memory_clock_speed":                types.Int64Type,
+		"mig_profiles":                      types.ListType{ElemType: types.StringType},
+		"workload_power_profile":            types.StringType,
+		"secondary_workload_power_profile":  types.StringType,
+		"gpu_clock_level":                   types.Int64Type,
+		"memory_clock_level":                types.Int64Type,
+		"power_play":                        types.StringType,
+		"gpu_overdrive":                     types.Float64Type,
+		"memory_overdrive":                  types.Float64Type,
+		"fan_speed":                         types.Int64Type,
+		"minimal_gpu_clock":                 types.Int64Type,
+		"minimal_memory_clock":              types.Int64Type,
+		"activity_threshold":                types.Float64Type,
+		"hysteresis_up":                     types.Float64Type,
+		"hysteresis_down":                   types.Float64Type,
+	}}
+
+	if originalGPU.IsNull() {
+		return types.ListNull(gpuSettingObjectType)
+	}
+
+	if originalGPU.IsUnknown() {
+		return types.ListNull(gpuSettingObjectType)
+	}
+
+	var gpuSettings []GPUSettingModel
+	if diags := originalGPU.ElementsAs(ctx, &gpuSettings, false); diags.HasError() {
+		return originalGPU
+	}
+
+	// Convert Unknown UUIDs to null (Unknown not allowed in state)
+	gpuValues := make([]attr.Value, 0, len(gpuSettings))
+	for _, gpu := range gpuSettings {
+		uuid := gpu.UUID
+		if uuid.IsUnknown() {
+			uuid = types.StringNull()
+		}
+
+		// Handle MIG profiles list
+		var migProfilesVal attr.Value = types.ListNull(types.StringType)
+		if !gpu.MigProfiles.IsNull() && !gpu.MigProfiles.IsUnknown() {
+			migProfilesVal = gpu.MigProfiles
+		}
+
+		gpuObj, diags := types.ObjectValue(gpuSettingObjectType.AttrTypes, map[string]attr.Value{
+			"uuid":                              uuid,
+			"name":                              gpu.Name,
+			"child_type":                        gpu.ChildType,
+			"power_limit":                       gpu.PowerLimit,
+			"ecc_mode":                          gpu.EccMode,
+			"compute_mode":                      gpu.ComputeMode,
+			"clock_sync_boost_mode":             gpu.ClockSyncBoostMode,
+			"multiprocessor_clock_speed":        gpu.MultiProcessorClockSpeed,
+			"memory_clock_speed":                gpu.MemoryClockSpeed,
+			"mig_profiles":                      migProfilesVal,
+			"workload_power_profile":            gpu.WorkloadPowerProfile,
+			"secondary_workload_power_profile":  gpu.SecondaryWorkloadPowerProfile,
+			"gpu_clock_level":                   gpu.GpuClockLevel,
+			"memory_clock_level":                gpu.MemoryClockLevel,
+			"power_play":                        gpu.PowerPlay,
+			"gpu_overdrive":                     gpu.GpuOverDrive,
+			"memory_overdrive":                  gpu.MemoryOverDrive,
+			"fan_speed":                         gpu.FanSpeed,
+			"minimal_gpu_clock":                 gpu.MinimalGpuClock,
+			"minimal_memory_clock":              gpu.MinimalMemoryClock,
+			"activity_threshold":                gpu.ActivityThreshold,
+			"hysteresis_up":                     gpu.HysteresisUp,
+			"hysteresis_down":                   gpu.HysteresisDown,
+		})
+		if !diags.HasError() {
+			gpuValues = append(gpuValues, gpuObj)
+		}
+	}
+
+	result, _ := types.ListValue(gpuSettingObjectType, gpuValues)
 	return result
 }
 

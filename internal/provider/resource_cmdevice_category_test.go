@@ -2810,16 +2810,19 @@ func TestAccCMDeviceCategory_GPUSettingsBasicCRUD(t *testing.T) {
 
 // testAccCMDeviceCategoryConfig_GPUSettings creates config with N GPU settings.
 func testAccCMDeviceCategoryConfig_GPUSettings(name string, gpuCount int) string {
-	// Build GPU settings dynamically
+	// Build GPU settings dynamically using new schema with name/child_type
 	gpuSettings := ""
-	computeModes := []string{"default", "exclusive", "prohibited", "default"}
+	computeModes := []string{"DEFAULT", "EXCLUSIVE_PROCESS", "PROHIBITED", "DEFAULT"}
+	eccModes := []string{"NONE", "ENABLED", "DISABLED", "NONE"}
 	for i := 0; i < gpuCount; i++ {
 		gpuSettings += fmt.Sprintf(`
     {
-      device_id    = "%d"
-      model        = "Tesla V100"
+      name         = "%d"
+      child_type   = "nvidia"
       compute_mode = "%s"
-    },`, i, computeModes[i%len(computeModes)])
+      ecc_mode     = "%s"
+      power_limit  = %d
+    },`, i, computeModes[i%len(computeModes)], eccModes[i%len(eccModes)], 250+i*10)
 	}
 
 	return fmt.Sprintf(`
