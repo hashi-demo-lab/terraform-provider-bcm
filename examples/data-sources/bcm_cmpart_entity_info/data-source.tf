@@ -1,0 +1,96 @@
+# Example: Retrieve all BCM entities (no filters)
+# Returns all entities from the BCM cluster for discovery purposes
+data "bcm_cmpart_entity_info" "all" {}
+
+output "total_entities" {
+  description = "Total number of entities in the cluster"
+  value       = length(data.bcm_cmpart_entity_info.all.entities)
+}
+
+# Example: Filter by entity type
+# Retrieves all SoftwareImage entities (case-sensitive)
+data "bcm_cmpart_entity_info" "software_images" {
+  type = "SoftwareImage"
+}
+
+output "software_image_names" {
+  description = "Names of all software images"
+  value       = [for e in data.bcm_cmpart_entity_info.software_images.entities : e.name]
+}
+
+# Example: Filter by name pattern (glob)
+# Retrieves entities with names starting with "default" (case-insensitive)
+data "bcm_cmpart_entity_info" "defaults" {
+  name_pattern = "default*"
+}
+
+output "default_entities" {
+  description = "Entities with names starting with 'default'"
+  value = {
+    for e in data.bcm_cmpart_entity_info.defaults.entities :
+    e.name => e.type
+  }
+}
+
+# Example: Filter by name pattern with wildcard in middle
+# Retrieves entities with "node" anywhere in their name (case-insensitive)
+data "bcm_cmpart_entity_info" "nodes" {
+  name_pattern = "*node*"
+}
+
+# Example: Combined type and name pattern filters (AND logic)
+# Retrieves SoftwareImages with names starting with "default"
+data "bcm_cmpart_entity_info" "default_images" {
+  type         = "SoftwareImage"
+  name_pattern = "default*"
+}
+
+output "default_image_uuids" {
+  description = "UUIDs of default software images"
+  value       = [for e in data.bcm_cmpart_entity_info.default_images.entities : e.uuid]
+}
+
+# Example: Lookup specific entity UUID by type and exact name
+# Use the UUID in other resources
+data "bcm_cmpart_entity_info" "my_image" {
+  type         = "SoftwareImage"
+  name_pattern = "default-image"
+}
+
+# Example: Use discovered UUID in another resource
+# Uncomment when bcm_cmdevice_category resource is available
+# resource "bcm_cmdevice_category" "compute" {
+#   name           = "compute-nodes"
+#   software_image = try(data.bcm_cmpart_entity_info.my_image.entities[0].uuid, null)
+# }
+
+# Example: List all categories
+data "bcm_cmpart_entity_info" "categories" {
+  type = "Category"
+}
+
+output "category_list" {
+  description = "Map of category names to UUIDs"
+  value = {
+    for e in data.bcm_cmpart_entity_info.categories.entities :
+    e.name => e.uuid
+  }
+}
+
+# Example: Group entities by type (discovery)
+output "entities_by_type" {
+  description = "Entities grouped by type"
+  value = {
+    for type in distinct([for e in data.bcm_cmpart_entity_info.all.entities : e.type]) :
+    type => [for e in data.bcm_cmpart_entity_info.all.entities : e.name if e.type == type]
+  }
+}
+
+# Example: Count entities by type
+output "entity_type_counts" {
+  description = "Count of entities per type"
+  value = {
+    for type in distinct([for e in data.bcm_cmpart_entity_info.all.entities : e.type]) :
+    type => length([for e in data.bcm_cmpart_entity_info.all.entities : e if e.type == type])
+  }
+}

@@ -25,9 +25,9 @@
 
 **Purpose**: Project initialization and test file scaffolding
 
-- [ ] T001 Create data source skeleton file at internal/provider/data_source_cmpart_entity_info.go with struct definition and interface assertions
-- [ ] T002 Create test file skeleton at internal/provider/data_source_cmpart_entity_info_test.go with package declaration and imports
-- [ ] T003 Register data source in internal/provider/provider.go DataSources() function by adding NewCMPartEntityInfoDataSource
+- [X] T001 Create data source skeleton file at internal/provider/data_source_cmpart_entity_info.go with struct definition and interface assertions
+- [X] T002 Create test file skeleton at internal/provider/data_source_cmpart_entity_info_test.go with package declaration and imports
+- [X] T003 Register data source in internal/provider/provider.go DataSources() function by adding NewCMPartEntityInfoDataSource
 
 **Acceptance Criteria**:
 - Files compile without errors
@@ -42,11 +42,11 @@
 
 **CRITICAL**: No user story implementation can begin until this phase is complete
 
-- [ ] T004 Define CMPartEntityInfoDataSourceModel struct in internal/provider/data_source_cmpart_entity_info.go with ID, Type, NamePattern, Entities fields
-- [ ] T005 Define EntityInfoModel struct in internal/provider/data_source_cmpart_entity_info.go with Name, Type, UUID fields
-- [ ] T006 Implement Schema() method in internal/provider/data_source_cmpart_entity_info.go with type (optional string), name_pattern (optional string), id (computed string), entities (computed list)
-- [ ] T007 Implement Metadata() method in internal/provider/data_source_cmpart_entity_info.go returning TypeName "bcm_cmpart_entity_info"
-- [ ] T008 Implement Configure() method in internal/provider/data_source_cmpart_entity_info.go to receive BCMClient from provider
+- [X] T004 Define CMPartEntityInfoDataSourceModel struct in internal/provider/data_source_cmpart_entity_info.go with ID, Type, NamePattern, Entities fields
+- [X] T005 Define EntityInfoModel struct in internal/provider/data_source_cmpart_entity_info.go with Name, Type, UUID fields
+- [X] T006 Implement Schema() method in internal/provider/data_source_cmpart_entity_info.go with type (optional string), name_pattern (optional string), id (computed string), entities (computed list)
+- [X] T007 Implement Metadata() method in internal/provider/data_source_cmpart_entity_info.go returning TypeName "bcm_cmpart_entity_info"
+- [X] T008 Implement Configure() method in internal/provider/data_source_cmpart_entity_info.go to receive BCMClient from provider
 
 **Acceptance Criteria**:
 - Schema defines all input/output attributes per data-model.md
@@ -67,20 +67,20 @@
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T009 [P] [US1] Write TestAccCMPartEntityInfoDataSource_Basic acceptance test in internal/provider/data_source_cmpart_entity_info_test.go - verify data source returns entities with id computed
-- [ ] T010 [P] [US1] Write TestAccCMPartEntityInfoDataSource_FilterByType acceptance test in internal/provider/data_source_cmpart_entity_info_test.go - query with type="SoftwareImage", verify id computed
-- [ ] T011 [P] [US1] Write TestAccCMPartEntityInfoDataSource_EmptyResult acceptance test in internal/provider/data_source_cmpart_entity_info_test.go - query with type="NonExistentType123", verify empty entities list returned (not error)
-- [ ] T012 [P] [US1] Write TestAccCMPartEntityInfoDataSource_InvalidCredentials acceptance test in internal/provider/data_source_cmpart_entity_info_test.go - verify authentication error message
+- [X] T009 [P] [US1] Write TestAccCMPartEntityInfoDataSource_Basic acceptance test in internal/provider/data_source_cmpart_entity_info_test.go - verify data source returns entities with id computed
+- [X] T010 [P] [US1] Write TestAccCMPartEntityInfoDataSource_FilterByType acceptance test in internal/provider/data_source_cmpart_entity_info_test.go - query with type="SoftwareImage", verify id computed
+- [X] T011 [P] [US1] Write TestAccCMPartEntityInfoDataSource_EmptyResult acceptance test in internal/provider/data_source_cmpart_entity_info_test.go - query with type="NonExistentType123", verify empty entities list returned (not error)
+- [X] T012 [P] [US1] Write TestAccCMPartEntityInfoDataSource_InvalidCredentials acceptance test in internal/provider/data_source_cmpart_entity_info_test.go - verify authentication error message
 
 **Checkpoint**: All US1 tests should FAIL (RED phase complete)
 
 ### Implementation for User Story 1 (TDD GREEN Phase)
 
-- [ ] T013 [US1] Implement Read() method skeleton in internal/provider/data_source_cmpart_entity_info.go with API call to cmpart.getBasicEntityInformation
-- [ ] T014 [US1] Implement API response parsing in internal/provider/data_source_cmpart_entity_info.go - parse JSON array, extract resolveName->name, type, uuid fields
-- [ ] T015 [US1] Implement type filter logic in internal/provider/data_source_cmpart_entity_info.go - case-sensitive exact match when type attribute is set
-- [ ] T016 [US1] Implement ID generation in internal/provider/data_source_cmpart_entity_info.go - format: "cmpart-entity-info:{type}:{name_pattern}" or "cmpart-entity-info:all"
-- [ ] T017 [US1] Implement error handling in internal/provider/data_source_cmpart_entity_info.go - API errors with descriptive messages per error_messages.go patterns
+- [X] T013 [US1] Implement Read() method skeleton in internal/provider/data_source_cmpart_entity_info.go with API call to cmpart.getBasicEntityInformation
+- [X] T014 [US1] Implement API response parsing in internal/provider/data_source_cmpart_entity_info.go - parse JSON array, extract resolveName->name, type, uuid fields
+- [X] T015 [US1] Implement type filter logic in internal/provider/data_source_cmpart_entity_info.go - case-sensitive exact match when type attribute is set
+- [X] T016 [US1] Implement ID generation in internal/provider/data_source_cmpart_entity_info.go - format: "cmpart-entity-info:{type}:{name_pattern}" or "cmpart-entity-info:all"
+- [X] T017 [US1] Implement error handling in internal/provider/data_source_cmpart_entity_info.go - API errors with descriptive messages per error_messages.go patterns
 
 **Acceptance Criteria**:
 - All US1 tests pass (GREEN phase complete)
@@ -100,16 +100,16 @@
 
 ### Tests for User Story 2 (TDD RED Phase)
 
-- [ ] T018 [P] [US2] Write TestAccCMPartEntityInfoDataSource_FilterByNamePattern acceptance test in internal/provider/data_source_cmpart_entity_info_test.go - query with name_pattern="default*", verify id computed
-- [ ] T019 [P] [US2] Write TestAccCMPartEntityInfoDataSource_FilterByNamePatternMiddle acceptance test in internal/provider/data_source_cmpart_entity_info_test.go - query with name_pattern="*node*" for middle match
-- [ ] T020 [P] [US2] Write TestAccCMPartEntityInfoDataSource_FilterByExactName acceptance test in internal/provider/data_source_cmpart_entity_info_test.go - query without wildcards for literal match
+- [X] T018 [P] [US2] Write TestAccCMPartEntityInfoDataSource_FilterByNamePattern acceptance test in internal/provider/data_source_cmpart_entity_info_test.go - query with name_pattern="default*", verify id computed
+- [X] T019 [P] [US2] Write TestAccCMPartEntityInfoDataSource_FilterByNamePatternMiddle acceptance test in internal/provider/data_source_cmpart_entity_info_test.go - query with name_pattern="*node*" for middle match
+- [X] T020 [P] [US2] Write TestAccCMPartEntityInfoDataSource_FilterByExactName acceptance test in internal/provider/data_source_cmpart_entity_info_test.go - query without wildcards for literal match
 
 **Checkpoint**: All US2 tests should FAIL (RED phase complete)
 
 ### Implementation for User Story 2 (TDD GREEN Phase)
 
-- [ ] T021 [US2] Implement matchesNamePattern helper function in internal/provider/data_source_cmpart_entity_info.go using filepath.Match with case normalization (strings.ToLower)
-- [ ] T022 [US2] Integrate name_pattern filter into Read() method in internal/provider/data_source_cmpart_entity_info.go - apply filter after type filter
+- [X] T021 [US2] Implement matchesNamePattern helper function in internal/provider/data_source_cmpart_entity_info.go using filepath.Match with case normalization (strings.ToLower)
+- [X] T022 [US2] Integrate name_pattern filter into Read() method in internal/provider/data_source_cmpart_entity_info.go - apply filter after type filter
 
 **Acceptance Criteria**:
 - All US2 tests pass (GREEN phase complete)
@@ -129,14 +129,14 @@
 
 ### Tests for User Story 3 (TDD RED Phase)
 
-- [ ] T023 [P] [US3] Write TestAccCMPartEntityInfoDataSource_CombinedFilters acceptance test in internal/provider/data_source_cmpart_entity_info_test.go - query with type="SoftwareImage" and name_pattern="default*"
+- [X] T023 [P] [US3] Write TestAccCMPartEntityInfoDataSource_CombinedFilters acceptance test in internal/provider/data_source_cmpart_entity_info_test.go - query with type="SoftwareImage" and name_pattern="default*"
 
 **Checkpoint**: All US3 tests should FAIL (RED phase complete)
 
 ### Implementation for User Story 3 (TDD GREEN Phase)
 
-- [ ] T024 [US3] Implement matchesEntityFilter helper function in internal/provider/data_source_cmpart_entity_info.go combining type and name_pattern checks with AND logic
-- [ ] T025 [US3] Refactor Read() method in internal/provider/data_source_cmpart_entity_info.go to use matchesEntityFilter for unified filtering
+- [X] T024 [US3] Implement matchesEntityFilter helper function in internal/provider/data_source_cmpart_entity_info.go combining type and name_pattern checks with AND logic
+- [X] T025 [US3] Refactor Read() method in internal/provider/data_source_cmpart_entity_info.go to use matchesEntityFilter for unified filtering
 
 **Acceptance Criteria**:
 - All US3 tests pass (GREEN phase complete)
@@ -155,13 +155,13 @@
 
 ### Tests for User Story 4 (TDD RED Phase)
 
-- [ ] T026 [P] [US4] Write TestAccCMPartEntityInfoDataSource_NoFilters acceptance test in internal/provider/data_source_cmpart_entity_info_test.go - query with no type or name_pattern, verify multiple entity types returned
+- [X] T026 [P] [US4] Write TestAccCMPartEntityInfoDataSource_NoFilters acceptance test in internal/provider/data_source_cmpart_entity_info_test.go - query with no type or name_pattern, verify multiple entity types returned
 
 **Checkpoint**: All US4 tests should FAIL (RED phase complete)
 
 ### Implementation for User Story 4 (TDD GREEN Phase)
 
-- [ ] T027 [US4] Verify null filter handling in internal/provider/data_source_cmpart_entity_info.go - ensure null/unset filters pass all entities through
+- [X] T027 [US4] Verify null filter handling in internal/provider/data_source_cmpart_entity_info.go - ensure null/unset filters pass all entities through
 
 **Acceptance Criteria**:
 - All US4 tests pass (GREEN phase complete)
@@ -180,13 +180,13 @@
 
 ### Tests for User Story 5 (TDD RED Phase)
 
-- [ ] T028 [P] [US5] Write TestAccCMPartEntityInfoDataSource_UUIDLookup acceptance test in internal/provider/data_source_cmpart_entity_info_test.go - query known entity, verify UUID format (36 chars with dashes)
+- [X] T028 [P] [US5] Write TestAccCMPartEntityInfoDataSource_UUIDLookup acceptance test in internal/provider/data_source_cmpart_entity_info_test.go - query known entity, verify UUID format (36 chars with dashes)
 
 **Checkpoint**: All US5 tests should FAIL (RED phase complete)
 
 ### Implementation for User Story 5 (TDD GREEN Phase)
 
-- [ ] T029 [US5] No additional implementation needed - covered by combined filters. Add validation test to confirm single-entity lookup works
+- [X] T029 [US5] No additional implementation needed - covered by combined filters. Add validation test to confirm single-entity lookup works
 
 **Acceptance Criteria**:
 - All US5 tests pass (GREEN phase complete)
@@ -201,12 +201,12 @@
 
 **Purpose**: Documentation, examples, and code quality improvements
 
-- [ ] T030 [P] Create example Terraform configuration at examples/data-sources/bcm_cmpart_entity_info/data-source.tf with all filter combinations per quickstart.md
-- [ ] T031 [P] Add tflog debug/trace logging to Read() method in internal/provider/data_source_cmpart_entity_info.go for API calls and filter operations
-- [ ] T032 Run make generate to create docs/data-sources/cmpart_entity_info.md
-- [ ] T033 Run make lint to verify code passes linting checks
-- [ ] T034 Run full acceptance test suite: TF_ACC=1 go test -v -timeout 120m ./internal/provider/ -run TestAccCMPartEntityInfo
-- [ ] T035 Validate quickstart.md examples work against live BCM cluster
+- [X] T030 [P] Create example Terraform configuration at examples/data-sources/bcm_cmpart_entity_info/data-source.tf with all filter combinations per quickstart.md
+- [X] T031 [P] Add tflog debug/trace logging to Read() method in internal/provider/data_source_cmpart_entity_info.go for API calls and filter operations
+- [X] T032 Run make generate to create docs/data-sources/cmpart_entity_info.md
+- [X] T033 Run make lint to verify code passes linting checks
+- [X] T034 Run full acceptance test suite: TF_ACC=1 go test -v -timeout 120m ./internal/provider/ -run TestAccCMPartEntityInfo
+- [X] T035 Validate quickstart.md examples work against live BCM cluster
 
 ---
 
