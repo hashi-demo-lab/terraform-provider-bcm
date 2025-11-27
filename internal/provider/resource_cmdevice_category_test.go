@@ -4450,3 +4450,209 @@ func TestAccCMDeviceCategory_BMCPasswordUpdate(t *testing.T) {
 		},
 	})
 }
+
+// TestAccCMDeviceCategoryResource_Services tests the services (OSServiceConfig) list field.
+// This tests that services can be configured on a category with the full schema.
+func TestAccCMDeviceCategoryResource_Services(t *testing.T) {
+	categoryName := generateUniqueTestName("tftest-services")
+
+	// Cleanup any leftover test categories
+	testAccCMDeviceCategoryPreCheck(t, categoryName)
+
+	// ID consistency tracking across operations
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceCategoryDestroy,
+		Steps: []resource.TestStep{
+			// Step 1: Create with services configuration
+			{
+				Config: testAccCMDeviceCategoryResourceConfig_ServicesBasic(categoryName),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(categoryName),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("uuid"),
+						knownvalue.NotNull(),
+					),
+					// Track ID consistency
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+			// Step 2: Idempotency check
+			{
+				Config: testAccCMDeviceCategoryResourceConfig_ServicesBasic(categoryName),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+			// Step 3: Import and verify
+			{
+				Config:            testAccCMDeviceCategoryResourceConfig_ServicesBasic(categoryName),
+				ResourceName:      "bcm_cmdevice_category.test",
+				ImportState:       true,
+				ImportStateVerify: true,
+				ImportStateVerifyIgnore: []string{
+					"force",
+					"services",
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+		},
+	})
+}
+
+// testAccCMDeviceCategoryResourceConfig_ServicesBasic creates a config with services.
+func testAccCMDeviceCategoryResourceConfig_ServicesBasic(name string) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmdevice_categories" "all" {}
+data "bcm_cmpart_softwareimages" "all" {}
+
+locals {
+  management_network_uuid = length(data.bcm_cmdevice_categories.all.categories) > 0 ? data.bcm_cmdevice_categories.all.categories[0].management_network_id : "00000000-0000-0000-0000-000000000000"
+  software_image_uuid = length(data.bcm_cmpart_softwareimages.all.images) > 0 ? data.bcm_cmpart_softwareimages.all.images[0].uuid : "00000000-0000-0000-0000-000000000000"
+}
+
+resource "bcm_cmdevice_category" "test" {
+  name               = %[4]q
+  management_network = local.management_network_uuid
+  notes              = "Services test category"
+
+  software_image_proxy = {
+    parent_software_image = local.software_image_uuid
+  }
+
+  services = [
+    {
+      name                          = "sshd"
+      monitored                     = true
+      autostart                     = true
+      managed                       = false
+      run_if                        = "ALWAYS"
+      sickness_check_script_timeout = 10
+      sickness_check_interval       = 60
+      script_timeout                = 30
+    },
+    {
+      name      = "nginx"
+      monitored = false
+      autostart = false
+      managed   = true
+    }
+  ]
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		name,
+	)
+}
+
+// TestAccCMDeviceCategoryResource_ServicesWithAllFields tests services with all optional fields.
+func TestAccCMDeviceCategoryResource_ServicesWithAllFields(t *testing.T) {
+	categoryName := generateUniqueTestName("tftest-svc-full")
+
+	// Cleanup any leftover test categories
+	testAccCMDeviceCategoryPreCheck(t, categoryName)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceCategoryDestroy,
+		Steps: []resource.TestStep{
+			// Create with all service fields
+			{
+				Config: testAccCMDeviceCategoryResourceConfig_ServicesAllFields(categoryName),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(categoryName),
+					),
+				},
+			},
+			// Idempotency check
+			{
+				Config: testAccCMDeviceCategoryResourceConfig_ServicesAllFields(categoryName),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+		},
+	})
+}
+
+// testAccCMDeviceCategoryResourceConfig_ServicesAllFields creates a config with all service fields populated.
+func testAccCMDeviceCategoryResourceConfig_ServicesAllFields(name string) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmdevice_categories" "all" {}
+data "bcm_cmpart_softwareimages" "all" {}
+
+locals {
+  management_network_uuid = length(data.bcm_cmdevice_categories.all.categories) > 0 ? data.bcm_cmdevice_categories.all.categories[0].management_network_id : "00000000-0000-0000-0000-000000000000"
+  software_image_uuid = length(data.bcm_cmpart_softwareimages.all.images) > 0 ? data.bcm_cmpart_softwareimages.all.images[0].uuid : "00000000-0000-0000-0000-000000000000"
+}
+
+resource "bcm_cmdevice_category" "test" {
+  name               = %[4]q
+  management_network = local.management_network_uuid
+  notes              = "Services full fields test"
+
+  software_image_proxy = {
+    parent_software_image = local.software_image_uuid
+  }
+
+  services = [
+    {
+      name                          = "custom-monitor"
+      monitored                     = true
+      autostart                     = true
+      managed                       = true
+      run_if                        = "ALWAYS"
+      sickness_check_script         = "/usr/local/bin/health_check.sh"
+      sickness_check_script_timeout = 30
+      sickness_check_interval       = 120
+      script_timeout                = 60
+    }
+  ]
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		name,
+	)
+}

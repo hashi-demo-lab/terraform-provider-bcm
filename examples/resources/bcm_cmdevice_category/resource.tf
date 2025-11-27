@@ -462,3 +462,70 @@ resource "bcm_cmdevice_category" "mixed_gpu_with_routing" {
   default_gateway = "192.168.1.1"
   name_servers    = ["8.8.8.8", "8.8.4.4"]
 }
+
+# Example 16: Category with OS Services
+# Configure monitored system services with health checking
+resource "bcm_cmdevice_category" "with_services" {
+  name               = "service-monitored-nodes"
+  management_network = "84d8d82b-3ae7-4433-a793-bb44d5c3b4fe"
+  notes              = "Nodes with monitored system services"
+
+  services = [
+    {
+      name                          = "sshd"
+      monitored                     = true
+      autostart                     = true
+      managed                       = false
+      run_if                        = "ALWAYS"
+      sickness_check_script_timeout = 10
+      sickness_check_interval       = 60
+      script_timeout                = 30
+    },
+    {
+      name      = "nginx"
+      monitored = true
+      autostart = true
+      managed   = true
+      run_if    = "ALWAYS"
+    },
+    {
+      name                    = "custom-daemon"
+      monitored               = true
+      autostart               = true
+      managed                 = false
+      sickness_check_script   = "/usr/local/bin/health_check.sh"
+      sickness_check_interval = 120
+    }
+  ]
+}
+
+# Example 17: Category with services and health monitoring
+# Configure services with custom health check scripts
+resource "bcm_cmdevice_category" "services_with_health_check" {
+  name               = "health-monitored-cluster"
+  management_network = "84d8d82b-3ae7-4433-a793-bb44d5c3b4fe"
+  notes              = "Cluster with comprehensive health monitoring"
+
+  services = [
+    {
+      name                          = "slurmd"
+      monitored                     = true
+      autostart                     = true
+      managed                       = true
+      run_if                        = "ALWAYS"
+      sickness_check_script         = "/usr/local/bin/check_slurmd.sh"
+      sickness_check_script_timeout = 30
+      sickness_check_interval       = 60
+      script_timeout                = 120
+    },
+    {
+      name                          = "node_exporter"
+      monitored                     = true
+      autostart                     = true
+      managed                       = false
+      sickness_check_script         = "/usr/local/bin/check_exporter.sh"
+      sickness_check_script_timeout = 10
+      sickness_check_interval       = 30
+    }
+  ]
+}
