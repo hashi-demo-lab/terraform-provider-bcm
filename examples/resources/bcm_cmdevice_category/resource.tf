@@ -287,3 +287,178 @@ resource "bcm_cmdevice_category" "comprehensive" {
     systemctl enable nvidia-persistenced
   EOT
 }
+
+# Example 11: Category with static routes
+# Configure custom network routing for the category
+resource "bcm_cmdevice_category" "with_static_routes" {
+  name               = "multi-network-nodes"
+  management_network = "84d8d82b-3ae7-4433-a793-bb44d5c3b4fe"
+  notes              = "Nodes with custom routing for multiple networks"
+
+  # Static routes for network segmentation
+  # BCM assigns UUIDs to each route after creation
+  static_routes = [
+    {
+      destination = "10.100.0.0/16"
+      gateway     = "192.168.1.254"
+      metric      = 100
+    },
+    {
+      destination = "10.200.0.0/16"
+      gateway     = "192.168.1.253"
+      metric      = 200
+    },
+    {
+      destination = "172.16.0.0/12"
+      gateway     = "192.168.1.252"
+      # metric is optional, defaults to 0
+    }
+  ]
+
+  # Network configuration
+  default_gateway = "192.168.1.1"
+  name_servers    = ["8.8.8.8"]
+}
+
+# Example 12: Category with Nvidia GPU settings
+# Configure Nvidia GPU power and compute settings
+resource "bcm_cmdevice_category" "nvidia_gpu_nodes" {
+  name               = "nvidia-a100-cluster"
+  management_network = "84d8d82b-3ae7-4433-a793-bb44d5c3b4fe"
+  notes              = "Nvidia A100 GPU nodes with optimized settings"
+
+  # GPU settings for Nvidia cards
+  # Each entry configures a range of GPUs (e.g., "0" for GPU 0, "0-3" for GPUs 0-3)
+  gpu_settings = [
+    {
+      name         = "0-3"     # Configure GPUs 0, 1, 2, 3
+      child_type   = "nvidia"  # Required: "nvidia" or "amd"
+      power_limit  = 400       # Power limit in Watts
+      ecc_mode     = "ENABLED" # ECC memory: ENABLED, DISABLED, NONE
+      compute_mode = "DEFAULT" # DEFAULT, EXCLUSIVE_PROCESS, EXCLUSIVE_THREAD, PROHIBITED
+    },
+    {
+      name                       = "4-7"
+      child_type                 = "nvidia"
+      power_limit                = 350
+      ecc_mode                   = "ENABLED"
+      compute_mode               = "EXCLUSIVE_PROCESS"
+      clock_sync_boost_mode      = "NONE"
+      multiprocessor_clock_speed = 1800000000 # 1.8 GHz in Hz
+      memory_clock_speed         = 1500000000 # 1.5 GHz in Hz
+    }
+  ]
+
+  # Kernel modules for Nvidia
+  modules = [
+    {
+      name       = "nvidia"
+      parameters = ""
+    },
+    {
+      name       = "nvidia-drm"
+      parameters = "modeset=1"
+    }
+  ]
+
+  kernel_parameters = "intel_iommu=on iommu=pt"
+}
+
+# Example 13: Category with Nvidia MIG (Multi-Instance GPU) profiles
+# Configure MIG partitioning for Nvidia GPUs
+resource "bcm_cmdevice_category" "nvidia_mig_nodes" {
+  name               = "nvidia-mig-cluster"
+  management_network = "84d8d82b-3ae7-4433-a793-bb44d5c3b4fe"
+  notes              = "Nvidia GPUs with MIG partitioning enabled"
+
+  gpu_settings = [
+    {
+      name         = "0"
+      child_type   = "nvidia"
+      ecc_mode     = "ENABLED"
+      compute_mode = "DEFAULT"
+      # MIG profiles define GPU partitioning
+      # Format: "Xg.Ygb" where X=compute instances, Y=memory in GB
+      mig_profiles = ["1g.5gb", "1g.5gb", "1g.5gb", "1g.5gb"]
+    },
+    {
+      name         = "1"
+      child_type   = "nvidia"
+      ecc_mode     = "ENABLED"
+      compute_mode = "DEFAULT"
+      # Different MIG configuration for second GPU
+      mig_profiles = ["2g.10gb", "2g.10gb"]
+    }
+  ]
+}
+
+# Example 14: Category with AMD GPU settings
+# Configure AMD GPU clock and power settings
+resource "bcm_cmdevice_category" "amd_gpu_nodes" {
+  name               = "amd-mi250-cluster"
+  management_network = "84d8d82b-3ae7-4433-a793-bb44d5c3b4fe"
+  notes              = "AMD MI250 GPU nodes with optimized settings"
+
+  # GPU settings for AMD cards
+  gpu_settings = [
+    {
+      name               = "0-1"     # Configure GPUs 0 and 1
+      child_type         = "amd"     # Required: "nvidia" or "amd"
+      gpu_clock_level    = 5         # GPU clock frequency level (0-7)
+      memory_clock_level = 2         # Memory clock frequency level (0-3)
+      power_play         = "DEFAULT" # Power play mode
+      fan_speed          = 128       # Fan speed value (0-255)
+    },
+    {
+      name                 = "2-3"
+      child_type           = "amd"
+      gpu_clock_level      = 7
+      memory_clock_level   = 3
+      gpu_overdrive        = 0.1       # GPU overdrive percentage (0-0.2)
+      minimal_gpu_clock    = 800000000 # Minimum GPU clock in Hz
+      minimal_memory_clock = 400000000 # Minimum memory clock in Hz
+      activity_threshold   = 0.5       # Workload threshold before clock change
+      hysteresis_up        = 1.0       # Delay before clock increase (seconds)
+      hysteresis_down      = 2.0       # Delay before clock decrease (seconds)
+    }
+  ]
+
+  # Kernel modules for AMD
+  modules = [
+    {
+      name       = "amdgpu"
+      parameters = ""
+    }
+  ]
+}
+
+# Example 15: Mixed GPU category with static routes
+# Comprehensive example combining GPU settings and network routing
+resource "bcm_cmdevice_category" "mixed_gpu_with_routing" {
+  name               = "mixed-gpu-cluster"
+  management_network = "84d8d82b-3ae7-4433-a793-bb44d5c3b4fe"
+  notes              = "Mixed GPU nodes with custom routing"
+
+  # Static routes for GPU data networks
+  static_routes = [
+    {
+      destination = "10.50.0.0/16"
+      gateway     = "192.168.1.100"
+      metric      = 50
+    }
+  ]
+
+  # Nvidia GPU settings
+  gpu_settings = [
+    {
+      name         = "0"
+      child_type   = "nvidia"
+      power_limit  = 300
+      compute_mode = "DEFAULT"
+    }
+  ]
+
+  # Network configuration
+  default_gateway = "192.168.1.1"
+  name_servers    = ["8.8.8.8", "8.8.4.4"]
+}
