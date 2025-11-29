@@ -63,8 +63,10 @@
     "AWS_SECRET_ACCESS_KEY": "${localEnv:AWS_SECRET_ACCESS_KEY}",
     "AWS_SESSION_TOKEN": "${localEnv:AWS_SESSION_TOKEN}",
     "AWS_SESSION_EXPIRATION": "${localEnv:AWS_SESSION_EXPIRATION}",
-    "VAULT_RADAR_LICENSE": "${localEnv:VAULT_RADAR_LICENSE:}"
-
+    "VAULT_RADAR_LICENSE": "${localEnv:VAULT_RADAR_LICENSE:}",
+    "LANGFUSE_HOST": "${localEnv:LANGFUSE_HOST:https://cloud.langfuse.com}",
+    "LANGFUSE_PUBLIC_KEY": "${localEnv:LANGFUSE_PUBLIC_KEY}",
+    "LANGFUSE_SECRET_KEY": "${localEnv:LANGFUSE_SECRET_KEY}"
   },
   "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=delegated",
   "workspaceFolder": "/workspace"

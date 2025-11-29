@@ -103,7 +103,9 @@ RUN sh -c "$(wget -O- https://github.com/deluan/zsh-in-docker/releases/download/
     curl -LsSf https://astral.sh/uv/install.sh | sh && \
     echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc && \
     ~/.local/bin/uv tool install pre-commit --with pre-commit-uv && \
-    ~/.local/bin/uv tool install specify-cli --from git+https://github.com/github/spec-kit.git
+    ~/.local/bin/uv tool install specify-cli --from git+https://github.com/github/spec-kit.git && \
+    # Install langfuse for Claude Code tracing
+    ~/.local/bin/uv tool install langfuse
 
 # Configure ccstatusline with Powerline enabled
 RUN mkdir -p /home/node/.config/ccstatusline && \
@@ -171,3 +173,47 @@ RUN mkdir -p /home/node/.config/ccstatusline && \
 # Add clauded alias for claude --dangerously-skip-permissions
 RUN echo 'alias clauded="claude --dangerously-skip-permissions"' >> /home/node/.zshrc && \
     chown node:node /home/node/.zshrc
+
+# Configure Claude Code Langfuse tracing hook
+RUN mkdir -p /home/node/.claude/hooks && \
+    # Create langfuse_trace.py hook script
+    echo '#!/usr/bin/env python3\n\
+"""Send Claude Code tool executions to Langfuse"""\n\
+import json, os, sys\n\
+\n\
+try:\n\
+    from langfuse import Langfuse\n\
+\n\
+    hook_input = json.load(sys.stdin)\n\
+\n\
+    langfuse = Langfuse()\n\
+\n\
+    trace = langfuse.trace(\n\
+        name=f"claude-code-{hook_input.get('\''tool_name'\'', '\''unknown'\'')}",\n\
+        session_id=hook_input.get('\''session_id'\''),\n\
+        metadata={"tool": hook_input.get('\''tool_name'\'')}\n\
+    )\n\
+\n\
+    trace.span(\n\
+        name=hook_input.get('\''tool_name'\'', '\''unknown'\''),\n\
+        input=hook_input.get('\''tool_input'\'', {}),\n\
+        output=str(hook_input.get('\''tool_response'\'', {}).get('\''stdout'\'', '\'''\''))[:4000]\n\
+    )\n\
+\n\
+    langfuse.flush()\n\
+except:\n\
+    pass  # Do not break Claude Code\n' > /home/node/.claude/hooks/langfuse_trace.py && \
+    chmod +x /home/node/.claude/hooks/langfuse_trace.py && \
+    # Create Claude settings.json with Langfuse hook
+    echo '{\
+  "hooks": {\
+    "PostToolUse": [{\
+      "matcher": "*",\
+      "hooks": [{\
+        "type": "command",\
+        "command": "python3 ~/.claude/hooks/langfuse_trace.py"\
+      }]\
+    }]\
+  }\
+}' > /home/node/.claude/settings.json && \
+    chown -R node:node /home/node/.claude

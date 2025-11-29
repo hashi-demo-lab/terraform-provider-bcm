@@ -7,7 +7,8 @@
       "Bash(pip3 install:*)",
       "Skill(terraform-provider-tests)",
       "Bash(done)",
-      "Bash(chmod:*)"
+      "Bash(chmod:*)",
+      "Bash(docker rmi:*)"
     ],
     "deny": [],
     "ask": []
