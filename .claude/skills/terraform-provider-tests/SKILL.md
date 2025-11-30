@@ -42,14 +42,14 @@ python3 scripts/analyze_gap.py ./internal/provider/ --output ./ai_reports/tf_pro
 **Verify compilation after changes**:
 
 ```bash
-./scripts/verify_compilation.sh ./internal/provider/
+./.claude/skills/terraform-provider-tests/verify_compilation.sh ./internal/provider/
 ```
 
 **Validate all examples**:
 
 ```bash
 export BCM_ENDPOINT="https://..." BCM_USERNAME="..." BCM_PASSWORD="..."
-./scripts/test-examples.sh
+./.claude/skills/terraform-provider-tests/test-examples.sh
 ```
 
 ### Recommended Naming Convention
@@ -217,13 +217,13 @@ Quick compilation check without running tests.
 ### Usage
 
 ```bash
-./scripts/verify_compilation.sh <test_directory>
+./.claude/skills/terraform-provider-tests/scripts/verify_compilation.sh <test_directory>
 ```
 
 **Example**:
 
 ```bash
-./scripts/verify_compilation.sh ./internal/provider/
+./.claude/skills/terraform-provider-tests/scripts/verify_compilation.sh ./internal/provider/
 ```
 
 ### What It Validates
@@ -258,22 +258,22 @@ Run acceptance tests concurrently per file for faster execution.
 
 ```bash
 # Run all acceptance tests with 15 concurrent files
-./scripts/run_tests_parallel.sh
+./.claude/skills/terraform-provider-tests/scripts/run_tests_parallel.sh
 
 # Run only resource tests with higher concurrency
-./scripts/run_tests_parallel.sh --resources-only -c 8
+./.claude/skills/terraform-provider-tests/scripts/run_tests_parallel.sh --resources-only -c 8
 
 # Run only data source tests
-./scripts/run_tests_parallel.sh --data-sources-only
+./.claude/skills/terraform-provider-tests/scripts/run_tests_parallel.sh --data-sources-only
 
 # Run tests matching specific pattern
-./scripts/run_tests_parallel.sh -p "TestAccCMPartSoftwareImage"
+./.claude/skills/terraform-provider-tests/scripts/run_tests_parallel.sh -p "TestAccCMPartSoftwareImage"
 
 # Run tests from specific file
-./scripts/run_tests_parallel.sh -f resource_cmpart_softwareimage_test.go
+./.claude/skills/terraform-provider-tests/scripts/run_tests_parallel.sh -f resource_cmpart_softwareimage_test.go
 
 # Verbose output with detailed test logs
-./scripts/run_tests_parallel.sh --verbose
+./.claude/skills/terraform-provider-tests/scripts/run_tests_parallel.sh --verbose
 ```
 
 **Options**:
