@@ -97,7 +97,7 @@ USER node
 # Install zsh theme, Claude, uv for user, and Python tools in one layer
 RUN sh -c "$(wget -O- https://github.com/deluan/zsh-in-docker/releases/download/v1.2.0/zsh-in-docker.sh)" -- \
         -p git \
-        -a "export PROMPT_COMMAND='history -a' && export HISTFILE=/commandhistory/.bash_history" \
+        -a 'export PROMPT_COMMAND="history -a" && export HISTFILE=/commandhistory/.bash_history' \
         -x && \
     npm install -g @anthropic-ai/claude-code ccstatusline && \
     curl -LsSf https://astral.sh/uv/install.sh | sh && \

@@ -168,7 +168,3 @@ RUN mkdir -p /home/node/.config/ccstatusline && \
 # Add clauded alias for claude --dangerously-skip-permissions
 RUN echo 'alias clauded="claude --dangerously-skip-permissions"' >> /home/node/.zshrc && \
     chown node:node /home/node/.zshrc
-
-# Install Claude Code hooks dependencies
-COPY --chown=node:node .claude/hooks /workspace/.claude/hooks
-RUN cd /workspace/.claude/hooks && npm install && npm run build
