@@ -28,7 +28,7 @@ func NewCMDeviceNodesDataSource() datasource.DataSource {
 
 // CMDeviceNodesDataSource is the data source implementation.
 type CMDeviceNodesDataSource struct {
-	client *BCMClient
+	BCMDataSourceBase
 }
 
 // CMDeviceNodesDataSourceModel describes the data source data model.
@@ -285,20 +285,7 @@ func (d *CMDeviceNodesDataSource) Schema(_ context.Context, _ datasource.SchemaR
 
 // Configure adds the provider configured client to the data source.
 func (d *CMDeviceNodesDataSource) Configure(_ context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
-	if req.ProviderData == nil {
-		return
-	}
-
-	client, ok := req.ProviderData.(*BCMClient)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Unexpected Data Source Configure Type",
-			fmt.Sprintf("Expected *BCMClient, got: %T. Please report this issue to the provider developers.", req.ProviderData),
-		)
-		return
-	}
-
-	d.client = client
+	d.ConfigureDataSource(req, resp)
 }
 
 // Read refreshes the Terraform state with the latest data.
@@ -313,7 +300,7 @@ func (d *CMDeviceNodesDataSource) Read(ctx context.Context, req datasource.ReadR
 
 	// Call BCM API to get nodes
 	tflog.Debug(ctx, "Calling BCM API: cmdevice.getNodes")
-	body, err := d.client.CallJSONRPC(ctx, "cmdevice", "getNodes")
+	body, err := d.Client.CallJSONRPC(ctx, "cmdevice", "getNodes")
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to Read BCM Nodes",

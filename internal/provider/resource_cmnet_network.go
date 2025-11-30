@@ -34,7 +34,7 @@ func NewCMNetNetworkResource() resource.Resource {
 
 // CMNetNetworkResource defines the resource implementation.
 type CMNetNetworkResource struct {
-	client *BCMClient
+	BCMResourceBase
 }
 
 // CMNetNetworkResourceModel describes the resource data model.
@@ -175,20 +175,7 @@ func (r *CMNetNetworkResource) Schema(ctx context.Context, req resource.SchemaRe
 
 // Configure adds the provider configured client to the resource.
 func (r *CMNetNetworkResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
-	if req.ProviderData == nil {
-		return
-	}
-
-	client, ok := req.ProviderData.(*BCMClient)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *BCMClient, got: %T. Please report this issue to the provider developers.", req.ProviderData),
-		)
-		return
-	}
-
-	r.client = client
+	r.ConfigureResource(req, resp)
 }
 
 // Create creates a new network resource.
@@ -217,7 +204,7 @@ func (r *CMNetNetworkResource) Create(ctx context.Context, req resource.CreateRe
 	}
 
 	// Pre-flight validation: Call validateNetwork before CREATE
-	validationErrors, err := r.client.ValidateEntity(ctx, "CMNet", "validateNetwork", entity, true)
+	validationErrors, err := r.Client.ValidateEntity(ctx, "CMNet", "validateNetwork", entity, true)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Validation API Error",
@@ -226,25 +213,8 @@ func (r *CMNetNetworkResource) Create(ctx context.Context, req resource.CreateRe
 		return
 	}
 
-	// Process validation results
-	hasErrors := false
-	for _, valErr := range validationErrors {
-		if valErr.IsError() {
-			resp.Diagnostics.AddError(
-				fmt.Sprintf("Validation Error: %s", valErr.Field),
-				valErr.Message,
-			)
-			hasErrors = true
-		} else if valErr.IsWarning() {
-			resp.Diagnostics.AddWarning(
-				fmt.Sprintf("Validation Warning: %s", valErr.Field),
-				valErr.Message,
-			)
-		}
-	}
-
-	// Halt if validation errors found
-	if hasErrors {
+	// Process validation results - halt if errors found
+	if ProcessValidationErrors(validationErrors, &resp.Diagnostics) {
 		return
 	}
 
@@ -254,7 +224,7 @@ func (r *CMNetNetworkResource) Create(ctx context.Context, req resource.CreateRe
 	})
 
 	// Call BCM API to create network
-	body, err := r.client.CallJSONRPC(ctx, "cmnet", "addNetwork", entity)
+	body, err := r.Client.CallJSONRPC(ctx, "cmnet", "addNetwork", entity)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Network Creation Failed",
@@ -298,7 +268,7 @@ func (r *CMNetNetworkResource) Create(ctx context.Context, req resource.CreateRe
 	}
 
 	// Since BCM returns null updated_entity, do a follow-up Read to get full network data
-	readBody, err := r.client.CallJSONRPC(ctx, "cmnet", "getNetwork", generatedUUID)
+	readBody, err := r.Client.CallJSONRPC(ctx, "cmnet", "getNetwork", generatedUUID)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Failed to Read Created Network",
@@ -341,7 +311,7 @@ func (r *CMNetNetworkResource) Read(ctx context.Context, req resource.ReadReques
 	}
 
 	// Call BCM API to get network by UUID (efficient direct lookup)
-	body, err := r.client.CallJSONRPC(ctx, "cmnet", "getNetwork", lookupID)
+	body, err := r.Client.CallJSONRPC(ctx, "cmnet", "getNetwork", lookupID)
 	if err != nil {
 		errorMsg := err.Error()
 		if containsAny(errorMsg, []string{"not found", "does not exist", "Unable to use map_key_to_string"}) {
@@ -396,7 +366,7 @@ func (r *CMNetNetworkResource) Update(ctx context.Context, req resource.UpdateRe
 	entity["revision"] = plan.Revision.ValueString()
 
 	// Pre-flight validation: Call validateNetwork before UPDATE
-	validationErrors, err := r.client.ValidateEntity(ctx, "CMNet", "validateNetwork", entity, false)
+	validationErrors, err := r.Client.ValidateEntity(ctx, "CMNet", "validateNetwork", entity, false)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Validation API Error",
@@ -405,25 +375,8 @@ func (r *CMNetNetworkResource) Update(ctx context.Context, req resource.UpdateRe
 		return
 	}
 
-	// Process validation results
-	hasErrors := false
-	for _, valErr := range validationErrors {
-		if valErr.IsError() {
-			resp.Diagnostics.AddError(
-				fmt.Sprintf("Validation Error: %s", valErr.Field),
-				valErr.Message,
-			)
-			hasErrors = true
-		} else if valErr.IsWarning() {
-			resp.Diagnostics.AddWarning(
-				fmt.Sprintf("Validation Warning: %s", valErr.Field),
-				valErr.Message,
-			)
-		}
-	}
-
-	// Halt if validation errors found
-	if hasErrors {
+	// Process validation results - halt if errors found
+	if ProcessValidationErrors(validationErrors, &resp.Diagnostics) {
 		return
 	}
 
@@ -433,7 +386,7 @@ func (r *CMNetNetworkResource) Update(ctx context.Context, req resource.UpdateRe
 	})
 
 	// Call BCM API to update network (force=false for safety)
-	body, err := r.client.CallJSONRPC(ctx, "cmnet", "updateNetwork", entity, false)
+	body, err := r.Client.CallJSONRPC(ctx, "cmnet", "updateNetwork", entity, false)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Network Update Failed",
@@ -476,7 +429,7 @@ func (r *CMNetNetworkResource) Delete(ctx context.Context, req resource.DeleteRe
 	})
 
 	// Call BCM API to delete network
-	_, err := r.client.CallJSONRPC(ctx, "cmnet", "removeNetwork", state.UUID.ValueString())
+	_, err := r.Client.CallJSONRPC(ctx, "cmnet", "removeNetwork", state.UUID.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Network Deletion Failed",

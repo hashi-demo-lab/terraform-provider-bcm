@@ -29,7 +29,7 @@ func NewCMPartEntityInfoDataSource() datasource.DataSource {
 
 // CMPartEntityInfoDataSource is the data source implementation.
 type CMPartEntityInfoDataSource struct {
-	client *BCMClient
+	BCMDataSourceBase
 }
 
 // CMPartEntityInfoDataSourceModel describes the data source data model.
@@ -96,20 +96,7 @@ func (d *CMPartEntityInfoDataSource) Schema(_ context.Context, _ datasource.Sche
 
 // Configure adds the provider configured client to the data source.
 func (d *CMPartEntityInfoDataSource) Configure(_ context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
-	if req.ProviderData == nil {
-		return
-	}
-
-	client, ok := req.ProviderData.(*BCMClient)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Unexpected Data Source Configure Type",
-			fmt.Sprintf("Expected *BCMClient, got: %T. Please report this issue to the provider developers.", req.ProviderData),
-		)
-		return
-	}
-
-	d.client = client
+	d.ConfigureDataSource(req, resp)
 }
 
 // Read refreshes the Terraform state with the latest data.
@@ -141,7 +128,7 @@ func (d *CMPartEntityInfoDataSource) Read(ctx context.Context, req datasource.Re
 	}
 
 	// Call BCM API - service name is lowercase "cmpart"
-	body, err := d.client.CallJSONRPC(ctx, "cmpart", "getBasicEntityInformation")
+	body, err := d.Client.CallJSONRPC(ctx, "cmpart", "getBasicEntityInformation")
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to Read BCM Entity Information",

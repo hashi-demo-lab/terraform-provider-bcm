@@ -336,9 +336,11 @@ func (c *BCMClient) doHTTPRequest(ctx context.Context, req *http.Request, jsonBo
 
 			return nil, fmt.Errorf("%s call failed after %d attempts: %w", logPrefix, attempt+1, err)
 		}
-		defer resp.Body.Close()
 
+		// Read body and close immediately (not defer) to avoid resource leak in retry loop
 		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close() // Close immediately after reading, not deferred
+
 		if err != nil {
 			lastErr = err
 
@@ -675,7 +677,7 @@ func (c *BCMClient) ValidateEntity(ctx context.Context, service, validateMethod 
 
 		// Filter Zero UUID errors for CREATE operations
 		// During CREATE, entities don't have UUIDs yet, so BCM returns expected "Zero UUID" errors
-		if isCreate && field == "uuid" && (errorCode == "NOT_NULL" || contains(message, "Zero UUID")) {
+		if isCreate && field == "uuid" && (errorCode == "NOT_NULL" || strings.Contains(message, "Zero UUID")) {
 			tflog.Debug(ctx, "Filtering expected Zero UUID error for CREATE operation", map[string]interface{}{
 				"field":   field,
 				"message": message,
@@ -698,6 +700,7 @@ func (c *BCMClient) ValidateEntity(ctx context.Context, service, validateMethod 
 }
 
 // getString safely extracts string value from map, returning empty string if not found or wrong type.
+// Note: For Terraform types.String, use getStringValue() from utils.go instead.
 func getString(data map[string]interface{}, key string) string {
 	if val, ok := data[key]; ok {
 		if str, ok := val.(string); ok {
@@ -705,20 +708,4 @@ func getString(data map[string]interface{}, key string) string {
 		}
 	}
 	return ""
-}
-
-// contains checks if a string contains a substring (case-sensitive).
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(substr) == 0 ||
-		(len(s) > 0 && len(substr) > 0 && indexOfSubstring(s, substr) >= 0))
-}
-
-// indexOfSubstring returns the index of substr in s, or -1 if not found.
-func indexOfSubstring(s, substr string) int {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return i
-		}
-	}
-	return -1
 }

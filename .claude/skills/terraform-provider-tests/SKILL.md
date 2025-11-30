@@ -10,6 +10,7 @@ Analyze test coverage and improve Terraform provider acceptance tests using mode
 ## Summary & Next Steps
 
 **When invoked, I will:**
+
 1. Run gap analysis: `python3 scripts/analyze_gap.py ./internal/provider/ --output ./ai_reports/tf_provider_tests_gap_$(date +%Y%m%d_%H%M%S).md`
 2. Generate timestamped report in `./ai_reports/`
 3. Provide **succinct summary** with:
@@ -18,6 +19,7 @@ Analyze test coverage and improve Terraform provider acceptance tests using mode
    - Recommended next action
 
 **Priority levels:**
+
 - **P1 (Critical)**: Missing drift/import tests, heavy legacy usage (>20 calls)
 - **P2 (Important)**: Missing idempotency, moderate legacy (5-20 calls)
 - **P3 (Cleanup)**: Light legacy (<5 calls)
@@ -29,6 +31,7 @@ Analyze test coverage and improve Terraform provider acceptance tests using mode
 ### Common Usage Scenarios
 
 **Analyze test modernization gaps**:
+
 ```bash
 python3 scripts/analyze_gap.py ./internal/provider/ --output ./ai_reports/tf_provider_tests_gap_$(date +%Y%m%d_%H%M%S).md
 ```
@@ -37,11 +40,13 @@ python3 scripts/analyze_gap.py ./internal/provider/ --output ./ai_reports/tf_pro
 "Analyze resource_example_test.go for coverage gaps"
 
 **Verify compilation after changes**:
+
 ```bash
 ./scripts/verify_compilation.sh ./internal/provider/
 ```
 
 **Validate all examples**:
+
 ```bash
 export BCM_ENDPOINT="https://..." BCM_USERNAME="..." BCM_PASSWORD="..."
 ./scripts/test-examples.sh
@@ -51,11 +56,11 @@ export BCM_ENDPOINT="https://..." BCM_USERNAME="..." BCM_PASSWORD="..."
 
 All gap analysis reports should use the `tf_provider_tests_*` naming pattern in the `./ai_reports/` directory:
 
-| Report Type | Filename Pattern | Example |
-|-------------|------------------|---------|
-| Initial gap analysis | `./ai_reports/tf_provider_tests_gap_YYYYMMDD_HHMMSS.md` | `./ai_reports/tf_provider_tests_gap_20251123_225128.md` |
-| Final analysis | `./ai_reports/tf_provider_tests_final_YYYYMMDD_HHMMSS.md` | `./ai_reports/tf_provider_tests_final_20251123_230145.md` |
-| One-time analysis | `./ai_reports/tf_provider_tests_gap.md` | `./ai_reports/tf_provider_tests_gap.md` |
+| Report Type          | Filename Pattern                                          | Example                                                   |
+| -------------------- | --------------------------------------------------------- | --------------------------------------------------------- |
+| Initial gap analysis | `./ai_reports/tf_provider_tests_gap_YYYYMMDD_HHMMSS.md`   | `./ai_reports/tf_provider_tests_gap_20251123_225128.md`   |
+| Final analysis       | `./ai_reports/tf_provider_tests_final_YYYYMMDD_HHMMSS.md` | `./ai_reports/tf_provider_tests_final_20251123_230145.md` |
+| One-time analysis    | `./ai_reports/tf_provider_tests_gap.md`                   | `./ai_reports/tf_provider_tests_gap.md`                   |
 
 **Timestamp format**: `$(date +%Y%m%d_%H%M%S)` generates `YYYYMMDD_HHMMSS`
 
@@ -89,11 +94,13 @@ python3 scripts/analyze_gap.py <test_directory> [--output report.md]
 ```
 
 **Example** (recommended naming pattern):
+
 ```bash
 python3 scripts/analyze_gap.py ./internal/provider/ --output ./ai_reports/tf_provider_tests_gap_$(date +%Y%m%d_%H%M%S).md
 ```
 
 **Simple filename** (for one-time analysis):
+
 ```bash
 python3 scripts/analyze_gap.py ./internal/provider/ --output ./ai_reports/tf_provider_tests_gap.md
 ```
@@ -111,6 +118,7 @@ python3 scripts/analyze_gap.py ./internal/provider/ --output ./ai_reports/tf_pro
 ### Output
 
 Markdown report with:
+
 - Codebase statistics (line counts by file type, test-to-impl ratio)
 - Executive summary with overall grade (A/B/C)
 - File-by-file analysis with status
@@ -118,6 +126,7 @@ Markdown report with:
 - Modern pattern quick reference
 
 **Review the report to understand**:
+
 - Which files need the most work
 - What patterns are missing
 - Overall modernization progress
@@ -127,16 +136,19 @@ Markdown report with:
 Focus on high-impact changes first:
 
 ### Priority 1 (Critical) ⚠️
+
 - Missing drift detection tests
 - Missing import tests
 - Heavy legacy usage (>20 calls per file)
 
 ### Priority 2 (Important) 📋
+
 - Missing idempotency checks
 - Moderate legacy usage (5-20 calls)
 - Mixed patterns (legacy + modern)
 
 ### Priority 3 (Cleanup) 📝
+
 - Light legacy usage (<5 calls)
 - Documentation improvements
 
@@ -160,6 +172,7 @@ For each file, apply patterns in this order:
 Replace `Check: resource.ComposeAggregateTestCheckFunc()` with `ConfigStateChecks`.
 
 **Before**:
+
 ```go
 Check: resource.ComposeAggregateTestCheckFunc(
     resource.TestCheckResourceAttr("example_resource.test", "name", "expected"),
@@ -167,6 +180,7 @@ Check: resource.ComposeAggregateTestCheckFunc(
 ```
 
 **After**:
+
 ```go
 ConfigStateChecks: []statecheck.StateCheck{
     statecheck.ExpectKnownValue(
@@ -207,6 +221,7 @@ Quick compilation check without running tests.
 ```
 
 **Example**:
+
 ```bash
 ./scripts/verify_compilation.sh ./internal/provider/
 ```
@@ -219,6 +234,7 @@ Quick compilation check without running tests.
 - ✅ Statistics (file count, test count)
 
 **If compilation fails**:
+
 1. Review error messages
 2. Check for missing imports
 3. Verify block closures
@@ -227,6 +243,7 @@ Quick compilation check without running tests.
 ## Phase 5: Testing
 
 ### Quick Compile Check
+
 ```bash
 go test -c ./internal/provider/ -o /tmp/provider_tests
 ```
@@ -238,8 +255,9 @@ go test -c ./internal/provider/ -o /tmp/provider_tests
 Run acceptance tests concurrently per file for faster execution.
 
 **Usage**:
+
 ```bash
-# Run all acceptance tests with 4 concurrent files
+# Run all acceptance tests with 15 concurrent files
 ./scripts/run_tests_parallel.sh
 
 # Run only resource tests with higher concurrency
@@ -259,6 +277,7 @@ Run acceptance tests concurrently per file for faster execution.
 ```
 
 **Options**:
+
 - `-d, --dir DIR` - Test directory (default: ./internal/provider)
 - `-p, --pattern PATTERN` - Test pattern to match (default: TestAcc)
 - `-c, --concurrency N` - Max concurrent test files (default: 4)
@@ -270,17 +289,20 @@ Run acceptance tests concurrently per file for faster execution.
 - `--no-color` - Disable colored output
 
 **Benefits**:
+
 - ⚡ Faster execution (4x-8x speedup with proper concurrency)
 - 📊 Per-file progress tracking
 - 🎯 Aggregated summary with pass/fail counts
 - 🔍 Automatic failure highlighting
 
 ### Single Test (Sequential)
+
 ```bash
 TF_ACC=1 go test -v -timeout 30m ./internal/provider/ -run "^TestAccResource_Specific$"
 ```
 
 ### Full Suite (Sequential)
+
 ```bash
 TF_ACC=1 go test -v -timeout 120m ./internal/provider/
 ```
@@ -328,11 +350,13 @@ SKIP_BUILD=true ./scripts/test-examples.sh
 ### Execution Strategy
 
 **Data Sources** (parallel):
+
 - Run up to 4 examples concurrently (configurable with `PARALLEL_LIMIT`)
 - Fast validation (init → validate → plan)
 - No actual resources created
 
 **Resources** (sequential):
+
 - Run one at a time (state-modifying operations)
 - Full lifecycle testing for test-citest examples (init → validate → plan → apply → destroy)
 - Plan-only validation for documentation examples
@@ -343,16 +367,18 @@ SKIP_BUILD=true ./scripts/test-examples.sh
 2. **Provider build** - Compile provider binary (skippable with `SKIP_BUILD=true`)
 3. **Example discovery** - Find all `.tf` files in `examples/data-sources/*/` and `examples/resources/*/`
 4. **Example testing** - Execute terraform commands on each example
-5. **Cleanup** - Remove test resources (citest-* prefix) with retry logic
+5. **Cleanup** - Remove test resources (citest-\* prefix) with retry logic
 
 ### Environment Variables
 
 **Required**:
+
 - `BCM_ENDPOINT` - BCM API endpoint
 - `BCM_USERNAME` - BCM authentication username
 - `BCM_PASSWORD` - BCM authentication password
 
 **Optional**:
+
 - `PROVIDER_VERSION` - Provider version (default: 0.1.0)
 - `SKIP_BUILD` - Skip build phase (default: false)
 - `PARALLEL_LIMIT` - Max parallel data source tests (default: 4)
@@ -370,16 +396,19 @@ SKIP_BUILD=true ./scripts/test-examples.sh
 ### Best Practices
 
 **Example Naming**:
+
 - Use `citest-` prefix for resources that need cleanup
 - Examples in `test-citest/` directories undergo full apply/destroy
 - Other examples are validated with plan-only
 
 **Provider Configuration**:
+
 - Examples should NOT include provider blocks
 - Script automatically injects provider config with environment variables
 - Use `insecure_skip_verify = true` for self-signed certs
 
 **Resource Cleanup**:
+
 - Script automatically cleans up resources with `citest-` prefix
 - Uses exponential backoff retry for cleanup failures
 - Run `--cleanup-only` to manually cleanup orphaned resources
@@ -387,6 +416,7 @@ SKIP_BUILD=true ./scripts/test-examples.sh
 ### When to Use Example Testing
 
 Run example testing when:
+
 - Adding new examples to `examples/` directory
 - Modifying provider schema or behavior
 - Before releasing a new provider version
@@ -398,12 +428,14 @@ Run example testing when:
 Example testing complements acceptance tests:
 
 **Acceptance Tests** (`make testacc`):
+
 - Full CRUD operation validation
 - Import and drift detection
 - Comprehensive error handling
 - Run on every commit
 
 **Example Tests** (`./scripts/test-examples.sh`):
+
 - Documentation accuracy validation
 - End-user workflow verification
 - Multi-example compatibility
@@ -412,6 +444,7 @@ Example testing complements acceptance tests:
 ## Completion Criteria
 
 A fully modernized test file has:
+
 - ✅ Zero legacy `Check` blocks
 - ✅ All state assertions use `statecheck.ExpectKnownValue()`
 - ✅ Idempotency checks after Create and Update
@@ -428,24 +461,26 @@ The analyzer detects inconsistent usage of the `.id` property across test steps.
 ### Why It Matters
 
 Resource IDs should remain stable across:
+
 - Initial creation
 - Import operations
 - Update operations
 
 Inconsistent ID handling can indicate:
+
 - Resource recreation instead of in-place updates
 - Import state mismatches
 - State management bugs
 
 ### What the Analyzer Detects
 
-| Issue | Description | Severity |
-|-------|-------------|----------|
-| Missing CompareValue | Multiple test steps without ID consistency tracking | High |
-| Partial ID tracking | Some steps track ID, others don't | Medium |
-| Legacy ID checks | Uses `TestCheckResourceAttr` for "id" instead of modern patterns | Medium |
-| No ID verification | Resource tests that never verify ID | High |
-| Modern without tracking | Uses `ExpectKnownValue` for ID but no `CompareValue` | Low |
+| Issue                   | Description                                                      | Severity |
+| ----------------------- | ---------------------------------------------------------------- | -------- |
+| Missing CompareValue    | Multiple test steps without ID consistency tracking              | High     |
+| Partial ID tracking     | Some steps track ID, others don't                                | Medium   |
+| Legacy ID checks        | Uses `TestCheckResourceAttr` for "id" instead of modern patterns | Medium   |
+| No ID verification      | Resource tests that never verify ID                              | High     |
+| Modern without tracking | Uses `ExpectKnownValue` for ID but no `CompareValue`             | Low      |
 
 ### Correct Pattern
 
@@ -487,6 +522,7 @@ func TestAccResource_Complete(t *testing.T) {
 ### Common Anti-Patterns
 
 **Anti-pattern 1: Legacy ID checks**
+
 ```go
 // ❌ Bad - uses legacy pattern
 Check: resource.ComposeAggregateTestCheckFunc(
@@ -495,6 +531,7 @@ Check: resource.ComposeAggregateTestCheckFunc(
 ```
 
 **Anti-pattern 2: Inconsistent tracking**
+
 ```go
 // ❌ Bad - only tracks ID in Create step, not Import/Update
 Steps: []resource.TestStep{
@@ -517,6 +554,7 @@ Steps: []resource.TestStep{
 ```
 
 **Anti-pattern 3: No tracking at all**
+
 ```go
 // ❌ Bad - multiple steps with no ID consistency tracking
 compareID := statecheck.CompareValue(compare.ValuesSame()) // Declared but never used!
@@ -538,12 +576,15 @@ compareID := statecheck.CompareValue(compare.ValuesSame()) // Declared but never
 This skill includes comprehensive reference documentation:
 
 ### references/workflow.md
+
 Complete step-by-step modernization workflow with detailed guidance for each phase, common pitfalls, and completion criteria.
 
 **When to read**: For detailed phase-by-phase instructions.
 
 ### references/pattern_templates.md
+
 Ready-to-use code templates for all modern patterns:
+
 - Legacy to modern conversion examples
 - Idempotency verification
 - Import test steps
@@ -555,7 +596,9 @@ Ready-to-use code templates for all modern patterns:
 **When to read**: When applying specific patterns to code.
 
 ### references/hashicorp_official.md
+
 Consolidated HashiCorp official documentation:
+
 - TestCase and TestStep structure
 - State checks (statecheck package)
 - Plan checks (plancheck package)
@@ -578,10 +621,12 @@ Consolidated HashiCorp official documentation:
 This skill uses a **hybrid approach**:
 
 **Automation** for:
+
 - ✅ Gap analysis (find legacy patterns, missing tests)
 - ✅ Compilation verification (syntax checking)
 
 **Guided assistance** for:
+
 - ✅ Code changes (apply patterns with context)
 - ✅ Complex operations (drift tests, API integration)
 - ✅ Decision making (prioritization, test design)

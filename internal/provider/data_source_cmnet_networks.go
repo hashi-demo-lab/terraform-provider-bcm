@@ -30,7 +30,7 @@ func NewCMNetNetworksDataSource() datasource.DataSource {
 // CMNetNetworksDataSource is the data source implementation for querying BCM network configurations.
 // It retrieves network information from the BCM CMNet service via the getNetworks API call.
 type CMNetNetworksDataSource struct {
-	client *BCMClient // BCM API client for making JSON-RPC calls
+	BCMDataSourceBase
 }
 
 // CMNetNetworksDataSourceModel describes the data source data model.
@@ -256,20 +256,7 @@ func (d *CMNetNetworksDataSource) Schema(_ context.Context, _ datasource.SchemaR
 
 // Configure adds the provider configured client to the data source.
 func (d *CMNetNetworksDataSource) Configure(_ context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
-	if req.ProviderData == nil {
-		return
-	}
-
-	client, ok := req.ProviderData.(*BCMClient)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Unexpected Data Source Configure Type",
-			fmt.Sprintf("Expected *BCMClient, got: %T. Please report this issue to the provider developers.", req.ProviderData),
-		)
-		return
-	}
-
-	d.client = client
+	d.ConfigureDataSource(req, resp)
 }
 
 // Read refreshes the Terraform state with the latest data.
@@ -288,7 +275,7 @@ func (d *CMNetNetworksDataSource) Read(ctx context.Context, req datasource.ReadR
 	})
 
 	// Call BCM API
-	body, err := d.client.CallJSONRPC(ctx, "cmnet", "getNetworks")
+	body, err := d.Client.CallJSONRPC(ctx, "cmnet", "getNetworks")
 	if err != nil {
 		// Enhanced error handling with actionable guidance
 		resp.Diagnostics.AddError(
@@ -298,7 +285,7 @@ func (d *CMNetNetworksDataSource) Read(ctx context.Context, req datasource.ReadR
 				"  - Authentication failure: Verify BCM credentials are correct\n"+
 				"  - Network connectivity: Ensure BCM endpoint is reachable\n"+
 				"  - API endpoint: Confirm BCM API is available at the configured endpoint\n\n"+
-				"Error details: %s", d.client.Endpoint, err.Error()),
+				"Error details: %s", d.Client.Endpoint, err.Error()),
 		)
 		return
 	}

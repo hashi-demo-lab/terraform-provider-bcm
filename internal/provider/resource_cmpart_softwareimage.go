@@ -33,7 +33,7 @@ var (
 
 // CMPartSoftwareImageResource defines the resource implementation.
 type CMPartSoftwareImageResource struct {
-	client *BCMClient
+	BCMResourceBase
 }
 
 // CMPartSoftwareImageResourceModel describes the resource data model.
@@ -246,20 +246,7 @@ func (r *CMPartSoftwareImageResource) Schema(ctx context.Context, req resource.S
 
 // Configure stores the BCM client in the resource instance.
 func (r *CMPartSoftwareImageResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
-	if req.ProviderData == nil {
-		return
-	}
-
-	client, ok := req.ProviderData.(*BCMClient)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *BCMClient, got: %T. Please report this issue to the provider developers.", req.ProviderData),
-		)
-		return
-	}
-
-	r.client = client
+	r.ConfigureResource(req, resp)
 }
 
 // Create implements the resource Create operation (REFACTOR phase - API integration).
@@ -275,7 +262,7 @@ func (r *CMPartSoftwareImageResource) Create(ctx context.Context, req resource.C
 	entity := r.buildAPIEntity(&plan, "")
 
 	// Pre-flight validation: Call validateSoftwareImage before CREATE
-	validationErrors, err := r.client.ValidateEntity(ctx, "CMPart", "validateSoftwareImage", entity, true)
+	validationErrors, err := r.Client.ValidateEntity(ctx, "CMPart", "validateSoftwareImage", entity, true)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Validation API Error",
@@ -284,25 +271,8 @@ func (r *CMPartSoftwareImageResource) Create(ctx context.Context, req resource.C
 		return
 	}
 
-	// Process validation results
-	hasErrors := false
-	for _, valErr := range validationErrors {
-		if valErr.IsError() {
-			resp.Diagnostics.AddError(
-				fmt.Sprintf("Validation Error: %s", valErr.Field),
-				valErr.Message,
-			)
-			hasErrors = true
-		} else if valErr.IsWarning() {
-			resp.Diagnostics.AddWarning(
-				fmt.Sprintf("Validation Warning: %s", valErr.Field),
-				valErr.Message,
-			)
-		}
-	}
-
-	// Halt if validation errors found
-	if hasErrors {
+	// Process validation results - halt if errors found
+	if ProcessValidationErrors(validationErrors, &resp.Diagnostics) {
 		return
 	}
 
@@ -314,7 +284,7 @@ func (r *CMPartSoftwareImageResource) Create(ctx context.Context, req resource.C
 		"entity": string(entityJSON),
 	})
 
-	createBody, err := r.client.CallJSONRPC(ctx, "CMPart", "addSoftwareImage", entity, false)
+	createBody, err := r.Client.CallJSONRPC(ctx, "CMPart", "addSoftwareImage", entity, false)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Software Image Creation Failed",
@@ -379,7 +349,7 @@ func (r *CMPartSoftwareImageResource) Create(ctx context.Context, req resource.C
 			}
 
 			// Check if clone is complete by reading fileOperationInProgress
-			statusBody, err := r.client.CallJSONRPC(ctx, "CMPart", "getSoftwareImages")
+			statusBody, err := r.Client.CallJSONRPC(ctx, "CMPart", "getSoftwareImages")
 			if err != nil {
 				lastErr = err
 				tflog.Warn(ctx, "Failed to check clone status", map[string]interface{}{
@@ -499,7 +469,7 @@ func (r *CMPartSoftwareImageResource) Update(ctx context.Context, req resource.U
 	entity := r.buildAPIEntity(&plan, plan.UUID.ValueString())
 
 	// Pre-flight validation: Call validateSoftwareImage before UPDATE
-	validationErrors, err := r.client.ValidateEntity(ctx, "CMPart", "validateSoftwareImage", entity, false)
+	validationErrors, err := r.Client.ValidateEntity(ctx, "CMPart", "validateSoftwareImage", entity, false)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Validation API Error",
@@ -508,25 +478,8 @@ func (r *CMPartSoftwareImageResource) Update(ctx context.Context, req resource.U
 		return
 	}
 
-	// Process validation results
-	hasErrors := false
-	for _, valErr := range validationErrors {
-		if valErr.IsError() {
-			resp.Diagnostics.AddError(
-				fmt.Sprintf("Validation Error: %s", valErr.Field),
-				valErr.Message,
-			)
-			hasErrors = true
-		} else if valErr.IsWarning() {
-			resp.Diagnostics.AddWarning(
-				fmt.Sprintf("Validation Warning: %s", valErr.Field),
-				valErr.Message,
-			)
-		}
-	}
-
-	// Halt if validation errors found
-	if hasErrors {
+	// Process validation results - halt if errors found
+	if ProcessValidationErrors(validationErrors, &resp.Diagnostics) {
 		return
 	}
 
@@ -538,7 +491,7 @@ func (r *CMPartSoftwareImageResource) Update(ctx context.Context, req resource.U
 		"entity": string(entityJSON),
 	})
 
-	_, err = r.client.CallJSONRPC(ctx, "CMPart", "updateSoftwareImage", entity, false)
+	_, err = r.Client.CallJSONRPC(ctx, "CMPart", "updateSoftwareImage", entity, false)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Software Image Update Failed",
@@ -602,7 +555,7 @@ func (r *CMPartSoftwareImageResource) Delete(ctx context.Context, req resource.D
 			"image_uuid": state.UUID.ValueString(),
 		})
 
-		result, err := CheckCategoriesUsingImage(ctx, r.client, state.Name.ValueString())
+		result, err := CheckCategoriesUsingImage(ctx, r.Client, state.Name.ValueString())
 		if err != nil {
 			// Dependency check failed - log warning but allow user to proceed with force
 			resp.Diagnostics.AddWarning(
@@ -645,7 +598,7 @@ func (r *CMPartSoftwareImageResource) Delete(ctx context.Context, req resource.D
 		})
 	} else {
 		// Force deletion - log warning about potential orphaned references
-		tflog.Warn(ctx, BuildForceDeleteionWarning("Software Image", state.Name.ValueString()), map[string]interface{}{
+		tflog.Warn(ctx, BuildForceDeletionWarning("Software Image", state.Name.ValueString()), map[string]interface{}{
 			"image_name": state.Name.ValueString(),
 			"image_uuid": state.UUID.ValueString(),
 			"force":      true,
@@ -653,7 +606,7 @@ func (r *CMPartSoftwareImageResource) Delete(ctx context.Context, req resource.D
 	}
 
 	// Call removeSoftwareImage with UUID, removeData=false, removeAll=false, force parameter
-	_, err := r.client.CallJSONRPC(ctx, "CMPart", "removeSoftwareImage", state.UUID.ValueString(), false, false, force)
+	_, err := r.Client.CallJSONRPC(ctx, "CMPart", "removeSoftwareImage", state.UUID.ValueString(), false, false, force)
 	if err != nil {
 		// Enhanced error handling - check if already deleted (idempotent)
 		errStr := err.Error()
@@ -700,7 +653,7 @@ func (r *CMPartSoftwareImageResource) readSoftwareImage(ctx context.Context, mod
 	} else if !model.ID.IsNull() && model.ID.ValueString() != "" {
 		// Import case: ID is set (UUID), need to look up by ID
 		// First, get all images and find by UUID
-		allImagesBody, err := r.client.CallJSONRPC(ctx, "CMPart", "getSoftwareImages")
+		allImagesBody, err := r.Client.CallJSONRPC(ctx, "CMPart", "getSoftwareImages")
 		if err != nil {
 			diags.AddError(
 				"Software Image Read Failed",
@@ -749,7 +702,7 @@ func (r *CMPartSoftwareImageResource) readSoftwareImage(ctx context.Context, mod
 	})
 
 	// Use efficient getSoftwareImage(name) API for direct lookup
-	body, err := r.client.CallJSONRPC(ctx, "CMPart", "getSoftwareImage", lookupName)
+	body, err := r.Client.CallJSONRPC(ctx, "CMPart", "getSoftwareImage", lookupName)
 	if err != nil {
 		diags.AddError(
 			"Software Image Read Failed",

@@ -31,7 +31,7 @@ var (
 
 // CMDeviceDeviceResource defines the resource implementation.
 type CMDeviceDeviceResource struct {
-	client *BCMClient
+	BCMResourceBase
 }
 
 // CMDeviceDeviceResourceModel describes the resource data model.
@@ -361,20 +361,7 @@ func (r *CMDeviceDeviceResource) Schema(ctx context.Context, req resource.Schema
 
 // Configure adds the provider configured client to the resource.
 func (r *CMDeviceDeviceResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
-	if req.ProviderData == nil {
-		return
-	}
-
-	client, ok := req.ProviderData.(*BCMClient)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *BCMClient, got: %T. Please report this issue to the provider developers.", req.ProviderData),
-		)
-		return
-	}
-
-	r.client = client
+	r.ConfigureResource(req, resp)
 }
 
 // Create creates the device resource.
@@ -394,118 +381,35 @@ func (r *CMDeviceDeviceResource) Create(ctx context.Context, req resource.Create
 		"uuid":     newUUID,
 	})
 
-	// If partition not specified, query category to get default partition
-	partitionUUID := ""
-	usesProxy := false // Track if partition comes from softwareImageProxy
+	// Resolve partition UUID (either from plan or from category's default)
+	partitionResult, err := r.resolvePartitionFromCategory(ctx, plan.Category.ValueString(), plan.Partition)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error Resolving Partition",
+			fmt.Sprintf("Could not resolve partition for device '%s': %s\n\n"+
+				"Please specify partition explicitly or ensure the category has a valid "+
+				"partition or software image proxy configuration.", plan.Hostname.ValueString(), err.Error()),
+		)
+		return
+	}
 
-	if !plan.Partition.IsNull() && !plan.Partition.IsUnknown() {
-		partitionUUID = plan.Partition.ValueString()
-	} else {
-		// Query category to get its default partition
-		categoryBody, err := r.client.CallJSONRPC(ctx, "cmdevice", "getCategory", plan.Category.ValueString())
-		if err != nil {
-			resp.Diagnostics.AddError(
-				"Error Querying Category",
-				fmt.Sprintf("Could not query category '%s' to get default partition: %s", plan.Category.ValueString(), err.Error()),
-			)
-			return
-		}
+	partitionUUID := partitionResult.PartitionUUID
 
-		var categoryData map[string]interface{}
-		if err := json.Unmarshal(categoryBody, &categoryData); err != nil {
-			resp.Diagnostics.AddError(
-				"Error Parsing Category",
-				fmt.Sprintf("Could not parse category data: %s", err.Error()),
-			)
-			return
-		}
-
-		// Try direct partition field first
-		if partition, ok := categoryData["partition"].(string); ok && partition != "" {
-			partitionUUID = partition
-			tflog.Debug(ctx, "Using category's direct partition", map[string]interface{}{
-				"partition": partitionUUID,
-			})
-		} else if proxyData, ok := categoryData["softwareImageProxy"].(map[string]interface{}); ok && proxyData != nil {
-			// Check if category uses softwareImageProxy instead
-			if parentImage, ok := proxyData["parentSoftwareImage"].(string); ok && parentImage != "" {
-				usesProxy = true // Mark that this category uses softwareImageProxy
-				tflog.Debug(ctx, "Category uses softwareImageProxy - will use cluster's base partition", map[string]interface{}{
-					"parent_software_image": parentImage,
-				})
-
-				// When softwareImageProxy is used, devices must reference the cluster's default partition
-				// Query for the base partition
-				partitionsBody, err := r.client.CallJSONRPC(ctx, "CMPart", "getPartitions")
-				if err != nil {
-					resp.Diagnostics.AddError(
-						"Error Querying Partitions",
-						fmt.Sprintf("Could not query partitions: %s", err.Error()),
-					)
-					return
-				}
-
-				var partitions []map[string]interface{}
-				if err := json.Unmarshal(partitionsBody, &partitions); err != nil {
-					resp.Diagnostics.AddError(
-						"Error Parsing Partitions",
-						fmt.Sprintf("Could not parse partitions response: %s", err.Error()),
-					)
-					return
-				}
-
-				// Find the base partition (or first available partition)
-				basePartitionFound := false
-				for _, part := range partitions {
-					if name, ok := part["name"].(string); ok && name == "base" {
-						if uuid, ok := part["uuid"].(string); ok && uuid != "" {
-							partitionUUID = uuid
-							basePartitionFound = true
-							tflog.Debug(ctx, "Found base partition for softwareImageProxy", map[string]interface{}{
-								"partition_uuid": partitionUUID,
-							})
-							break
-						}
-					}
-				}
-
-				if !basePartitionFound {
-					resp.Diagnostics.AddError(
-						"Missing Base Partition",
-						"Category uses softwareImageProxy but no 'base' partition found in cluster",
-					)
-					return
-				}
-
-				// Add delay for BCM to process the proxy configuration (eventual consistency)
-				// BCM needs time to propagate the software image proxy configuration
-				tflog.Debug(ctx, "Waiting for category proxy to stabilize", nil)
-				time.Sleep(5 * time.Second)
-			} else {
-				resp.Diagnostics.AddError(
-					"Missing Partition",
-					"Category has softwareImageProxy but no parentSoftwareImage. Please specify partition explicitly.",
-				)
-				return
-			}
-		} else {
-			resp.Diagnostics.AddError(
-				"Missing Partition",
-				"Category does not have a default partition or software image proxy. Please specify partition explicitly.",
-			)
-			return
-		}
+	// When using softwareImageProxy, add delay for BCM to process the proxy configuration
+	if partitionResult.UsesProxy {
+		tflog.Debug(ctx, "Waiting for category proxy to stabilize", nil)
+		time.Sleep(5 * time.Second)
 	}
 
 	// Only wait for partition commit if NOT using softwareImageProxy
 	// When softwareImageProxy is used, the partition is derived from category's proxy configuration
 	// and we only need to ensure the software image is committed (not the partition)
-	if !usesProxy {
+	if !partitionResult.UsesProxy {
 		tflog.Debug(ctx, "Waiting for partition to be committed", map[string]interface{}{
 			"partition_uuid": partitionUUID,
-			"uses_proxy":     usesProxy,
+			"uses_proxy":     partitionResult.UsesProxy,
 		})
-		if err := r.waitForPartitionCommit(ctx, r.client, partitionUUID); err != nil {
+		if err := r.waitForPartitionCommit(ctx, r.Client, partitionUUID); err != nil {
 			resp.Diagnostics.AddError(
 				"Partition Not Ready",
 				fmt.Sprintf("Partition %s is not committed/available after waiting: %s\n\n"+
@@ -521,7 +425,7 @@ func (r *CMDeviceDeviceResource) Create(ctx context.Context, req resource.Create
 		// The partition is the cluster's existing base partition, not a newly created one
 		tflog.Debug(ctx, "Category uses softwareImageProxy with base partition", map[string]interface{}{
 			"partition_uuid": partitionUUID,
-			"uses_proxy":     usesProxy,
+			"uses_proxy":     partitionResult.UsesProxy,
 		})
 	}
 
@@ -541,7 +445,7 @@ func (r *CMDeviceDeviceResource) Create(ctx context.Context, req resource.Create
 	}
 
 	// Pre-flight validation: Call validateDevice before CREATE
-	validationErrors, err := r.client.ValidateEntity(ctx, "CMDevice", "validateDevice", deviceEntity, true)
+	validationErrors, err := r.Client.ValidateEntity(ctx, "CMDevice", "validateDevice", deviceEntity, true)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Validation API Error",
@@ -550,25 +454,8 @@ func (r *CMDeviceDeviceResource) Create(ctx context.Context, req resource.Create
 		return
 	}
 
-	// Process validation results
-	hasErrors := false
-	for _, valErr := range validationErrors {
-		if valErr.IsError() {
-			resp.Diagnostics.AddError(
-				fmt.Sprintf("Validation Error: %s", valErr.Field),
-				valErr.Message,
-			)
-			hasErrors = true
-		} else if valErr.IsWarning() {
-			resp.Diagnostics.AddWarning(
-				fmt.Sprintf("Validation Warning: %s", valErr.Field),
-				valErr.Message,
-			)
-		}
-	}
-
-	// Halt if validation errors found
-	if hasErrors {
+	// Process validation results - halt if errors found
+	if ProcessValidationErrors(validationErrors, &resp.Diagnostics) {
 		return
 	}
 
@@ -579,7 +466,7 @@ func (r *CMDeviceDeviceResource) Create(ctx context.Context, req resource.Create
 	}
 
 	// Call BCM API to create device
-	body, err := r.client.CallJSONRPC(ctx, "cmdevice", "addDevice", deviceEntity, forceValue)
+	body, err := r.Client.CallJSONRPC(ctx, "cmdevice", "addDevice", deviceEntity, forceValue)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Creating Device",
@@ -629,7 +516,7 @@ func (r *CMDeviceDeviceResource) Create(ctx context.Context, req resource.Create
 	// Wait a moment for BCM to process the device creation
 	time.Sleep(2 * time.Second)
 
-	readBody, err := r.client.CallJSONRPC(ctx, "cmdevice", "getDevice", newUUID)
+	readBody, err := r.Client.CallJSONRPC(ctx, "cmdevice", "getDevice", newUUID)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Reading Created Device",
@@ -762,6 +649,91 @@ func (r *CMDeviceDeviceResource) waitForPartitionCommit(ctx context.Context, cli
 		maxRetries, totalWait.Seconds())
 }
 
+// PartitionResolutionResult contains the result of resolving a partition from a category.
+type PartitionResolutionResult struct {
+	PartitionUUID string
+	UsesProxy     bool
+}
+
+// resolvePartitionFromCategory resolves the partition UUID for a device.
+// If partitionValue is set, it uses that directly. Otherwise, it queries the category
+// to get its default partition or resolve it from softwareImageProxy.
+//
+// Returns:
+//   - PartitionResolutionResult with the partition UUID and whether it uses a proxy
+//   - error if the resolution fails
+func (r *CMDeviceDeviceResource) resolvePartitionFromCategory(ctx context.Context, categoryName string, partitionValue types.String) (PartitionResolutionResult, error) {
+	result := PartitionResolutionResult{}
+
+	// If partition is explicitly provided, use it directly
+	if !partitionValue.IsNull() && !partitionValue.IsUnknown() {
+		result.PartitionUUID = partitionValue.ValueString()
+		return result, nil
+	}
+
+	// Query category to get its default partition
+	categoryBody, err := r.Client.CallJSONRPC(ctx, "cmdevice", "getCategory", categoryName)
+	if err != nil {
+		return result, fmt.Errorf("could not query category '%s' to get default partition: %w", categoryName, err)
+	}
+
+	var categoryData map[string]interface{}
+	if err := json.Unmarshal(categoryBody, &categoryData); err != nil {
+		return result, fmt.Errorf("could not parse category data: %w", err)
+	}
+
+	// Try direct partition field first
+	if partition, ok := categoryData["partition"].(string); ok && partition != "" {
+		result.PartitionUUID = partition
+		tflog.Debug(ctx, "Using category's direct partition", map[string]interface{}{
+			"partition": result.PartitionUUID,
+		})
+		return result, nil
+	}
+
+	// Check if category uses softwareImageProxy instead
+	proxyData, ok := categoryData["softwareImageProxy"].(map[string]interface{})
+	if !ok || proxyData == nil {
+		return result, fmt.Errorf("category does not have a default partition or software image proxy")
+	}
+
+	parentImage, ok := proxyData["parentSoftwareImage"].(string)
+	if !ok || parentImage == "" {
+		return result, fmt.Errorf("category has softwareImageProxy but no parentSoftwareImage")
+	}
+
+	result.UsesProxy = true
+	tflog.Debug(ctx, "Category uses softwareImageProxy - will use cluster's base partition", map[string]interface{}{
+		"parent_software_image": parentImage,
+	})
+
+	// Query for the base partition
+	partitionsBody, err := r.Client.CallJSONRPC(ctx, "CMPart", "getPartitions")
+	if err != nil {
+		return result, fmt.Errorf("could not query partitions: %w", err)
+	}
+
+	var partitions []map[string]interface{}
+	if err := json.Unmarshal(partitionsBody, &partitions); err != nil {
+		return result, fmt.Errorf("could not parse partitions response: %w", err)
+	}
+
+	// Find the base partition
+	for _, part := range partitions {
+		if name, ok := part["name"].(string); ok && name == "base" {
+			if uuid, ok := part["uuid"].(string); ok && uuid != "" {
+				result.PartitionUUID = uuid
+				tflog.Debug(ctx, "Found base partition for softwareImageProxy", map[string]interface{}{
+					"partition_uuid": result.PartitionUUID,
+				})
+				return result, nil
+			}
+		}
+	}
+
+	return result, fmt.Errorf("category uses softwareImageProxy but no 'base' partition found in cluster")
+}
+
 // Read reads the device resource.
 func (r *CMDeviceDeviceResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var state CMDeviceDeviceResourceModel
@@ -781,7 +753,7 @@ func (r *CMDeviceDeviceResource) Read(ctx context.Context, req resource.ReadRequ
 	})
 
 	// Call BCM API to get device (efficient direct lookup)
-	body, err := r.client.CallJSONRPC(ctx, "cmdevice", "getDevice", deviceID)
+	body, err := r.Client.CallJSONRPC(ctx, "cmdevice", "getDevice", deviceID)
 	if err != nil || len(body) == 0 {
 		tflog.Warn(ctx, "Device not found in BCM, removing from state", map[string]interface{}{
 			"uuid": state.UUID.ValueString(),
@@ -916,87 +888,18 @@ func (r *CMDeviceDeviceResource) Update(ctx context.Context, req resource.Update
 	})
 
 	// Resolve partition UUID (either from plan or from category's default)
-	partitionUUID := ""
-
-	if !plan.Partition.IsNull() && !plan.Partition.IsUnknown() {
-		partitionUUID = plan.Partition.ValueString()
-	} else {
-		// Query category to get default partition
-		categoryBody, err := r.client.CallJSONRPC(ctx, "cmdevice", "getCategory", plan.Category.ValueString())
-		if err != nil {
-			resp.Diagnostics.AddError(
-				"Error Querying Category",
-				fmt.Sprintf("Could not query category '%s' to get partition: %s", plan.Category.ValueString(), err.Error()),
-			)
-			return
-		}
-
-		var categoryData map[string]interface{}
-		if err := json.Unmarshal(categoryBody, &categoryData); err != nil {
-			resp.Diagnostics.AddError(
-				"Error Parsing Category Data",
-				fmt.Sprintf("Could not parse category data: %s", err.Error()),
-			)
-			return
-		}
-
-		// Try direct partition field first
-		if partition, ok := categoryData["partition"].(string); ok && partition != "" {
-			partitionUUID = partition
-			tflog.Debug(ctx, "Using category's direct partition", map[string]interface{}{
-				"partition": partitionUUID,
-			})
-		} else if proxyData, ok := categoryData["softwareImageProxy"].(map[string]interface{}); ok && proxyData != nil {
-			// Check if category uses softwareImageProxy instead
-			if parentImage, ok := proxyData["parentSoftwareImage"].(string); ok && parentImage != "" {
-				tflog.Debug(ctx, "Category uses softwareImageProxy - will use cluster's base partition", map[string]interface{}{
-					"parent_software_image": parentImage,
-				})
-
-				// Query for the base partition
-				partitionsBody, err := r.client.CallJSONRPC(ctx, "CMPart", "getPartitions")
-				if err != nil {
-					resp.Diagnostics.AddError(
-						"Error Querying Partitions",
-						fmt.Sprintf("Could not query partitions: %s", err.Error()),
-					)
-					return
-				}
-
-				var partitions []map[string]interface{}
-				if err := json.Unmarshal(partitionsBody, &partitions); err != nil {
-					resp.Diagnostics.AddError(
-						"Error Parsing Partitions",
-						fmt.Sprintf("Could not parse partitions response: %s", err.Error()),
-					)
-					return
-				}
-
-				// Find the base partition
-				basePartitionFound := false
-				for _, part := range partitions {
-					if name, ok := part["name"].(string); ok && name == "base" {
-						if uuid, ok := part["uuid"].(string); ok && uuid != "" {
-							partitionUUID = uuid
-							basePartitionFound = true
-							tflog.Debug(ctx, "Found base partition for softwareImageProxy", map[string]interface{}{
-								"partition_uuid": partitionUUID,
-							})
-							break
-						}
-					}
-				}
-
-				if !basePartitionFound {
-					resp.Diagnostics.AddError(
-						"Missing Base Partition",
-						"Category uses softwareImageProxy but no 'base' partition found in cluster",
-					)
-					return
-				}
-			}
-		}
+	partitionResult, err := r.resolvePartitionFromCategory(ctx, plan.Category.ValueString(), plan.Partition)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error Resolving Partition",
+			fmt.Sprintf("Could not resolve partition for device '%s': %s\n\n"+
+				"Please specify partition explicitly or ensure the category has a valid "+
+				"partition or software image proxy configuration.", plan.Hostname.ValueString(), err.Error()),
+		)
+		return
 	}
+
+	partitionUUID := partitionResult.PartitionUUID
 
 	// Build device entity for BCM API (include UUID for update)
 	// Partition field is always included as BCM requires it
@@ -1015,7 +918,7 @@ func (r *CMDeviceDeviceResource) Update(ctx context.Context, req resource.Update
 	}
 
 	// Pre-flight validation: Call validateDevice before UPDATE
-	validationErrors, err := r.client.ValidateEntity(ctx, "CMDevice", "validateDevice", deviceEntity, false)
+	validationErrors, err := r.Client.ValidateEntity(ctx, "CMDevice", "validateDevice", deviceEntity, false)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Validation API Error",
@@ -1024,25 +927,8 @@ func (r *CMDeviceDeviceResource) Update(ctx context.Context, req resource.Update
 		return
 	}
 
-	// Process validation results
-	hasErrors := false
-	for _, valErr := range validationErrors {
-		if valErr.IsError() {
-			resp.Diagnostics.AddError(
-				fmt.Sprintf("Validation Error: %s", valErr.Field),
-				valErr.Message,
-			)
-			hasErrors = true
-		} else if valErr.IsWarning() {
-			resp.Diagnostics.AddWarning(
-				fmt.Sprintf("Validation Warning: %s", valErr.Field),
-				valErr.Message,
-			)
-		}
-	}
-
-	// Halt if validation errors found
-	if hasErrors {
+	// Process validation results - halt if errors found
+	if ProcessValidationErrors(validationErrors, &resp.Diagnostics) {
 		return
 	}
 
@@ -1053,7 +939,7 @@ func (r *CMDeviceDeviceResource) Update(ctx context.Context, req resource.Update
 	}
 
 	// Call BCM API to update device
-	_, err = r.client.CallJSONRPC(ctx, "cmdevice", "updateDevice", deviceEntity, forceValue)
+	_, err = r.Client.CallJSONRPC(ctx, "cmdevice", "updateDevice", deviceEntity, forceValue)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Updating Device",
@@ -1068,7 +954,7 @@ func (r *CMDeviceDeviceResource) Update(ctx context.Context, req resource.Update
 	})
 
 	// Read back the updated device
-	readBody, err := r.client.CallJSONRPC(ctx, "cmdevice", "getDevice", state.UUID.ValueString())
+	readBody, err := r.Client.CallJSONRPC(ctx, "cmdevice", "getDevice", state.UUID.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Reading Updated Device",
@@ -1180,7 +1066,7 @@ func (r *CMDeviceDeviceResource) Delete(ctx context.Context, req resource.Delete
 	}
 
 	// Call BCM API to delete device
-	_, err := r.client.CallJSONRPC(ctx, "cmdevice", "removeDevice", state.UUID.ValueString(), forceValue)
+	_, err := r.Client.CallJSONRPC(ctx, "cmdevice", "removeDevice", state.UUID.ValueString(), forceValue)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Deleting Device",
@@ -1375,7 +1261,7 @@ func (r *CMDeviceDeviceResource) lookupAndBuildRolesForEntity(ctx context.Contex
 
 	// Query all nodes to extract available role objects
 	// Roles are embedded in node objects and must be extracted
-	body, err := r.client.CallJSONRPC(ctx, "cmdevice", "getNodes")
+	body, err := r.Client.CallJSONRPC(ctx, "cmdevice", "getNodes")
 	if err != nil {
 		return fmt.Errorf("failed to query nodes for role lookup: %w", err)
 	}

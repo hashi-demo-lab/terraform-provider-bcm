@@ -25,7 +25,7 @@ func NewCMUserUsersDataSource() datasource.DataSource {
 
 // CMUserUsersDataSource defines the data source implementation.
 type CMUserUsersDataSource struct {
-	client *BCMClient
+	BCMDataSourceBase
 }
 
 // CMUserUsersDataSourceModel describes the data source data model.
@@ -173,24 +173,8 @@ func (d *CMUserUsersDataSource) Schema(ctx context.Context, req datasource.Schem
 	}
 }
 
-func (d *CMUserUsersDataSource) Configure(ctx context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
-	// Prevent panic if the provider has not been configured.
-	if req.ProviderData == nil {
-		return
-	}
-
-	client, ok := req.ProviderData.(*BCMClient)
-
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Unexpected Data Source Configure Type",
-			fmt.Sprintf("Expected *BCMClient, got: %T. Please report this issue to the provider developers.", req.ProviderData),
-		)
-
-		return
-	}
-
-	d.client = client
+func (d *CMUserUsersDataSource) Configure(_ context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
+	d.ConfigureDataSource(req, resp)
 }
 
 func (d *CMUserUsersDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
@@ -205,7 +189,7 @@ func (d *CMUserUsersDataSource) Read(ctx context.Context, req datasource.ReadReq
 
 	// Call BCM API to get all users
 	tflog.Debug(ctx, "Calling cmuser.getUsers()")
-	body, err := d.client.CallJSONRPC(ctx, "cmuser", "getUsers")
+	body, err := d.Client.CallJSONRPC(ctx, "cmuser", "getUsers")
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Reading Users",

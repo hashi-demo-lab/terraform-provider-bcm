@@ -36,7 +36,7 @@ func NewCMPartPartitionsDataSource() datasource.DataSource {
 
 // CMPartPartitionsDataSource is the data source implementation.
 type CMPartPartitionsDataSource struct {
-	client *BCMClient
+	BCMDataSourceBase
 }
 
 // CMPartPartitionsDataSourceModel describes the data source data model.
@@ -201,20 +201,7 @@ func (d *CMPartPartitionsDataSource) Schema(_ context.Context, _ datasource.Sche
 
 // Configure adds the provider configured client to the data source.
 func (d *CMPartPartitionsDataSource) Configure(_ context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
-	if req.ProviderData == nil {
-		return
-	}
-
-	client, ok := req.ProviderData.(*BCMClient)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Unexpected Data Source Configure Type",
-			fmt.Sprintf("Expected *BCMClient, got: %T. Please report this issue to the provider developers.", req.ProviderData),
-		)
-		return
-	}
-
-	d.client = client
+	d.ConfigureDataSource(req, resp)
 }
 
 // Read refreshes the Terraform state with the latest data.
@@ -241,7 +228,7 @@ func (d *CMPartPartitionsDataSource) Read(ctx context.Context, req datasource.Re
 	})
 
 	// Call BCM API
-	body, err := d.client.CallJSONRPC(ctx, bcmPartitionService, bcmPartitionMethod)
+	body, err := d.Client.CallJSONRPC(ctx, bcmPartitionService, bcmPartitionMethod)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to Read BCM Partitions",

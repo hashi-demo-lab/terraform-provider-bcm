@@ -29,7 +29,7 @@ func NewCMKubeClustersDataSource() datasource.DataSource {
 
 // CMKubeClustersDataSource is the data source implementation.
 type CMKubeClustersDataSource struct {
-	client *BCMClient
+	BCMDataSourceBase
 }
 
 // CMKubeClustersDataSourceModel describes the data source data model.
@@ -202,20 +202,7 @@ func (d *CMKubeClustersDataSource) Schema(_ context.Context, _ datasource.Schema
 
 // Configure adds the provider configured client to the data source.
 func (d *CMKubeClustersDataSource) Configure(_ context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
-	if req.ProviderData == nil {
-		return
-	}
-
-	client, ok := req.ProviderData.(*BCMClient)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Unexpected Data Source Configure Type",
-			"Expected *BCMClient, got something else. Please report this issue to the provider developers.",
-		)
-		return
-	}
-
-	d.client = client
+	d.ConfigureDataSource(req, resp)
 }
 
 // Read refreshes the Terraform state with the latest data.
@@ -231,7 +218,7 @@ func (d *CMKubeClustersDataSource) Read(ctx context.Context, req datasource.Read
 	tflog.Debug(ctx, "Reading Kubernetes clusters from BCM API")
 
 	// Call BCM API to retrieve all Kubernetes clusters
-	body, err := d.client.CallJSONRPC(ctx, "cmkube", "getKubeClusters")
+	body, err := d.Client.CallJSONRPC(ctx, "cmkube", "getKubeClusters")
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Reading Kubernetes Clusters",

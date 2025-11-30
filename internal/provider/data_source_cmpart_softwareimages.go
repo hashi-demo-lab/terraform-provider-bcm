@@ -6,7 +6,6 @@ package provider
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -28,7 +27,7 @@ func NewCMPartSoftwareImagesDataSource() datasource.DataSource {
 
 // CMPartSoftwareImagesDataSource is the data source implementation.
 type CMPartSoftwareImagesDataSource struct {
-	client *BCMClient
+	BCMDataSourceBase
 }
 
 // CMPartSoftwareImagesDataSourceModel describes the data source data model.
@@ -288,20 +287,7 @@ func (d *CMPartSoftwareImagesDataSource) Schema(_ context.Context, _ datasource.
 
 // Configure adds the provider configured client to the data source.
 func (d *CMPartSoftwareImagesDataSource) Configure(_ context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
-	if req.ProviderData == nil {
-		return
-	}
-
-	client, ok := req.ProviderData.(*BCMClient)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Unexpected Data Source Configure Type",
-			fmt.Sprintf("Expected *BCMClient, got: %T. Please report this issue to the provider developers.", req.ProviderData),
-		)
-		return
-	}
-
-	d.client = client
+	d.ConfigureDataSource(req, resp)
 }
 
 // Read refreshes the Terraform state with the latest data.
@@ -320,7 +306,7 @@ func (d *CMPartSoftwareImagesDataSource) Read(ctx context.Context, req datasourc
 	})
 
 	// Call BCM API
-	body, err := d.client.CallJSONRPC(ctx, "CMPart", "getSoftwareImages")
+	body, err := d.Client.CallJSONRPC(ctx, "CMPart", "getSoftwareImages")
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to Read BCM Software Images",
@@ -456,54 +442,6 @@ func mapAPIResponseToModel(apiData map[string]interface{}) SoftwareImageModel {
 	}
 
 	return model
-}
-
-// Helper functions for null-safe field extraction
-
-func getStringValue(data map[string]interface{}, key string) types.String {
-	if val, ok := data[key]; ok && val != nil {
-		if str, ok := val.(string); ok && str != "" {
-			return types.StringValue(str)
-		}
-	}
-	return types.StringNull()
-}
-
-func getBoolValue(data map[string]interface{}, key string) types.Bool {
-	if val, ok := data[key]; ok && val != nil {
-		if b, ok := val.(bool); ok {
-			return types.BoolValue(b)
-		}
-	}
-	return types.BoolNull()
-}
-
-func getInt64Value(data map[string]interface{}, key string) types.Int64 {
-	if val, ok := data[key]; ok && val != nil {
-		switch v := val.(type) {
-		case float64:
-			return types.Int64Value(int64(v))
-		case int64:
-			return types.Int64Value(v)
-		case int:
-			return types.Int64Value(int64(v))
-		}
-	}
-	return types.Int64Null()
-}
-
-func getFloat64Value(data map[string]interface{}, key string) types.Float64 {
-	if val, ok := data[key]; ok && val != nil {
-		switch v := val.(type) {
-		case float64:
-			return types.Float64Value(v)
-		case int64:
-			return types.Float64Value(float64(v))
-		case int:
-			return types.Float64Value(float64(v))
-		}
-	}
-	return types.Float64Null()
 }
 
 // matchesSoftwareImageFilter checks if an image matches the filter criteria.
