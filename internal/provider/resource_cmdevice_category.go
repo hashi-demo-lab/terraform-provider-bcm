@@ -10,7 +10,6 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/hashicorp/terraform-plugin-framework-validators/float64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
@@ -36,7 +35,7 @@ var (
 
 // CMDeviceCategoryResource defines the resource implementation.
 type CMDeviceCategoryResource struct {
-	client *BCMClient
+	BCMResourceBase
 }
 
 // CMDeviceCategoryResourceModel describes the resource data model.
@@ -1097,21 +1096,7 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 
 // Configure stores the provider client for later use.
 func (r *CMDeviceCategoryResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
-	// Prevent panic if the provider has not been configured
-	if req.ProviderData == nil {
-		return
-	}
-
-	client, ok := req.ProviderData.(*BCMClient)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Unexpected Resource Configure Type",
-			"Expected *BCMClient, got something else. Please report this issue to the provider developers.",
-		)
-		return
-	}
-
-	r.client = client
+	r.ConfigureResource(req, resp)
 }
 
 // Create implements resource.Resource (REFACTOR phase - Real API integration).
@@ -1138,7 +1123,7 @@ func (r *CMDeviceCategoryResource) Create(ctx context.Context, req resource.Crea
 	entity := r.buildAPIEntity(ctx, &plan, "")
 
 	// Pre-flight validation: Call validateCategory before CREATE
-	validationErrors, err := r.client.ValidateEntity(ctx, "CMDevice", "validateCategory", entity, true)
+	validationErrors, err := r.Client.ValidateEntity(ctx, "CMDevice", "validateCategory", entity, true)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Validation API Error",
@@ -1147,25 +1132,8 @@ func (r *CMDeviceCategoryResource) Create(ctx context.Context, req resource.Crea
 		return
 	}
 
-	// Process validation results
-	hasErrors := false
-	for _, valErr := range validationErrors {
-		if valErr.IsError() {
-			resp.Diagnostics.AddError(
-				fmt.Sprintf("Validation Error: %s", valErr.Field),
-				valErr.Message,
-			)
-			hasErrors = true
-		} else if valErr.IsWarning() {
-			resp.Diagnostics.AddWarning(
-				fmt.Sprintf("Validation Warning: %s", valErr.Field),
-				valErr.Message,
-			)
-		}
-	}
-
-	// Halt if validation errors found
-	if hasErrors {
+	// Process validation results - halt if errors found
+	if ProcessValidationErrors(validationErrors, &resp.Diagnostics) {
 		return
 	}
 
@@ -1181,7 +1149,7 @@ func (r *CMDeviceCategoryResource) Create(ctx context.Context, req resource.Crea
 	})
 
 	// Call addCategory API
-	body, err := r.client.CallJSONRPC(ctx, "cmdevice", "addCategory", entity, force)
+	body, err := r.Client.CallJSONRPC(ctx, "cmdevice", "addCategory", entity, force)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Category Creation Failed",
@@ -1678,7 +1646,7 @@ func (r *CMDeviceCategoryResource) Update(ctx context.Context, req resource.Upda
 	entity := r.buildAPIEntity(ctx, &plan, state.UUID.ValueString())
 
 	// Pre-flight validation: Call validateCategory before UPDATE
-	validationErrors, err := r.client.ValidateEntity(ctx, "CMDevice", "validateCategory", entity, false)
+	validationErrors, err := r.Client.ValidateEntity(ctx, "CMDevice", "validateCategory", entity, false)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Validation API Error",
@@ -1687,25 +1655,8 @@ func (r *CMDeviceCategoryResource) Update(ctx context.Context, req resource.Upda
 		return
 	}
 
-	// Process validation results
-	hasErrors := false
-	for _, valErr := range validationErrors {
-		if valErr.IsError() {
-			resp.Diagnostics.AddError(
-				fmt.Sprintf("Validation Error: %s", valErr.Field),
-				valErr.Message,
-			)
-			hasErrors = true
-		} else if valErr.IsWarning() {
-			resp.Diagnostics.AddWarning(
-				fmt.Sprintf("Validation Warning: %s", valErr.Field),
-				valErr.Message,
-			)
-		}
-	}
-
-	// Halt if validation errors found
-	if hasErrors {
+	// Process validation results - halt if errors found
+	if ProcessValidationErrors(validationErrors, &resp.Diagnostics) {
 		return
 	}
 
@@ -1728,7 +1679,7 @@ func (r *CMDeviceCategoryResource) Update(ctx context.Context, req resource.Upda
 	})
 
 	// Call updateCategory API
-	_, err = r.client.CallJSONRPC(ctx, "cmdevice", "updateCategory", entity, force)
+	_, err = r.Client.CallJSONRPC(ctx, "cmdevice", "updateCategory", entity, force)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Category Update Failed",
@@ -1950,7 +1901,7 @@ func (r *CMDeviceCategoryResource) Delete(ctx context.Context, req resource.Dele
 			"category_name": state.Name.ValueString(),
 		})
 
-		result, err := CheckDevicesInCategory(ctx, r.client, state.UUID.ValueString())
+		result, err := CheckDevicesInCategory(ctx, r.Client, state.UUID.ValueString())
 		if err != nil {
 			// Dependency check failed - log warning but allow user to proceed with force
 			resp.Diagnostics.AddWarning(
@@ -1993,7 +1944,7 @@ func (r *CMDeviceCategoryResource) Delete(ctx context.Context, req resource.Dele
 		})
 	} else {
 		// Force deletion - log warning about potential orphaned references
-		tflog.Warn(ctx, BuildForceDeleteionWarning("Category", state.Name.ValueString()), map[string]interface{}{
+		tflog.Warn(ctx, BuildForceDeletionWarning("Category", state.Name.ValueString()), map[string]interface{}{
 			"category_uuid": state.UUID.ValueString(),
 			"category_name": state.Name.ValueString(),
 			"force":         true,
@@ -2001,7 +1952,7 @@ func (r *CMDeviceCategoryResource) Delete(ctx context.Context, req resource.Dele
 	}
 
 	// Call removeCategory API
-	_, err := r.client.CallJSONRPC(ctx, "cmdevice", "removeCategory", state.UUID.ValueString(), force)
+	_, err := r.Client.CallJSONRPC(ctx, "cmdevice", "removeCategory", state.UUID.ValueString(), force)
 	if err != nil {
 		// Enhanced error handling - Parse error to check if already deleted (idempotent)
 		errStr := err.Error()
@@ -2031,38 +1982,6 @@ func (r *CMDeviceCategoryResource) Delete(ctx context.Context, req resource.Dele
 	})
 }
 
-// containsAny checks if a string contains any of the specified substrings (case-insensitive).
-func containsAny(s string, substrings []string) bool {
-	// Import strings package functionality inline for case-insensitive check
-	lowerStr := ""
-	for _, c := range s {
-		if c >= 'A' && c <= 'Z' {
-			lowerStr += string(c + 32)
-		} else {
-			lowerStr += string(c)
-		}
-	}
-
-	for _, substring := range substrings {
-		lowerSub := ""
-		for _, c := range substring {
-			if c >= 'A' && c <= 'Z' {
-				lowerSub += string(c + 32)
-			} else {
-				lowerSub += string(c)
-			}
-		}
-
-		// Check if lowerStr contains lowerSub
-		for i := 0; i <= len(lowerStr)-len(lowerSub); i++ {
-			if lowerStr[i:i+len(lowerSub)] == lowerSub {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 // ImportState implements resource.ResourceWithImportState.
 func (r *CMDeviceCategoryResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	// T034-T035: Two-phase import implementation
@@ -2075,7 +1994,7 @@ func (r *CMDeviceCategoryResource) ImportState(ctx context.Context, req resource
 	})
 
 	// Phase 1: List all categories to find the name for this UUID
-	body, err := r.client.CallJSONRPC(ctx, "cmdevice", "getCategories")
+	body, err := r.Client.CallJSONRPC(ctx, "cmdevice", "getCategories")
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Import Failed",
@@ -2748,7 +2667,7 @@ func (r *CMDeviceCategoryResource) readCategory(ctx context.Context, model *CMDe
 	})
 
 	// Use efficient getCategory(name) API for direct lookup
-	body, err := r.client.CallJSONRPC(ctx, "cmdevice", "getCategory", lookupName)
+	body, err := r.Client.CallJSONRPC(ctx, "cmdevice", "getCategory", lookupName)
 	if err != nil {
 		diags.AddError(
 			"Category Read Failed",
@@ -4001,11 +3920,6 @@ func unknownInt64ToNull(val types.Int64) types.Int64 {
 		return types.Int64Null()
 	}
 	return val
-}
-
-// generateUUID creates a new UUID v4 string.
-func generateUUID() string {
-	return uuid.New().String()
 }
 
 // generateStaticRouteUUIDs generates UUIDs for any routes that don't have one.

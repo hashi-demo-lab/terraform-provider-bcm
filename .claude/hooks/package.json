@@ -1,0 +1,26 @@
+{
+  "name": "claude-langfuse-hooks",
+  "version": "1.1.0",
+  "description": "Langfuse tracing hooks for Claude Code",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "trace": "node dist/langfuse-hook.js",
+    "watch": "tsc --watch",
+    "setup": "npm install && npm run build",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watch",
+    "health": "./scripts/health-check.sh"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.3",
+    "langfuse": "^3.0.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.0",
+    "@types/node": "^20.0.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.0",
+    "typescript": "^5.0.0"
+  }
+}

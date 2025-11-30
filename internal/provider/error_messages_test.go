@@ -116,8 +116,8 @@ func TestBuildDependencyError_Truncation(t *testing.T) {
 	}
 }
 
-func TestBuildForceDeleteionWarning_Category(t *testing.T) {
-	msg := BuildForceDeleteionWarning("Category", "default")
+func TestBuildForceDeletionWarning_Category(t *testing.T) {
+	msg := BuildForceDeletionWarning("Category", "default")
 
 	// Verify message structure
 	if !strings.Contains(msg, "Category 'default' is being deleted with force=true") {
@@ -137,8 +137,8 @@ func TestBuildForceDeleteionWarning_Category(t *testing.T) {
 	}
 }
 
-func TestBuildForceDeleteionWarning_SoftwareImage(t *testing.T) {
-	msg := BuildForceDeleteionWarning("Software Image", "Rocky-8.10")
+func TestBuildForceDeletionWarning_SoftwareImage(t *testing.T) {
+	msg := BuildForceDeletionWarning("Software Image", "Rocky-8.10")
 
 	// Verify message structure
 	if !strings.Contains(msg, "Software Image 'Rocky-8.10' is being deleted with force=true") {

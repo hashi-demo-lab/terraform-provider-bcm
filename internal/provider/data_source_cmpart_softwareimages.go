@@ -458,54 +458,6 @@ func mapAPIResponseToModel(apiData map[string]interface{}) SoftwareImageModel {
 	return model
 }
 
-// Helper functions for null-safe field extraction
-
-func getStringValue(data map[string]interface{}, key string) types.String {
-	if val, ok := data[key]; ok && val != nil {
-		if str, ok := val.(string); ok && str != "" {
-			return types.StringValue(str)
-		}
-	}
-	return types.StringNull()
-}
-
-func getBoolValue(data map[string]interface{}, key string) types.Bool {
-	if val, ok := data[key]; ok && val != nil {
-		if b, ok := val.(bool); ok {
-			return types.BoolValue(b)
-		}
-	}
-	return types.BoolNull()
-}
-
-func getInt64Value(data map[string]interface{}, key string) types.Int64 {
-	if val, ok := data[key]; ok && val != nil {
-		switch v := val.(type) {
-		case float64:
-			return types.Int64Value(int64(v))
-		case int64:
-			return types.Int64Value(v)
-		case int:
-			return types.Int64Value(int64(v))
-		}
-	}
-	return types.Int64Null()
-}
-
-func getFloat64Value(data map[string]interface{}, key string) types.Float64 {
-	if val, ok := data[key]; ok && val != nil {
-		switch v := val.(type) {
-		case float64:
-			return types.Float64Value(v)
-		case int64:
-			return types.Float64Value(float64(v))
-		case int:
-			return types.Float64Value(float64(v))
-		}
-	}
-	return types.Float64Null()
-}
-
 // matchesSoftwareImageFilter checks if an image matches the filter criteria.
 // Multiple filters use AND logic - the image must match all specified filters.
 //

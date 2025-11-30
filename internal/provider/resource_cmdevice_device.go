@@ -31,7 +31,7 @@ var (
 
 // CMDeviceDeviceResource defines the resource implementation.
 type CMDeviceDeviceResource struct {
-	client *BCMClient
+	BCMResourceBase
 }
 
 // CMDeviceDeviceResourceModel describes the resource data model.
@@ -361,20 +361,7 @@ func (r *CMDeviceDeviceResource) Schema(ctx context.Context, req resource.Schema
 
 // Configure adds the provider configured client to the resource.
 func (r *CMDeviceDeviceResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
-	if req.ProviderData == nil {
-		return
-	}
-
-	client, ok := req.ProviderData.(*BCMClient)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *BCMClient, got: %T. Please report this issue to the provider developers.", req.ProviderData),
-		)
-		return
-	}
-
-	r.client = client
+	r.ConfigureResource(req, resp)
 }
 
 // Create creates the device resource.
@@ -402,7 +389,7 @@ func (r *CMDeviceDeviceResource) Create(ctx context.Context, req resource.Create
 		partitionUUID = plan.Partition.ValueString()
 	} else {
 		// Query category to get its default partition
-		categoryBody, err := r.client.CallJSONRPC(ctx, "cmdevice", "getCategory", plan.Category.ValueString())
+		categoryBody, err := r.Client.CallJSONRPC(ctx, "cmdevice", "getCategory", plan.Category.ValueString())
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Error Querying Category",
@@ -436,7 +423,7 @@ func (r *CMDeviceDeviceResource) Create(ctx context.Context, req resource.Create
 
 				// When softwareImageProxy is used, devices must reference the cluster's default partition
 				// Query for the base partition
-				partitionsBody, err := r.client.CallJSONRPC(ctx, "CMPart", "getPartitions")
+				partitionsBody, err := r.Client.CallJSONRPC(ctx, "CMPart", "getPartitions")
 				if err != nil {
 					resp.Diagnostics.AddError(
 						"Error Querying Partitions",
@@ -505,7 +492,7 @@ func (r *CMDeviceDeviceResource) Create(ctx context.Context, req resource.Create
 			"partition_uuid": partitionUUID,
 			"uses_proxy":     usesProxy,
 		})
-		if err := r.waitForPartitionCommit(ctx, r.client, partitionUUID); err != nil {
+		if err := r.waitForPartitionCommit(ctx, r.Client, partitionUUID); err != nil {
 			resp.Diagnostics.AddError(
 				"Partition Not Ready",
 				fmt.Sprintf("Partition %s is not committed/available after waiting: %s\n\n"+
@@ -541,7 +528,7 @@ func (r *CMDeviceDeviceResource) Create(ctx context.Context, req resource.Create
 	}
 
 	// Pre-flight validation: Call validateDevice before CREATE
-	validationErrors, err := r.client.ValidateEntity(ctx, "CMDevice", "validateDevice", deviceEntity, true)
+	validationErrors, err := r.Client.ValidateEntity(ctx, "CMDevice", "validateDevice", deviceEntity, true)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Validation API Error",
@@ -550,25 +537,8 @@ func (r *CMDeviceDeviceResource) Create(ctx context.Context, req resource.Create
 		return
 	}
 
-	// Process validation results
-	hasErrors := false
-	for _, valErr := range validationErrors {
-		if valErr.IsError() {
-			resp.Diagnostics.AddError(
-				fmt.Sprintf("Validation Error: %s", valErr.Field),
-				valErr.Message,
-			)
-			hasErrors = true
-		} else if valErr.IsWarning() {
-			resp.Diagnostics.AddWarning(
-				fmt.Sprintf("Validation Warning: %s", valErr.Field),
-				valErr.Message,
-			)
-		}
-	}
-
-	// Halt if validation errors found
-	if hasErrors {
+	// Process validation results - halt if errors found
+	if ProcessValidationErrors(validationErrors, &resp.Diagnostics) {
 		return
 	}
 
@@ -579,7 +549,7 @@ func (r *CMDeviceDeviceResource) Create(ctx context.Context, req resource.Create
 	}
 
 	// Call BCM API to create device
-	body, err := r.client.CallJSONRPC(ctx, "cmdevice", "addDevice", deviceEntity, forceValue)
+	body, err := r.Client.CallJSONRPC(ctx, "cmdevice", "addDevice", deviceEntity, forceValue)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Creating Device",
@@ -629,7 +599,7 @@ func (r *CMDeviceDeviceResource) Create(ctx context.Context, req resource.Create
 	// Wait a moment for BCM to process the device creation
 	time.Sleep(2 * time.Second)
 
-	readBody, err := r.client.CallJSONRPC(ctx, "cmdevice", "getDevice", newUUID)
+	readBody, err := r.Client.CallJSONRPC(ctx, "cmdevice", "getDevice", newUUID)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Reading Created Device",
@@ -781,7 +751,7 @@ func (r *CMDeviceDeviceResource) Read(ctx context.Context, req resource.ReadRequ
 	})
 
 	// Call BCM API to get device (efficient direct lookup)
-	body, err := r.client.CallJSONRPC(ctx, "cmdevice", "getDevice", deviceID)
+	body, err := r.Client.CallJSONRPC(ctx, "cmdevice", "getDevice", deviceID)
 	if err != nil || len(body) == 0 {
 		tflog.Warn(ctx, "Device not found in BCM, removing from state", map[string]interface{}{
 			"uuid": state.UUID.ValueString(),
@@ -922,7 +892,7 @@ func (r *CMDeviceDeviceResource) Update(ctx context.Context, req resource.Update
 		partitionUUID = plan.Partition.ValueString()
 	} else {
 		// Query category to get default partition
-		categoryBody, err := r.client.CallJSONRPC(ctx, "cmdevice", "getCategory", plan.Category.ValueString())
+		categoryBody, err := r.Client.CallJSONRPC(ctx, "cmdevice", "getCategory", plan.Category.ValueString())
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Error Querying Category",
@@ -954,7 +924,7 @@ func (r *CMDeviceDeviceResource) Update(ctx context.Context, req resource.Update
 				})
 
 				// Query for the base partition
-				partitionsBody, err := r.client.CallJSONRPC(ctx, "CMPart", "getPartitions")
+				partitionsBody, err := r.Client.CallJSONRPC(ctx, "CMPart", "getPartitions")
 				if err != nil {
 					resp.Diagnostics.AddError(
 						"Error Querying Partitions",
@@ -1015,7 +985,7 @@ func (r *CMDeviceDeviceResource) Update(ctx context.Context, req resource.Update
 	}
 
 	// Pre-flight validation: Call validateDevice before UPDATE
-	validationErrors, err := r.client.ValidateEntity(ctx, "CMDevice", "validateDevice", deviceEntity, false)
+	validationErrors, err := r.Client.ValidateEntity(ctx, "CMDevice", "validateDevice", deviceEntity, false)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Validation API Error",
@@ -1024,25 +994,8 @@ func (r *CMDeviceDeviceResource) Update(ctx context.Context, req resource.Update
 		return
 	}
 
-	// Process validation results
-	hasErrors := false
-	for _, valErr := range validationErrors {
-		if valErr.IsError() {
-			resp.Diagnostics.AddError(
-				fmt.Sprintf("Validation Error: %s", valErr.Field),
-				valErr.Message,
-			)
-			hasErrors = true
-		} else if valErr.IsWarning() {
-			resp.Diagnostics.AddWarning(
-				fmt.Sprintf("Validation Warning: %s", valErr.Field),
-				valErr.Message,
-			)
-		}
-	}
-
-	// Halt if validation errors found
-	if hasErrors {
+	// Process validation results - halt if errors found
+	if ProcessValidationErrors(validationErrors, &resp.Diagnostics) {
 		return
 	}
 
@@ -1053,7 +1006,7 @@ func (r *CMDeviceDeviceResource) Update(ctx context.Context, req resource.Update
 	}
 
 	// Call BCM API to update device
-	_, err = r.client.CallJSONRPC(ctx, "cmdevice", "updateDevice", deviceEntity, forceValue)
+	_, err = r.Client.CallJSONRPC(ctx, "cmdevice", "updateDevice", deviceEntity, forceValue)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Updating Device",
@@ -1068,7 +1021,7 @@ func (r *CMDeviceDeviceResource) Update(ctx context.Context, req resource.Update
 	})
 
 	// Read back the updated device
-	readBody, err := r.client.CallJSONRPC(ctx, "cmdevice", "getDevice", state.UUID.ValueString())
+	readBody, err := r.Client.CallJSONRPC(ctx, "cmdevice", "getDevice", state.UUID.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Reading Updated Device",
@@ -1180,7 +1133,7 @@ func (r *CMDeviceDeviceResource) Delete(ctx context.Context, req resource.Delete
 	}
 
 	// Call BCM API to delete device
-	_, err := r.client.CallJSONRPC(ctx, "cmdevice", "removeDevice", state.UUID.ValueString(), forceValue)
+	_, err := r.Client.CallJSONRPC(ctx, "cmdevice", "removeDevice", state.UUID.ValueString(), forceValue)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Deleting Device",
@@ -1375,7 +1328,7 @@ func (r *CMDeviceDeviceResource) lookupAndBuildRolesForEntity(ctx context.Contex
 
 	// Query all nodes to extract available role objects
 	// Roles are embedded in node objects and must be extracted
-	body, err := r.client.CallJSONRPC(ctx, "cmdevice", "getNodes")
+	body, err := r.Client.CallJSONRPC(ctx, "cmdevice", "getNodes")
 	if err != nil {
 		return fmt.Errorf("failed to query nodes for role lookup: %w", err)
 	}

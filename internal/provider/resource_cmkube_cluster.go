@@ -33,7 +33,7 @@ var (
 
 // CMKubeClusterResource defines the resource implementation.
 type CMKubeClusterResource struct {
-	client *BCMClient
+	BCMResourceBase
 }
 
 // CMKubeClusterResourceModel describes the resource data model.
@@ -87,20 +87,7 @@ func (r *CMKubeClusterResource) Metadata(ctx context.Context, req resource.Metad
 
 // Configure adds the provider configured client to the resource.
 func (r *CMKubeClusterResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
-	if req.ProviderData == nil {
-		return
-	}
-
-	client, ok := req.ProviderData.(*BCMClient)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *BCMClient, got: %T. Please report this issue to the provider developers.", req.ProviderData),
-		)
-		return
-	}
-
-	r.client = client
+	r.ConfigureResource(req, resp)
 }
 
 // Schema defines the resource schema.
@@ -278,7 +265,7 @@ func (r *CMKubeClusterResource) Create(ctx context.Context, req resource.CreateR
 
 	// Pre-flight validation: Call validateKubeCluster before CREATE
 	// Note: Service name is "cmkube" (lowercase) - exception to CamelCase pattern
-	validationErrors, err := r.client.ValidateEntity(ctx, "cmkube", "validateKubeCluster", entity, true)
+	validationErrors, err := r.Client.ValidateEntity(ctx, "cmkube", "validateKubeCluster", entity, true)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Validation API Error",
@@ -287,25 +274,8 @@ func (r *CMKubeClusterResource) Create(ctx context.Context, req resource.CreateR
 		return
 	}
 
-	// Process validation results
-	hasErrors := false
-	for _, valErr := range validationErrors {
-		if valErr.IsError() {
-			resp.Diagnostics.AddError(
-				fmt.Sprintf("Validation Error: %s", valErr.Field),
-				valErr.Message,
-			)
-			hasErrors = true
-		} else if valErr.IsWarning() {
-			resp.Diagnostics.AddWarning(
-				fmt.Sprintf("Validation Warning: %s", valErr.Field),
-				valErr.Message,
-			)
-		}
-	}
-
-	// Halt if validation errors found
-	if hasErrors {
+	// Process validation results - halt if errors found
+	if ProcessValidationErrors(validationErrors, &resp.Diagnostics) {
 		return
 	}
 
@@ -314,7 +284,7 @@ func (r *CMKubeClusterResource) Create(ctx context.Context, req resource.CreateR
 		"name": plan.Name.ValueString(),
 	})
 
-	body, err := r.client.CallJSONRPC(ctx, "cmkube", "addKubeCluster", entity, plan.Force.ValueBool())
+	body, err := r.Client.CallJSONRPC(ctx, "cmkube", "addKubeCluster", entity, plan.Force.ValueBool())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Creating Kubernetes Cluster",
@@ -507,7 +477,7 @@ func (r *CMKubeClusterResource) readCluster(ctx context.Context, model *CMKubeCl
 	})
 
 	// Call BCM API with direct UUID lookup (args pattern)
-	body, err := r.client.CallJSONRPC(ctx, "cmkube", "getKubeCluster", clusterUUID)
+	body, err := r.Client.CallJSONRPC(ctx, "cmkube", "getKubeCluster", clusterUUID)
 	if err != nil {
 		diags.AddError(
 			"Error Reading Kubernetes Cluster",
@@ -646,7 +616,7 @@ func (r *CMKubeClusterResource) Update(ctx context.Context, req resource.UpdateR
 
 	// Pre-flight validation: Call validateKubeCluster before UPDATE
 	// Note: Service name is "cmkube" (lowercase) - exception to CamelCase pattern
-	validationErrors, err := r.client.ValidateEntity(ctx, "cmkube", "validateKubeCluster", entity, false)
+	validationErrors, err := r.Client.ValidateEntity(ctx, "cmkube", "validateKubeCluster", entity, false)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Validation API Error",
@@ -655,25 +625,8 @@ func (r *CMKubeClusterResource) Update(ctx context.Context, req resource.UpdateR
 		return
 	}
 
-	// Process validation results
-	hasErrors := false
-	for _, valErr := range validationErrors {
-		if valErr.IsError() {
-			resp.Diagnostics.AddError(
-				fmt.Sprintf("Validation Error: %s", valErr.Field),
-				valErr.Message,
-			)
-			hasErrors = true
-		} else if valErr.IsWarning() {
-			resp.Diagnostics.AddWarning(
-				fmt.Sprintf("Validation Warning: %s", valErr.Field),
-				valErr.Message,
-			)
-		}
-	}
-
-	// Halt if validation errors found
-	if hasErrors {
+	// Process validation results - halt if errors found
+	if ProcessValidationErrors(validationErrors, &resp.Diagnostics) {
 		return
 	}
 
@@ -683,7 +636,7 @@ func (r *CMKubeClusterResource) Update(ctx context.Context, req resource.UpdateR
 		"name": plan.Name.ValueString(),
 	})
 
-	_, err = r.client.CallJSONRPC(ctx, "cmkube", "updateKubeCluster", entity, plan.Force.ValueBool())
+	_, err = r.Client.CallJSONRPC(ctx, "cmkube", "updateKubeCluster", entity, plan.Force.ValueBool())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Updating Kubernetes Cluster",
@@ -786,7 +739,7 @@ func (r *CMKubeClusterResource) Delete(ctx context.Context, req resource.DeleteR
 	})
 
 	// Call BCM API to delete cluster
-	_, err := r.client.CallJSONRPC(ctx, "cmkube", "removeKubeCluster", clusterUUID, state.Force.ValueBool())
+	_, err := r.Client.CallJSONRPC(ctx, "cmkube", "removeKubeCluster", clusterUUID, state.Force.ValueBool())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Deleting Kubernetes Cluster",
@@ -804,11 +757,11 @@ func (r *CMKubeClusterResource) Delete(ctx context.Context, req resource.DeleteR
 
 // ImportState imports an existing cluster by UUID.
 func (r *CMKubeClusterResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	// Import by UUID
-	resource.ImportStatePassthroughID(ctx, path.Root("uuid"), req, resp)
+	// Import by ID (consistent with other resources - id and uuid are equivalent)
+	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 
-	// Also set ID to same value
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), req.ID)...)
+	// Also set UUID to same value for consistency
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("uuid"), req.ID)...)
 }
 
 // buildClusterEntity constructs a BCM KubeCluster entity from Terraform model.

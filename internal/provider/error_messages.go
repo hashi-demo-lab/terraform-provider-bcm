@@ -91,7 +91,7 @@ func BuildDependencyError(resourceType, resourceName, dependentType string, iden
 	)
 }
 
-// BuildForceDeleteionWarning creates a warning message for force deletion operations.
+// BuildForceDeletionWarning creates a warning message for force deletion operations.
 // This warning is logged when a resource is deleted with force=true, potentially
 // creating orphaned references in dependent resources.
 //
@@ -100,7 +100,7 @@ func BuildDependencyError(resourceType, resourceName, dependentType string, iden
 //   - resourceName: Name of the resource being force deleted
 //
 // Returns formatted warning message suitable for Terraform diagnostics or logging.
-func BuildForceDeleteionWarning(resourceType, resourceName string) string {
+func BuildForceDeletionWarning(resourceType, resourceName string) string {
 	var impact string
 	switch resourceType {
 	case "Category":

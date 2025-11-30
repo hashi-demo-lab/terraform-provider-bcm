@@ -34,7 +34,7 @@ var (
 
 // CMUserUserResource defines the resource implementation.
 type CMUserUserResource struct {
-	client *BCMClient
+	BCMResourceBase
 }
 
 // CMUserUserResourceModel describes the resource data model.
@@ -241,26 +241,13 @@ func (r *CMUserUserResource) Schema(ctx context.Context, req resource.SchemaRequ
 
 // Configure stores the BCM client in the resource instance.
 func (r *CMUserUserResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
-	if req.ProviderData == nil {
-		return
-	}
-
-	client, ok := req.ProviderData.(*BCMClient)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *BCMClient, got: %T. Please report this issue to the provider developers.", req.ProviderData),
-		)
-		return
-	}
-
-	r.client = client
+	r.ConfigureResource(req, resp)
 }
 
 // getNextAvailableUID queries existing users and returns the next available UID.
 // Starts from 60000 to avoid conflicts with system users (0-999) and regular users (1000-59999).
 func (r *CMUserUserResource) getNextAvailableUID(ctx context.Context) (int64, error) {
-	body, err := r.client.CallJSONRPC(ctx, "cmuser", "getUsers")
+	body, err := r.Client.CallJSONRPC(ctx, "cmuser", "getUsers")
 	if err != nil {
 		return 0, fmt.Errorf("failed to query existing users: %w", err)
 	}
@@ -339,7 +326,7 @@ func (r *CMUserUserResource) Create(ctx context.Context, req resource.CreateRequ
 	}
 
 	// Call addUser API
-	createBody, err := r.client.CallJSONRPC(ctx, "cmuser", "addUser", entity, force)
+	createBody, err := r.Client.CallJSONRPC(ctx, "cmuser", "addUser", entity, force)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"User Creation Failed",
@@ -496,7 +483,7 @@ func (r *CMUserUserResource) Update(ctx context.Context, req resource.UpdateRequ
 	}
 
 	// Call updateUser API
-	_, err := r.client.CallJSONRPC(ctx, "cmuser", "updateUser", entity, force)
+	_, err := r.Client.CallJSONRPC(ctx, "cmuser", "updateUser", entity, force)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"User Update Failed",
@@ -541,7 +528,7 @@ func (r *CMUserUserResource) Delete(ctx context.Context, req resource.DeleteRequ
 	})
 
 	// Call removeUser with UUID (BCM requires UUID, not username)
-	_, err := r.client.CallJSONRPC(ctx, "cmuser", "removeUser", state.UUID.ValueString())
+	_, err := r.Client.CallJSONRPC(ctx, "cmuser", "removeUser", state.UUID.ValueString())
 	if err != nil {
 		// Enhanced error handling - check if already deleted (idempotent)
 		errStr := err.Error()
@@ -598,7 +585,7 @@ func (r *CMUserUserResource) readUser(ctx context.Context, model *CMUserUserReso
 		lookupName = model.Username.ValueString()
 	} else if !model.ID.IsNull() && model.ID.ValueString() != "" {
 		// Import case: need to look up by UUID to find username
-		allUsersBody, err := r.client.CallJSONRPC(ctx, "cmuser", "getUsers")
+		allUsersBody, err := r.Client.CallJSONRPC(ctx, "cmuser", "getUsers")
 		if err != nil {
 			diags.AddError(
 				"User Read Failed",
@@ -647,7 +634,7 @@ func (r *CMUserUserResource) readUser(ctx context.Context, model *CMUserUserReso
 	})
 
 	// Use getUser(username) for direct lookup
-	body, err := r.client.CallJSONRPC(ctx, "cmuser", "getUser", lookupName)
+	body, err := r.Client.CallJSONRPC(ctx, "cmuser", "getUser", lookupName)
 	if err != nil {
 		diags.AddError(
 			"User Read Failed",
