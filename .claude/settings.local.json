@@ -8,7 +8,10 @@
       "Skill(terraform-provider-tests)",
       "Bash(done)",
       "Bash(chmod:*)",
-      "Bash(docker rmi:*)"
+      "Bash(docker rmi:*)",
+      "Bash(npm install)",
+      "Bash(npm run build:*)",
+      "Bash(node dist/langfuse-hook.js)"
     ],
     "deny": [],
     "ask": []

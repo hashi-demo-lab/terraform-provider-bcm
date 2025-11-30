@@ -136,3 +136,96 @@ func minInt(a, b int) int {
 	}
 	return b
 }
+
+// =============================================================================
+// CRUD Operation Error Messages
+// =============================================================================
+
+// BuildAPIError creates a standardized error message for API call failures.
+// Use this for consistent error formatting across all resources.
+//
+// Parameters:
+//   - operation: The operation that failed (e.g., "Create", "Read", "Update", "Delete")
+//   - resourceType: Type of resource (e.g., "Category", "Device")
+//   - resourceName: Name or identifier of the resource
+//   - err: The underlying error
+func BuildAPIError(operation, resourceType, resourceName string, err error) string {
+	return fmt.Sprintf(
+		"Failed to %s %s '%s': %s\n\n"+
+			"Verify BCM endpoint, credentials, and network connectivity.",
+		strings.ToLower(operation),
+		resourceType,
+		resourceName,
+		err.Error(),
+	)
+}
+
+// BuildParseError creates a standardized error message for JSON parsing failures.
+//
+// Parameters:
+//   - operation: The operation context (e.g., "Create", "Read")
+//   - resourceType: Type of resource
+//   - err: The underlying parse error
+func BuildParseError(operation, resourceType string, err error) string {
+	return fmt.Sprintf(
+		"Failed to parse %s response for %s operation: %s\n\n"+
+			"This may indicate an incompatible BCM API version.",
+		resourceType,
+		strings.ToLower(operation),
+		err.Error(),
+	)
+}
+
+// BuildNotFoundError creates a standardized "not found" error message.
+//
+// Parameters:
+//   - resourceType: Type of resource (e.g., "Category", "Device")
+//   - identifier: Name or UUID of the resource
+func BuildNotFoundError(resourceType, identifier string) string {
+	return fmt.Sprintf(
+		"%s '%s' not found in BCM. It may have been deleted externally or never existed.",
+		resourceType,
+		identifier,
+	)
+}
+
+// BuildValidationAPIError creates an error message for validation API failures.
+//
+// Parameters:
+//   - resourceType: Type of resource being validated
+//   - resourceName: Name of the resource
+//   - err: The underlying error
+func BuildValidationAPIError(resourceType, resourceName string, err error) string {
+	return fmt.Sprintf(
+		"Could not validate %s '%s': %s\n\n"+
+			"The validation API call failed. Check BCM connectivity and credentials.",
+		resourceType,
+		resourceName,
+		err.Error(),
+	)
+}
+
+// =============================================================================
+// Error Title Constants - Standardized error titles
+// =============================================================================
+
+// ErrorTitle returns a standardized error title for CRUD operations.
+// Format: "<ResourceType> <Operation> Failed"
+func ErrorTitle(resourceType, operation string) string {
+	return fmt.Sprintf("%s %s Failed", resourceType, operation)
+}
+
+// ErrorTitleNotFound returns a standardized "not found" error title.
+func ErrorTitleNotFound(resourceType string) string {
+	return fmt.Sprintf("%s Not Found", resourceType)
+}
+
+// ErrorTitleParse returns a standardized parse error title.
+func ErrorTitleParse(resourceType string) string {
+	return fmt.Sprintf("%s Parse Error", resourceType)
+}
+
+// ErrorTitleValidation returns a standardized validation error title.
+func ErrorTitleValidation() string {
+	return "Validation API Error"
+}

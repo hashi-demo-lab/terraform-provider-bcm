@@ -7,10 +7,12 @@
 package provider
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
@@ -199,5 +201,188 @@ func resolveUnknownBoolToNull(val types.Bool) types.Bool {
 		return types.BoolNull()
 	}
 	return val
+}
+
+// =============================================================================
+// Entity Building Helpers - For constructing BCM API request entities
+// =============================================================================
+
+// NewBCMEntity creates a new BCM entity map with standard base fields.
+// All BCM entities require these common fields for API operations.
+//
+// Parameters:
+//   - baseType: The BCM entity type (e.g., "Category", "Device", "SoftwareImage")
+//
+// Example:
+//
+//	entity := NewBCMEntity("Category")
+//	entity["name"] = "my-category"
+func NewBCMEntity(baseType string) map[string]interface{} {
+	return map[string]interface{}{
+		"baseType":      baseType,
+		"childType":     "",
+		"modified":      true,
+		"to_be_removed": false,
+		"revision":      "",
+	}
+}
+
+// NewBCMEntityWithUUID creates a new BCM entity with UUID handling.
+// If uuid is empty, a new UUID v4 is generated.
+//
+// Parameters:
+//   - baseType: The BCM entity type
+//   - uuid: Existing UUID or empty string for new entity
+//
+// Returns the entity and the UUID that was set.
+func NewBCMEntityWithUUID(baseType, uuid string) (map[string]interface{}, string) {
+	entity := NewBCMEntity(baseType)
+	if uuid == "" {
+		uuid = generateUUID()
+	}
+	entity["uuid"] = uuid
+	return entity, uuid
+}
+
+// SetEntityUUID sets or generates a UUID for an entity.
+// Returns the UUID that was set (either the provided one or a new generated one).
+func SetEntityUUID(entity map[string]interface{}, uuid string) string {
+	if uuid == "" {
+		uuid = generateUUID()
+	}
+	entity["uuid"] = uuid
+	return uuid
+}
+
+// =============================================================================
+// Entity Field Setters - Type-safe setters for BCM entity fields
+// =============================================================================
+
+// SetStringField sets a string field on an entity if the value is not null/unknown.
+// This is the primary helper for converting Terraform types.String to entity fields.
+func SetStringField(entity map[string]interface{}, key string, value types.String) {
+	if !value.IsNull() && !value.IsUnknown() {
+		entity[key] = value.ValueString()
+	}
+}
+
+// SetBoolField sets a bool field on an entity if the value is not null/unknown.
+func SetBoolField(entity map[string]interface{}, key string, value types.Bool) {
+	if !value.IsNull() && !value.IsUnknown() {
+		entity[key] = value.ValueBool()
+	}
+}
+
+// SetInt64Field sets an int64 field on an entity if the value is not null/unknown.
+func SetInt64Field(entity map[string]interface{}, key string, value types.Int64) {
+	if !value.IsNull() && !value.IsUnknown() {
+		entity[key] = value.ValueInt64()
+	}
+}
+
+// SetFloat64Field sets a float64 field on an entity if the value is not null/unknown.
+func SetFloat64Field(entity map[string]interface{}, key string, value types.Float64) {
+	if !value.IsNull() && !value.IsUnknown() {
+		entity[key] = value.ValueFloat64()
+	}
+}
+
+// SetStringListField sets a string list field on an entity if the value is not null/unknown.
+// Returns any diagnostics from the conversion.
+func SetStringListField(ctx context.Context, entity map[string]interface{}, key string, value types.List, diags *diag.Diagnostics) {
+	if !value.IsNull() && !value.IsUnknown() {
+		var list []string
+		d := value.ElementsAs(ctx, &list, false)
+		diags.Append(d...)
+		if !d.HasError() {
+			entity[key] = list
+		}
+	}
+}
+
+// =============================================================================
+// Force Parameter Helper
+// =============================================================================
+
+// GetForceValue extracts the force boolean value, defaulting to false if null/unknown.
+// This standardizes the common pattern of extracting force parameters.
+func GetForceValue(force types.Bool) bool {
+	if force.IsNull() || force.IsUnknown() {
+		return false
+	}
+	return force.ValueBool()
+}
+
+// =============================================================================
+// List Value Helpers - For extracting list types from API responses
+// =============================================================================
+
+// GetStringListValue safely extracts a string list from a map, returning types.ListNull()
+// if the key is missing, nil, empty, or wrong type.
+func GetStringListValue(data map[string]interface{}, key string) types.List {
+	if data == nil {
+		return types.ListNull(types.StringType)
+	}
+	if val, ok := data[key]; ok && val != nil {
+		if slice, ok := val.([]interface{}); ok && len(slice) > 0 {
+			elements := make([]attr.Value, 0, len(slice))
+			for _, item := range slice {
+				if str, ok := item.(string); ok && str != "" {
+					elements = append(elements, types.StringValue(str))
+				}
+			}
+			if len(elements) > 0 {
+				listValue, _ := types.ListValue(types.StringType, elements)
+				return listValue
+			}
+		}
+	}
+	return types.ListNull(types.StringType)
+}
+
+// =============================================================================
+// Filter Helpers - For data source filtering
+// =============================================================================
+
+// MatchesSubstringFilter performs case-insensitive substring matching.
+// Returns true if value contains pattern (case-insensitive).
+// Returns true if pattern is null/unknown (no filter applied).
+func MatchesSubstringFilter(value types.String, pattern types.String) bool {
+	if pattern.IsNull() || pattern.IsUnknown() {
+		return true // No filter applied
+	}
+	if value.IsNull() || value.IsUnknown() {
+		return false // Can't match against null/unknown value
+	}
+	return strings.Contains(
+		strings.ToLower(value.ValueString()),
+		strings.ToLower(pattern.ValueString()),
+	)
+}
+
+// MatchesExactFilter performs exact string matching.
+// Returns true if value equals expected exactly.
+// Returns true if expected is null/unknown (no filter applied).
+func MatchesExactFilter(value types.String, expected types.String) bool {
+	if expected.IsNull() || expected.IsUnknown() {
+		return true // No filter applied
+	}
+	if value.IsNull() || value.IsUnknown() {
+		return false // Can't match against null/unknown value
+	}
+	return value.ValueString() == expected.ValueString()
+}
+
+// MatchesExactFilterString performs exact string matching with a raw string pattern.
+// Returns true if value equals expected exactly.
+// Returns true if expected is empty (no filter applied).
+func MatchesExactFilterString(value types.String, expected string) bool {
+	if expected == "" {
+		return true // No filter applied
+	}
+	if value.IsNull() || value.IsUnknown() {
+		return false // Can't match against null/unknown value
+	}
+	return value.ValueString() == expected
 }
 

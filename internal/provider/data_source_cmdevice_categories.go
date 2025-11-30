@@ -24,7 +24,7 @@ func NewCMDeviceCategoriesDataSource() datasource.DataSource {
 
 // CMDeviceCategoriesDataSource defines the data source implementation.
 type CMDeviceCategoriesDataSource struct {
-	client *BCMClient
+	BCMDataSourceBase
 }
 
 // CMDeviceCategoriesDataSourceModel describes the data source data model.
@@ -249,24 +249,8 @@ func (d *CMDeviceCategoriesDataSource) Schema(ctx context.Context, req datasourc
 	}
 }
 
-func (d *CMDeviceCategoriesDataSource) Configure(ctx context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
-	// Prevent panic if the provider has not been configured.
-	if req.ProviderData == nil {
-		return
-	}
-
-	client, ok := req.ProviderData.(*BCMClient)
-
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Unexpected Data Source Configure Type",
-			fmt.Sprintf("Expected *BCMClient, got: %T. Please report this issue to the provider developers.", req.ProviderData),
-		)
-
-		return
-	}
-
-	d.client = client
+func (d *CMDeviceCategoriesDataSource) Configure(_ context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
+	d.ConfigureDataSource(req, resp)
 }
 
 func (d *CMDeviceCategoriesDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
@@ -281,7 +265,7 @@ func (d *CMDeviceCategoriesDataSource) Read(ctx context.Context, req datasource.
 
 	// Call BCM API to get categories
 	tflog.Debug(ctx, "Calling cmdevice.getCategories()")
-	result, err := d.client.CallJSONRPC(ctx, "cmdevice", "getCategories")
+	result, err := d.Client.CallJSONRPC(ctx, "cmdevice", "getCategories")
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Reading Categories",
