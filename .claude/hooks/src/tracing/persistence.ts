@@ -20,8 +20,14 @@ const PERSISTENCE_DIR = join(tmpdir(), "langfuse-claude-code");
 /** Prefix for state files */
 const STATE_PREFIX = "state-";
 
+/** Prefix for pending parent context files (for subagent linking) */
+const PENDING_PARENT_PREFIX = "pending-parent-";
+
 /** Maximum age for state files before cleanup (24 hours) */
 const MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+/** Maximum age for pending parent context (5 minutes - subagent should start quickly) */
+const PENDING_PARENT_MAX_AGE_MS = 5 * 60 * 1000;
 
 /**
  * Extended SpanState with creation timestamp for cleanup purposes.
@@ -145,31 +151,31 @@ export function cleanupOldStates(): void {
  *
  * @param sessionId - The session identifier
  * @param toolUseId - The unique tool use identifier
- * @param spanId - The OpenTelemetry span ID
- * @param traceId - The trace ID for this session
- * @param sessionSpanId - The session-level span ID (parent)
+ * @param spanInfo - The span information to persist (object with spanId, traceId, parentSpanId, etc.)
  */
 export function registerActiveSpan(
   sessionId: string,
   toolUseId: string,
-  spanId: string,
-  traceId: string,
-  sessionSpanId: string
+  spanInfo: ActiveSpanInfo
 ): void {
   let state = loadSpanState(sessionId);
 
   if (!state) {
     state = {
-      traceId,
-      sessionSpanId,
+      traceId: spanInfo.traceId || "",
+      sessionSpanId: spanInfo.parentSpanId || "",
       activeSpans: {},
       createdAt: Date.now(),
     };
   }
 
   state.activeSpans[toolUseId] = {
-    spanId,
-    startTime: Date.now(),
+    spanId: spanInfo.spanId,
+    startTime: spanInfo.startTime ?? Date.now(),
+    traceId: spanInfo.traceId,
+    parentSpanId: spanInfo.parentSpanId,
+    ctx: spanInfo.ctx,
+    parent_tool_use_id: spanInfo.parent_tool_use_id,
   };
 
   saveSpanState(sessionId, state);
@@ -181,12 +187,12 @@ export function registerActiveSpan(
  *
  * @param sessionId - The session identifier
  * @param toolUseId - The unique tool use identifier
- * @returns The span info including trace context, or null if not found
+ * @returns The span info including trace context and hierarchy info, or null if not found
  */
 export function popActiveSpan(
   sessionId: string,
   toolUseId: string
-): (ActiveSpanInfo & { traceId: string; sessionSpanId: string }) | null {
+): (ActiveSpanInfo & { sessionSpanId: string }) | null {
   const state = loadSpanState(sessionId);
   if (!state || !state.activeSpans[toolUseId]) return null;
 
@@ -196,26 +202,28 @@ export function popActiveSpan(
 
   return {
     ...span,
-    traceId: state.traceId,
+    // Ensure traceId falls back to state-level if not in span
+    traceId: span.traceId || state.traceId,
     sessionSpanId: state.sessionSpanId,
   };
 }
 
 /**
- * Get session info (trace ID, session span ID) for a session.
+ * Get session info (trace ID, session span ID, traceparent) for a session.
  *
  * @param sessionId - The session identifier
  * @returns The session trace context, or null if not found
  */
 export function getSessionInfo(
   sessionId: string
-): { traceId: string; sessionSpanId: string } | null {
+): { traceId: string; sessionSpanId: string; traceparent?: string } | null {
   const state = loadSpanState(sessionId);
   if (!state) return null;
 
   return {
     traceId: state.traceId,
     sessionSpanId: state.sessionSpanId,
+    traceparent: state.traceparent,
   };
 }
 
@@ -226,11 +234,13 @@ export function getSessionInfo(
  * @param sessionId - The session identifier
  * @param traceId - The trace ID for this session
  * @param sessionSpanId - The session-level span ID
+ * @param traceparent - Optional W3C traceparent for context propagation
  */
 export function initSession(
   sessionId: string,
   traceId: string,
-  sessionSpanId: string
+  sessionSpanId: string,
+  traceparent?: string
 ): void {
   let state = loadSpanState(sessionId);
 
@@ -238,10 +248,15 @@ export function initSession(
     state = {
       traceId,
       sessionSpanId,
+      traceparent,
       activeSpans: {},
       createdAt: Date.now(),
       metrics: createEmptyMetrics(),
     };
+    saveSpanState(sessionId, state);
+  } else if (traceparent && !state.traceparent) {
+    // Update existing state with traceparent if missing (backward compat)
+    state.traceparent = traceparent;
     saveSpanState(sessionId, state);
   }
 }
@@ -417,4 +432,151 @@ export function calculateAggregateMetrics(metrics: SessionMetrics): {
     modelBreakdown: { ...metrics.toolsByModel },
     modelsUsed: [...metrics.modelsUsed],
   };
+}
+
+// =============================================================================
+// Pending Parent Context (for cross-session subagent linking)
+// =============================================================================
+
+/**
+ * Pending parent context for subagent linking.
+ * Stored when a Task tool is invoked so the spawned subagent can link to it.
+ */
+export interface PendingParentContext {
+  /** W3C traceparent of the parent's Agent observation */
+  traceparent: string;
+  /** Trace ID of the parent session */
+  traceId: string;
+  /** Observation ID of the Agent observation (Task tool) */
+  observationId: string;
+  /** Session ID of the parent session */
+  parentSessionId: string;
+  /** Tool use ID of the Task tool call */
+  toolUseId: string;
+  /** Subagent type (from Task tool input) */
+  subagentType?: string;
+  /** Timestamp when created (for cleanup) */
+  createdAt: number;
+}
+
+/**
+ * Get file path for pending parent context.
+ * Uses a timestamp-based name since we don't know the subagent's session ID yet.
+ */
+function getPendingParentPath(parentSessionId: string, toolUseId: string): string {
+  const sanitizedSessionId = parentSessionId.replace(/[^a-zA-Z0-9_-]/g, "_");
+  const sanitizedToolUseId = toolUseId.replace(/[^a-zA-Z0-9_-]/g, "_");
+  return join(PERSISTENCE_DIR, `${PENDING_PARENT_PREFIX}${sanitizedSessionId}-${sanitizedToolUseId}.json`);
+}
+
+/**
+ * Store pending parent context when a Task tool is invoked.
+ * The spawned subagent will look for this to link itself to the parent's trace.
+ *
+ * @param ctx - The pending parent context
+ */
+export function storePendingParentContext(ctx: PendingParentContext): void {
+  try {
+    ensureDir();
+    const path = getPendingParentPath(ctx.parentSessionId, ctx.toolUseId);
+    const tempPath = `${path}.tmp.${process.pid}`;
+    writeFileSync(tempPath, JSON.stringify(ctx), { encoding: "utf8", mode: 0o600 });
+    renameSync(tempPath, path);
+  } catch (e) {
+    console.error(`[Langfuse] Failed to store pending parent context: ${e}`);
+  }
+}
+
+/**
+ * Find and retrieve any pending parent context for subagent linking.
+ * Returns the most recent pending context that hasn't expired.
+ * Used by a new session to check if it should link to a parent trace.
+ *
+ * @returns The pending parent context if found, null otherwise
+ */
+export function findPendingParentContext(): PendingParentContext | null {
+  try {
+    if (!existsSync(PERSISTENCE_DIR)) return null;
+
+    const files = readdirSync(PERSISTENCE_DIR);
+    const now = Date.now();
+    let mostRecent: PendingParentContext | null = null;
+    let mostRecentTime = 0;
+
+    for (const file of files) {
+      if (!file.startsWith(PENDING_PARENT_PREFIX)) continue;
+
+      try {
+        const path = join(PERSISTENCE_DIR, file);
+        const data = readFileSync(path, "utf8");
+        const ctx = JSON.parse(data) as PendingParentContext;
+
+        // Skip expired contexts
+        if (now - ctx.createdAt > PENDING_PARENT_MAX_AGE_MS) {
+          // Clean up expired file
+          try { unlinkSync(path); } catch { /* ignore */ }
+          continue;
+        }
+
+        // Track the most recent valid context
+        if (ctx.createdAt > mostRecentTime) {
+          mostRecent = ctx;
+          mostRecentTime = ctx.createdAt;
+        }
+      } catch {
+        // Skip invalid files
+      }
+    }
+
+    return mostRecent;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Remove a pending parent context after it's been used or the Task completes.
+ *
+ * @param parentSessionId - The parent session ID
+ * @param toolUseId - The Task tool use ID
+ */
+export function removePendingParentContext(parentSessionId: string, toolUseId: string): void {
+  try {
+    const path = getPendingParentPath(parentSessionId, toolUseId);
+    if (existsSync(path)) {
+      unlinkSync(path);
+    }
+  } catch {
+    // Ignore cleanup errors
+  }
+}
+
+/**
+ * Clean up all expired pending parent contexts.
+ */
+export function cleanupPendingParentContexts(): void {
+  try {
+    if (!existsSync(PERSISTENCE_DIR)) return;
+
+    const files = readdirSync(PERSISTENCE_DIR);
+    const now = Date.now();
+
+    for (const file of files) {
+      if (!file.startsWith(PENDING_PARENT_PREFIX)) continue;
+
+      try {
+        const path = join(PERSISTENCE_DIR, file);
+        const data = readFileSync(path, "utf8");
+        const ctx = JSON.parse(data) as PendingParentContext;
+
+        if (now - ctx.createdAt > PENDING_PARENT_MAX_AGE_MS) {
+          unlinkSync(path);
+        }
+      } catch {
+        // Skip invalid files
+      }
+    }
+  } catch {
+    // Ignore cleanup errors
+  }
 }

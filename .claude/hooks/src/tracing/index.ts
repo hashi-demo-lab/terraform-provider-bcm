@@ -2,7 +2,7 @@
  * Tracing module for Langfuse integration.
  *
  * This module provides a type-safe API for creating Langfuse observations
- * using the native @langfuse/tracing library.
+ * using the v4 SDK with asType support for proper observation types.
  *
  * @example
  * ```typescript
@@ -17,9 +17,10 @@
  * // Initialize tracing
  * initTracing(createConfigFromEnv());
  *
- * // Create observations
+ * // Create observations with proper types
  * const session = createSessionObservation({ sessionId: "xxx", cwd: "/path" });
- * const tool = createToolObservation({ toolName: "Bash", ... });
+ * const agent = createToolObservation({ toolName: "Task", isSubagent: true, ... }, undefined, session);
+ * const tool = createToolObservation({ toolName: "Bash", ... }, undefined, session);
  *
  * // Shutdown before exit
  * await shutdownTracing();
@@ -47,7 +48,7 @@ export {
   initTracing,
   shutdownTracing,
   forceFlush,
-  getSpanProcessor,
+  getTracingConfig,
   isTracingInitialized,
   createConfigFromEnv,
 } from "./provider.js";
@@ -57,11 +58,21 @@ export {
   createSessionTraceId,
   createParentContext,
   createSessionObservation,
+  createSessionObservationWithParent,
   createToolObservation,
+  createToolObservationWithContext,
   createEventObservation,
   finalizeToolObservation,
   finalizeSessionObservation,
   recordEvent,
+  recordEventWithContext,
+  // Traceparent helpers for cross-process context propagation
+  createTraceparent,
+  parseTraceparent,
+  withParentContext,
+  type SessionObservation,
+  type ToolObservation,
+  type CreateObservationOptions,
   type FinalizeSessionOptions,
 } from "./observations.js";
 
@@ -79,15 +90,12 @@ export {
   updateSessionMetrics,
   getSessionMetrics,
   calculateAggregateMetrics,
+  // Pending parent context for subagent linking
+  storePendingParentContext,
+  findPendingParentContext,
+  removePendingParentContext,
+  cleanupPendingParentContexts,
   type PersistedSpanState,
   type TokenData,
+  type PendingParentContext,
 } from "./persistence.js";
-
-// Re-export useful types from @langfuse/tracing
-export type {
-  LangfuseAgent,
-  LangfuseTool,
-  LangfuseEvent,
-  LangfuseSpan,
-  LangfuseObservation,
-} from "@langfuse/tracing";

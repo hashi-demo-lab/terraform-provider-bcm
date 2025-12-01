@@ -1,22 +1,17 @@
 /**
- * TracerProvider setup for Langfuse integration.
- * Uses @langfuse/tracing's setLangfuseTracerProvider for native API support.
+ * Langfuse tracing provider using the v4 SDK with asType support.
+ * Initializes OpenTelemetry with LangfuseSpanProcessor for proper observation types.
  */
 
-import { NodeSDK } from "@opentelemetry/sdk-node";
+import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 import { LangfuseSpanProcessor } from "@langfuse/otel";
-import { resourceFromAttributes } from "@opentelemetry/resources";
-import { ATTR_SERVICE_NAME } from "@opentelemetry/semantic-conventions";
-import {
-  setLangfuseTracerProvider,
-  getLangfuseTracerProvider,
-} from "@langfuse/tracing";
+import { setLangfuseTracerProvider } from "@langfuse/tracing";
 import type { TracingConfig } from "./types.js";
 
 // Module-level state
-let sdk: NodeSDK | null = null;
-let spanProcessor: LangfuseSpanProcessor | null = null;
 let isInitialized = false;
+let provider: NodeTracerProvider | null = null;
+let currentConfig: TracingConfig | null = null;
 
 /**
  * Default configuration values.
@@ -25,18 +20,17 @@ const DEFAULTS = {
   baseUrl: "https://cloud.langfuse.com",
   environment: "development",
   release: "claude-code",
-  serviceName: "claude-code-hook",
-  serviceVersion: "1.0.0",
 } as const;
 
 /**
- * Initialize the tracing provider with Langfuse configuration.
+ * Initialize the Langfuse tracing provider with OpenTelemetry.
+ * Must be called before any tracing operations.
  *
  * @param config - Tracing configuration with API keys
  * @returns true if initialization succeeded, false otherwise
  */
 export function initTracing(config: TracingConfig): boolean {
-  if (isInitialized) {
+  if (isInitialized && provider) {
     return true;
   }
 
@@ -54,39 +48,25 @@ export function initTracing(config: TracingConfig): boolean {
   }
 
   try {
-    // Create Langfuse span processor
-    spanProcessor = new LangfuseSpanProcessor({
-      publicKey,
-      secretKey,
-      baseUrl,
-      environment,
-      release,
-      flushAt: 1,
-      exportMode: "immediate",
+    // Set environment variables for Langfuse SDK
+    process.env.LANGFUSE_PUBLIC_KEY = publicKey;
+    process.env.LANGFUSE_SECRET_KEY = secretKey;
+    process.env.LANGFUSE_BASE_URL = baseUrl;
+    process.env.LANGFUSE_RELEASE = release;
+    process.env.LANGFUSE_ENVIRONMENT = environment;
+
+    // Create NodeTracerProvider with LangfuseSpanProcessor
+    provider = new NodeTracerProvider({
+      spanProcessors: [new LangfuseSpanProcessor()],
     });
 
-    // Create and start NodeSDK
-    sdk = new NodeSDK({
-      resource: resourceFromAttributes({
-        [ATTR_SERVICE_NAME]: DEFAULTS.serviceName,
-        "deployment.environment": environment,
-        "service.version": release,
-      }),
-      spanProcessors: [spanProcessor],
-    });
-
-    sdk.start();
-
-    // Set the tracer provider for @langfuse/tracing native API
-    // This enables startObservation() and other native functions
-    const provider = getLangfuseTracerProvider();
+    // Set as the Langfuse tracer provider for @langfuse/tracing
     setLangfuseTracerProvider(provider);
 
+    currentConfig = { ...config, environment, release };
     isInitialized = true;
 
-    if (config.debug) {
-      console.error(`[Langfuse] Initialized (${release}/${environment})`);
-    }
+    console.error(`[Langfuse] Initialized (${release}/${environment})`);
 
     return true;
   } catch (error) {
@@ -96,13 +76,20 @@ export function initTracing(config: TracingConfig): boolean {
 }
 
 /**
+ * Get the current tracing configuration.
+ */
+export function getTracingConfig(): TracingConfig | null {
+  return currentConfig;
+}
+
+/**
  * Force flush all pending spans to Langfuse.
  * Call this before process exit to ensure data is exported.
  */
 export async function forceFlush(): Promise<void> {
-  if (spanProcessor) {
+  if (provider) {
     try {
-      await spanProcessor.forceFlush();
+      await provider.forceFlush();
     } catch {
       // Ignore flush errors during shutdown
     }
@@ -119,29 +106,17 @@ export async function shutdownTracing(): Promise<void> {
   }
 
   try {
-    // Force flush to ensure all spans are exported
     await forceFlush();
-
-    // Shutdown the SDK
-    if (sdk) {
-      await sdk.shutdown();
+    if (provider) {
+      await provider.shutdown();
     }
   } catch {
     // Ignore shutdown errors
   } finally {
-    // Reset state
-    sdk = null;
-    spanProcessor = null;
+    provider = null;
+    currentConfig = null;
     isInitialized = false;
-    setLangfuseTracerProvider(null);
   }
-}
-
-/**
- * Get the span processor for direct access if needed.
- */
-export function getSpanProcessor(): LangfuseSpanProcessor | null {
-  return spanProcessor;
 }
 
 /**
@@ -158,7 +133,7 @@ export function createConfigFromEnv(): TracingConfig {
   return {
     publicKey: process.env.LANGFUSE_PUBLIC_KEY || "",
     secretKey: process.env.LANGFUSE_SECRET_KEY || "",
-    baseUrl: process.env.LANGFUSE_HOST,
+    baseUrl: process.env.LANGFUSE_HOST || process.env.LANGFUSE_BASE_URL,
     environment: process.env.LANGFUSE_ENVIRONMENT,
     release: process.env.LANGFUSE_RELEASE,
     debug: process.env.LANGFUSE_LOG_LEVEL === "DEBUG",

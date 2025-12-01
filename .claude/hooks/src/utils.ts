@@ -17,6 +17,8 @@ export interface ClaudeCodeEvent {
   tool_input?: Record<string, unknown>;
   tool_response?: unknown;
   tool_use_id?: string;
+  /** Parent tool use ID for nested tools/subagents */
+  parent_tool_use_id?: string;
   stop_hook_active?: boolean;
   timestamp?: string;
   model?: string;
@@ -26,6 +28,9 @@ export interface ClaudeCodeEvent {
     total?: number;
   };
   user_id?: string;
+  // Compact event fields
+  trigger?: "manual" | "auto";
+  custom_instructions?: string;
 }
 
 // Constants
@@ -35,6 +40,8 @@ export const VALID_EVENTS = [
   "Stop",
   "PreToolUse",
   "UserPromptSubmit",
+  "PreCompact",
+  "PostCompact",
 ];
 
 // String Utilities

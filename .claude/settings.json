@@ -1,12 +1,41 @@
 {
   "hooks": {
-    "PostToolUse": [
+    "PreToolUse": [
       {
-        "matcher": "*",
         "hooks": [
           {
             "type": "command",
-            "command": "cd .claude/hooks && node dist/langfuse-hook.js"
+            "command": "node /workspace/.claude/hooks/dist/langfuse-hook.js"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /workspace/.claude/hooks/dist/langfuse-hook.js"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /workspace/.claude/hooks/dist/langfuse-hook.js"
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /workspace/.claude/hooks/dist/langfuse-hook.js"
           }
         ]
       }
@@ -16,7 +45,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cd .claude/hooks && node dist/langfuse-hook.js"
+            "command": "node /workspace/.claude/hooks/dist/langfuse-hook.js"
           }
         ]
       }
@@ -26,7 +55,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cd .claude/hooks && node dist/langfuse-hook.js"
+            "command": "node /workspace/.claude/hooks/dist/langfuse-hook.js"
           }
         ]
       }

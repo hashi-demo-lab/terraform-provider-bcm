@@ -4,8 +4,6 @@
  * session context, and tool context.
  */
 
-import type { SpanContext } from "@opentelemetry/api";
-
 /**
  * Represents the state of spans tracked in persistent storage.
  * Used to maintain span relationships across stateless hook processes.
@@ -15,6 +13,8 @@ export interface SpanState {
   traceId: string;
   /** The span ID of the session-level observation */
   sessionSpanId: string;
+  /** W3C traceparent for OTel context propagation (format: {version}-{trace-id}-{span-id}-{flags}) */
+  traceparent?: string;
   /** Map of tool_use_id to span information for active tools */
   activeSpans: Record<string, ActiveSpanInfo>;
   /** Session-level metrics accumulated across tool executions */
@@ -23,12 +23,23 @@ export interface SpanState {
 
 /**
  * Information about an active span.
+ * Extended to support cross-process parent-child hierarchy recovery.
  */
 export interface ActiveSpanInfo {
   /** The OpenTelemetry span ID */
   spanId: string;
   /** Timestamp when the span started (ms since epoch) */
   startTime: number;
+  /** The trace ID for linking */
+  traceId?: string;
+  /** The parent span ID for hierarchy preservation */
+  parentSpanId?: string;
+  /** W3C traceparent for OTel context propagation */
+  traceparent?: string;
+  /** Original tool context for cross-process restoration */
+  ctx?: ToolContext;
+  /** Parent tool use ID if this is a nested tool/subagent */
+  parent_tool_use_id?: string;
 }
 
 /**
@@ -109,8 +120,10 @@ export interface ToolResult {
  * Options for starting an observation.
  */
 export interface StartObservationOptions {
-  /** Parent span context for linking observations */
-  parentSpanContext?: SpanContext;
+  /** Parent trace ID for linking observations */
+  parentTraceId?: string;
+  /** Parent span ID for nesting */
+  parentSpanId?: string;
   /** Custom start time (Date object) */
   startTime?: Date;
 }

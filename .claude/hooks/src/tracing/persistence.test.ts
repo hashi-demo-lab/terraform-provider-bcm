@@ -119,14 +119,13 @@ describe('Persistence Module', () => {
       const sessionId = `${testSessionPrefix}-span`;
       const toolUseId = 'tool-use-001';
 
-      // Register span
-      registerActiveSpan(
-        sessionId,
-        toolUseId,
-        'span-id-001',
-        'trace-id-001',
-        'session-span-001'
-      );
+      // Register span with new object-based API
+      registerActiveSpan(sessionId, toolUseId, {
+        spanId: 'span-id-001',
+        startTime: Date.now(),
+        traceId: 'trace-id-001',
+        parentSpanId: 'session-span-001',
+      });
 
       // Pop span
       const popped = popActiveSpan(sessionId, toolUseId);
@@ -146,9 +145,9 @@ describe('Persistence Module', () => {
       const sessionId = `${testSessionPrefix}-multi`;
 
       // Register multiple spans
-      registerActiveSpan(sessionId, 'tool-1', 'span-1', 'trace-1', 'session-1');
-      registerActiveSpan(sessionId, 'tool-2', 'span-2', 'trace-1', 'session-1');
-      registerActiveSpan(sessionId, 'tool-3', 'span-3', 'trace-1', 'session-1');
+      registerActiveSpan(sessionId, 'tool-1', { spanId: 'span-1', startTime: Date.now(), traceId: 'trace-1', parentSpanId: 'session-1' });
+      registerActiveSpan(sessionId, 'tool-2', { spanId: 'span-2', startTime: Date.now(), traceId: 'trace-1', parentSpanId: 'session-1' });
+      registerActiveSpan(sessionId, 'tool-3', { spanId: 'span-3', startTime: Date.now(), traceId: 'trace-1', parentSpanId: 'session-1' });
 
       // Pop in different order
       const pop2 = popActiveSpan(sessionId, 'tool-2');
@@ -163,7 +162,7 @@ describe('Persistence Module', () => {
 
     it('returns null for non-existent tool use id', () => {
       const sessionId = `${testSessionPrefix}-nonexistent`;
-      registerActiveSpan(sessionId, 'tool-1', 'span-1', 'trace-1', 'session-1');
+      registerActiveSpan(sessionId, 'tool-1', { spanId: 'span-1', startTime: Date.now(), traceId: 'trace-1', parentSpanId: 'session-1' });
 
       const result = popActiveSpan(sessionId, 'tool-wrong');
       expect(result).toBeNull();
@@ -259,7 +258,12 @@ describe('Persistence Module', () => {
       // Create and register span
       const observationId = 'span-tool-01';
       const startTime = Date.now();
-      registerActiveSpan(sessionId, toolUseId, observationId, traceId, sessionSpanId);
+      registerActiveSpan(sessionId, toolUseId, {
+        spanId: observationId,
+        startTime,
+        traceId,
+        parentSpanId: sessionSpanId,
+      });
 
       // Process 1 exits - in-memory state is lost
       // But file persistence remains
@@ -293,9 +297,9 @@ describe('Persistence Module', () => {
 
       // === Process 1: Multiple PreToolUse ===
       initSession(sessionId, traceId, sessionSpanId);
-      registerActiveSpan(sessionId, 'tool-1', 'span-1', traceId, sessionSpanId);
-      registerActiveSpan(sessionId, 'tool-2', 'span-2', traceId, sessionSpanId);
-      registerActiveSpan(sessionId, 'tool-3', 'span-3', traceId, sessionSpanId);
+      registerActiveSpan(sessionId, 'tool-1', { spanId: 'span-1', startTime: Date.now(), traceId, parentSpanId: sessionSpanId });
+      registerActiveSpan(sessionId, 'tool-2', { spanId: 'span-2', startTime: Date.now(), traceId, parentSpanId: sessionSpanId });
+      registerActiveSpan(sessionId, 'tool-3', { spanId: 'span-3', startTime: Date.now(), traceId, parentSpanId: sessionSpanId });
 
       // === Process 2: PostToolUse for tool-2 ===
       const span2 = popActiveSpan(sessionId, 'tool-2');
@@ -320,7 +324,7 @@ describe('Persistence Module', () => {
 
       // Create session with active spans
       initSession(sessionId, traceId, sessionSpanId);
-      registerActiveSpan(sessionId, 'tool-1', 'span-1', traceId, sessionSpanId);
+      registerActiveSpan(sessionId, 'tool-1', { spanId: 'span-1', startTime: Date.now(), traceId, parentSpanId: sessionSpanId });
 
       // Verify state exists
       expect(getSessionInfo(sessionId)).not.toBeNull();
