@@ -31,6 +31,9 @@ export interface ClaudeCodeEvent {
   // Compact event fields
   trigger?: "manual" | "auto";
   custom_instructions?: string;
+  // UserPromptSubmit fields
+  /** User prompt content (for UserPromptSubmit events) */
+  prompt?: string;
 }
 
 // Constants

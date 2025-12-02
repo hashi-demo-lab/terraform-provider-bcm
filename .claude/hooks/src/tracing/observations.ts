@@ -489,11 +489,13 @@ export function createToolObservation(
  *
  * @param ctx - Tool context
  * @param traceparent - W3C traceparent string for context restoration
+ * @param sessionId - Optional session ID to set on the trace (for cross-process sessions)
  * @returns A ToolObservation wrapper attached to the parent trace
  */
 export function createToolObservationWithContext(
   ctx: ToolContext,
-  traceparent: string
+  traceparent: string,
+  sessionId?: string
 ): ToolObservation {
   // Parse traceparent to get parent span context for cross-process linking
   const parsedParent = parseTraceparent(traceparent);
@@ -525,6 +527,14 @@ export function createToolObservationWithContext(
       input: ctx.toolInput,
       metadata,
     }, { asType: "agent", parentSpanContext });
+
+    // Set sessionId and name on trace for cross-process session correlation
+    if (sessionId) {
+      observation.updateTrace({
+        sessionId,
+        name: "claude-code-session",
+      });
+    }
 
     return {
       traceId: observation.traceId,
@@ -563,6 +573,14 @@ export function createToolObservationWithContext(
     metadata,
   }, { asType: "tool", parentSpanContext });
 
+  // Set sessionId and name on trace for cross-process session correlation
+  if (sessionId) {
+    observation.updateTrace({
+      sessionId,
+      name: "claude-code-session",
+    });
+  }
+
   return {
     traceId: observation.traceId,
     id: observation.id,
@@ -594,11 +612,13 @@ export function createToolObservationWithContext(
  * In v4 SDK, events are created using startObservation with asType: "event".
  *
  * @param name - Event name
+ * @param input - Event input (e.g., user prompt content)
  * @param metadata - Event metadata
  * @param parentObservation - Optional parent observation
  */
 export function createEventObservation(
   name: string,
+  input?: unknown,
   metadata?: Record<string, unknown>,
   parentObservation?: SessionObservation | ToolObservation
 ): void {
@@ -613,11 +633,13 @@ export function createEventObservation(
       : parentObservation._observation;
     // Events auto-end in v4 SDK
     parent.startObservation(name, {
+      input,
       metadata: eventMetadata,
     }, { asType: "event" });
   } else {
     // Create as root event
     startObservation(name, {
+      input,
       metadata: eventMetadata,
     }, { asType: "event" });
   }
@@ -627,15 +649,17 @@ export function createEventObservation(
  * Record an event (create and immediately finalize).
  *
  * @param name - Event name
+ * @param input - Event input (e.g., user prompt content)
  * @param metadata - Event metadata
  * @param parentObservation - Optional parent observation
  */
 export function recordEvent(
   name: string,
+  input?: unknown,
   metadata?: Record<string, unknown>,
   parentObservation?: SessionObservation | ToolObservation
 ): void {
-  createEventObservation(name, metadata, parentObservation);
+  createEventObservation(name, input, metadata, parentObservation);
 }
 
 /**
@@ -643,17 +667,21 @@ export function recordEvent(
  * Uses W3C traceparent to link the event to the correct trace.
  *
  * @param name - Event name
+ * @param input - Event input (e.g., user prompt content)
  * @param metadata - Event metadata
  * @param traceparent - W3C traceparent string for context restoration
+ * @param sessionId - Optional session ID to set on the trace (for cross-process sessions)
  */
 export function recordEventWithContext(
   name: string,
+  input?: unknown,
   metadata?: Record<string, unknown>,
-  traceparent?: string
+  traceparent?: string,
+  sessionId?: string
 ): void {
   if (!traceparent) {
     // No traceparent - create as root event (fallback)
-    createEventObservation(name, metadata);
+    createEventObservation(name, input, metadata);
     return;
   }
 
@@ -673,9 +701,18 @@ export function recordEventWithContext(
   };
 
   // Create event with parent span context for proper trace linking
-  startObservation(name, {
+  const observation = startObservation(name, {
+    input,
     metadata: eventMetadata,
   }, { asType: "event", parentSpanContext });
+
+  // Ensure trace has sessionId and name for cross-process events
+  if (sessionId) {
+    observation.updateTrace({
+      sessionId,
+      name: "claude-code-session",
+    });
+  }
 }
 
 /**

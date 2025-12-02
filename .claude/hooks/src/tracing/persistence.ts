@@ -174,6 +174,7 @@ export function registerActiveSpan(
     startTime: spanInfo.startTime ?? Date.now(),
     traceId: spanInfo.traceId,
     parentSpanId: spanInfo.parentSpanId,
+    traceparent: spanInfo.traceparent,
     ctx: spanInfo.ctx,
     parent_tool_use_id: spanInfo.parent_tool_use_id,
   };
@@ -209,14 +210,14 @@ export function popActiveSpan(
 }
 
 /**
- * Get session info (trace ID, session span ID, traceparent) for a session.
+ * Get session info (trace ID, session span ID, traceparent, createdAt) for a session.
  *
  * @param sessionId - The session identifier
  * @returns The session trace context, or null if not found
  */
 export function getSessionInfo(
   sessionId: string
-): { traceId: string; sessionSpanId: string; traceparent?: string } | null {
+): { traceId: string; sessionSpanId: string; traceparent?: string; createdAt?: number } | null {
   const state = loadSpanState(sessionId);
   if (!state) return null;
 
@@ -224,6 +225,7 @@ export function getSessionInfo(
     traceId: state.traceId,
     sessionSpanId: state.sessionSpanId,
     traceparent: state.traceparent,
+    createdAt: state.createdAt,
   };
 }
 

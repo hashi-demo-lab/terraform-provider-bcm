@@ -237,7 +237,7 @@ function processEvent(event: ClaudeCodeEvent): void {
       // If no in-memory parent but we have a persisted session, use traceparent for cross-process linking
       let observation: ToolObservation;
       if (!actualParent && persistedSession?.traceparent) {
-        observation = createToolObservationWithContext(ctx, persistedSession.traceparent);
+        observation = createToolObservationWithContext(ctx, persistedSession.traceparent, event.session_id);
         DEBUG && log("DEBUG", `PreToolUse cross-process with traceparent: ${persistedSession.traceparent}`);
       } else {
         observation = createToolObservation(ctx, undefined, actualParent);
@@ -362,11 +362,11 @@ function processEvent(event: ClaudeCodeEvent): void {
           let observation: ToolObservation;
           if (persistedSpan.traceparent) {
             // Create observation within restored parent context
-            observation = createToolObservationWithContext(restoredCtx, persistedSpan.traceparent);
+            observation = createToolObservationWithContext(restoredCtx, persistedSpan.traceparent, event.session_id);
             debugLog(`Cross-process observation with span traceparent: ${persistedSpan.traceparent}`);
           } else if (persistedSession?.traceparent) {
             // Fall back to session traceparent
-            observation = createToolObservationWithContext(restoredCtx, persistedSession.traceparent);
+            observation = createToolObservationWithContext(restoredCtx, persistedSession.traceparent, event.session_id);
             debugLog(`Cross-process observation with session traceparent: ${persistedSession.traceparent}`);
           } else {
             // Last resort: attach to in-memory session if available
@@ -414,7 +414,7 @@ function processEvent(event: ClaudeCodeEvent): void {
           // Use session traceparent if available for cross-process linking
           let obs: ToolObservation;
           if (persistedSession?.traceparent) {
-            obs = createToolObservationWithContext(ctx, persistedSession.traceparent);
+            obs = createToolObservationWithContext(ctx, persistedSession.traceparent, event.session_id);
           } else {
             obs = createToolObservation(ctx, undefined, sessionObs);
           }
@@ -452,7 +452,7 @@ function processEvent(event: ClaudeCodeEvent): void {
         // Use session traceparent if available for cross-process linking
         let observation: ToolObservation;
         if (persistedSession?.traceparent) {
-          observation = createToolObservationWithContext(ctx, persistedSession.traceparent);
+          observation = createToolObservationWithContext(ctx, persistedSession.traceparent, event.session_id);
         } else {
           observation = createToolObservation(ctx, undefined, sessionObs);
         }
@@ -491,17 +491,59 @@ function processEvent(event: ClaudeCodeEvent): void {
     }
 
     case "UserPromptSubmit": {
+      const promptMetadata: Record<string, unknown> = {
+        permission_mode: event.permission_mode,
+        timestamp: event.timestamp || new Date().toISOString(),
+        prompt_received: !!event.prompt,
+      };
+
+      // Capture the user prompt as input
+      const promptInput = event.prompt || null;
+
       if (sessionObs) {
-        recordEvent(
-          "user_prompt",
-          {
-            permission_mode: event.permission_mode,
-            timestamp: event.timestamp || new Date().toISOString(),
-          },
-          sessionObs
-        );
+        recordEvent("user_prompt", promptInput, promptMetadata, sessionObs);
+      } else if (persistedSession?.traceparent) {
+        // Cross-process: use traceparent to link to correct trace
+        recordEventWithContext("user_prompt", promptInput, promptMetadata, persistedSession.traceparent, event.session_id);
       }
-      DEBUG && log("DEBUG", "UserPromptSubmit");
+      DEBUG && log("DEBUG", `UserPromptSubmit: ${promptInput ? "with prompt" : "no prompt field"}`);
+      break;
+    }
+
+    case "PreCompact": {
+      const compactMetadata: Record<string, unknown> = {
+        timestamp: event.timestamp || new Date().toISOString(),
+        trigger: event.trigger || "unknown", // "manual" or "auto"
+        event_type: "pre_compact",
+      };
+
+      if (event.custom_instructions) {
+        compactMetadata.has_custom_instructions = true;
+      }
+
+      if (sessionObs) {
+        recordEvent("compact_started", null, compactMetadata, sessionObs);
+      } else if (persistedSession?.traceparent) {
+        recordEventWithContext("compact_started", null, compactMetadata, persistedSession.traceparent, event.session_id);
+      }
+      log("INFO", `PreCompact (trigger: ${event.trigger || "unknown"})`);
+      break;
+    }
+
+    case "PostCompact": {
+      const compactMetadata: Record<string, unknown> = {
+        timestamp: event.timestamp || new Date().toISOString(),
+        trigger: event.trigger || "unknown",
+        event_type: "post_compact",
+        compaction_complete: true,
+      };
+
+      if (sessionObs) {
+        recordEvent("compact_completed", null, compactMetadata, sessionObs);
+      } else if (persistedSession?.traceparent) {
+        recordEventWithContext("compact_completed", null, compactMetadata, persistedSession.traceparent, event.session_id);
+      }
+      log("INFO", "PostCompact completed");
       break;
     }
 
@@ -513,14 +555,14 @@ function processEvent(event: ClaudeCodeEvent): void {
 
       if (sessionObs) {
         // In-memory session available (same process)
-        recordEvent("subagent_completed", eventMetadata, sessionObs);
+        recordEvent("subagent_completed", null, eventMetadata, sessionObs);
       } else if (persistedSession?.traceparent) {
         // Cross-process: use traceparent to link to correct trace
-        recordEventWithContext("subagent_completed", eventMetadata, persistedSession.traceparent);
+        recordEventWithContext("subagent_completed", null, eventMetadata, persistedSession.traceparent, event.session_id);
         DEBUG && log("DEBUG", `SubagentStop with cross-process traceparent: ${persistedSession.traceparent}`);
       } else {
         // Fallback: create orphan event (will not be linked)
-        recordEvent("subagent_completed", eventMetadata);
+        recordEvent("subagent_completed", null, eventMetadata);
         DEBUG && log("DEBUG", "SubagentStop without session context (orphan event)");
       }
       log("INFO", "Subagent completed");
@@ -604,6 +646,10 @@ async function main() {
     try {
       const data = JSON.parse(line);
       debugLog(`Parsed event: type=${data.type || data.hook_event_name}, session=${data.session_id}, tool=${data.tool_name || 'n/a'}`);
+      // Log UserPromptSubmit prompt field
+      if (data.hook_event_name === "UserPromptSubmit") {
+        debugLog(`UserPromptSubmit prompt: ${data.prompt ? `"${data.prompt.substring(0, 100)}..."` : 'absent'}`);
+      }
       if (isValidEvent(data)) {
         processEvent(data);
         debugLog(`Event processed successfully`);
@@ -619,11 +665,11 @@ async function main() {
 
   const shutdown = async () => {
     debugLog(`Shutdown initiated - ${sessionObservations.size} active sessions`);
-    // End any active sessions
-    for (const [sessionId, sessionObs] of sessionObservations) {
-      finalizeSessionObservation(sessionObs, { ended: true });
-      sessionObservations.delete(sessionId);
-    }
+    // NOTE: Do NOT finalize sessions here!
+    // Sessions should only be ended by the explicit "Stop" event.
+    // Each hook invocation is a separate process, and the session span
+    // should remain "open" until the Stop event comes in a future process.
+    // Just flush pending spans without ending sessions.
 
     try {
       // Explicitly flush spans before shutdown to ensure export completes
