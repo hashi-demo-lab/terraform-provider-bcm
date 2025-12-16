@@ -49,7 +49,6 @@ signs:
       - "{{ .Env.GPG_FINGERPRINT }}" # set this environment variable for your signing key
       - "--output"
       - "${signature}"
-      - "--armor"
       - "--detach-sign"
       - "${artifact}"
 release:
