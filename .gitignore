@@ -45,3 +45,4 @@ coverage.out
 # GPG keys for provider signing (never commit!)
 .gpg-keys/
 GPG_PUBLIC_KEY.asc
+GPG_PRIVATE_KEY.asc
