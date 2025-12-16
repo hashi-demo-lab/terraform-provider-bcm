@@ -47,7 +47,7 @@ func (p *BCMProvider) Metadata(ctx context.Context, req provider.MetadataRequest
 
 func (p *BCMProvider) Schema(ctx context.Context, req provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "Terraform provider for Nvidia BCM (BlueField Configuration Manager)",
+		MarkdownDescription: `**PROTOTYPE PROVIDER** - This is a prototype Terraform provider for Nvidia BCM (Base Command Manager). It is recommended to fork this provider for your own use and development. This provider is not officially supported and may have breaking changes.`,
 		Attributes: map[string]schema.Attribute{
 			"endpoint": schema.StringAttribute{
 				MarkdownDescription: "BCM JSON-RPC API endpoint (e.g., https://172.21.15.254:8081). Can also be set via BCM_ENDPOINT environment variable.",
@@ -170,7 +170,6 @@ func (p *BCMProvider) Resources(ctx context.Context) []func() resource.Resource 
 		NewCMPartSoftwareImageResource,
 		NewCMDeviceCategoryResource,
 		NewCMDeviceDeviceResource,
-		NewCMKubeClusterResource,
 		NewCMNetNetworkResource,
 		NewCMUserUserResource,
 	}
@@ -187,7 +186,6 @@ func (p *BCMProvider) DataSources(ctx context.Context) []func() datasource.DataS
 		NewCMDeviceCategoriesDataSource,
 		NewCMDeviceNodesDataSource,
 		NewCMDeviceRolesDataSource,
-		NewCMKubeClustersDataSource,
 		NewCMNetNetworksDataSource,
 		NewCMPartEntityInfoDataSource,
 		NewCMPartPartitionsDataSource,

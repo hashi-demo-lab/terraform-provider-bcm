@@ -28,8 +28,8 @@ func main() {
 	flag.Parse()
 
 	opts := providerserver.ServeOpts{
-		// BCM (BlueField Configuration Manager) Terraform Provider
-		Address: "registry.terraform.io/hashicorp/bcm",
+		// BCM (Base Command Manager) Terraform Provider
+		Address: "registry.terraform.io/hashi-demo-lab/bcm",
 		Debug:   debug,
 	}
 

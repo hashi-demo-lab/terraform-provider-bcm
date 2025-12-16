@@ -10,6 +10,13 @@ on:
   push:
     paths-ignore:
       - 'README.md'
+  workflow_dispatch:
+    inputs:
+      skip_acceptance_tests:
+        description: 'Skip acceptance tests (useful when BCM endpoint is unavailable)'
+        required: false
+        default: 'false'
+        type: boolean
 
 # Testing only needs permissions to read the repository contents.
 permissions:
@@ -52,22 +59,42 @@ jobs:
           git diff --compact-summary --exit-code || \
             (echo; echo "Unexpected difference in directories after code generation. Run 'make generate' command and commit."; exit 1)
 
+  # Run unit tests (no BCM connection required)
+  unit-test:
+    name: Unit Tests
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
+      - uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6.1.0
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+      - run: go mod download
+      - name: Run unit tests
+        run: go test -v -cover -timeout=120s ./internal/provider/ -run "^TestUnit"
+
   # Run acceptance tests in a matrix with Terraform CLI versions
+  # These tests require BCM endpoint connectivity
   test:
     name: Terraform Provider Acceptance Tests
     needs: build
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
+    # Skip if manual trigger with skip_acceptance_tests=true
+    if: github.event.inputs.skip_acceptance_tests != 'true'
     strategy:
       fail-fast: false
       matrix:
-        # list whatever Terraform versions here you would like to support
+        # Terraform versions to test against
         terraform:
-          - '1.0.*'
-          - '1.1.*'
-          - '1.2.*'
-          - '1.3.*'
-          - '1.4.*'
+          - '1.5.*'
+          - '1.6.*'
+          - '1.7.*'
+          - '1.8.*'
+          - '1.9.*'
+          - '1.10.*'
     steps:
       - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
       - uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6.1.0
@@ -79,7 +106,22 @@ jobs:
           terraform_version: ${{ matrix.terraform }}
           terraform_wrapper: false
       - run: go mod download
-      - env:
+      - name: Check BCM credentials
+        id: check-creds
+        env:
+          BCM_ENDPOINT: ${{ secrets.BCM_ENDPOINT }}
+        run: |
+          if [ -z "$BCM_ENDPOINT" ]; then
+            echo "has_creds=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::BCM credentials not configured - acceptance tests will be skipped"
+          else
+            echo "has_creds=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Run acceptance tests
+        if: steps.check-creds.outputs.has_creds == 'true'
+        env:
           TF_ACC: "1"
-        run: go test -v -cover ./internal/provider/
-        timeout-minutes: 10
+          BCM_ENDPOINT: ${{ secrets.BCM_ENDPOINT }}
+          BCM_USERNAME: ${{ secrets.BCM_USERNAME }}
+          BCM_PASSWORD: ${{ secrets.BCM_PASSWORD }}
+        run: go test -v -cover -timeout 120m ./internal/provider/

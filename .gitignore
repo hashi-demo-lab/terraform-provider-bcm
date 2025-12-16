@@ -41,3 +41,7 @@ website/vendor
 terraform-provider-bcm
 terraform-provider-bcm_v0.1.0
 coverage.out
+
+# GPG keys for provider signing (never commit!)
+.gpg-keys/
+GPG_PUBLIC_KEY.asc

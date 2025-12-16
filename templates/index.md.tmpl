@@ -1,0 +1,39 @@
+---
+page_title: "Provider: bcm"
+description: |-
+  Prototype Terraform provider for Nvidia BCM (Bright Cluster Manager)
+---
+
+# BCM Provider
+
+~> **PROTOTYPE PROVIDER** - This is a prototype Terraform provider for Nvidia BCM (Base Command Manager). It is recommended to **fork this provider** for your own use and development. This provider is not officially supported and may have breaking changes.
+
+The BCM provider allows Terraform to manage resources in Nvidia's Base Command Manager (BCM). It provides resources and data sources for managing cluster configurations including:
+
+- Software Images
+- Categories (node groups)
+- Devices (compute nodes)
+- Networks
+- Users and Groups
+
+## Requirements
+
+- [Terraform](https://developer.hashicorp.com/terraform/downloads) >= 1.5
+- A BCM endpoint with API access
+- Valid BCM credentials
+
+## Authentication
+
+The provider can be configured using environment variables or provider block attributes:
+
+```shell
+export BCM_ENDPOINT="https://bcm.example.com:8081"
+export BCM_USERNAME="automation-user"
+export BCM_PASSWORD="your-secure-password"
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Example Usage
+
+{{ tffile "examples/provider/provider.tf" }}

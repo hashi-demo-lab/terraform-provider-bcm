@@ -9,7 +9,7 @@
 terraform {
   required_providers {
     bcm = {
-      source = "hashicorp/bcm"
+      source = "hashi-demo-lab/bcm"
     }
   }
   required_version = ">= 1.14.0"
