@@ -323,6 +323,248 @@ resource "bcm_cmdevice_category" "comprehensive" {
     systemctl enable nvidia-persistenced
   EOT
 }
+
+# Example 11: Category with static routes
+# Configure custom network routing for the category
+resource "bcm_cmdevice_category" "with_static_routes" {
+  name               = "multi-network-nodes"
+  management_network = "84d8d82b-3ae7-4433-a793-bb44d5c3b4fe"
+  notes              = "Nodes with custom routing for multiple networks"
+
+  # Static routes for network segmentation
+  # BCM assigns UUIDs to each route after creation
+  static_routes = [
+    {
+      destination = "10.100.0.0/16"
+      gateway     = "192.168.1.254"
+      metric      = 100
+    },
+    {
+      destination = "10.200.0.0/16"
+      gateway     = "192.168.1.253"
+      metric      = 200
+    },
+    {
+      destination = "172.16.0.0/12"
+      gateway     = "192.168.1.252"
+      # metric is optional, defaults to 0
+    }
+  ]
+
+  # Network configuration
+  default_gateway = "192.168.1.1"
+  name_servers    = ["8.8.8.8"]
+}
+
+# Example 12: Category with Nvidia GPU settings
+# Configure Nvidia GPU power and compute settings
+resource "bcm_cmdevice_category" "nvidia_gpu_nodes" {
+  name               = "nvidia-a100-cluster"
+  management_network = "84d8d82b-3ae7-4433-a793-bb44d5c3b4fe"
+  notes              = "Nvidia A100 GPU nodes with optimized settings"
+
+  # GPU settings for Nvidia cards
+  # Each entry configures a range of GPUs (e.g., "0" for GPU 0, "0-3" for GPUs 0-3)
+  gpu_settings = [
+    {
+      name         = "0-3"     # Configure GPUs 0, 1, 2, 3
+      child_type   = "nvidia"  # Required: "nvidia" or "amd"
+      power_limit  = 400       # Power limit in Watts
+      ecc_mode     = "ENABLED" # ECC memory: ENABLED, DISABLED, NONE
+      compute_mode = "DEFAULT" # DEFAULT, EXCLUSIVE_PROCESS, EXCLUSIVE_THREAD, PROHIBITED
+    },
+    {
+      name                       = "4-7"
+      child_type                 = "nvidia"
+      power_limit                = 350
+      ecc_mode                   = "ENABLED"
+      compute_mode               = "EXCLUSIVE_PROCESS"
+      clock_sync_boost_mode      = "NONE"
+      multiprocessor_clock_speed = 1800000000 # 1.8 GHz in Hz
+      memory_clock_speed         = 1500000000 # 1.5 GHz in Hz
+    }
+  ]
+
+  # Kernel modules for Nvidia
+  modules = [
+    {
+      name       = "nvidia"
+      parameters = ""
+    },
+    {
+      name       = "nvidia-drm"
+      parameters = "modeset=1"
+    }
+  ]
+
+  kernel_parameters = "intel_iommu=on iommu=pt"
+}
+
+# Example 13: Category with Nvidia MIG (Multi-Instance GPU) profiles
+# Configure MIG partitioning for Nvidia GPUs
+resource "bcm_cmdevice_category" "nvidia_mig_nodes" {
+  name               = "nvidia-mig-cluster"
+  management_network = "84d8d82b-3ae7-4433-a793-bb44d5c3b4fe"
+  notes              = "Nvidia GPUs with MIG partitioning enabled"
+
+  gpu_settings = [
+    {
+      name         = "0"
+      child_type   = "nvidia"
+      ecc_mode     = "ENABLED"
+      compute_mode = "DEFAULT"
+      # MIG profiles define GPU partitioning
+      # Format: "Xg.Ygb" where X=compute instances, Y=memory in GB
+      mig_profiles = ["1g.5gb", "1g.5gb", "1g.5gb", "1g.5gb"]
+    },
+    {
+      name         = "1"
+      child_type   = "nvidia"
+      ecc_mode     = "ENABLED"
+      compute_mode = "DEFAULT"
+      # Different MIG configuration for second GPU
+      mig_profiles = ["2g.10gb", "2g.10gb"]
+    }
+  ]
+}
+
+# Example 14: Category with AMD GPU settings
+# Configure AMD GPU clock and power settings
+resource "bcm_cmdevice_category" "amd_gpu_nodes" {
+  name               = "amd-mi250-cluster"
+  management_network = "84d8d82b-3ae7-4433-a793-bb44d5c3b4fe"
+  notes              = "AMD MI250 GPU nodes with optimized settings"
+
+  # GPU settings for AMD cards
+  gpu_settings = [
+    {
+      name               = "0-1"     # Configure GPUs 0 and 1
+      child_type         = "amd"     # Required: "nvidia" or "amd"
+      gpu_clock_level    = 5         # GPU clock frequency level (0-7)
+      memory_clock_level = 2         # Memory clock frequency level (0-3)
+      power_play         = "DEFAULT" # Power play mode
+      fan_speed          = 128       # Fan speed value (0-255)
+    },
+    {
+      name                 = "2-3"
+      child_type           = "amd"
+      gpu_clock_level      = 7
+      memory_clock_level   = 3
+      gpu_overdrive        = 0.1       # GPU overdrive percentage (0-0.2)
+      minimal_gpu_clock    = 800000000 # Minimum GPU clock in Hz
+      minimal_memory_clock = 400000000 # Minimum memory clock in Hz
+      activity_threshold   = 0.5       # Workload threshold before clock change
+      hysteresis_up        = 1.0       # Delay before clock increase (seconds)
+      hysteresis_down      = 2.0       # Delay before clock decrease (seconds)
+    }
+  ]
+
+  # Kernel modules for AMD
+  modules = [
+    {
+      name       = "amdgpu"
+      parameters = ""
+    }
+  ]
+}
+
+# Example 15: Mixed GPU category with static routes
+# Comprehensive example combining GPU settings and network routing
+resource "bcm_cmdevice_category" "mixed_gpu_with_routing" {
+  name               = "mixed-gpu-cluster"
+  management_network = "84d8d82b-3ae7-4433-a793-bb44d5c3b4fe"
+  notes              = "Mixed GPU nodes with custom routing"
+
+  # Static routes for GPU data networks
+  static_routes = [
+    {
+      destination = "10.50.0.0/16"
+      gateway     = "192.168.1.100"
+      metric      = 50
+    }
+  ]
+
+  # Nvidia GPU settings
+  gpu_settings = [
+    {
+      name         = "0"
+      child_type   = "nvidia"
+      power_limit  = 300
+      compute_mode = "DEFAULT"
+    }
+  ]
+
+  # Network configuration
+  default_gateway = "192.168.1.1"
+  name_servers    = ["8.8.8.8", "8.8.4.4"]
+}
+
+# Example 16: Category with OS Services
+# Configure monitored system services with health checking
+resource "bcm_cmdevice_category" "with_services" {
+  name               = "service-monitored-nodes"
+  management_network = "84d8d82b-3ae7-4433-a793-bb44d5c3b4fe"
+  notes              = "Nodes with monitored system services"
+
+  services = [
+    {
+      name                          = "sshd"
+      monitored                     = true
+      autostart                     = true
+      managed                       = false
+      run_if                        = "ALWAYS"
+      sickness_check_script_timeout = 10
+      sickness_check_interval       = 60
+      script_timeout                = 30
+    },
+    {
+      name      = "nginx"
+      monitored = true
+      autostart = true
+      managed   = true
+      run_if    = "ALWAYS"
+    },
+    {
+      name                    = "custom-daemon"
+      monitored               = true
+      autostart               = true
+      managed                 = false
+      sickness_check_script   = "/usr/local/bin/health_check.sh"
+      sickness_check_interval = 120
+    }
+  ]
+}
+
+# Example 17: Category with services and health monitoring
+# Configure services with custom health check scripts
+resource "bcm_cmdevice_category" "services_with_health_check" {
+  name               = "health-monitored-cluster"
+  management_network = "84d8d82b-3ae7-4433-a793-bb44d5c3b4fe"
+  notes              = "Cluster with comprehensive health monitoring"
+
+  services = [
+    {
+      name                          = "slurmd"
+      monitored                     = true
+      autostart                     = true
+      managed                       = true
+      run_if                        = "ALWAYS"
+      sickness_check_script         = "/usr/local/bin/check_slurmd.sh"
+      sickness_check_script_timeout = 30
+      sickness_check_interval       = 60
+      script_timeout                = 120
+    },
+    {
+      name                          = "node_exporter"
+      monitored                     = true
+      autostart                     = true
+      managed                       = false
+      sickness_check_script         = "/usr/local/bin/check_exporter.sh"
+      sickness_check_script_timeout = 10
+      sickness_check_interval       = 30
+    }
+  ]
+}
 ```
 
 <!-- schema generated by tfplugindocs -->
@@ -357,9 +599,9 @@ resource "bcm_cmdevice_category" "comprehensive" {
 - `finalize` (String) Finalization script
 - `fips` (String) FIPS mode (YES or NO). If not specified, BCM assigns NO.
 - `force` (Boolean) Force parameter to override warnings and constraints
-- `fsexports` (Attributes List) NFS filesystem exports for nodes in this category (see [below for nested schema](#nestedatt--fsexports))
+- `fsexports` (Attributes List) NFS filesystem exports for nodes in this category. Configures entries for /etc/exports. (see [below for nested schema](#nestedatt--fsexports))
 - `fsmounts` (Attributes List) Filesystem mounts (see [below for nested schema](#nestedatt--fsmounts))
-- `gpu_settings` (Attributes List) GPU hardware configuration for nodes in this category (see [below for nested schema](#nestedatt--gpu_settings))
+- `gpu_settings` (Attributes List) GPU hardware configuration for nodes in this category. Supports Nvidia and AMD GPUs with vendor-specific settings. **Known Limitation**: BCM API does not persist this field - values are stored in Terraform state only. After import, re-apply configuration to restore values. (see [below for nested schema](#nestedatt--gpu_settings))
 - `initialize` (String) Initialization script
 - `install_boot_record` (Boolean) Install boot record flag. If not specified, BCM assigns a default.
 - `install_mode` (String) Installation mode (AUTO, FULL, MINIMAL, CUSTOM). If not specified, BCM assigns a default.
@@ -375,12 +617,12 @@ resource "bcm_cmdevice_category" "comprehensive" {
 - `notes` (String) User notes or description for the category
 - `proxy_settings` (Attributes) Proxy settings (see [below for nested schema](#nestedatt--proxy_settings))
 - `raidconf` (String) RAID configuration
-- `roles` (Attributes List) Service role assignments for nodes in this category (see [below for nested schema](#nestedatt--roles))
+- `roles` (Attributes List) Service role assignments for nodes in this category. **Known Limitation**: BCM API does not persist this field - values are stored in Terraform state only. Role UUIDs are generated locally by the provider. After import, re-apply configuration to restore values. (see [below for nested schema](#nestedatt--roles))
 - `search_domains` (List of String) DNS search domains
 - `selinux_settings` (Attributes) SELinux settings (see [below for nested schema](#nestedatt--selinux_settings))
-- `services` (Attributes List) Service configurations for nodes in this category (structure TBD - marked as POST-MVP) (see [below for nested schema](#nestedatt--services))
+- `services` (Attributes List) OS service configurations for nodes in this category. Defines which services should be monitored and managed by CMDaemon. **Known Limitation**: BCM API may not persist this field consistently - values are stored in Terraform state. After import, re-apply configuration to restore values. (see [below for nested schema](#nestedatt--services))
 - `software_image_proxy` (Attributes) Software image proxy configuration (see [below for nested schema](#nestedatt--software_image_proxy))
-- `static_routes` (Attributes List) Static network routes for nodes in this category (see [below for nested schema](#nestedatt--static_routes))
+- `static_routes` (Attributes List) Static network routes for nodes in this category. (see [below for nested schema](#nestedatt--static_routes))
 - `time_servers` (List of String) NTP time servers
 - `timezone_settings` (Attributes) Timezone settings (see [below for nested schema](#nestedatt--timezone_settings))
 - `use_exclusively_for` (String) Use exclusively for
@@ -435,13 +677,23 @@ Read-Only:
 Required:
 
 - `network` (String) Network UUID reference for export access
-- `path` (String) Export path (e.g., /home, /shared)
+- `path` (String) Path to export (e.g., /home, /shared)
 
 Optional:
 
+- `all_squash` (Boolean) Map all uids and gids to the anonymous user (default: false)
 - `allow_write` (Boolean) Allow write access (default: false)
-- `async` (Boolean) Use async mode for writes (default: false)
-- `root_squash` (Boolean) Enable root squash security (default: false)
+- `anon_gid` (Number) Anonymous account group id number (default: 65534)
+- `anon_uid` (Number) Anonymous account user id number (default: 65534)
+- `async` (Boolean) Allow async NFS operations (default: true). When true, the NFS server can reply to requests before changes are committed to stable storage.
+- `check_tree` (Boolean) Check tree (default: false)
+- `disabled` (Boolean) Disable the export (default: false)
+- `extra_options` (String) Extra NFS options to be added to this export
+- `fsid` (Number) File system id for exports used in failover setup. Make sure these are identical for failover pairs.
+- `hosts` (String) Extra hosts-range allowed access to this export (space separated)
+- `name` (String) Export name (unique). If not specified, defaults to the path value.
+- `rdma` (Boolean) Enable NFS over RDMA (default: false)
+- `root_squash` (Boolean) Map requests from uid/gid 0 to the anonymous uid/gid (default: false)
 
 
 <a id="nestedatt--fsmounts"></a>
@@ -470,12 +722,35 @@ Read-Only:
 
 Required:
 
-- `device_id` (String) GPU device ID (e.g., 0, 1, 2)
+- `child_type` (String) GPU vendor type: 'nvidia' or 'amd'.
+- `name` (String) GPU range for which these settings apply (e.g., '0', '0-3', '0,1,2').
 
 Optional:
 
-- `compute_mode` (String) Compute mode (default, exclusive, prohibited)
-- `model` (String) GPU model name (e.g., Tesla V100, A100)
+- `activity_threshold` (Number) Activity threshold percentage 0-1 (AMD only).
+- `clock_sync_boost_mode` (String) Clock sync boost mode among GPUs in group (Nvidia only).
+- `compute_mode` (String) Compute mode (Nvidia only).
+- `ecc_mode` (String) ECC mode: DISABLED, ENABLED, NONE (Nvidia only).
+- `fan_speed` (Number) Fan speed value 0-255 (AMD only).
+- `gpu_clock_level` (Number) GPU clock frequency level 0-7 (AMD only).
+- `gpu_overdrive` (Number) GPU overdrive percentage 0-0.2 (AMD only).
+- `hysteresis_down` (Number) Delay in seconds before clock level is decreased (AMD only).
+- `hysteresis_up` (Number) Delay in seconds before clock level is increased (AMD only).
+- `memory_clock_level` (Number) Memory clock frequency level 0-3 (AMD only).
+- `memory_clock_speed` (Number) Memory clock speed in Hz (Nvidia only).
+- `memory_overdrive` (Number) Memory overdrive percentage 0-0.2 (AMD only).
+- `mig_profiles` (List of String) MIG profiles that will be applied to the GPU (Nvidia only).
+- `minimal_gpu_clock` (Number) Minimum GPU clock speed in Hz (AMD only).
+- `minimal_memory_clock` (Number) Minimum memory clock speed in Hz (AMD only).
+- `multiprocessor_clock_speed` (Number) Streaming multiprocessor clock speed in Hz (Nvidia only).
+- `power_limit` (Number) Power limit in Watts (Nvidia only).
+- `power_play` (String) Power play mode (AMD only).
+- `secondary_workload_power_profile` (String) Secondary workload power profile (Nvidia only).
+- `workload_power_profile` (String) Workload power profile (Nvidia only).
+
+Read-Only:
+
+- `uuid` (String) BCM-assigned UUID for this GPU settings entry.
 
 
 <a id="nestedatt--modules"></a>
@@ -518,6 +793,21 @@ Read-Only:
 <a id="nestedatt--services"></a>
 ### Nested Schema for `services`
 
+Required:
+
+- `name` (String) Service name (max 64 characters). Must be unique within the category.
+
+Optional:
+
+- `autostart` (Boolean) If true, CMDaemon will automatically restart a failed service.
+- `managed` (Boolean) If true, manage config files from cmd (if any).
+- `monitored` (Boolean) If true, CMDaemon will periodically check if the service is running.
+- `run_if` (String) Condition for running the service. Valid values: ALWAYS (default), or other BCM-defined states.
+- `script_timeout` (Number) Service operation timeout in seconds. Use -1 for no timeout (default).
+- `sickness_check_interval` (Number) Interval in seconds between sickness checks. Rounded up to 30-second monitoring intervals. Default: 60 seconds.
+- `sickness_check_script` (String) Script path for sickness checking. The script is executed periodically to determine service health.
+- `sickness_check_script_timeout` (Number) Timeout in seconds after which the sickness check script is killed. Default: 10 seconds.
+
 
 <a id="nestedatt--software_image_proxy"></a>
 ### Nested Schema for `software_image_proxy`
@@ -537,12 +827,21 @@ Read-Only:
 
 Required:
 
-- `destination` (String) Destination network in CIDR notation (e.g., 192.168.1.0/24)
-- `gateway` (String) Gateway IP address (e.g., 10.0.0.1)
+- `gateway` (String) Gateway IPv4 address (e.g., '10.0.0.1')
+- `ip` (String) Destination IP address (e.g., '0.0.0.0' for default route, '192.168.1.0' for specific network)
+- `name` (String) Route name identifier (e.g., 'default-route', 'internal-net')
+- `netmask_bits` (Number) Network mask in CIDR notation bits (0-32, e.g., 0 for default route, 24 for /24 subnet)
+- `network` (String) Network UUID reference for this route (must be valid RFC 4122 UUID)
 
 Optional:
 
-- `metric` (Number) Route metric (priority, lower is preferred)
+- `metric` (Number) Route metric (priority, lower is preferred). Defaults to 0 if not specified.
+- `network_device_name` (String) Specific network device name for this route (optional, leave empty for auto-selection)
+- `notes` (String) User notes for this route
+
+Read-Only:
+
+- `uuid` (String) Unique identifier assigned by BCM
 
 
 <a id="nestedatt--timezone_settings"></a>
