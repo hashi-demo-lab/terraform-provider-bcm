@@ -1,0 +1,18 @@
+---
+page_title: "{{.Name}} Action - {{.ProviderName}}"
+subcategory: ""
+description: |-
+  Execute power operations on BCM-managed devices.
+---
+
+# {{.Name}} (Action)
+
+~> **Note:** Actions require Terraform 1.14 or later.
+
+Execute power operations on BCM-managed devices. This action allows you to power on, power off, reboot, or power cycle devices managed by BCM.
+
+## Example Usage
+
+{{ tffile "examples/actions/bcm_cmdevice_power/main.tf" }}
+
+{{ .SchemaMarkdown | trimspace }}
