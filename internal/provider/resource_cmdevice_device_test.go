@@ -28,7 +28,7 @@ import (
 // testAccCMDeviceDevicePreCheck performs pre-test cleanup of leftover test devices.
 func testAccCMDeviceDevicePreCheck(t *testing.T, deviceNames ...string) {
 	client := createTestBCMClient(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	for _, name := range deviceNames {
 		// Try to get device UUID by name.
@@ -511,7 +511,7 @@ func TestAccCMDeviceDevice_DriftNotes(t *testing.T) {
 			{
 				PreConfig: func() {
 					client := createTestBCMClient(t)
-					ctx := context.Background()
+					ctx := t.Context()
 
 					// Get device by hostname.
 					body, err := client.CallJSONRPC(ctx, "cmdevice", "getDevice", deviceName)
@@ -550,7 +550,7 @@ func TestAccCMDeviceDevice_DriftNotes(t *testing.T) {
 					}
 
 					// Wait for eventual consistency.
-					time.Sleep(2 * time.Second)
+					time.Sleep(TestEventualConsistencyDelay)
 
 					t.Logf("[DEBUG] Modified notes externally to: externally-modified")
 				},
@@ -992,7 +992,7 @@ func TestAccCMDeviceDevice_Drift(t *testing.T) {
 			{
 				PreConfig: func() {
 					client := createTestBCMClient(t)
-					ctx := context.Background()
+					ctx := t.Context()
 
 					// Get UUID by device hostname using helper.
 					uuid := getResourceUUIDByName(t, "cmdevice", "getDevice", initialHostname)
@@ -1035,7 +1035,7 @@ func TestAccCMDeviceDevice_Drift(t *testing.T) {
 					}
 
 					// Wait for eventual consistency.
-					time.Sleep(2 * time.Second)
+					time.Sleep(TestEventualConsistencyDelay)
 
 					t.Logf("[DEBUG] Modified hostname externally to: %v", entity["hostname"])
 				},
@@ -1857,7 +1857,7 @@ func TestAccCMDeviceDevice_RolesDrift(t *testing.T) {
 			{
 				PreConfig: func() {
 					client := createTestBCMClient(t)
-					ctx := context.Background()
+					ctx := t.Context()
 
 					// Get device UUID by hostname.
 					deviceUUID := getResourceUUIDByName(t, "cmdevice", "getDevice", deviceName)
@@ -1886,7 +1886,7 @@ func TestAccCMDeviceDevice_RolesDrift(t *testing.T) {
 					}
 
 					// Wait for eventual consistency.
-					time.Sleep(2 * time.Second)
+					time.Sleep(TestEventualConsistencyDelay)
 
 					t.Logf("[DEBUG] Modified roles externally to: [] (was backup, provisioning)")
 				},
@@ -2204,7 +2204,7 @@ func TestAccCMDeviceDevice_RolesDriftByName(t *testing.T) {
 			{
 				PreConfig: func() {
 					client := createTestBCMClient(t)
-					ctx := context.Background()
+					ctx := t.Context()
 
 					// Get device UUID by hostname.
 					deviceUUID := getResourceUUIDByName(t, "cmdevice", "getDevice", deviceName)
@@ -2231,7 +2231,7 @@ func TestAccCMDeviceDevice_RolesDriftByName(t *testing.T) {
 					}
 
 					// Wait for eventual consistency.
-					time.Sleep(2 * time.Second)
+					time.Sleep(TestEventualConsistencyDelay)
 					t.Logf("[DEBUG] Removed roles externally (drift)")
 				},
 				Config: testAccCMDeviceDeviceConfigWithRoleNames(deviceName, categoryName, imageName, imagePath, mac, roleNames),

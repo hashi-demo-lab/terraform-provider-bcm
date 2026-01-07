@@ -82,20 +82,20 @@ func testAccCMDeviceCategoryPreCheck(t *testing.T, names ...string) {
 
 	// Attempt to clean up any leftover test categories with standardized retry logic
 	for _, name := range names {
-		body, err := client.CallJSONRPC(context.Background(), "cmdevice", "getCategory", name)
+		body, err := client.CallJSONRPC(t.Context(), "cmdevice", "getCategory", name)
 		if err == nil {
 			var categoryData map[string]interface{}
 			if json.Unmarshal(body, &categoryData) == nil {
 				if uuid, ok := categoryData["uuid"].(string); ok && uuid != "" {
 					// Category exists, try to delete it with force=true
-					_, err := client.CallJSONRPC(context.Background(), "cmdevice", "removeCategory", uuid, true)
+					_, err := client.CallJSONRPC(t.Context(), "cmdevice", "removeCategory", uuid, true)
 					if err != nil {
 						t.Logf("Failed to delete leftover category %s: %v", name, err)
 						continue
 					}
 
 					// Verify deletion with shared helper (standardized retry config: 5 retries)
-					deleted := verifyResourceDeleted(context.Background(), client, "cmdevice", "getCategory", name, 5)
+					deleted := verifyResourceDeleted(t.Context(), client, "cmdevice", "getCategory", name, 5)
 					if deleted {
 						t.Logf("✓ Cleaned up leftover test category: %s", name)
 					} else {
@@ -525,7 +525,7 @@ func TestAccCMDeviceCategory_DriftNotes(t *testing.T) {
 				PreConfig: func() {
 					// Phase 3 - Task T014 (GREEN): Implement PreConfig to modify via BCM API
 					client := createTestBCMClient(t)
-					ctx := context.Background()
+					ctx := t.Context()
 
 					// Get UUID by category name using helper
 					uuid := getResourceUUIDByName(t, "cmdevice", "getCategory", categoryName)
@@ -568,7 +568,7 @@ func TestAccCMDeviceCategory_DriftNotes(t *testing.T) {
 					}
 
 					// Wait for eventual consistency
-					time.Sleep(2 * time.Second)
+					time.Sleep(TestEventualConsistencyDelay)
 
 					t.Logf("[DEBUG] Modified notes externally to: %v", entity["notes"])
 				},
@@ -674,7 +674,7 @@ func TestAccCMDeviceCategory_DestroyExternalDelete(t *testing.T) {
 				PreConfig: func() {
 					// Delete the category via BCM API before Terraform tries to destroy it
 					client := createTestBCMClient(t)
-					ctx := context.Background()
+					ctx := t.Context()
 
 					// Get category UUID
 					uuid := getResourceUUIDByName(t, "cmdevice", "getCategory", categoryName)
@@ -686,7 +686,7 @@ func TestAccCMDeviceCategory_DestroyExternalDelete(t *testing.T) {
 					}
 
 					// Wait for eventual consistency
-					time.Sleep(2 * time.Second)
+					time.Sleep(TestEventualConsistencyDelay)
 
 					t.Logf("[DEBUG] Deleted category externally: %s", categoryName)
 				},
@@ -2682,7 +2682,7 @@ resource "bcm_cmdevice_category" "test" {
 }
 
 // testAccCMDeviceCategoryConfig_StaticRoutesInvalid creates config with invalid static route.
-// Parameters: ip (destination IP), gateway (gateway IP)
+// Parameters: ip (destination IP), gateway (gateway IP).
 func testAccCMDeviceCategoryConfig_StaticRoutesInvalid(name, ip, gateway string) string {
 	return fmt.Sprintf(`
 provider "bcm" {
@@ -3980,7 +3980,7 @@ resource "bcm_cmdevice_category" "test" {
 
 // testAccCMDeviceCategoryResourceConfig_WithRole creates a category with a single role
 // for testing role UUID population (Issue #83).
-func testAccCMDeviceCategoryResourceConfig_WithRole(name, roleName, childType string) string {
+func testAccCMDeviceCategoryResourceConfig_WithRole(name string) string {
 	return fmt.Sprintf(`
 provider "bcm" {
   endpoint             = %[1]q
@@ -4008,8 +4008,8 @@ resource "bcm_cmdevice_category" "test" {
 
   roles = [
     {
-      name       = %[5]q
-      child_type = %[6]q
+      name       = "head"
+      child_type = "HeadNode"
     }
   ]
 }
@@ -4018,8 +4018,6 @@ resource "bcm_cmdevice_category" "test" {
 		os.Getenv("BCM_USERNAME"),
 		os.Getenv("BCM_PASSWORD"),
 		name,
-		roleName,
-		childType,
 	)
 }
 
@@ -4085,7 +4083,7 @@ func TestAccCMDeviceCategory_RolesUUIDPopulated(t *testing.T) {
 		Steps: []resource.TestStep{
 			// Create with role, verify UUID populated
 			{
-				Config: testAccCMDeviceCategoryResourceConfig_WithRole(categoryName, "head", "HeadNode"),
+				Config: testAccCMDeviceCategoryResourceConfig_WithRole(categoryName),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "name", categoryName),
 					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "roles.0.name", "head"),
@@ -4132,7 +4130,7 @@ func TestAccCMDeviceCategory_RolesIdempotency(t *testing.T) {
 		Steps: []resource.TestStep{
 			// Create with role
 			{
-				Config: testAccCMDeviceCategoryResourceConfig_WithRole(categoryName, "head", "HeadNode"),
+				Config: testAccCMDeviceCategoryResourceConfig_WithRole(categoryName),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_category.test",
@@ -4149,7 +4147,7 @@ func TestAccCMDeviceCategory_RolesIdempotency(t *testing.T) {
 			},
 			// Verify idempotency - no changes on re-apply
 			{
-				Config: testAccCMDeviceCategoryResourceConfig_WithRole(categoryName, "head", "HeadNode"),
+				Config: testAccCMDeviceCategoryResourceConfig_WithRole(categoryName),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
@@ -4220,7 +4218,7 @@ func TestAccCMDeviceCategory_RolesUUIDPreservedOnRefresh(t *testing.T) {
 		Steps: []resource.TestStep{
 			// Create and capture UUID
 			{
-				Config: testAccCMDeviceCategoryResourceConfig_WithRole(categoryName, "head", "HeadNode"),
+				Config: testAccCMDeviceCategoryResourceConfig_WithRole(categoryName),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttrSet("bcm_cmdevice_category.test", "roles.0.uuid"),
 					resource.TestCheckResourceAttrWith("bcm_cmdevice_category.test", "roles.0.uuid",
@@ -4268,7 +4266,7 @@ func TestAccCMDeviceCategory_RolesImportUUID(t *testing.T) {
 		Steps: []resource.TestStep{
 			// Create with role
 			{
-				Config: testAccCMDeviceCategoryResourceConfig_WithRole(categoryName, "head", "HeadNode"),
+				Config: testAccCMDeviceCategoryResourceConfig_WithRole(categoryName),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_category.test",

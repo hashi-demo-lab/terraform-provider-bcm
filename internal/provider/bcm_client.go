@@ -15,21 +15,22 @@ import (
 	"net"
 	"net/http"
 	"net/http/cookiejar"
+	"net/url"
 	"strings"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
-// Retry configuration constants
+// Retry configuration constants.
 const (
-	// DefaultMaxRetries is the default number of retries for transient errors
+	// DefaultMaxRetries is the default number of retries for transient errors.
 	DefaultMaxRetries = 3
-	// DefaultBaseDelay is the initial delay between retries
+	// DefaultBaseDelay is the initial delay between retries.
 	DefaultBaseDelay = 1 * time.Second
-	// DefaultMaxDelay is the maximum delay between retries
+	// DefaultMaxDelay is the maximum delay between retries.
 	DefaultMaxDelay = 30 * time.Second
-	// DefaultJitterFactor adds randomness to prevent thundering herd (0.0-1.0)
+	// DefaultJitterFactor adds randomness to prevent thundering herd (0.0-1.0).
 	DefaultJitterFactor = 0.2
 )
 
@@ -54,9 +55,9 @@ type ValidationError struct {
 }
 
 // IsError returns true if the validation error has ERROR severity or unknown severity.
-// Unknown severity is treated as ERROR for safety (halt operation).
+// Unknown or empty severity is treated as ERROR for safety (halt operation).
 func (v ValidationError) IsError() bool {
-	return v.Severity == "ERROR" || (v.Severity != "WARNING" && v.Severity != "")
+	return v.Severity != "WARNING"
 }
 
 // IsWarning returns true if the validation error has WARNING severity.
@@ -91,17 +92,35 @@ type LoginRequest struct {
 
 // NewBCMClient creates authenticated client with cookie jar and performs login.
 func NewBCMClient(ctx context.Context, endpoint, username, password string, insecureSkipVerify bool, timeout int) (*BCMClient, error) {
+	// Validate endpoint URL
+	parsedURL, err := url.Parse(endpoint)
+	if err != nil {
+		return nil, fmt.Errorf("invalid endpoint URL '%s': %w", endpoint, err)
+	}
+	if parsedURL.Scheme == "" || parsedURL.Host == "" {
+		return nil, fmt.Errorf("endpoint URL must include scheme and host: %s", endpoint)
+	}
+	if parsedURL.Scheme == "http" {
+		// Log warning but don't fail - some test environments use HTTP
+		tflog.Warn(ctx, "BCM endpoint uses HTTP instead of HTTPS - credentials will be transmitted in plaintext", map[string]interface{}{
+			"endpoint": endpoint,
+		})
+	}
+
 	// Create cookie jar for automatic cookie management
 	jar, err := cookiejar.New(nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create cookie jar: %w", err)
 	}
 
-	// Create HTTP client with TLS config and cookie jar
+	// Create HTTP client with TLS config, cookie jar, and connection pooling
 	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{
 			InsecureSkipVerify: insecureSkipVerify,
 		},
+		MaxIdleConns:        100,
+		MaxIdleConnsPerHost: 10,
+		IdleConnTimeout:     90 * time.Second,
 	}
 
 	client := &http.Client{
@@ -273,15 +292,11 @@ func isRetryableError(err error) bool {
 
 	// Check for specific network operation errors
 	var opErr *net.OpError
-	if errors.As(err, &opErr) {
-		return true
-	}
-
-	return false
+	return errors.As(err, &opErr)
 }
 
 // calculateBackoff calculates the delay for the next retry attempt with exponential backoff and jitter.
-// delay = min(maxDelay, baseDelay * 2^attempt) + random jitter
+// delay = min(maxDelay, baseDelay * 2^attempt) + random jitter.
 func (c *BCMClient) calculateBackoff(attempt int) time.Duration {
 	// Exponential backoff: baseDelay * 2^attempt
 	delay := c.BaseDelay * time.Duration(1<<uint(attempt))
@@ -314,6 +329,11 @@ func (c *BCMClient) doHTTPRequest(ctx context.Context, req *http.Request, jsonBo
 		resp, err := c.HTTPClient.Do(req)
 		if err != nil {
 			lastErr = err
+
+			// Close response body if present (can happen with partial responses)
+			if resp != nil && resp.Body != nil {
+				resp.Body.Close()
+			}
 
 			// Check if error is retryable
 			if isRetryableError(err) && attempt < c.MaxRetries {

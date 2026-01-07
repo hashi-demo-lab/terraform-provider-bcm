@@ -210,7 +210,7 @@ func BuildValidationAPIError(resourceType, resourceName string, err error) strin
 // =============================================================================
 
 // ErrorTitle returns a standardized error title for CRUD operations.
-// Format: "<ResourceType> <Operation> Failed"
+// Format: "<ResourceType> <Operation> Failed".
 func ErrorTitle(resourceType, operation string) string {
 	return fmt.Sprintf("%s %s Failed", resourceType, operation)
 }

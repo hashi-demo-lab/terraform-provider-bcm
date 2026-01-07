@@ -114,7 +114,7 @@ func testAccCheckCMUserUserDestroy(s *terraform.State) error {
 		username := rs.Primary.Attributes["username"]
 
 		// Wait for eventual consistency
-		time.Sleep(2 * time.Second)
+		time.Sleep(TestEventualConsistencyDelay)
 
 		// Check if user still exists using verifyResourceDeleted with retries
 		deleted := verifyResourceDeleted(ctx, client, "cmuser", "getUser", username, 4)
@@ -436,7 +436,7 @@ func TestAccCMUserUser_DriftShell(t *testing.T) {
 			{
 				PreConfig: func() {
 					client := createTestBCMClient(t)
-					ctx := context.Background()
+					ctx := t.Context()
 
 					// Get user data
 					body, err := client.CallJSONRPC(ctx, "cmuser", "getUser", username)
@@ -460,7 +460,7 @@ func TestAccCMUserUser_DriftShell(t *testing.T) {
 					}
 
 					// Wait for eventual consistency
-					time.Sleep(2 * time.Second)
+					time.Sleep(TestEventualConsistencyDelay)
 
 					t.Logf("[DEBUG] Modified shell externally to /bin/sh")
 				},
@@ -530,7 +530,7 @@ func TestAccCMUserUser_DriftNotes(t *testing.T) {
 			{
 				PreConfig: func() {
 					client := createTestBCMClient(t)
-					ctx := context.Background()
+					ctx := t.Context()
 
 					// Get user data
 					body, err := client.CallJSONRPC(ctx, "cmuser", "getUser", username)
@@ -554,7 +554,7 @@ func TestAccCMUserUser_DriftNotes(t *testing.T) {
 					}
 
 					// Wait for eventual consistency
-					time.Sleep(2 * time.Second)
+					time.Sleep(TestEventualConsistencyDelay)
 
 					t.Logf("[DEBUG] Modified notes externally to: %s", driftNotes)
 				},

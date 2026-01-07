@@ -4,7 +4,6 @@
 package provider
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -45,7 +44,7 @@ func createMockBCMServer(t *testing.T, loginSuccessful bool) *httptest.Server {
 // createProviderConfig creates a tfsdk.Config for testing provider configuration.
 func createProviderConfig(t *testing.T, endpoint, username, password string, insecureSkipVerify *bool, timeout *int64) tfsdk.Config {
 	// Get provider schema.
-	ctx := context.Background()
+	ctx := t.Context()
 	providerFactory := New("test")
 	p, ok := providerFactory().(*BCMProvider)
 	if !ok {
@@ -107,21 +106,16 @@ func createProviderConfig(t *testing.T, endpoint, username, password string, ins
 // TestProviderConfigure_MissingEndpoint tests that provider configuration.
 // fails when endpoint is missing from both config and environment.
 func TestProviderConfigure_MissingEndpoint(t *testing.T) {
-	// Clear environment variables.
-	origEndpoint := os.Getenv("BCM_ENDPOINT")
-	origUsername := os.Getenv("BCM_USERNAME")
-	origPassword := os.Getenv("BCM_PASSWORD")
-	defer func() {
-		os.Setenv("BCM_ENDPOINT", origEndpoint)
-		os.Setenv("BCM_USERNAME", origUsername)
-		os.Setenv("BCM_PASSWORD", origPassword)
-	}()
+	// Clear environment variables using t.Setenv (automatically restores after test).
+	t.Setenv("BCM_ENDPOINT", "")
+	t.Setenv("BCM_USERNAME", "")
+	t.Setenv("BCM_PASSWORD", "")
 
 	os.Unsetenv("BCM_ENDPOINT")
 	os.Unsetenv("BCM_USERNAME")
 	os.Unsetenv("BCM_PASSWORD")
 
-	ctx := context.Background()
+	ctx := t.Context()
 	providerFactory := New("test")
 	p, ok := providerFactory().(*BCMProvider)
 	if !ok {
@@ -158,21 +152,16 @@ func TestProviderConfigure_MissingEndpoint(t *testing.T) {
 // TestProviderConfigure_MissingUsername tests that provider configuration.
 // fails when username is missing from both config and environment.
 func TestProviderConfigure_MissingUsername(t *testing.T) {
-	// Clear environment variables.
-	origEndpoint := os.Getenv("BCM_ENDPOINT")
-	origUsername := os.Getenv("BCM_USERNAME")
-	origPassword := os.Getenv("BCM_PASSWORD")
-	defer func() {
-		os.Setenv("BCM_ENDPOINT", origEndpoint)
-		os.Setenv("BCM_USERNAME", origUsername)
-		os.Setenv("BCM_PASSWORD", origPassword)
-	}()
+	// Clear environment variables using t.Setenv (automatically restores after test).
+	t.Setenv("BCM_ENDPOINT", "")
+	t.Setenv("BCM_USERNAME", "")
+	t.Setenv("BCM_PASSWORD", "")
 
 	os.Unsetenv("BCM_ENDPOINT")
 	os.Unsetenv("BCM_USERNAME")
 	os.Unsetenv("BCM_PASSWORD")
 
-	ctx := context.Background()
+	ctx := t.Context()
 	providerFactory := New("test")
 	p, ok := providerFactory().(*BCMProvider)
 	if !ok {
@@ -209,21 +198,16 @@ func TestProviderConfigure_MissingUsername(t *testing.T) {
 // TestProviderConfigure_MissingPassword tests that provider configuration.
 // fails when password is missing from both config and environment.
 func TestProviderConfigure_MissingPassword(t *testing.T) {
-	// Clear environment variables.
-	origEndpoint := os.Getenv("BCM_ENDPOINT")
-	origUsername := os.Getenv("BCM_USERNAME")
-	origPassword := os.Getenv("BCM_PASSWORD")
-	defer func() {
-		os.Setenv("BCM_ENDPOINT", origEndpoint)
-		os.Setenv("BCM_USERNAME", origUsername)
-		os.Setenv("BCM_PASSWORD", origPassword)
-	}()
+	// Clear environment variables using t.Setenv (automatically restores after test).
+	t.Setenv("BCM_ENDPOINT", "")
+	t.Setenv("BCM_USERNAME", "")
+	t.Setenv("BCM_PASSWORD", "")
 
 	os.Unsetenv("BCM_ENDPOINT")
 	os.Unsetenv("BCM_USERNAME")
 	os.Unsetenv("BCM_PASSWORD")
 
-	ctx := context.Background()
+	ctx := t.Context()
 	providerFactory := New("test")
 	p, ok := providerFactory().(*BCMProvider)
 	if !ok {
@@ -260,21 +244,16 @@ func TestProviderConfigure_MissingPassword(t *testing.T) {
 // TestProviderConfigure_MissingAllCredentials tests that provider configuration.
 // fails when all credentials are missing.
 func TestProviderConfigure_MissingAllCredentials(t *testing.T) {
-	// Clear environment variables.
-	origEndpoint := os.Getenv("BCM_ENDPOINT")
-	origUsername := os.Getenv("BCM_USERNAME")
-	origPassword := os.Getenv("BCM_PASSWORD")
-	defer func() {
-		os.Setenv("BCM_ENDPOINT", origEndpoint)
-		os.Setenv("BCM_USERNAME", origUsername)
-		os.Setenv("BCM_PASSWORD", origPassword)
-	}()
+	// Clear environment variables using t.Setenv (automatically restores after test).
+	t.Setenv("BCM_ENDPOINT", "")
+	t.Setenv("BCM_USERNAME", "")
+	t.Setenv("BCM_PASSWORD", "")
 
 	os.Unsetenv("BCM_ENDPOINT")
 	os.Unsetenv("BCM_USERNAME")
 	os.Unsetenv("BCM_PASSWORD")
 
-	ctx := context.Background()
+	ctx := t.Context()
 	providerFactory := New("test")
 	p, ok := providerFactory().(*BCMProvider)
 	if !ok {
@@ -308,21 +287,12 @@ func TestProviderConfigure_EnvironmentVariables(t *testing.T) {
 	server := createMockBCMServer(t, true)
 	defer server.Close()
 
-	// Save and set environment variables.
-	origEndpoint := os.Getenv("BCM_ENDPOINT")
-	origUsername := os.Getenv("BCM_USERNAME")
-	origPassword := os.Getenv("BCM_PASSWORD")
-	defer func() {
-		os.Setenv("BCM_ENDPOINT", origEndpoint)
-		os.Setenv("BCM_USERNAME", origUsername)
-		os.Setenv("BCM_PASSWORD", origPassword)
-	}()
+	// Set environment variables using t.Setenv (automatically restores after test).
+	t.Setenv("BCM_ENDPOINT", server.URL)
+	t.Setenv("BCM_USERNAME", "env-user")
+	t.Setenv("BCM_PASSWORD", "env-pass")
 
-	os.Setenv("BCM_ENDPOINT", server.URL)
-	os.Setenv("BCM_USERNAME", "env-user")
-	os.Setenv("BCM_PASSWORD", "env-pass")
-
-	ctx := context.Background()
+	ctx := t.Context()
 	providerFactory := New("test")
 	p, ok := providerFactory().(*BCMProvider)
 	if !ok {
@@ -361,21 +331,12 @@ func TestProviderConfigure_ConfigPrecedence(t *testing.T) {
 	server := createMockBCMServer(t, true)
 	defer server.Close()
 
-	// Save and set environment variables with different values.
-	origEndpoint := os.Getenv("BCM_ENDPOINT")
-	origUsername := os.Getenv("BCM_USERNAME")
-	origPassword := os.Getenv("BCM_PASSWORD")
-	defer func() {
-		os.Setenv("BCM_ENDPOINT", origEndpoint)
-		os.Setenv("BCM_USERNAME", origUsername)
-		os.Setenv("BCM_PASSWORD", origPassword)
-	}()
+	// Set environment variables with different values using t.Setenv (automatically restores after test).
+	t.Setenv("BCM_ENDPOINT", "https://env-endpoint.example.com:8081")
+	t.Setenv("BCM_USERNAME", "env-user")
+	t.Setenv("BCM_PASSWORD", "env-pass")
 
-	os.Setenv("BCM_ENDPOINT", "https://env-endpoint.example.com:8081")
-	os.Setenv("BCM_USERNAME", "env-user")
-	os.Setenv("BCM_PASSWORD", "env-pass")
-
-	ctx := context.Background()
+	ctx := t.Context()
 	providerFactory := New("test")
 	p, ok := providerFactory().(*BCMProvider)
 	if !ok {
@@ -411,21 +372,16 @@ func TestProviderConfigure_DefaultValues(t *testing.T) {
 	server := createMockBCMServer(t, true)
 	defer server.Close()
 
-	// Clear environment variables.
-	origEndpoint := os.Getenv("BCM_ENDPOINT")
-	origUsername := os.Getenv("BCM_USERNAME")
-	origPassword := os.Getenv("BCM_PASSWORD")
-	defer func() {
-		os.Setenv("BCM_ENDPOINT", origEndpoint)
-		os.Setenv("BCM_USERNAME", origUsername)
-		os.Setenv("BCM_PASSWORD", origPassword)
-	}()
+	// Clear environment variables using t.Setenv (automatically restores after test).
+	t.Setenv("BCM_ENDPOINT", "")
+	t.Setenv("BCM_USERNAME", "")
+	t.Setenv("BCM_PASSWORD", "")
 
 	os.Unsetenv("BCM_ENDPOINT")
 	os.Unsetenv("BCM_USERNAME")
 	os.Unsetenv("BCM_PASSWORD")
 
-	ctx := context.Background()
+	ctx := t.Context()
 	providerFactory := New("test")
 	p, ok := providerFactory().(*BCMProvider)
 	if !ok {
@@ -472,21 +428,16 @@ func TestProviderConfigure_CustomTimeout(t *testing.T) {
 	server := createMockBCMServer(t, true)
 	defer server.Close()
 
-	// Clear environment variables.
-	origEndpoint := os.Getenv("BCM_ENDPOINT")
-	origUsername := os.Getenv("BCM_USERNAME")
-	origPassword := os.Getenv("BCM_PASSWORD")
-	defer func() {
-		os.Setenv("BCM_ENDPOINT", origEndpoint)
-		os.Setenv("BCM_USERNAME", origUsername)
-		os.Setenv("BCM_PASSWORD", origPassword)
-	}()
+	// Clear environment variables using t.Setenv (automatically restores after test).
+	t.Setenv("BCM_ENDPOINT", "")
+	t.Setenv("BCM_USERNAME", "")
+	t.Setenv("BCM_PASSWORD", "")
 
 	os.Unsetenv("BCM_ENDPOINT")
 	os.Unsetenv("BCM_USERNAME")
 	os.Unsetenv("BCM_PASSWORD")
 
-	ctx := context.Background()
+	ctx := t.Context()
 	providerFactory := New("test")
 	p, ok := providerFactory().(*BCMProvider)
 	if !ok {
@@ -523,21 +474,16 @@ func TestProviderConfigure_CustomInsecureSkipVerify(t *testing.T) {
 	server := createMockBCMServer(t, true)
 	defer server.Close()
 
-	// Clear environment variables.
-	origEndpoint := os.Getenv("BCM_ENDPOINT")
-	origUsername := os.Getenv("BCM_USERNAME")
-	origPassword := os.Getenv("BCM_PASSWORD")
-	defer func() {
-		os.Setenv("BCM_ENDPOINT", origEndpoint)
-		os.Setenv("BCM_USERNAME", origUsername)
-		os.Setenv("BCM_PASSWORD", origPassword)
-	}()
+	// Clear environment variables using t.Setenv (automatically restores after test).
+	t.Setenv("BCM_ENDPOINT", "")
+	t.Setenv("BCM_USERNAME", "")
+	t.Setenv("BCM_PASSWORD", "")
 
 	os.Unsetenv("BCM_ENDPOINT")
 	os.Unsetenv("BCM_USERNAME")
 	os.Unsetenv("BCM_PASSWORD")
 
-	ctx := context.Background()
+	ctx := t.Context()
 	providerFactory := New("test")
 	p, ok := providerFactory().(*BCMProvider)
 	if !ok {
@@ -573,21 +519,16 @@ func TestProviderConfigure_LoginFailure(t *testing.T) {
 	server := createMockBCMServer(t, false)
 	defer server.Close()
 
-	// Clear environment variables.
-	origEndpoint := os.Getenv("BCM_ENDPOINT")
-	origUsername := os.Getenv("BCM_USERNAME")
-	origPassword := os.Getenv("BCM_PASSWORD")
-	defer func() {
-		os.Setenv("BCM_ENDPOINT", origEndpoint)
-		os.Setenv("BCM_USERNAME", origUsername)
-		os.Setenv("BCM_PASSWORD", origPassword)
-	}()
+	// Clear environment variables using t.Setenv (automatically restores after test).
+	t.Setenv("BCM_ENDPOINT", "")
+	t.Setenv("BCM_USERNAME", "")
+	t.Setenv("BCM_PASSWORD", "")
 
 	os.Unsetenv("BCM_ENDPOINT")
 	os.Unsetenv("BCM_USERNAME")
 	os.Unsetenv("BCM_PASSWORD")
 
-	ctx := context.Background()
+	ctx := t.Context()
 	providerFactory := New("test")
 	p, ok := providerFactory().(*BCMProvider)
 	if !ok {
@@ -624,7 +565,7 @@ func TestProviderConfigure_LoginFailure(t *testing.T) {
 
 // TestProviderMetadata tests that provider metadata is correctly set.
 func TestProviderMetadata(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	testVersion := "test-version"
 	providerFactory := New(testVersion)
 	p, ok := providerFactory().(*BCMProvider)
@@ -650,7 +591,7 @@ func TestProviderMetadata(t *testing.T) {
 
 // TestProviderSchema tests that provider schema is correctly defined.
 func TestProviderSchema(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	providerFactory := New("test")
 	p, ok := providerFactory().(*BCMProvider)
 	if !ok {

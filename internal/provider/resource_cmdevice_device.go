@@ -366,6 +366,14 @@ func (r *CMDeviceDeviceResource) Configure(ctx context.Context, req resource.Con
 
 // Create creates the device resource.
 func (r *CMDeviceDeviceResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	if r.Client == nil {
+		resp.Diagnostics.AddError(
+			"Provider Not Configured",
+			"The provider has not been configured. Please ensure the provider block is properly configured.",
+		)
+		return
+	}
+
 	var plan CMDeviceDeviceResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	if resp.Diagnostics.HasError() {
@@ -736,6 +744,14 @@ func (r *CMDeviceDeviceResource) resolvePartitionFromCategory(ctx context.Contex
 
 // Read reads the device resource.
 func (r *CMDeviceDeviceResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	if r.Client == nil {
+		resp.Diagnostics.AddError(
+			"Provider Not Configured",
+			"The provider has not been configured. Please ensure the provider block is properly configured.",
+		)
+		return
+	}
+
 	var state CMDeviceDeviceResourceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
@@ -873,6 +889,14 @@ func (r *CMDeviceDeviceResource) Read(ctx context.Context, req resource.ReadRequ
 
 // Update updates the device resource.
 func (r *CMDeviceDeviceResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	if r.Client == nil {
+		resp.Diagnostics.AddError(
+			"Provider Not Configured",
+			"The provider has not been configured. Please ensure the provider block is properly configured.",
+		)
+		return
+	}
+
 	var plan CMDeviceDeviceResourceModel
 	var state CMDeviceDeviceResourceModel
 
@@ -1048,6 +1072,14 @@ func (r *CMDeviceDeviceResource) Update(ctx context.Context, req resource.Update
 
 // Delete deletes the device resource.
 func (r *CMDeviceDeviceResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	if r.Client == nil {
+		resp.Diagnostics.AddError(
+			"Provider Not Configured",
+			"The provider has not been configured. Please ensure the provider block is properly configured.",
+		)
+		return
+	}
+
 	var state CMDeviceDeviceResourceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
@@ -1315,7 +1347,7 @@ func (r *CMDeviceDeviceResource) lookupAndBuildRolesForEntity(ctx context.Contex
 		sort.Strings(missingRoles)
 
 		return fmt.Errorf(
-			"Roles not found in cluster: %s\nAvailable roles: %s\nUse the `bcm_cmdevice_roles` data source to discover available roles.",
+			"roles not found in cluster: %s\navailable roles: %s\nuse the `bcm_cmdevice_roles` data source to discover available roles",
 			strings.Join(missingRoles, ", "),
 			strings.Join(availableNames, ", "),
 		)
