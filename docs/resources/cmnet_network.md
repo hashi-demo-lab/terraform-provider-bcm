@@ -57,3 +57,13 @@ resource "bcm_cmnet_network" "example" {
 - `revision` (String) BCM revision identifier for concurrency control.
 - `to_be_removed` (Boolean) BCM removal flag.
 - `uuid` (String) BCM-assigned UUID for the network.
+
+## Import
+
+Import is supported using the following syntax:
+
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
+```shell
+terraform import bcm_cmnet_network.example <network-uuid>
+```
