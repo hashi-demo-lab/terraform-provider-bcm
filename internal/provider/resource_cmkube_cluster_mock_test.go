@@ -427,11 +427,12 @@ func TestAccCMKubeClusterResource_MockEtcdNodesValidationError(t *testing.T) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 			// Use ERROR severity to halt execution (WARNING would allow continuation)
+			// BCM API uses lowercase field names: field, message, severity
 			_ = json.NewEncoder(w).Encode([]map[string]interface{}{
 				{
-					"Field":    "etcdNodes",
-					"Message":  "etcd cluster requires odd number of nodes (1, 3, or 5) for quorum",
-					"Severity": "ERROR",
+					"field":    "etcdNodes",
+					"message":  "etcd cluster requires odd number of nodes (1, 3, or 5) for quorum",
+					"severity": "ERROR",
 				},
 			})
 			return

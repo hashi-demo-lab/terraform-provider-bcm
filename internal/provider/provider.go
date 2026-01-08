@@ -139,6 +139,15 @@ func (p *BCMProvider) Configure(ctx context.Context, req provider.ConfigureReque
 		timeout = data.Timeout.ValueInt64()
 	}
 
+	// Validate timeout value
+	if timeout <= 0 {
+		resp.Diagnostics.AddError(
+			"Invalid Timeout Value",
+			"Timeout must be a positive integer in seconds",
+		)
+		return
+	}
+
 	// Create BCM client with cookie-based authentication
 	client, err := NewBCMClient(
 		ctx,
@@ -159,10 +168,11 @@ func (p *BCMProvider) Configure(ctx context.Context, req provider.ConfigureReque
 		return
 	}
 
-	// Make client available to data sources, resources, and actions
+	// Make client available to data sources, resources, actions, and ephemeral resources
 	resp.DataSourceData = client
 	resp.ResourceData = client
 	resp.ActionData = client
+	resp.EphemeralResourceData = client
 }
 
 func (p *BCMProvider) Resources(ctx context.Context) []func() resource.Resource {
@@ -172,6 +182,7 @@ func (p *BCMProvider) Resources(ctx context.Context) []func() resource.Resource 
 		NewCMDeviceDeviceResource,
 		NewCMNetNetworkResource,
 		NewCMUserUserResource,
+		NewCMKubeClusterResource,
 	}
 }
 
@@ -191,6 +202,7 @@ func (p *BCMProvider) DataSources(ctx context.Context) []func() datasource.DataS
 		NewCMPartPartitionsDataSource,
 		NewCMPartSoftwareImagesDataSource,
 		NewCMUserUsersDataSource,
+		NewCMKubeClustersDataSource,
 	}
 }
 
