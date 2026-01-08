@@ -309,7 +309,8 @@ func mapPartitionAPIResponseToModel(ctx context.Context, apiData map[string]inte
 	model.CreationTime = getInt64Value(apiData, "creationTime") // creationTime → creation_time
 	model.Revision = getStringValue(apiData, "revision")
 	model.Modified = getBoolValue(apiData, "modified")
-	model.ToBeRemoved = getBoolValue(apiData, "to_be_removed") // to_be_removed → to_be_removed
+	// Note: BCM API uses snake_case for to_be_removed (exception to camelCase convention)
+	model.ToBeRemoved = getBoolValue(apiData, "to_be_removed")
 	model.Notes = getStringValue(apiData, "notes")
 
 	return model

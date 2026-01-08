@@ -328,9 +328,11 @@ func (d *CMDeviceCategoriesDataSource) Read(ctx context.Context, req datasource.
 			DataNode:               getBoolValue(catData, "dataNode"),
 			VersionConfigFiles:     getBoolValue(catData, "versionConfigFiles"),
 			Modified:               getBoolValue(catData, "modified"),
-			ToBeRemoved:            getBoolValue(catData, "to_be_removed"),
-			Notes:                  getStringValue(catData, "notes"),
-			ParentUUID:             getStringValue(catData, "parent_uuid"),
+			// Note: BCM API uses snake_case for to_be_removed (exception to camelCase convention)
+			ToBeRemoved: getBoolValue(catData, "to_be_removed"),
+			Notes:       getStringValue(catData, "notes"),
+			// Note: BCM API uses snake_case for parent_uuid (exception to camelCase convention)
+			ParentUUID: getStringValue(catData, "parent_uuid"),
 		}
 
 		// Extract software image ID from softwareImageProxy

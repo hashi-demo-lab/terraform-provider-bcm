@@ -275,6 +275,14 @@ func (r *CMUserUserResource) getNextAvailableUID(ctx context.Context) (int64, er
 
 // Create implements the resource Create operation.
 func (r *CMUserUserResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	if r.Client == nil {
+		resp.Diagnostics.AddError(
+			"Provider Not Configured",
+			"The provider has not been configured. Please ensure the provider block is properly configured.",
+		)
+		return
+	}
+
 	var plan CMUserUserResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	if resp.Diagnostics.HasError() {
@@ -312,8 +320,16 @@ func (r *CMUserUserResource) Create(ctx context.Context, req resource.CreateRequ
 	// Build API entity from plan
 	entity := r.buildAPIEntity(ctx, &plan, "")
 
-	// Log the request entity for debugging
-	entityJSON, _ := json.MarshalIndent(entity, "", "  ")
+	// Create a sanitized copy for logging (redact password)
+	sanitizedEntity := make(map[string]interface{})
+	for k, v := range entity {
+		if k == "password" {
+			sanitizedEntity[k] = "[REDACTED]"
+		} else {
+			sanitizedEntity[k] = v
+		}
+	}
+	entityJSON, _ := json.MarshalIndent(sanitizedEntity, "", "  ")
 	tflog.Debug(ctx, "Creating user via BCM API with entity", map[string]interface{}{
 		"username": plan.Username.ValueString(),
 		"entity":   string(entityJSON),
@@ -416,6 +432,14 @@ func (r *CMUserUserResource) Create(ctx context.Context, req resource.CreateRequ
 
 // Read implements the resource Read operation.
 func (r *CMUserUserResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	if r.Client == nil {
+		resp.Diagnostics.AddError(
+			"Provider Not Configured",
+			"The provider has not been configured. Please ensure the provider block is properly configured.",
+		)
+		return
+	}
+
 	var state CMUserUserResourceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
@@ -439,6 +463,14 @@ func (r *CMUserUserResource) Read(ctx context.Context, req resource.ReadRequest,
 
 // Update implements the resource Update operation.
 func (r *CMUserUserResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	if r.Client == nil {
+		resp.Diagnostics.AddError(
+			"Provider Not Configured",
+			"The provider has not been configured. Please ensure the provider block is properly configured.",
+		)
+		return
+	}
+
 	var plan CMUserUserResourceModel
 	var state CMUserUserResourceModel
 
@@ -468,8 +500,16 @@ func (r *CMUserUserResource) Update(ctx context.Context, req resource.UpdateRequ
 		})
 	}
 
-	// Log the update entity for debugging
-	entityJSON, _ := json.MarshalIndent(entity, "", "  ")
+	// Create a sanitized copy for logging (redact password)
+	sanitizedEntity := make(map[string]interface{})
+	for k, v := range entity {
+		if k == "password" {
+			sanitizedEntity[k] = "[REDACTED]"
+		} else {
+			sanitizedEntity[k] = v
+		}
+	}
+	entityJSON, _ := json.MarshalIndent(sanitizedEntity, "", "  ")
 	tflog.Debug(ctx, "Updating user via BCM API with entity", map[string]interface{}{
 		"username": plan.Username.ValueString(),
 		"uuid":     state.UUID.ValueString(),
@@ -516,6 +556,14 @@ func (r *CMUserUserResource) Update(ctx context.Context, req resource.UpdateRequ
 
 // Delete implements the resource Delete operation.
 func (r *CMUserUserResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	if r.Client == nil {
+		resp.Diagnostics.AddError(
+			"Provider Not Configured",
+			"The provider has not been configured. Please ensure the provider block is properly configured.",
+		)
+		return
+	}
+
 	var state CMUserUserResourceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
@@ -566,12 +614,16 @@ func (r *CMUserUserResource) ImportState(ctx context.Context, req resource.Impor
 	// Set username attribute - Read() will populate the rest
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("username"), req.ID)...)
 
-	// Also need to set a placeholder password since it's required but we can't recover it
-	// After import, user should update their config with the actual password
+	// Set an empty password placeholder - this prevents "value is null" errors during refresh
+	// The password is required for create but not readable from the API
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("password"), types.StringValue(""))...)
+
+	// Warn user that password must be set in their configuration
 	resp.Diagnostics.AddWarning(
 		"Password Required After Import",
-		"The user password cannot be recovered from BCM API. Please update your Terraform configuration "+
-			"with the correct password value to prevent drift on subsequent applies.",
+		"The user password cannot be recovered from BCM API. You MUST add the 'password' attribute "+
+			"to your Terraform configuration with the actual password value. Without this, subsequent "+
+			"applies will fail or may reset the user's password.",
 	)
 }
 

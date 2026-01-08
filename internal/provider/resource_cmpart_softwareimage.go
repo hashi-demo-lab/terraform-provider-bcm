@@ -251,6 +251,14 @@ func (r *CMPartSoftwareImageResource) Configure(ctx context.Context, req resourc
 
 // Create implements the resource Create operation (REFACTOR phase - API integration).
 func (r *CMPartSoftwareImageResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	if r.Client == nil {
+		resp.Diagnostics.AddError(
+			"Provider Not Configured",
+			"The provider has not been configured. Please ensure the provider block is properly configured.",
+		)
+		return
+	}
+
 	var plan CMPartSoftwareImageResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	if resp.Diagnostics.HasError() {
@@ -349,6 +357,9 @@ func (r *CMPartSoftwareImageResource) Create(ctx context.Context, req resource.C
 			}
 
 			// Check if clone is complete by reading fileOperationInProgress
+			// NOTE: We use getSoftwareImages() (list all) instead of getSoftwareImage(uuid) because
+			// the BCM API's getSoftwareImage method does not reliably return the fileOperationInProgress
+			// field during active clone operations. The list endpoint provides consistent status updates.
 			statusBody, err := r.Client.CallJSONRPC(ctx, "CMPart", "getSoftwareImages")
 			if err != nil {
 				lastErr = err
@@ -407,6 +418,13 @@ func (r *CMPartSoftwareImageResource) Create(ctx context.Context, req resource.C
 	planOriginalImage := plan.OriginalImage
 	r.readSoftwareImage(ctx, &plan, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
+		// Attempt to clean up orphaned resource
+		if !plan.ID.IsNull() && !plan.ID.IsUnknown() {
+			tflog.Warn(ctx, "Attempting to clean up orphaned software image after read failure", map[string]interface{}{
+				"uuid": plan.ID.ValueString(),
+			})
+			_, _ = r.Client.CallJSONRPC(ctx, "CMPart", "removeSoftwareImages", []string{plan.Name.ValueString()}, false)
+		}
 		return
 	}
 
@@ -428,6 +446,14 @@ func (r *CMPartSoftwareImageResource) Create(ctx context.Context, req resource.C
 
 // Read implements the resource Read operation (REFACTOR phase - API integration).
 func (r *CMPartSoftwareImageResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	if r.Client == nil {
+		resp.Diagnostics.AddError(
+			"Provider Not Configured",
+			"The provider has not been configured. Please ensure the provider block is properly configured.",
+		)
+		return
+	}
+
 	var state CMPartSoftwareImageResourceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
@@ -456,6 +482,14 @@ func (r *CMPartSoftwareImageResource) Read(ctx context.Context, req resource.Rea
 
 // Update implements the resource Update operation (REFACTOR phase - API integration).
 func (r *CMPartSoftwareImageResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	if r.Client == nil {
+		resp.Diagnostics.AddError(
+			"Provider Not Configured",
+			"The provider has not been configured. Please ensure the provider block is properly configured.",
+		)
+		return
+	}
+
 	var plan CMPartSoftwareImageResourceModel
 	var state CMPartSoftwareImageResourceModel
 
@@ -530,6 +564,14 @@ func (r *CMPartSoftwareImageResource) Update(ctx context.Context, req resource.U
 
 // Delete implements the resource Delete operation (REFACTOR phase - API integration).
 func (r *CMPartSoftwareImageResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	if r.Client == nil {
+		resp.Diagnostics.AddError(
+			"Provider Not Configured",
+			"The provider has not been configured. Please ensure the provider block is properly configured.",
+		)
+		return
+	}
+
 	var state CMPartSoftwareImageResourceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {

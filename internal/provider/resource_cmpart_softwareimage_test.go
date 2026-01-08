@@ -732,7 +732,7 @@ func TestAccCMPartSoftwareImage_DriftKernelParameters(t *testing.T) {
 					}
 
 					// Wait for eventual consistency
-					time.Sleep(2 * time.Second)
+					time.Sleep(TestEventualConsistencyDelay)
 
 					t.Logf("[DEBUG] Modified kernel_parameters externally to: %v", entity["kernelParameters"])
 				},
@@ -858,7 +858,7 @@ func TestAccCMPartSoftwareImage_Drift(t *testing.T) {
 					}
 
 					// Wait for eventual consistency
-					time.Sleep(2 * time.Second)
+					time.Sleep(TestEventualConsistencyDelay)
 
 					t.Logf("[DEBUG] Modified notes externally to: %v", entity["notes"])
 				},
@@ -1009,7 +1009,7 @@ func TestAccCMPartSoftwareImage_DestroyExternalDelete(t *testing.T) {
 					}
 
 					// Wait for eventual consistency
-					time.Sleep(2 * time.Second)
+					time.Sleep(TestEventualConsistencyDelay)
 
 					t.Logf("[DEBUG] Deleted image externally: %s", imageName)
 				},
@@ -1327,8 +1327,12 @@ func testAccCMPartSoftwareImagePreCheck(t *testing.T, imageNames ...string) {
 
 	// Delete each test image by name if it exists
 	for _, imageName := range imageNames {
-		// Use shared helper with 5 retries (standardized)
-		deleted := verifyResourceDeleted(ctx, client, "CMPart", "removeSoftwareImages", imageName, 5)
+		// First attempt to delete the resource
+		_, _ = client.CallJSONRPC(ctx, "CMPart", "removeSoftwareImages", []string{imageName}, false)
+		// Give BCM time to process the deletion
+		time.Sleep(TestEventualConsistencyDelay)
+		// Then verify it's actually deleted using a GET method
+		deleted := verifyResourceDeleted(ctx, client, "CMPart", "getSoftwareImage", imageName, 5)
 		if deleted {
 			t.Logf("[DEBUG] PreCheck cleaned up existing image: %s", imageName)
 		}

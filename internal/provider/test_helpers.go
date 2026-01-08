@@ -12,6 +12,13 @@ import (
 	"time"
 )
 
+const (
+	// TestEventualConsistencyDelay is the delay to wait for BCM eventual consistency
+	// in drift detection tests and cleanup operations. BCM API operations may take
+	// time to propagate, so this delay allows the system to reach a consistent state.
+	TestEventualConsistencyDelay = 2 * time.Second
+)
+
 // BCM API Field Name Mappings
 //
 // The BCM API uses camelCase field names, while Terraform schemas use snake_case.
