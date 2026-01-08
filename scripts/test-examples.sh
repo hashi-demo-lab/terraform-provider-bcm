@@ -346,14 +346,21 @@ build_provider() {
 
     log_info "Phase 2: Building provider binary..."
 
-    # Detect platform
-    local os arch
-    os=$(uname -s | tr '[:upper:]' '[:lower:]')
-    case "$(uname -m)" in
-        x86_64) arch="amd64" ;;
-        arm64|aarch64) arch="arm64" ;;
-        *) arch="amd64" ;;
-    esac
+    # Detect platform - use terraform's reported platform to handle emulation scenarios
+    local os arch tf_platform
+    tf_platform=$(terraform version | grep -oE 'linux_[a-z0-9]+' | head -1)
+    if [ -n "$tf_platform" ]; then
+        os="${tf_platform%%_*}"
+        arch="${tf_platform#*_}"
+    else
+        # Fallback to uname detection
+        os=$(uname -s | tr '[:upper:]' '[:lower:]')
+        case "$(uname -m)" in
+            x86_64) arch="amd64" ;;
+            arm64|aarch64) arch="arm64" ;;
+            *) arch="amd64" ;;
+        esac
+    fi
 
     log_info "Detected platform: ${os}_${arch}"
     log_debug "Build directory: /workspace"
@@ -361,7 +368,11 @@ build_provider() {
     # Build binary
     local binary_name="terraform-provider-bcm_v${PROVIDER_VERSION}"
     log_info "Building: $binary_name"
-    log_debug "Executing: go build -o $binary_name ."
+
+    # Set GOOS/GOARCH for cross-compilation when host != target
+    export GOOS="$os"
+    export GOARCH="$arch"
+    log_debug "Executing: GOOS=$os GOARCH=$arch go build -o $binary_name ."
 
     cd /workspace
     local build_output

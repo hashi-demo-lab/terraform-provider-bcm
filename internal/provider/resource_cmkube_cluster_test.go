@@ -79,7 +79,7 @@ func testAccCheckCMKubeClusterDestroy(s *terraform.State) error {
 // getTestMasterNodeUUID queries BCM for available master node.
 func getTestMasterNodeUUID(t *testing.T) string {
 	client := createTestBCMClient(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// Query available nodes
 	body, err := client.CallJSONRPC(ctx, "cmdevice", "getNodes")
@@ -106,7 +106,7 @@ func getTestMasterNodeUUID(t *testing.T) string {
 // getTestWorkerNodeUUID queries BCM for available worker node.
 func getTestWorkerNodeUUID(t *testing.T, index int) string {
 	client := createTestBCMClient(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	body, err := client.CallJSONRPC(ctx, "cmdevice", "getNodes")
 	if err != nil {
@@ -133,7 +133,7 @@ func getTestWorkerNodeUUID(t *testing.T, index int) string {
 // getTestEtcdNodeUUID queries BCM for available etcd node (uses a different node than master).
 func getTestEtcdNodeUUID(t *testing.T, index int) string {
 	client := createTestBCMClient(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	body, err := client.CallJSONRPC(ctx, "cmdevice", "getNodes")
 	if err != nil {
@@ -163,7 +163,7 @@ func getTestEtcdNodeUUID(t *testing.T, index int) string {
 // getTestManagementNetworkUUID queries BCM for available management network.
 func getTestManagementNetworkUUID(t *testing.T) string {
 	client := createTestBCMClient(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	body, err := client.CallJSONRPC(ctx, "cmnet", "getNetworks")
 	if err != nil {
@@ -300,7 +300,7 @@ func TestAccCMKubeClusterResource_DriftDetection(t *testing.T) {
 			{
 				PreConfig: func() {
 					client := createTestBCMClient(t)
-					ctx := context.Background()
+					ctx := t.Context()
 
 					// Get cluster UUID by name
 					uuid := getResourceUUIDByName(t, "cmkube", "getKubeCluster", clusterName)
@@ -341,7 +341,7 @@ func TestAccCMKubeClusterResource_DriftDetection(t *testing.T) {
 					}
 
 					// Wait for eventual consistency
-					time.Sleep(2 * time.Second)
+					time.Sleep(TestEventualConsistencyDelay)
 
 					t.Logf("[DEBUG] Modified version externally to: 1.29.0")
 				},

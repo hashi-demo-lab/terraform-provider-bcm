@@ -28,7 +28,7 @@ output "default_entities" {
   description = "Entities with names starting with 'default'"
   value = {
     for e in data.bcm_cmpart_entity_info.defaults.entities :
-    e.name => e.type
+    "${e.name}_${e.type}" => e.type
   }
 }
 

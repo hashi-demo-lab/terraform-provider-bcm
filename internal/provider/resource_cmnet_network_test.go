@@ -251,7 +251,7 @@ func TestAccCMNetNetwork_DriftDetection(t *testing.T) {
 			{
 				PreConfig: func() {
 					client := createTestBCMClient(t)
-					ctx := context.Background()
+					ctx := t.Context()
 
 					// Get network UUID by name
 					uuid := getResourceUUIDByName(t, "cmnet", "getNetwork", networkName)
@@ -294,7 +294,7 @@ func TestAccCMNetNetwork_DriftDetection(t *testing.T) {
 					}
 
 					// Wait for eventual consistency
-					time.Sleep(2 * time.Second)
+					time.Sleep(TestEventualConsistencyDelay)
 
 					t.Logf("[DEBUG] Modified notes externally to: %v", entity["notes"])
 				},

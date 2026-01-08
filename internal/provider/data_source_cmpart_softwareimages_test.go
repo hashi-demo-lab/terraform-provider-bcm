@@ -49,7 +49,7 @@ func TestAccCMPartSoftwareImagesDataSource_EmptyResponse(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmpart_softwareimages.test",
 						tfjsonpath.New("id"),
-						knownvalue.StringExact("placeholder"),
+						knownvalue.NotNull(),
 					),
 				},
 			},

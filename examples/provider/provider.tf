@@ -27,7 +27,7 @@ provider "bcm" {
 variable "bcm_endpoint" {
   description = "BCM API endpoint URL"
   type        = string
-  default     = "https://172.21.15.254:8081"
+  default     = "https://bcm.example.com:8081"
 }
 
 variable "bcm_username" {

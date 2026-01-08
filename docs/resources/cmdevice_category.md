@@ -81,13 +81,13 @@ resource "bcm_cmdevice_category" "with_disk_setup" {
   # Disk setup with XML configuration
   disksetup = <<-EOT
     <?xml version="1.0" encoding="UTF-8"?>
-    <disksetup>
+    <diskSetup>
       <disk device="/dev/sda">
         <partition number="1" size="512M" type="ef00" label="EFI"/>
         <partition number="2" size="100G" type="8300" label="root"/>
         <partition number="3" size="remaining" type="8300" label="data"/>
       </disk>
-    </disksetup>
+    </diskSetup>
   EOT
 
   raidconf = <<-EOT
@@ -333,21 +333,31 @@ resource "bcm_cmdevice_category" "with_static_routes" {
 
   # Static routes for network segmentation
   # BCM assigns UUIDs to each route after creation
+  # NOTE: name and network (UUID) are required fields
   static_routes = [
     {
-      destination = "10.100.0.0/16"
-      gateway     = "192.168.1.254"
-      metric      = 100
+      name         = "route-datacenter-a"
+      ip           = "10.100.0.0"
+      netmask_bits = 16
+      gateway      = "192.168.1.254"
+      metric       = 100
+      network      = "84d8d82b-3ae7-4433-a793-bb44d5c3b4fe"
     },
     {
-      destination = "10.200.0.0/16"
-      gateway     = "192.168.1.253"
-      metric      = 200
+      name         = "route-datacenter-b"
+      ip           = "10.200.0.0"
+      netmask_bits = 16
+      gateway      = "192.168.1.253"
+      metric       = 200
+      network      = "84d8d82b-3ae7-4433-a793-bb44d5c3b4fe"
     },
     {
-      destination = "172.16.0.0/12"
-      gateway     = "192.168.1.252"
-      # metric is optional, defaults to 0
+      name         = "route-private-net"
+      ip           = "172.16.0.0"
+      netmask_bits = 12
+      gateway      = "192.168.1.252"
+      metric       = 0
+      network      = "84d8d82b-3ae7-4433-a793-bb44d5c3b4fe"
     }
   ]
 
@@ -478,9 +488,12 @@ resource "bcm_cmdevice_category" "mixed_gpu_with_routing" {
   # Static routes for GPU data networks
   static_routes = [
     {
-      destination = "10.50.0.0/16"
-      gateway     = "192.168.1.100"
-      metric      = 50
+      name         = "gpu-data-network"
+      ip           = "10.50.0.0"
+      netmask_bits = 16
+      gateway      = "192.168.1.100"
+      metric       = 50
+      network      = "84d8d82b-3ae7-4433-a793-bb44d5c3b4fe"
     }
   ]
 
@@ -577,10 +590,10 @@ resource "bcm_cmdevice_category" "services_with_health_check" {
 
 ### Optional
 
-- `access_settings` (Attributes) Access settings (see [below for nested schema](#nestedatt--access_settings))
+- `access_settings` (Attributes) Access settings. Note: Nested attributes not yet implemented - use raw API calls if needed. (see [below for nested schema](#nestedatt--access_settings))
 - `allow_networking_restart` (Boolean) Allow networking restart flag. If not specified, BCM assigns a default.
 - `authentication_service` (String) Authentication service (AUTO, LDAP, SSSD, LOCAL). If not specified, BCM assigns AUTO.
-- `bios_setup` (Attributes) BIOS setup configuration (see [below for nested schema](#nestedatt--bios_setup))
+- `bios_setup` (Attributes) BIOS setup configuration. Note: Nested attributes not yet implemented - use raw API calls if needed. (see [below for nested schema](#nestedatt--bios_setup))
 - `bmc_settings` (Attributes) BMC configuration settings (see [below for nested schema](#nestedatt--bmc_settings))
 - `boot_loader` (String) Boot loader type (SYSLINUX, GRUB, GRUB2, PXELINUX). If not specified, BCM assigns a default.
 - `boot_loader_file` (String) Boot loader file path. If not specified, BCM uses defaults based on boot_loader.
@@ -589,7 +602,7 @@ resource "bcm_cmdevice_category" "services_with_health_check" {
 - `default_gateway` (String) Default gateway IP address. If not specified, BCM may assign a default.
 - `default_gateway_metric` (Number) Default gateway metric. If not specified, BCM may assign a default.
 - `disksetup` (String) Disk setup XML configuration (max 10KB)
-- `dpu_settings` (Attributes) DPU settings (see [below for nested schema](#nestedatt--dpu_settings))
+- `dpu_settings` (Attributes) DPU settings. Note: Nested attributes not yet implemented - use raw API calls if needed. (see [below for nested schema](#nestedatt--dpu_settings))
 - `exclude_list_full` (String) Exclude list for full operations (max 50KB)
 - `exclude_list_grab` (String) Exclude list for grab operations (max 50KB)
 - `exclude_list_grabnew` (String) Exclude list for grabnew operations (max 50KB)
@@ -615,19 +628,19 @@ resource "bcm_cmdevice_category" "services_with_health_check" {
 - `new_node_install_mode` (String) New node installation mode (FULL, MINIMAL, SKIP). If not specified, BCM assigns a default.
 - `node_installer_disk` (Boolean) Node installer disk flag. If not specified, BCM assigns a default.
 - `notes` (String) User notes or description for the category
-- `proxy_settings` (Attributes) Proxy settings (see [below for nested schema](#nestedatt--proxy_settings))
+- `proxy_settings` (Attributes) Proxy settings. Note: Nested attributes not yet implemented - use raw API calls if needed. (see [below for nested schema](#nestedatt--proxy_settings))
 - `raidconf` (String) RAID configuration
 - `roles` (Attributes List) Service role assignments for nodes in this category. **Known Limitation**: BCM API does not persist this field - values are stored in Terraform state only. Role UUIDs are generated locally by the provider. After import, re-apply configuration to restore values. (see [below for nested schema](#nestedatt--roles))
 - `search_domains` (List of String) DNS search domains
-- `selinux_settings` (Attributes) SELinux settings (see [below for nested schema](#nestedatt--selinux_settings))
+- `selinux_settings` (Attributes) SELinux settings. Note: Nested attributes not yet implemented - use raw API calls if needed. (see [below for nested schema](#nestedatt--selinux_settings))
 - `services` (Attributes List) OS service configurations for nodes in this category. Defines which services should be monitored and managed by CMDaemon. **Known Limitation**: BCM API may not persist this field consistently - values are stored in Terraform state. After import, re-apply configuration to restore values. (see [below for nested schema](#nestedatt--services))
 - `software_image_proxy` (Attributes) Software image proxy configuration (see [below for nested schema](#nestedatt--software_image_proxy))
 - `static_routes` (Attributes List) Static network routes for nodes in this category. (see [below for nested schema](#nestedatt--static_routes))
 - `time_servers` (List of String) NTP time servers
-- `timezone_settings` (Attributes) Timezone settings (see [below for nested schema](#nestedatt--timezone_settings))
+- `timezone_settings` (Attributes) Timezone settings. Note: Nested attributes not yet implemented - use raw API calls if needed. (see [below for nested schema](#nestedatt--timezone_settings))
 - `use_exclusively_for` (String) Use exclusively for
 - `version_config_files` (Boolean) Version config files flag. If not specified, BCM assigns a default.
-- `ztp_settings` (Attributes) ZTP settings (see [below for nested schema](#nestedatt--ztp_settings))
+- `ztp_settings` (Attributes) ZTP settings. Note: Nested attributes not yet implemented - use raw API calls if needed. (see [below for nested schema](#nestedatt--ztp_settings))
 
 ### Read-Only
 
@@ -802,7 +815,7 @@ Optional:
 - `autostart` (Boolean) If true, CMDaemon will automatically restart a failed service.
 - `managed` (Boolean) If true, manage config files from cmd (if any).
 - `monitored` (Boolean) If true, CMDaemon will periodically check if the service is running.
-- `run_if` (String) Condition for running the service. Valid values: ALWAYS (default), or other BCM-defined states.
+- `run_if` (String) Condition for running the service. Common values: ALWAYS, NEVER. BCM validates additional states.
 - `script_timeout` (Number) Service operation timeout in seconds. Use -1 for no timeout (default).
 - `sickness_check_interval` (Number) Interval in seconds between sickness checks. Rounded up to 30-second monitoring intervals. Default: 60 seconds.
 - `sickness_check_script` (String) Script path for sickness checking. The script is executed periodically to determine service health.

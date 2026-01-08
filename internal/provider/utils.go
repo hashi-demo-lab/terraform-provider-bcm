@@ -174,35 +174,6 @@ func ProcessValidationErrors(validationErrors []ValidationError, diags *diag.Dia
 // Terraform Type Helpers
 // =============================================================================
 
-// resolveUnknownToNull converts Unknown values to Null for state consistency.
-// This is critical because Terraform Plugin Framework does not allow Unknown values
-// in state after Create/Update operations.
-//
-// Use this for computed fields that might be Unknown during planning but must be
-// resolved to either a concrete value or Null after the operation.
-func resolveUnknownStringToNull(val types.String) types.String {
-	if val.IsUnknown() {
-		return types.StringNull()
-	}
-	return val
-}
-
-// resolveUnknownInt64ToNull converts Unknown Int64 values to Null.
-func resolveUnknownInt64ToNull(val types.Int64) types.Int64 {
-	if val.IsUnknown() {
-		return types.Int64Null()
-	}
-	return val
-}
-
-// resolveUnknownBoolToNull converts Unknown Bool values to Null.
-func resolveUnknownBoolToNull(val types.Bool) types.Bool {
-	if val.IsUnknown() {
-		return types.BoolNull()
-	}
-	return val
-}
-
 // =============================================================================
 // Entity Building Helpers - For constructing BCM API request entities
 // =============================================================================
@@ -385,4 +356,3 @@ func MatchesExactFilterString(value types.String, expected string) bool {
 	}
 	return value.ValueString() == expected
 }
-

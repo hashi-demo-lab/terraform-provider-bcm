@@ -180,6 +180,14 @@ func (r *CMNetNetworkResource) Configure(ctx context.Context, req resource.Confi
 
 // Create creates a new network resource.
 func (r *CMNetNetworkResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	if r.Client == nil {
+		resp.Diagnostics.AddError(
+			"Provider Not Configured",
+			"The provider has not been configured. Please ensure the provider block is properly configured.",
+		)
+		return
+	}
+
 	var plan CMNetNetworkResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	if resp.Diagnostics.HasError() {
@@ -298,6 +306,14 @@ func (r *CMNetNetworkResource) Create(ctx context.Context, req resource.CreateRe
 
 // Read refreshes the resource state from BCM.
 func (r *CMNetNetworkResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	if r.Client == nil {
+		resp.Diagnostics.AddError(
+			"Provider Not Configured",
+			"The provider has not been configured. Please ensure the provider block is properly configured.",
+		)
+		return
+	}
+
 	var state CMNetNetworkResourceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
@@ -349,6 +365,14 @@ func (r *CMNetNetworkResource) Read(ctx context.Context, req resource.ReadReques
 
 // Update updates the network resource.
 func (r *CMNetNetworkResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	if r.Client == nil {
+		resp.Diagnostics.AddError(
+			"Provider Not Configured",
+			"The provider has not been configured. Please ensure the provider block is properly configured.",
+		)
+		return
+	}
+
 	var plan CMNetNetworkResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	if resp.Diagnostics.HasError() {
@@ -386,7 +410,7 @@ func (r *CMNetNetworkResource) Update(ctx context.Context, req resource.UpdateRe
 	})
 
 	// Call BCM API to update network (force=false for safety)
-	body, err := r.Client.CallJSONRPC(ctx, "cmnet", "updateNetwork", entity, false)
+	_, err = r.Client.CallJSONRPC(ctx, "cmnet", "updateNetwork", entity, false)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Network Update Failed",
@@ -395,11 +419,22 @@ func (r *CMNetNetworkResource) Update(ctx context.Context, req resource.UpdateRe
 		return
 	}
 
-	// Parse response
-	var updatedNetwork map[string]interface{}
-	if err := json.Unmarshal(body, &updatedNetwork); err != nil {
+	// BCM updateNetwork returns the updated entity directly (not wrapped in validation response)
+	// Unlike addNetwork which may return validation errors, updateNetwork performs validation
+	// before the update and returns the entity on success. We do a follow-up read for consistency.
+	readBody, err := r.Client.CallJSONRPC(ctx, "cmnet", "getNetwork", plan.UUID.ValueString())
+	if err != nil {
 		resp.Diagnostics.AddError(
-			"Error Parsing Update Response",
+			"Failed to Read Updated Network",
+			fmt.Sprintf("Network updated but failed to read back: %s", err.Error()),
+		)
+		return
+	}
+
+	var updatedNetwork map[string]interface{}
+	if err := json.Unmarshal(readBody, &updatedNetwork); err != nil {
+		resp.Diagnostics.AddError(
+			"Error Parsing Read Response",
 			fmt.Sprintf("Could not parse BCM API response: %s", err.Error()),
 		)
 		return
@@ -417,6 +452,14 @@ func (r *CMNetNetworkResource) Update(ctx context.Context, req resource.UpdateRe
 
 // Delete deletes the network resource.
 func (r *CMNetNetworkResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	if r.Client == nil {
+		resp.Diagnostics.AddError(
+			"Provider Not Configured",
+			"The provider has not been configured. Please ensure the provider block is properly configured.",
+		)
+		return
+	}
+
 	var state CMNetNetworkResourceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {

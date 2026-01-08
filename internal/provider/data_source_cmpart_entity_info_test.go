@@ -19,8 +19,8 @@ import (
 // Phase 3: User Story 1 Tests - List Entities by Type (TDD RED Phase)
 // =============================================================================
 
-// T009: TestAccCMPartEntityInfoDataSource_Basic
-// Verify data source returns entities with id computed
+// T009: TestAccCMPartEntityInfoDataSource_Basic.
+// Verify data source returns entities with id computed.
 func TestAccCMPartEntityInfoDataSource_Basic(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -47,8 +47,8 @@ func TestAccCMPartEntityInfoDataSource_Basic(t *testing.T) {
 	})
 }
 
-// T010: TestAccCMPartEntityInfoDataSource_FilterByType
-// Verify filtering by type="SoftwareImage" returns only SoftwareImage entities
+// T010: TestAccCMPartEntityInfoDataSource_FilterByType.
+// Verify filtering by type="SoftwareImage" returns only SoftwareImage entities.
 func TestAccCMPartEntityInfoDataSource_FilterByType(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -85,8 +85,8 @@ func TestAccCMPartEntityInfoDataSource_FilterByType(t *testing.T) {
 	})
 }
 
-// T011: TestAccCMPartEntityInfoDataSource_EmptyResult
-// Verify querying with type="NonExistentType123" returns empty list (not error)
+// T011: TestAccCMPartEntityInfoDataSource_EmptyResult.
+// Verify querying with type="NonExistentType123" returns empty list (not error).
 func TestAccCMPartEntityInfoDataSource_EmptyResult(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -113,8 +113,8 @@ func TestAccCMPartEntityInfoDataSource_EmptyResult(t *testing.T) {
 	})
 }
 
-// T012: TestAccCMPartEntityInfoDataSource_InvalidCredentials
-// Verify authentication error message is clear
+// T012: TestAccCMPartEntityInfoDataSource_InvalidCredentials.
+// Verify authentication error message is clear.
 func TestAccCMPartEntityInfoDataSource_InvalidCredentials(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -140,8 +140,8 @@ data "bcm_cmpart_entity_info" "test" {}
 // Phase 4: User Story 2 Tests - Filter Entities by Name Pattern (TDD RED Phase)
 // =============================================================================
 
-// T018: TestAccCMPartEntityInfoDataSource_FilterByNamePattern
-// Verify filtering by name_pattern="default*" returns matching entities
+// T018: TestAccCMPartEntityInfoDataSource_FilterByNamePattern.
+// Verify filtering by name_pattern="default*" returns matching entities.
 func TestAccCMPartEntityInfoDataSource_FilterByNamePattern(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -170,8 +170,8 @@ func TestAccCMPartEntityInfoDataSource_FilterByNamePattern(t *testing.T) {
 	})
 }
 
-// T019: TestAccCMPartEntityInfoDataSource_FilterByNamePatternMiddle
-// Verify filtering by name_pattern="*node*" for middle match
+// T019: TestAccCMPartEntityInfoDataSource_FilterByNamePatternMiddle.
+// Verify filtering by name_pattern="*node*" for middle match.
 func TestAccCMPartEntityInfoDataSource_FilterByNamePatternMiddle(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -191,8 +191,8 @@ func TestAccCMPartEntityInfoDataSource_FilterByNamePatternMiddle(t *testing.T) {
 	})
 }
 
-// T020: TestAccCMPartEntityInfoDataSource_FilterByExactName
-// Verify filtering without wildcards matches literally
+// T020: TestAccCMPartEntityInfoDataSource_FilterByExactName.
+// Verify filtering without wildcards matches literally.
 func TestAccCMPartEntityInfoDataSource_FilterByExactName(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -212,7 +212,7 @@ func TestAccCMPartEntityInfoDataSource_FilterByExactName(t *testing.T) {
 	})
 }
 
-// Additional test for case-insensitivity of name_pattern filter (HIGH priority from analysis)
+// Additional test for case-insensitivity of name_pattern filter (HIGH priority from analysis).
 func TestAccCMPartEntityInfoDataSource_FilterByNamePatternCaseInsensitive(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -237,8 +237,8 @@ func TestAccCMPartEntityInfoDataSource_FilterByNamePatternCaseInsensitive(t *tes
 // Phase 5: User Story 3 Tests - Combined Type and Name Filtering (TDD RED Phase)
 // =============================================================================
 
-// T023: TestAccCMPartEntityInfoDataSource_CombinedFilters
-// Verify combined type and name_pattern filtering with AND logic
+// T023: TestAccCMPartEntityInfoDataSource_CombinedFilters.
+// Verify combined type and name_pattern filtering with AND logic.
 func TestAccCMPartEntityInfoDataSource_CombinedFilters(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -270,8 +270,8 @@ func TestAccCMPartEntityInfoDataSource_CombinedFilters(t *testing.T) {
 // Phase 6: User Story 4 Tests - Retrieve All Entities (TDD RED Phase)
 // =============================================================================
 
-// T026: TestAccCMPartEntityInfoDataSource_NoFilters
-// Verify querying without filters returns all entities
+// T026: TestAccCMPartEntityInfoDataSource_NoFilters.
+// Verify querying without filters returns all entities.
 func TestAccCMPartEntityInfoDataSource_NoFilters(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -302,8 +302,8 @@ func TestAccCMPartEntityInfoDataSource_NoFilters(t *testing.T) {
 // Phase 7: User Story 5 Tests - Lookup Entity UUID by Known Name (TDD RED Phase)
 // =============================================================================
 
-// T028: TestAccCMPartEntityInfoDataSource_UUIDLookup
-// Verify UUID format is correct (36 chars with dashes)
+// T028: TestAccCMPartEntityInfoDataSource_UUIDLookup.
+// Verify UUID format is correct (36 chars with dashes).
 func TestAccCMPartEntityInfoDataSource_UUIDLookup(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },

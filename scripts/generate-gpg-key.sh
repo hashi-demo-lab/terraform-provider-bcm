@@ -1,4 +1,7 @@
 #!/bin/bash
+# Copyright (c) HashiCorp, Inc.
+# SPDX-License-Identifier: MPL-2.0
+
 # GPG Key Generation Script for Terraform Provider Publishing
 # This script generates a GPG key pair for signing Terraform provider releases
 

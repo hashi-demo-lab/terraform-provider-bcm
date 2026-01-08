@@ -4,7 +4,6 @@
 package provider
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -925,7 +924,7 @@ func TestAccCMDeviceDevice_InterfaceDrift(t *testing.T) {
 			{
 				PreConfig: func() {
 					client := createTestBCMClient(t)
-					ctx := context.Background()
+					ctx := t.Context()
 
 					// Get device by hostname
 					body, err := client.CallJSONRPC(ctx, "cmdevice", "getDevice", hostname)
@@ -981,7 +980,7 @@ func TestAccCMDeviceDevice_InterfaceDrift(t *testing.T) {
 					}
 
 					// Wait for eventual consistency
-					time.Sleep(2 * time.Second)
+					time.Sleep(TestEventualConsistencyDelay)
 
 					t.Logf("[DEBUG] Modified interface bootable externally to: false")
 				},

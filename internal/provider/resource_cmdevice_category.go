@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/float64validator"
@@ -381,6 +382,9 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
+				Validators: []validator.String{
+					stringvalidator.OneOf("HTTP", "TFTP", "NFS"),
+				},
 			},
 			"kernel_version": schema.StringAttribute{
 				Optional:            true,
@@ -425,6 +429,9 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
+				Validators: []validator.String{
+					stringvalidator.OneOf("AUTO", "FULL", "MINIMAL", "CUSTOM"),
+				},
 			},
 			"new_node_install_mode": schema.StringAttribute{
 				Optional:            true,
@@ -432,6 +439,9 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 				MarkdownDescription: "New node installation mode (FULL, MINIMAL, SKIP). If not specified, BCM assigns a default.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
+				},
+				Validators: []validator.String{
+					stringvalidator.OneOf("FULL", "MINIMAL", "SKIP"),
 				},
 			},
 			"install_boot_record": schema.BoolAttribute{
@@ -745,10 +755,8 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 						},
 						"run_if": schema.StringAttribute{
 							Optional:            true,
-							MarkdownDescription: "Condition for running the service. Valid values: ALWAYS (default), or other BCM-defined states.",
-							Validators: []validator.String{
-								stringvalidator.OneOf("ALWAYS"),
-							},
+							MarkdownDescription: "Condition for running the service. Common values: ALWAYS, NEVER. BCM validates additional states.",
+							// Removed overly restrictive validator - BCM performs server-side validation
 						},
 						"sickness_check_script": schema.StringAttribute{
 							Optional:            true,
@@ -820,13 +828,15 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 			},
 			"bios_setup": schema.SingleNestedAttribute{
 				Optional:            true,
-				MarkdownDescription: "BIOS setup configuration",
+				MarkdownDescription: "BIOS setup configuration. Note: Nested attributes not yet implemented - use raw API calls if needed.",
 				Attributes:          map[string]schema.Attribute{},
+				// TODO: Implement nested BIOS setup attributes when BCM API schema is documented
 			},
 			"dpu_settings": schema.SingleNestedAttribute{
 				Optional:            true,
-				MarkdownDescription: "DPU settings",
+				MarkdownDescription: "DPU settings. Note: Nested attributes not yet implemented - use raw API calls if needed.",
 				Attributes:          map[string]schema.Attribute{},
+				// TODO: Implement nested DPU settings attributes when BCM API schema is documented
 			},
 			"gpu_settings": schema.ListNestedAttribute{
 				Optional:            true,
@@ -958,28 +968,33 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 			},
 			"access_settings": schema.SingleNestedAttribute{
 				Optional:            true,
-				MarkdownDescription: "Access settings",
+				MarkdownDescription: "Access settings. Note: Nested attributes not yet implemented - use raw API calls if needed.",
 				Attributes:          map[string]schema.Attribute{},
+				// TODO: Implement nested access settings attributes when BCM API schema is documented
 			},
 			"selinux_settings": schema.SingleNestedAttribute{
 				Optional:            true,
-				MarkdownDescription: "SELinux settings",
+				MarkdownDescription: "SELinux settings. Note: Nested attributes not yet implemented - use raw API calls if needed.",
 				Attributes:          map[string]schema.Attribute{},
+				// TODO: Implement nested SELinux settings attributes when BCM API schema is documented
 			},
 			"proxy_settings": schema.SingleNestedAttribute{
 				Optional:            true,
-				MarkdownDescription: "Proxy settings",
+				MarkdownDescription: "Proxy settings. Note: Nested attributes not yet implemented - use raw API calls if needed.",
 				Attributes:          map[string]schema.Attribute{},
+				// TODO: Implement nested proxy settings attributes when BCM API schema is documented
 			},
 			"timezone_settings": schema.SingleNestedAttribute{
 				Optional:            true,
-				MarkdownDescription: "Timezone settings",
+				MarkdownDescription: "Timezone settings. Note: Nested attributes not yet implemented - use raw API calls if needed.",
 				Attributes:          map[string]schema.Attribute{},
+				// TODO: Implement nested timezone settings attributes when BCM API schema is documented
 			},
 			"ztp_settings": schema.SingleNestedAttribute{
 				Optional:            true,
-				MarkdownDescription: "ZTP settings",
+				MarkdownDescription: "ZTP settings. Note: Nested attributes not yet implemented - use raw API calls if needed.",
 				Attributes:          map[string]schema.Attribute{},
+				// TODO: Implement nested ZTP settings attributes when BCM API schema is documented
 			},
 			"fips": schema.StringAttribute{
 				Optional:            true,
@@ -1101,6 +1116,14 @@ func (r *CMDeviceCategoryResource) Configure(ctx context.Context, req resource.C
 
 // Create implements resource.Resource (REFACTOR phase - Real API integration).
 func (r *CMDeviceCategoryResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	if r.Client == nil {
+		resp.Diagnostics.AddError(
+			"Provider Not Configured",
+			"The provider has not been configured. Please ensure the provider block is properly configured.",
+		)
+		return
+	}
+
 	var plan CMDeviceCategoryResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	if resp.Diagnostics.HasError() {
@@ -1224,7 +1247,11 @@ func (r *CMDeviceCategoryResource) Create(ctx context.Context, req resource.Crea
 
 		r.readCategory(ctx, &plan, &resp.Diagnostics)
 		if resp.Diagnostics.HasError() {
-			lastReadErr = fmt.Errorf("read attempt %d failed", attempt+1)
+			var errDetails []string
+			for _, d := range resp.Diagnostics.Errors() {
+				errDetails = append(errDetails, d.Detail())
+			}
+			lastReadErr = fmt.Errorf("read attempt %d failed: %s", attempt+1, strings.Join(errDetails, "; "))
 			if attempt < maxRetries-1 {
 				// Wait with exponential backoff before retry
 				sleepDuration := time.Duration(1<<attempt) * time.Second
@@ -1396,6 +1423,14 @@ func (r *CMDeviceCategoryResource) Create(ctx context.Context, req resource.Crea
 
 // Read implements resource.Resource (REFACTOR phase - Real API integration).
 func (r *CMDeviceCategoryResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	if r.Client == nil {
+		resp.Diagnostics.AddError(
+			"Provider Not Configured",
+			"The provider has not been configured. Please ensure the provider block is properly configured.",
+		)
+		return
+	}
+
 	var state CMDeviceCategoryResourceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
@@ -1439,7 +1474,7 @@ func (r *CMDeviceCategoryResource) Read(ctx context.Context, req resource.ReadRe
 						"name": state.Name.ValueString(),
 					})
 					resp.State.RemoveResource(ctx)
-					resp.Diagnostics = nil // Clear the diagnostics
+					resp.Diagnostics = diag.Diagnostics{} // Clear the diagnostics
 					resourceDeleted = true
 					break
 				}
@@ -1449,7 +1484,11 @@ func (r *CMDeviceCategoryResource) Read(ctx context.Context, req resource.ReadRe
 			}
 
 			// Other read error - retry with backoff
-			lastReadErr = fmt.Errorf("read attempt %d failed", attempt+1)
+			var errDetails []string
+			for _, d := range resp.Diagnostics.Errors() {
+				errDetails = append(errDetails, d.Detail())
+			}
+			lastReadErr = fmt.Errorf("read attempt %d failed: %s", attempt+1, strings.Join(errDetails, "; "))
 			if attempt < maxRetries-1 {
 				sleepDuration := time.Duration(1<<attempt) * time.Second
 				tflog.Warn(ctx, "Category read failed, retrying due to eventual consistency", map[string]interface{}{
@@ -1633,6 +1672,14 @@ func (r *CMDeviceCategoryResource) Read(ctx context.Context, req resource.ReadRe
 
 // Update implements resource.Resource (REFACTOR phase - Real API integration).
 func (r *CMDeviceCategoryResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	if r.Client == nil {
+		resp.Diagnostics.AddError(
+			"Provider Not Configured",
+			"The provider has not been configured. Please ensure the provider block is properly configured.",
+		)
+		return
+	}
+
 	var plan CMDeviceCategoryResourceModel
 	var state CMDeviceCategoryResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -1661,10 +1708,10 @@ func (r *CMDeviceCategoryResource) Update(ctx context.Context, req resource.Upda
 	}
 
 	// Get force parameter from plan
-	// IMPORTANT: BCM's updateCategory sometimes requires force=true to bypass validation quirks
-	// when updating certain fields even if the name hasn't changed. For safety, we always use force=true
-	// for updates unless explicitly set to false by the user.
-	force := true // Default to true for updates
+	// Default to safe behavior - user must opt-in to force=true to bypass validation quirks.
+	// While BCM's updateCategory sometimes requires force=true to bypass validation quirks
+	// when updating certain fields, defaulting to force=true can mask real validation errors.
+	force := false // Default to safe behavior - user must opt-in to force
 	if !plan.Force.IsNull() {
 		force = plan.Force.ValueBool()
 	}
@@ -1709,7 +1756,11 @@ func (r *CMDeviceCategoryResource) Update(ctx context.Context, req resource.Upda
 
 		r.readCategory(ctx, &plan, &resp.Diagnostics)
 		if resp.Diagnostics.HasError() {
-			lastReadErr = fmt.Errorf("read attempt %d failed", attempt+1)
+			var errDetails []string
+			for _, d := range resp.Diagnostics.Errors() {
+				errDetails = append(errDetails, d.Detail())
+			}
+			lastReadErr = fmt.Errorf("read attempt %d failed: %s", attempt+1, strings.Join(errDetails, "; "))
 			if attempt < maxRetries-1 {
 				sleepDuration := time.Duration(1<<attempt) * time.Second
 				tflog.Warn(ctx, "Category read failed after update, retrying due to eventual consistency", map[string]interface{}{
@@ -1876,6 +1927,14 @@ func (r *CMDeviceCategoryResource) Update(ctx context.Context, req resource.Upda
 
 // Delete implements resource.Resource (REFACTOR phase - Real API integration).
 func (r *CMDeviceCategoryResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	if r.Client == nil {
+		resp.Diagnostics.AddError(
+			"Provider Not Configured",
+			"The provider has not been configured. Please ensure the provider block is properly configured.",
+		)
+		return
+	}
+
 	var state CMDeviceCategoryResourceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
@@ -3870,7 +3929,7 @@ func mergeServicesWithAPIResponse(ctx context.Context, originalServices types.Li
 	return result
 }
 
-// Helper functions for merging values (prefer user config, fallback to API)
+// Helper functions for merging values (prefer user config, fallback to API).
 func mergeStringValue(userVal, apiVal types.String) types.String {
 	if userVal.IsUnknown() {
 		if apiVal.IsNull() || apiVal.IsUnknown() {
@@ -3920,70 +3979,6 @@ func unknownInt64ToNull(val types.Int64) types.Int64 {
 		return types.Int64Null()
 	}
 	return val
-}
-
-// generateStaticRouteUUIDs generates UUIDs for any routes that don't have one.
-// This ensures the plan has UUIDs before buildAPIEntity and avoids "inconsistent result" errors.
-func generateStaticRouteUUIDs(ctx context.Context, routes types.List) types.List {
-	staticRouteObjectType := types.ObjectType{AttrTypes: map[string]attr.Type{
-		"uuid":                types.StringType,
-		"name":                types.StringType,
-		"ip":                  types.StringType,
-		"netmask_bits":        types.Int64Type,
-		"gateway":             types.StringType,
-		"metric":              types.Int64Type,
-		"network":             types.StringType,
-		"network_device_name": types.StringType,
-		"notes":               types.StringType,
-	}}
-
-	if routes.IsNull() || routes.IsUnknown() {
-		return routes
-	}
-
-	var routeModels []StaticRouteModel
-	if diags := routes.ElementsAs(ctx, &routeModels, false); diags.HasError() {
-		return routes
-	}
-
-	// Generate UUIDs for routes without them
-	modified := false
-	for i := range routeModels {
-		if routeModels[i].UUID.IsNull() || routeModels[i].UUID.IsUnknown() || routeModels[i].UUID.ValueString() == "" {
-			routeModels[i].UUID = types.StringValue(generateUUID())
-			modified = true
-			tflog.Debug(ctx, "Generated UUID for static route", map[string]interface{}{
-				"name": routeModels[i].Name.ValueString(),
-				"uuid": routeModels[i].UUID.ValueString(),
-			})
-		}
-	}
-
-	if !modified {
-		return routes
-	}
-
-	// Convert back to types.List
-	routeValues := make([]attr.Value, 0, len(routeModels))
-	for _, route := range routeModels {
-		routeObj, diags := types.ObjectValue(staticRouteObjectType.AttrTypes, map[string]attr.Value{
-			"uuid":                route.UUID,
-			"name":                route.Name,
-			"ip":                  route.IP,
-			"netmask_bits":        route.NetmaskBits,
-			"gateway":             route.Gateway,
-			"metric":              route.Metric,
-			"network":             route.Network,
-			"network_device_name": route.NetworkDeviceName,
-			"notes":               route.Notes,
-		})
-		if !diags.HasError() {
-			routeValues = append(routeValues, routeObj)
-		}
-	}
-
-	result, _ := types.ListValue(staticRouteObjectType, routeValues)
-	return result
 }
 
 // mergeFSMountsWithAPIResponse merges user-configured fsmount attributes with BCM API-computed values.
@@ -4194,40 +4189,4 @@ func parseStringListValue(ctx context.Context, data map[string]interface{}, key 
 		}
 	}
 	return types.ListNull(types.StringType)
-}
-
-// Issue #82: Coalesce helper functions for preserving plan values over API values
-// These return the first non-null, non-unknown value, preferring plan values
-
-// coalesceString returns the first non-null, non-unknown string value
-func coalesceString(values ...types.String) types.String {
-	for _, v := range values {
-		if !v.IsNull() && !v.IsUnknown() {
-			return v
-		}
-	}
-	// All values are null or unknown, return null
-	return types.StringNull()
-}
-
-// coalesceInt64 returns the first non-null, non-unknown int64 value
-func coalesceInt64(values ...types.Int64) types.Int64 {
-	for _, v := range values {
-		if !v.IsNull() && !v.IsUnknown() {
-			return v
-		}
-	}
-	// All values are null or unknown, return null
-	return types.Int64Null()
-}
-
-// coalesceFloat64 returns the first non-null, non-unknown float64 value
-func coalesceFloat64(values ...types.Float64) types.Float64 {
-	for _, v := range values {
-		if !v.IsNull() && !v.IsUnknown() {
-			return v
-		}
-	}
-	// All values are null or unknown, return null
-	return types.Float64Null()
 }

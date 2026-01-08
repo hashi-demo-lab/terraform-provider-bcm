@@ -15,7 +15,7 @@
     "ghcr.io/devcontainers/features/docker-in-docker:2.12.4": {}
     },
 
-  "postCreateCommand": "bash -c 'mkdir -p ~/.terraform.d && cat > ~/.terraform.d/credentials.tfrc.json << EOF\n{\n  \"credentials\": {\n    \"app.terraform.io\": {\n      \"token\": \"${TFE_TOKEN}\"\n    }\n  }\n}\nEOF'",
+  "postCreateCommand": "bash -c 'sudo chown -R node:node /home/node/.claude /commandhistory && mkdir -p ~/.terraform.d && cat > ~/.terraform.d/credentials.tfrc.json << EOF\n{\n  \"credentials\": {\n    \"app.terraform.io\": {\n      \"token\": \"${TFE_TOKEN}\"\n    }\n  }\n}\nEOF'",
 
   "customizations": {
     "vscode": {

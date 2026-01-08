@@ -210,6 +210,20 @@ func (d *CMUserUsersDataSource) Read(ctx context.Context, req datasource.ReadReq
 
 	tflog.Debug(ctx, fmt.Sprintf("Retrieved %d users from BCM API", len(usersData)))
 
+	// Validate username_pattern if provided
+	if !data.UsernamePattern.IsNull() && !data.UsernamePattern.IsUnknown() {
+		pattern := data.UsernamePattern.ValueString()
+		// Validate glob pattern syntax by testing with empty string
+		_, err := filepath.Match(pattern, "")
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Invalid username_pattern",
+				fmt.Sprintf("Glob pattern syntax error: %s", err.Error()),
+			)
+			return
+		}
+	}
+
 	// Map and filter users
 	var filteredUsers []UserModel
 	for _, userData := range usersData {
@@ -225,8 +239,8 @@ func (d *CMUserUsersDataSource) Read(ctx context.Context, req datasource.ReadReq
 
 	data.Users = filteredUsers
 
-	// Generate deterministic ID
-	data.ID = types.StringValue(fmt.Sprintf("users-%d", time.Now().Unix()))
+	// Set deterministic ID
+	data.ID = types.StringValue("cmuser-users")
 
 	tflog.Trace(ctx, "read cmuser users data source", map[string]interface{}{
 		"total_users":    len(usersData),
@@ -260,7 +274,7 @@ func computeAccountActive(shadowExpire types.Int64) types.Bool {
 // Returns true if user matches all specified filters, false otherwise.
 func matchesFilters(user UserModel, usernamePattern, groupIDFilter, userIDFilter types.String) bool {
 	// Filter by username_pattern (glob-style using filepath.Match)
-	if !usernamePattern.IsNull() {
+	if !usernamePattern.IsNull() && !usernamePattern.IsUnknown() {
 		pattern := usernamePattern.ValueString()
 		username := user.Username.ValueString()
 		matched, err := filepath.Match(pattern, username)
@@ -270,14 +284,14 @@ func matchesFilters(user UserModel, usernamePattern, groupIDFilter, userIDFilter
 	}
 
 	// Filter by group_id (exact match)
-	if !groupIDFilter.IsNull() {
+	if !groupIDFilter.IsNull() && !groupIDFilter.IsUnknown() {
 		if user.GroupID.ValueString() != groupIDFilter.ValueString() {
 			return false
 		}
 	}
 
 	// Filter by user_id (exact match)
-	if !userIDFilter.IsNull() {
+	if !userIDFilter.IsNull() && !userIDFilter.IsUnknown() {
 		if user.UserID.ValueString() != userIDFilter.ValueString() {
 			return false
 		}

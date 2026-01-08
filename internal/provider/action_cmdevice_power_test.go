@@ -160,7 +160,7 @@ func TestCMDevicePowerAction_InterfaceCompliance(t *testing.T) {
 	t.Parallel()
 
 	// Verify NewCMDevicePowerAction returns an action.Action
-	var _ action.Action = NewCMDevicePowerAction()
+	var _ = NewCMDevicePowerAction()
 
 	// Verify the concrete type implements ActionWithConfigure
 	a := NewCMDevicePowerAction()

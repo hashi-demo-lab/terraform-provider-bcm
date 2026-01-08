@@ -364,7 +364,8 @@ func mapAPIToNode(apiData map[string]interface{}) NodeModel {
 		ProvisioningTransport: getStringValue(apiData, "provisioningTransport"),
 
 		// State
-		Modified:    getBoolValue(apiData, "modified"),
+		Modified: getBoolValue(apiData, "modified"),
+		// Note: BCM API uses snake_case for to_be_removed (exception to camelCase convention)
 		ToBeRemoved: getBoolValue(apiData, "to_be_removed"),
 
 		// Nested attributes

@@ -1,7 +1,9 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package provider
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -16,7 +18,7 @@ func TestValidateCategory_DirectAPICall(t *testing.T) {
 		t.Skip("TF_ACC not set, skipping acceptance test")
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// Create BCM client
 	client := createTestBCMClient(t)
@@ -36,13 +38,17 @@ func TestValidateCategory_DirectAPICall(t *testing.T) {
 	for _, img := range images {
 		if name, ok := img["name"].(string); ok {
 			if name == "default-image" {
-				defaultImageUUID = img["uuid"].(string)
+				if uuid, ok := img["uuid"].(string); ok {
+					defaultImageUUID = uuid
+				}
 				break
 			}
 		}
 	}
 	if defaultImageUUID == "" && len(images) > 0 {
-		defaultImageUUID = images[0]["uuid"].(string)
+		if uuid, ok := images[0]["uuid"].(string); ok {
+			defaultImageUUID = uuid
+		}
 	}
 	t.Logf("Using software image UUID: %s", defaultImageUUID)
 
@@ -59,7 +65,9 @@ func TestValidateCategory_DirectAPICall(t *testing.T) {
 
 	var defaultNetworkUUID string
 	if len(networks) > 0 {
-		defaultNetworkUUID = networks[0]["uuid"].(string)
+		if uuid, ok := networks[0]["uuid"].(string); ok {
+			defaultNetworkUUID = uuid
+		}
 	}
 	t.Logf("Using network UUID: %s", defaultNetworkUUID)
 

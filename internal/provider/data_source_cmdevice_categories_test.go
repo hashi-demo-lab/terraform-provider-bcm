@@ -45,6 +45,7 @@ func TestAccCMDeviceCategoriesDataSource_FilterByName(t *testing.T) {
 			testAccPreCheck(t)
 		},
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceCategoryDestroy,
 		Steps: []resource.TestStep{
 			{
 				// First create a test category resource

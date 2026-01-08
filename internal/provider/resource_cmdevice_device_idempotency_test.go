@@ -4,7 +4,6 @@
 package provider
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -364,7 +363,7 @@ func TestAccCMDeviceDevice_IdempotencyDrift(t *testing.T) {
 			{
 				PreConfig: func() {
 					client := createTestBCMClient(t)
-					ctx := context.Background()
+					ctx := t.Context()
 
 					// Get device UUID by name
 					body, err := client.CallJSONRPC(ctx, "cmdevice", "getDevice", deviceName)
@@ -409,7 +408,7 @@ func TestAccCMDeviceDevice_IdempotencyDrift(t *testing.T) {
 					}
 
 					// Wait for eventual consistency
-					time.Sleep(2 * time.Second)
+					time.Sleep(TestEventualConsistencyDelay)
 
 					t.Logf("[DEBUG] Modified notes externally to: %v", entity["notes"])
 				},

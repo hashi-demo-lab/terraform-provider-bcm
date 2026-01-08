@@ -45,13 +45,13 @@ resource "bcm_cmdevice_category" "with_disk_setup" {
   # Disk setup with XML configuration
   disksetup = <<-EOT
     <?xml version="1.0" encoding="UTF-8"?>
-    <disksetup>
+    <diskSetup>
       <disk device="/dev/sda">
         <partition number="1" size="512M" type="ef00" label="EFI"/>
         <partition number="2" size="100G" type="8300" label="root"/>
         <partition number="3" size="remaining" type="8300" label="data"/>
       </disk>
-    </disksetup>
+    </diskSetup>
   EOT
 
   raidconf = <<-EOT
@@ -297,21 +297,31 @@ resource "bcm_cmdevice_category" "with_static_routes" {
 
   # Static routes for network segmentation
   # BCM assigns UUIDs to each route after creation
+  # NOTE: name and network (UUID) are required fields
   static_routes = [
     {
-      destination = "10.100.0.0/16"
-      gateway     = "192.168.1.254"
-      metric      = 100
+      name         = "route-datacenter-a"
+      ip           = "10.100.0.0"
+      netmask_bits = 16
+      gateway      = "192.168.1.254"
+      metric       = 100
+      network      = "84d8d82b-3ae7-4433-a793-bb44d5c3b4fe"
     },
     {
-      destination = "10.200.0.0/16"
-      gateway     = "192.168.1.253"
-      metric      = 200
+      name         = "route-datacenter-b"
+      ip           = "10.200.0.0"
+      netmask_bits = 16
+      gateway      = "192.168.1.253"
+      metric       = 200
+      network      = "84d8d82b-3ae7-4433-a793-bb44d5c3b4fe"
     },
     {
-      destination = "172.16.0.0/12"
-      gateway     = "192.168.1.252"
-      # metric is optional, defaults to 0
+      name         = "route-private-net"
+      ip           = "172.16.0.0"
+      netmask_bits = 12
+      gateway      = "192.168.1.252"
+      metric       = 0
+      network      = "84d8d82b-3ae7-4433-a793-bb44d5c3b4fe"
     }
   ]
 
@@ -442,9 +452,12 @@ resource "bcm_cmdevice_category" "mixed_gpu_with_routing" {
   # Static routes for GPU data networks
   static_routes = [
     {
-      destination = "10.50.0.0/16"
-      gateway     = "192.168.1.100"
-      metric      = 50
+      name         = "gpu-data-network"
+      ip           = "10.50.0.0"
+      netmask_bits = 16
+      gateway      = "192.168.1.100"
+      metric       = 50
+      network      = "84d8d82b-3ae7-4433-a793-bb44d5c3b4fe"
     }
   ]
 

@@ -306,7 +306,7 @@ func (d *CMPartSoftwareImagesDataSource) Read(ctx context.Context, req datasourc
 	})
 
 	// Call BCM API
-	body, err := d.Client.CallJSONRPC(ctx, "CMPart", "getSoftwareImages")
+	body, err := d.Client.CallJSONRPC(ctx, "cmpart", "getSoftwareImages")
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to Read BCM Software Images",
@@ -409,11 +409,13 @@ func mapAPIResponseToModel(apiData map[string]interface{}) SoftwareImageModel {
 	// Relationships
 	model.OriginalImage = getStringValue(apiData, "originalImage")
 	model.ParentSoftwareImage = getStringValue(apiData, "parentSoftwareImage")
+	// Note: BCM API uses snake_case for parent_uuid (exception to camelCase convention)
 	model.ParentUUID = getStringValue(apiData, "parent_uuid")
 
 	// State flags
 	model.FileOperationInProgress = getBoolValue(apiData, "fileOperationInProgress")
 	model.Modified = getBoolValue(apiData, "modified")
+	// Note: BCM API uses snake_case for to_be_removed (exception to camelCase convention)
 	model.ToBeRemoved = getBoolValue(apiData, "to_be_removed")
 
 	// Notes
@@ -425,13 +427,14 @@ func mapAPIResponseToModel(apiData map[string]interface{}) SoftwareImageModel {
 		for _, modData := range modulesData {
 			if modMap, ok := modData.(map[string]interface{}); ok {
 				module := KernelModuleModel{
-					UUID:        getStringValue(modMap, "uuid"),
-					Name:        getStringValue(modMap, "name"),
-					Parameters:  getStringValue(modMap, "parameters"),
-					BaseType:    getStringValue(modMap, "baseType"),
-					ChildType:   getStringValue(modMap, "childType"),
-					Revision:    getStringValue(modMap, "revision"),
-					Modified:    getBoolValue(modMap, "modified"),
+					UUID:       getStringValue(modMap, "uuid"),
+					Name:       getStringValue(modMap, "name"),
+					Parameters: getStringValue(modMap, "parameters"),
+					BaseType:   getStringValue(modMap, "baseType"),
+					ChildType:  getStringValue(modMap, "childType"),
+					Revision:   getStringValue(modMap, "revision"),
+					Modified:   getBoolValue(modMap, "modified"),
+					// Note: BCM API uses snake_case for to_be_removed (exception to camelCase convention)
 					ToBeRemoved: getBoolValue(modMap, "to_be_removed"),
 				}
 				model.Modules = append(model.Modules, module)

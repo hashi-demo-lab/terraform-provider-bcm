@@ -245,6 +245,14 @@ func (r *CMKubeClusterResource) Schema(ctx context.Context, req resource.SchemaR
 
 // Create creates a new Kubernetes cluster.
 func (r *CMKubeClusterResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	if r.Client == nil {
+		resp.Diagnostics.AddError(
+			"Provider Not Configured",
+			"The provider has not been configured. Please ensure the provider block is properly configured.",
+		)
+		return
+	}
+
 	var plan CMKubeClusterResourceModel
 
 	// Read Terraform plan data
@@ -393,6 +401,14 @@ func (r *CMKubeClusterResource) Create(ctx context.Context, req resource.CreateR
 
 // Read reads the current cluster state from BCM.
 func (r *CMKubeClusterResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	if r.Client == nil {
+		resp.Diagnostics.AddError(
+			"Provider Not Configured",
+			"The provider has not been configured. Please ensure the provider block is properly configured.",
+		)
+		return
+	}
+
 	var state CMKubeClusterResourceModel
 
 	// Read current state
@@ -409,6 +425,7 @@ func (r *CMKubeClusterResource) Read(ctx context.Context, req resource.ReadReque
 	stateManagementNetwork := state.ManagementNetwork
 	stateOverlayNetwork := state.OverlayNetwork
 	stateDNSServers := state.DNSServers
+	stateVersion := state.Version
 	stateCNIPlugin := state.CNIPlugin
 	stateStorageClasses := state.StorageClasses
 	stateLoadBalancerMode := state.LoadBalancerMode
@@ -445,6 +462,9 @@ func (r *CMKubeClusterResource) Read(ctx context.Context, req resource.ReadReque
 	}
 	if state.DNSServers.IsNull() && !stateDNSServers.IsNull() && !stateDNSServers.IsUnknown() {
 		state.DNSServers = stateDNSServers
+	}
+	if state.Version.IsNull() && !stateVersion.IsNull() && !stateVersion.IsUnknown() {
+		state.Version = stateVersion
 	}
 	if state.CNIPlugin.IsNull() && !stateCNIPlugin.IsNull() && !stateCNIPlugin.IsUnknown() {
 		state.CNIPlugin = stateCNIPlugin
@@ -597,6 +617,14 @@ func (r *CMKubeClusterResource) readCluster(ctx context.Context, model *CMKubeCl
 
 // Update updates an existing Kubernetes cluster.
 func (r *CMKubeClusterResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	if r.Client == nil {
+		resp.Diagnostics.AddError(
+			"Provider Not Configured",
+			"The provider has not been configured. Please ensure the provider block is properly configured.",
+		)
+		return
+	}
+
 	var plan CMKubeClusterResourceModel
 	var state CMKubeClusterResourceModel
 
@@ -724,6 +752,14 @@ func (r *CMKubeClusterResource) Update(ctx context.Context, req resource.UpdateR
 
 // Delete removes a Kubernetes cluster.
 func (r *CMKubeClusterResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	if r.Client == nil {
+		resp.Diagnostics.AddError(
+			"Provider Not Configured",
+			"The provider has not been configured. Please ensure the provider block is properly configured.",
+		)
+		return
+	}
+
 	var state CMKubeClusterResourceModel
 
 	// Read current state
