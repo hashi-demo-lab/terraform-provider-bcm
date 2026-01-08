@@ -1,3 +1,6 @@
+# Copyright (c) HashiCorp, Inc.
+# SPDX-License-Identifier: MPL-2.0
+
 # Gap Analyzer Configuration for terraform-provider-bcm
 # This extends the default configuration with BCM-specific settings
 

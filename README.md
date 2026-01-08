@@ -2,7 +2,7 @@
 
 # Terraform Provider for Nvidia BCM
 
-Terraform provider for managing Nvidia BCM (Base Comand Manager) infrastructure.
+Terraform provider for managing Nvidia BCM (Base Command Manager) infrastructure.
 
 ## Features
 
@@ -40,7 +40,7 @@ export BCM_PASSWORD="your-password"
 terraform {
   required_providers {
     bcm = {
-      source  = "hashicorp/bcm"
+      source  = "hashi-demo-lab/bcm"
       version = "~> 0.1"
     }
   }
@@ -106,9 +106,9 @@ make test
 **Acceptance Tests:**
 ```bash
 export TF_ACC=1
-export BCM_ENDPOINT="https://172.21.15.254:8081"
+export BCM_ENDPOINT="https://bcm.example.com:8081"
 export BCM_USERNAME="root"
-export BCM_PASSWORD="Hashicorp123!"
+export BCM_PASSWORD="your-password"
 
 make testacc
 ```
@@ -222,9 +222,9 @@ All documentation examples are automatically tested:
 
 ```bash
 # Set credentials
-export BCM_ENDPOINT="https://172.21.15.254:8081"
-export BCM_USERNAME="root"
-export BCM_PASSWORD="Hashicorp123!"
+export BCM_ENDPOINT="https://bcm.example.com:8081"
+export BCM_USERNAME="your-username"
+export BCM_PASSWORD="your-password"
 
 # Run all tests
 ./scripts/test-examples.sh
