@@ -33,16 +33,16 @@ output "k8s_1_28_clusters" {
   }] : []
 }
 
-# Example 4: Filter clusters by master node UUID
-data "bcm_cmkube_clusters" "clusters_with_node" {
+# Example 4: Filter clusters by etcd cluster UUID
+data "bcm_cmkube_clusters" "clusters_with_etcd" {
   filter {
-    master_node_id = "node-uuid-123"
+    etcd_cluster = "12345678-1234-1234-1234-123456789abc"
   }
 }
 
-# Output clusters containing specific master node
-output "clusters_with_specific_node" {
-  value = data.bcm_cmkube_clusters.clusters_with_node.clusters != null ? [for cluster in data.bcm_cmkube_clusters.clusters_with_node.clusters : cluster.name] : []
+# Output clusters referencing specific etcd cluster
+output "clusters_with_specific_etcd" {
+  value = data.bcm_cmkube_clusters.clusters_with_etcd.clusters != null ? [for cluster in data.bcm_cmkube_clusters.clusters_with_etcd.clusters : cluster.name] : []
 }
 
 # Example 5: Combine multiple filters (AND logic)
@@ -56,9 +56,9 @@ data "bcm_cmkube_clusters" "filtered" {
 # Output clusters matching all filters
 output "filtered_clusters" {
   value = data.bcm_cmkube_clusters.filtered.clusters != null ? [for cluster in data.bcm_cmkube_clusters.filtered.clusters : {
-    name    = cluster.name
-    version = cluster.version
-    masters = cluster.master_nodes
+    name         = cluster.name
+    version      = cluster.version
+    etcd_cluster = cluster.etcd_cluster
   }] : []
 }
 
@@ -74,15 +74,44 @@ data "bcm_cmkube_clusters" "import_lookup" {
 # terraform import bcm_cmkube_cluster.imported <uuid-from-data-source>
 # UUID from: data.bcm_cmkube_clusters.import_lookup.clusters[0].uuid
 
-# Example 7: Access cluster network details
+# Example 7: Access cluster network and API server details
 data "bcm_cmkube_clusters" "network_info" {}
 
-# Output cluster network configurations
+# Output cluster network configurations - aligned with BCM CMKube API entity
 output "cluster_networks" {
   value = data.bcm_cmkube_clusters.network_info.clusters != null ? [for cluster in data.bcm_cmkube_clusters.network_info.clusters : {
-    name               = cluster.name
-    management_network = cluster.management_network
-    overlay_network    = cluster.overlay_network
-    dns_servers        = cluster.dns_servers
+    name             = cluster.name
+    internal_network = cluster.internal_network
+    service_network  = cluster.service_network
+    pod_network      = cluster.pod_network
+    etcd_cluster     = cluster.etcd_cluster
+  }] : []
+}
+
+# Example 8: Access API server and ingress proxy configuration
+output "cluster_api_config" {
+  value = data.bcm_cmkube_clusters.network_info.clusters != null ? [for cluster in data.bcm_cmkube_clusters.network_info.clusters : {
+    name                             = cluster.name
+    kubernetes_api_server            = cluster.kubernetes_api_server
+    kubernetes_api_server_proxy_port = cluster.kubernetes_api_server_proxy_port
+    ingress_proxy_enable             = cluster.ingress_proxy_enable
+    ingress_proxy_listen_port        = cluster.ingress_proxy_listen_port
+  }] : []
+}
+
+# Example 9: Access nested application groups
+output "cluster_app_groups" {
+  value = data.bcm_cmkube_clusters.network_info.clusters != null ? [for cluster in data.bcm_cmkube_clusters.network_info.clusters : {
+    name       = cluster.name
+    app_groups = cluster.app_groups
+  }] : []
+}
+
+# Example 10: Access nested label sets and users
+output "cluster_label_sets_and_users" {
+  value = data.bcm_cmkube_clusters.network_info.clusters != null ? [for cluster in data.bcm_cmkube_clusters.network_info.clusters : {
+    name       = cluster.name
+    label_sets = cluster.label_sets
+    users      = cluster.users
   }] : []
 }

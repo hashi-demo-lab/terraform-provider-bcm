@@ -4,14 +4,14 @@ page_title: "bcm_cmkube_clusters Data Source - bcm"
 subcategory: ""
 description: |-
   Data source to discover and filter BCM Kubernetes clusters.
-  Use this data source to list all Kubernetes clusters managed by BCM or filter by name pattern, Kubernetes version, or master node UUID. This is useful for discovering clusters for import, building dependencies, or operational queries.
+  Use this data source to list all Kubernetes clusters managed by BCM or filter by name pattern, Kubernetes version, or etcd cluster UUID. This is useful for discovering clusters for import, building dependencies, or operational queries.
 ---
 
 # bcm_cmkube_clusters (Data Source)
 
 Data source to discover and filter BCM Kubernetes clusters.
 
-Use this data source to list all Kubernetes clusters managed by BCM or filter by name pattern, Kubernetes version, or master node UUID. This is useful for discovering clusters for import, building dependencies, or operational queries.
+Use this data source to list all Kubernetes clusters managed by BCM or filter by name pattern, Kubernetes version, or etcd cluster UUID. This is useful for discovering clusters for import, building dependencies, or operational queries.
 
 ## Example Usage
 
@@ -51,16 +51,16 @@ output "k8s_1_28_clusters" {
   }] : []
 }
 
-# Example 4: Filter clusters by master node UUID
-data "bcm_cmkube_clusters" "clusters_with_node" {
+# Example 4: Filter clusters by etcd cluster UUID
+data "bcm_cmkube_clusters" "clusters_with_etcd" {
   filter {
-    master_node_id = "node-uuid-123"
+    etcd_cluster = "12345678-1234-1234-1234-123456789abc"
   }
 }
 
-# Output clusters containing specific master node
-output "clusters_with_specific_node" {
-  value = data.bcm_cmkube_clusters.clusters_with_node.clusters != null ? [for cluster in data.bcm_cmkube_clusters.clusters_with_node.clusters : cluster.name] : []
+# Output clusters referencing specific etcd cluster
+output "clusters_with_specific_etcd" {
+  value = data.bcm_cmkube_clusters.clusters_with_etcd.clusters != null ? [for cluster in data.bcm_cmkube_clusters.clusters_with_etcd.clusters : cluster.name] : []
 }
 
 # Example 5: Combine multiple filters (AND logic)
@@ -74,9 +74,9 @@ data "bcm_cmkube_clusters" "filtered" {
 # Output clusters matching all filters
 output "filtered_clusters" {
   value = data.bcm_cmkube_clusters.filtered.clusters != null ? [for cluster in data.bcm_cmkube_clusters.filtered.clusters : {
-    name    = cluster.name
-    version = cluster.version
-    masters = cluster.master_nodes
+    name         = cluster.name
+    version      = cluster.version
+    etcd_cluster = cluster.etcd_cluster
   }] : []
 }
 
@@ -92,16 +92,45 @@ data "bcm_cmkube_clusters" "import_lookup" {
 # terraform import bcm_cmkube_cluster.imported <uuid-from-data-source>
 # UUID from: data.bcm_cmkube_clusters.import_lookup.clusters[0].uuid
 
-# Example 7: Access cluster network details
+# Example 7: Access cluster network and API server details
 data "bcm_cmkube_clusters" "network_info" {}
 
-# Output cluster network configurations
+# Output cluster network configurations - aligned with BCM CMKube API entity
 output "cluster_networks" {
   value = data.bcm_cmkube_clusters.network_info.clusters != null ? [for cluster in data.bcm_cmkube_clusters.network_info.clusters : {
-    name               = cluster.name
-    management_network = cluster.management_network
-    overlay_network    = cluster.overlay_network
-    dns_servers        = cluster.dns_servers
+    name             = cluster.name
+    internal_network = cluster.internal_network
+    service_network  = cluster.service_network
+    pod_network      = cluster.pod_network
+    etcd_cluster     = cluster.etcd_cluster
+  }] : []
+}
+
+# Example 8: Access API server and ingress proxy configuration
+output "cluster_api_config" {
+  value = data.bcm_cmkube_clusters.network_info.clusters != null ? [for cluster in data.bcm_cmkube_clusters.network_info.clusters : {
+    name                             = cluster.name
+    kubernetes_api_server            = cluster.kubernetes_api_server
+    kubernetes_api_server_proxy_port = cluster.kubernetes_api_server_proxy_port
+    ingress_proxy_enable             = cluster.ingress_proxy_enable
+    ingress_proxy_listen_port        = cluster.ingress_proxy_listen_port
+  }] : []
+}
+
+# Example 9: Access nested application groups
+output "cluster_app_groups" {
+  value = data.bcm_cmkube_clusters.network_info.clusters != null ? [for cluster in data.bcm_cmkube_clusters.network_info.clusters : {
+    name       = cluster.name
+    app_groups = cluster.app_groups
+  }] : []
+}
+
+# Example 10: Access nested label sets and users
+output "cluster_label_sets_and_users" {
+  value = data.bcm_cmkube_clusters.network_info.clusters != null ? [for cluster in data.bcm_cmkube_clusters.network_info.clusters : {
+    name       = cluster.name
+    label_sets = cluster.label_sets
+    users      = cluster.users
   }] : []
 }
 ```
@@ -123,8 +152,8 @@ output "cluster_networks" {
 
 Optional:
 
-- `master_node_id` (String) Find clusters containing this master node UUID in their master_nodes list.
-- `name_pattern` (String) Case-insensitive substring match for cluster name (e.g., 'prod' matches 'Prod-Cluster-01').
+- `etcd_cluster` (String) Filter by EtcdCluster UUID reference.
+- `name_pattern` (String) Case-insensitive substring match for cluster name (e.g., 'prod' matches 'prod-cluster-01').
 - `version` (String) Exact match for Kubernetes version (semver format, e.g., '1.28.0').
 
 
@@ -133,19 +162,62 @@ Optional:
 
 Read-Only:
 
-- `addons` (String) Cluster addons configuration (JSON-encoded).
-- `cni_plugin` (String) Container Network Interface (CNI) plugin name.
+- `app_groups` (Attributes List) Application groups for cluster addons. (see [below for nested schema](#nestedatt--clusters--app_groups))
 - `creation_time` (Number) Cluster creation timestamp (Unix epoch).
-- `dns_servers` (List of String) List of DNS server IP addresses.
+- `etcd_cluster` (String) UUID of the EtcdCluster entity that backs this Kubernetes cluster.
 - `id` (String) Cluster identifier (same as uuid).
-- `ingress_controller` (String) Ingress controller configuration (JSON-encoded).
-- `load_balancer_mode` (String) Load balancer mode/strategy.
-- `management_network` (String) Management network UUID for cluster management traffic.
-- `master_nodes` (List of String) List of master node UUIDs.
+- `ingress_proxy_backend_port` (Number) Ingress proxy backend port.
+- `ingress_proxy_enable` (Boolean) Enable ingress proxy for external traffic routing.
+- `ingress_proxy_listen_port` (Number) Ingress proxy listen port.
+- `internal_network` (String) UUID of the internal network for cluster node communication.
+- `kube_dns_ip` (String) Cluster DNS IP address.
+- `kubernetes_api_server` (String) Kubernetes API server URL.
+- `kubernetes_api_server_proxy_port` (Number) Kubernetes API server proxy port.
+- `label_sets` (Attributes List) Label sets that can be applied to nodes, categories, or overlays. (see [below for nested schema](#nestedatt--clusters--label_sets))
 - `name` (String) Cluster name.
-- `overlay_network` (String) Pod network overlay configuration (CIDR).
+- `options` (String) Extensible configuration options as JSON string.
+- `pod_network` (String) UUID of the pod network for container IPs.
+- `pod_network_node_mask` (String) Pod network node mask for CIDR allocation (e.g., '/24').
 - `revision_id` (Number) BCM revision number for change tracking.
-- `storage_classes` (String) Storage class definitions (JSON-encoded).
+- `service_network` (String) UUID of the service network for Kubernetes service IPs.
+- `trusted_domains` (List of String) List of trusted domains for certificate SANs.
+- `users` (Attributes List) Kubernetes users for kubeconfig management. (see [below for nested schema](#nestedatt--clusters--users))
 - `uuid` (String) BCM-assigned cluster UUID.
 - `version` (String) Kubernetes version (semver format).
-- `worker_nodes` (List of String) List of worker node UUIDs.
+
+<a id="nestedatt--clusters--app_groups"></a>
+### Nested Schema for `clusters.app_groups`
+
+Read-Only:
+
+- `applications` (Attributes List) Applications within this group. (see [below for nested schema](#nestedatt--clusters--app_groups--applications))
+- `enabled` (Boolean) Whether the application group is enabled.
+- `name` (String) Application group name.
+
+<a id="nestedatt--clusters--app_groups--applications"></a>
+### Nested Schema for `clusters.app_groups.applications`
+
+Read-Only:
+
+- `enabled` (Boolean) Whether the application is enabled.
+- `manifest` (String) Kubernetes manifest YAML/JSON content.
+- `name` (String) Application name.
+
+
+
+<a id="nestedatt--clusters--label_sets"></a>
+### Nested Schema for `clusters.label_sets`
+
+Read-Only:
+
+- `labels` (Map of String) Map of label key-value pairs.
+- `name` (String) Label set name.
+
+
+<a id="nestedatt--clusters--users"></a>
+### Nested Schema for `clusters.users`
+
+Read-Only:
+
+- `groups` (List of String) List of groups the user belongs to.
+- `name` (String) User name.

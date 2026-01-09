@@ -144,14 +144,14 @@ data "bcm_cmkube_clusters" "test" {
 	)
 }
 
-// T008: TestAccCMKubeClustersDataSource_FilterByMasterNode tests filtering by master node UUID.
-func TestAccCMKubeClustersDataSource_FilterByMasterNode(t *testing.T) {
+// T008: TestAccCMKubeClustersDataSource_FilterByEtcdCluster tests filtering by etcd cluster UUID.
+func TestAccCMKubeClustersDataSource_FilterByEtcdCluster(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccCMKubeClustersDataSourceConfig_filterByMasterNode("test-node-uuid"),
+				Config: testAccCMKubeClustersDataSourceConfig_filterByEtcdCluster("12345678-1234-1234-1234-123456789abc"),
 				ConfigStateChecks: []statecheck.StateCheck{
 					// Verify ID is set
 					statecheck.ExpectKnownValue(
@@ -159,7 +159,7 @@ func TestAccCMKubeClustersDataSource_FilterByMasterNode(t *testing.T) {
 						tfjsonpath.New("id"),
 						knownvalue.NotNull(),
 					),
-					// Note: Cannot verify master node match without knowing if any clusters have this node
+					// Note: Cannot verify etcd cluster match without knowing if any clusters reference this etcd cluster
 					// Actual verification of filter logic will be done in implementation
 				},
 			},
@@ -167,7 +167,7 @@ func TestAccCMKubeClustersDataSource_FilterByMasterNode(t *testing.T) {
 	})
 }
 
-func testAccCMKubeClustersDataSourceConfig_filterByMasterNode(masterNodeID string) string {
+func testAccCMKubeClustersDataSourceConfig_filterByEtcdCluster(etcdClusterID string) string {
 	return fmt.Sprintf(`
 provider "bcm" {
   endpoint             = %[1]q
@@ -178,14 +178,14 @@ provider "bcm" {
 
 data "bcm_cmkube_clusters" "test" {
   filter {
-    master_node_id = %[4]q
+    etcd_cluster = %[4]q
   }
 }
 `,
 		os.Getenv("BCM_ENDPOINT"),
 		os.Getenv("BCM_USERNAME"),
 		os.Getenv("BCM_PASSWORD"),
-		masterNodeID,
+		etcdClusterID,
 	)
 }
 
