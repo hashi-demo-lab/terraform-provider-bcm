@@ -249,6 +249,84 @@ resource "bcm_cmdevice_device" "k8s_combined_cp" {
   notes = "Combined etcd + Kubernetes control plane node"
 }
 
+# =============================================================================
+# Provisioning Kubernetes on Existing Devices
+# =============================================================================
+# When you have existing devices in BCM and want to provision Kubernetes:
+#
+# 1. Import existing devices into Terraform state:
+#    terraform import bcm_cmdevice_device.existing_cp <device-uuid>
+#    terraform import bcm_cmdevice_device.existing_worker <device-uuid>
+#
+# 2. Create EtcdCluster and KubeCluster resources (see above)
+#
+# 3. Add role blocks to existing device resources
+#
+# The following examples show configurations for imported devices:
+
+# Example 10: Existing device converted to Kubernetes control plane + etcd
+# Import first: terraform import bcm_cmdevice_device.existing_cp <uuid>
+resource "bcm_cmdevice_device" "existing_cp" {
+  # These values must match the existing device after import
+  hostname           = "existing-server-01"
+  category           = bcm_cmdevice_category.compute.id
+  management_network = data.bcm_cmnet_networks.all.networks[0].id
+  mac                = "00:11:22:33:44:70"
+
+  # Existing device settings are preserved
+  power_control = "ipmi"
+
+  # Add etcd role to run etcd cluster member
+  etcd_host_role {
+    etcd_cluster = bcm_cmetcd_cluster.k8s_etcd.uuid
+  }
+
+  # Add kubelet role for Kubernetes control plane
+  kubelet_role {
+    kube_cluster  = bcm_cmkube_cluster.production.uuid
+    control_plane = true
+    worker        = false # Dedicated control plane, no workloads
+  }
+
+  notes = "Existing device converted to K8s control plane"
+}
+
+# Example 11: Existing device converted to Kubernetes worker
+# Import first: terraform import bcm_cmdevice_device.existing_worker <uuid>
+resource "bcm_cmdevice_device" "existing_worker" {
+  hostname           = "existing-server-02"
+  category           = bcm_cmdevice_category.compute.id
+  management_network = data.bcm_cmnet_networks.all.networks[0].id
+  mac                = "00:11:22:33:44:71"
+
+  power_control = "ipmi"
+
+  # Workers only need kubelet_role (no etcd)
+  kubelet_role {
+    kube_cluster  = bcm_cmkube_cluster.production.uuid
+    control_plane = false
+    worker        = true
+  }
+
+  notes = "Existing device converted to K8s worker"
+}
+
+# =============================================================================
+# Typical Kubernetes Node Configurations Reference
+# =============================================================================
+#
+# | Node Type              | etcd_host_role | kubelet_role                    |
+# |------------------------|----------------|---------------------------------|
+# | Control plane + etcd   | Yes            | control_plane=true, worker=false|
+# | Control plane only     | No             | control_plane=true, worker=false|
+# | Worker                 | No             | control_plane=false, worker=true|
+# | Combined (small cluster)| Yes           | control_plane=true, worker=true |
+#
+# For production clusters:
+# - Use 3+ control plane nodes with etcd for high availability
+# - Separate etcd from control plane for large clusters (1000+ nodes)
+# - Workers should not run etcd or control plane components
+
 # Output device information for reference
 output "compute_basic_id" {
   description = "ID of the basic compute device"
