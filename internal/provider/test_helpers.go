@@ -158,10 +158,15 @@ func verifyResourceDeleted(ctx context.Context, client *BCMClient, service, meth
 
 		// Check if resource is gone (error response indicates not found)
 		if err != nil {
-			// API error could indicate deletion (404) or actual error
-			// For now, treat all errors as successful deletion
-			// Future enhancement: Parse error to distinguish 404 from other errors
-			return true
+			errStr := err.Error()
+			// Only treat "not found" type errors as successful deletion
+			// Common patterns: HTTP 404, "not found", "does not exist", empty result
+			if containsAny(errStr, []string{"404", "not found", "does not exist", "unknown", "no such"}) {
+				return true
+			}
+			// Other errors (network, auth, server errors) - resource status unknown, keep retrying
+			waitTime *= 2
+			continue
 		}
 
 		// Check if response is empty
@@ -377,8 +382,9 @@ func getResourceUUIDByName(t *testing.T, service, method, name string) string {
 // RFC 1123 DNS label requirements. For hostnames and DNS-compatible names, use
 // generateShortTestName() instead.
 func generateUniqueTestName(prefix string) string {
-	timestamp := time.Now().Format("20060102-150405")
-	nanos := time.Now().Nanosecond()
+	now := time.Now()
+	timestamp := now.Format("20060102-150405")
+	nanos := now.Nanosecond()
 	pid := os.Getpid()
 	return fmt.Sprintf("%s-%s-%d-%d", prefix, timestamp, nanos, pid)
 }

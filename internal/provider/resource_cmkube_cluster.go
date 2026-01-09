@@ -510,6 +510,13 @@ func (r *CMKubeClusterResource) Create(ctx context.Context, req resource.CreateR
 				"sleep_seconds": sleepDuration.Seconds(),
 			})
 			time.Sleep(sleepDuration)
+		} else {
+			// Final attempt failed - error out instead of saving incomplete state
+			resp.Diagnostics.AddError(
+				"Read After Create Incomplete",
+				"KubeCluster was created but read-back returned incomplete data after all retries",
+			)
+			return
 		}
 	}
 
@@ -726,29 +733,62 @@ func (r *CMKubeClusterResource) Update(ctx context.Context, req resource.UpdateR
 		return
 	}
 
-	// Read back updated entity
-	readBody, err := r.client.CallJSONRPC(ctx, "cmkube", "getKubeCluster", data.UUID.ValueString())
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Read After Update Failed",
-			fmt.Sprintf("Failed to read KubeCluster after update: %s", err),
-		)
-		return
-	}
+	// Read back updated entity with eventual consistency handling
+	maxRetries := 5
+	var lastReadErr error
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		readBody, err := r.client.CallJSONRPC(ctx, "cmkube", "getKubeCluster", data.UUID.ValueString())
+		if err != nil {
+			lastReadErr = err
+			if attempt < maxRetries-1 {
+				sleepDuration := time.Duration(1<<attempt) * time.Second
+				tflog.Warn(ctx, "KubeCluster read after update failed, retrying", map[string]interface{}{
+					"attempt":       attempt + 1,
+					"sleep_seconds": sleepDuration.Seconds(),
+					"error":         err.Error(),
+				})
+				time.Sleep(sleepDuration)
+				continue
+			}
+			resp.Diagnostics.AddError(
+				"Read After Update Failed",
+				fmt.Sprintf("Failed to read KubeCluster after update: %s", lastReadErr),
+			)
+			return
+		}
 
-	var responseData map[string]interface{}
-	if err := json.Unmarshal(readBody, &responseData); err != nil {
-		resp.Diagnostics.AddError(
-			"Response Parse Failed",
-			fmt.Sprintf("Failed to parse KubeCluster response: %s", err),
-		)
-		return
-	}
+		var responseData map[string]interface{}
+		if err := json.Unmarshal(readBody, &responseData); err != nil {
+			lastReadErr = err
+			if attempt < maxRetries-1 {
+				sleepDuration := time.Duration(1<<attempt) * time.Second
+				tflog.Warn(ctx, "KubeCluster response parse after update failed, retrying", map[string]interface{}{
+					"attempt":       attempt + 1,
+					"sleep_seconds": sleepDuration.Seconds(),
+				})
+				time.Sleep(sleepDuration)
+				continue
+			}
+			resp.Diagnostics.AddError(
+				"Response Parse Failed",
+				fmt.Sprintf("Failed to parse KubeCluster response: %s", err),
+			)
+			return
+		}
 
-	parseDiags := r.parseResponseIntoModel(ctx, responseData, &data)
-	resp.Diagnostics.Append(parseDiags...)
-	if resp.Diagnostics.HasError() {
-		return
+		// Parse response into model
+		parseDiags := r.parseResponseIntoModel(ctx, responseData, &data)
+		resp.Diagnostics.Append(parseDiags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+
+		tflog.Debug(ctx, "Successfully read KubeCluster after update", map[string]interface{}{
+			"uuid":    data.UUID.ValueString(),
+			"name":    data.Name.ValueString(),
+			"attempt": attempt + 1,
+		})
+		break
 	}
 
 	// Restore plan values for fields BCM may not return
@@ -1239,13 +1279,13 @@ func parseUsersFromAPI(ctx context.Context, usersData []interface{}) (types.List
 			continue
 		}
 
-		// Parse groups list
+		// Parse groups list - use dynamic slice to skip non-string values safely
 		var groupsValue types.List
 		if groupsData, ok := uMap["groups"].([]interface{}); ok && len(groupsData) > 0 {
-			groupElements := make([]attr.Value, len(groupsData))
-			for i, g := range groupsData {
+			groupElements := make([]attr.Value, 0, len(groupsData))
+			for _, g := range groupsData {
 				if gStr, ok := g.(string); ok {
-					groupElements[i] = types.StringValue(gStr)
+					groupElements = append(groupElements, types.StringValue(gStr))
 				}
 			}
 			var listDiags diag.Diagnostics

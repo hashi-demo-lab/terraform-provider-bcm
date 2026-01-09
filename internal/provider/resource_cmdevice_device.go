@@ -774,9 +774,9 @@ func (r *CMDeviceDeviceResource) waitForPartitionCommit(ctx context.Context, cli
 			return nil // Partition is accessible
 		}
 
-		// If not the last retry, wait with exponential backoff (capped at maxDelay)
+		// If not the last retry, wait with linear backoff (capped at maxDelay)
 		if i < maxRetries-1 {
-			// Exponential backoff: 2s, 4s, 6s, 8s, 10s, 10s, ...
+			// Linear backoff: 2s, 4s, 6s, 8s, 10s, 10s, ...
 			delay := baseDelay * time.Duration(i+1)
 			if delay > maxDelay {
 				delay = maxDelay

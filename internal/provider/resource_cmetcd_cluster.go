@@ -300,6 +300,13 @@ func (r *CMEtcdClusterResource) Create(ctx context.Context, req resource.CreateR
 				"sleep_seconds": sleepDuration.Seconds(),
 			})
 			time.Sleep(sleepDuration)
+		} else {
+			// Final attempt failed - error out instead of saving incomplete state
+			resp.Diagnostics.AddError(
+				"Read After Create Incomplete",
+				"EtcdCluster was created but read-back returned incomplete data after all retries",
+			)
+			return
 		}
 	}
 
@@ -470,26 +477,58 @@ func (r *CMEtcdClusterResource) Update(ctx context.Context, req resource.UpdateR
 		return
 	}
 
-	// Read back updated entity to populate all fields
-	readBody, err := r.client.GetEtcdCluster(ctx, data.UUID.ValueString())
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Read After Update Failed",
-			fmt.Sprintf("Failed to read EtcdCluster after update: %s", err),
-		)
-		return
-	}
+	// Read back updated entity to populate all fields with eventual consistency handling
+	maxRetries := 5
+	var lastReadErr error
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		readBody, err := r.client.GetEtcdCluster(ctx, data.UUID.ValueString())
+		if err != nil {
+			lastReadErr = err
+			if attempt < maxRetries-1 {
+				sleepDuration := time.Duration(1<<attempt) * time.Second
+				tflog.Warn(ctx, "EtcdCluster read after update failed, retrying", map[string]interface{}{
+					"attempt":       attempt + 1,
+					"sleep_seconds": sleepDuration.Seconds(),
+					"error":         err.Error(),
+				})
+				time.Sleep(sleepDuration)
+				continue
+			}
+			resp.Diagnostics.AddError(
+				"Read After Update Failed",
+				fmt.Sprintf("Failed to read EtcdCluster after update: %s", lastReadErr),
+			)
+			return
+		}
 
-	var responseData map[string]interface{}
-	if err := json.Unmarshal(readBody, &responseData); err != nil {
-		resp.Diagnostics.AddError(
-			"Response Parse Failed",
-			fmt.Sprintf("Failed to parse EtcdCluster response: %s", err),
-		)
-		return
-	}
+		var responseData map[string]interface{}
+		if err := json.Unmarshal(readBody, &responseData); err != nil {
+			lastReadErr = err
+			if attempt < maxRetries-1 {
+				sleepDuration := time.Duration(1<<attempt) * time.Second
+				tflog.Warn(ctx, "EtcdCluster response parse after update failed, retrying", map[string]interface{}{
+					"attempt":       attempt + 1,
+					"sleep_seconds": sleepDuration.Seconds(),
+				})
+				time.Sleep(sleepDuration)
+				continue
+			}
+			resp.Diagnostics.AddError(
+				"Response Parse Failed",
+				fmt.Sprintf("Failed to parse EtcdCluster response: %s", err),
+			)
+			return
+		}
 
-	r.parseResponseIntoModel(ctx, responseData, &data)
+		r.parseResponseIntoModel(ctx, responseData, &data)
+
+		tflog.Debug(ctx, "Successfully read EtcdCluster after update", map[string]interface{}{
+			"uuid":    data.UUID.ValueString(),
+			"name":    data.Name.ValueString(),
+			"attempt": attempt + 1,
+		})
+		break
+	}
 
 	// Restore plan value for options (BCM quirk: accepts but doesn't persist options field)
 	if !planOptions.IsNull() && !planOptions.IsUnknown() {

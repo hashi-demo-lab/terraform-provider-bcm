@@ -188,6 +188,10 @@ func NewBCMClient(ctx context.Context, endpoint, username, password string, inse
 
 		resp, lastErr = client.Do(req)
 		if lastErr != nil {
+			// Close response body if present to prevent resource leak
+			if resp != nil && resp.Body != nil {
+				resp.Body.Close()
+			}
 			if isRetryableError(lastErr) && attempt < DefaultMaxRetries {
 				continue
 			}
