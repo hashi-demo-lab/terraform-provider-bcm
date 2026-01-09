@@ -42,40 +42,49 @@ type CMKubeClustersDataSourceModel struct {
 // ClusterFilterModel describes the filter block for client-side filtering.
 // Multiple filters use AND logic (all filters must match for a cluster to be included).
 type ClusterFilterModel struct {
-	NamePattern  types.String `tfsdk:"name_pattern"`   // Case-insensitive substring match for cluster name
-	Version      types.String `tfsdk:"version"`        // Exact match for Kubernetes version (semver)
-	MasterNodeID types.String `tfsdk:"master_node_id"` // Find clusters containing this master node UUID
+	NamePattern types.String `tfsdk:"name_pattern"` // Case-insensitive substring match for cluster name
+	Version     types.String `tfsdk:"version"`      // Exact match for Kubernetes version (semver)
+	EtcdCluster types.String `tfsdk:"etcd_cluster"` // Filter by EtcdCluster UUID reference
 }
 
-// KubeClusterModel represents a BCM Kubernetes cluster with all fields.
+// KubeClusterModel represents a BCM Kubernetes cluster aligned with BCM CMKube API entity.
+// This model matches KubeClusterAlignedResourceModel for consistency between resource and data source.
 type KubeClusterModel struct {
 	// Identity fields
 	ID   types.String `tfsdk:"id"`
 	UUID types.String `tfsdk:"uuid"`
 	Name types.String `tfsdk:"name"`
 
-	// Node configuration
-	MasterNodes types.List `tfsdk:"master_nodes"`
-	WorkerNodes types.List `tfsdk:"worker_nodes"`
+	// Network references (UUIDs)
+	InternalNetwork types.String `tfsdk:"internal_network"`
+	ServiceNetwork  types.String `tfsdk:"service_network"`
+	PodNetwork      types.String `tfsdk:"pod_network"`
 
-	// Network configuration
-	ManagementNetwork types.String `tfsdk:"management_network"`
-	OverlayNetwork    types.String `tfsdk:"overlay_network"`
-	DNSServers        types.List   `tfsdk:"dns_servers"`
+	// EtcdCluster reference (UUID)
+	EtcdCluster types.String `tfsdk:"etcd_cluster"`
 
 	// Kubernetes configuration
-	Version   types.String `tfsdk:"version"`
-	CNIPlugin types.String `tfsdk:"cni_plugin"`
+	Version            types.String `tfsdk:"version"`
+	PodNetworkNodeMask types.String `tfsdk:"pod_network_node_mask"`
+	KubeDnsIP          types.String `tfsdk:"kube_dns_ip"`
 
-	// Storage configuration
-	StorageClasses types.String `tfsdk:"storage_classes"`
+	// API server configuration
+	KubernetesAPIServer          types.String `tfsdk:"kubernetes_api_server"`
+	KubernetesAPIServerProxyPort types.Int64  `tfsdk:"kubernetes_api_server_proxy_port"`
+	TrustedDomains               types.List   `tfsdk:"trusted_domains"`
 
-	// Load balancer configuration
-	LoadBalancerMode types.String `tfsdk:"load_balancer_mode"`
+	// Ingress proxy configuration
+	IngressProxyEnable      types.Bool  `tfsdk:"ingress_proxy_enable"`
+	IngressProxyListenPort  types.Int64 `tfsdk:"ingress_proxy_listen_port"`
+	IngressProxyBackendPort types.Int64 `tfsdk:"ingress_proxy_backend_port"`
 
-	// Cluster addons
-	Addons            types.String `tfsdk:"addons"`
-	IngressController types.String `tfsdk:"ingress_controller"`
+	// Extensible options
+	Options types.String `tfsdk:"options"`
+
+	// Nested blocks
+	AppGroups types.List `tfsdk:"app_groups"`
+	LabelSets types.List `tfsdk:"label_sets"`
+	Users     types.List `tfsdk:"users"`
 
 	// Computed metadata
 	CreationTime types.Int64 `tfsdk:"creation_time"`
@@ -87,12 +96,12 @@ func (d *CMKubeClustersDataSource) Metadata(_ context.Context, req datasource.Me
 	resp.TypeName = req.ProviderTypeName + "_cmkube_clusters"
 }
 
-// Schema defines the schema for the data source.
+// Schema defines the schema for the data source - aligned with BCM CMKube API entity.
 func (d *CMKubeClustersDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		MarkdownDescription: "Data source to discover and filter BCM Kubernetes clusters.\n\n" +
 			"Use this data source to list all Kubernetes clusters managed by BCM or filter by name pattern, " +
-			"Kubernetes version, or master node UUID. This is useful for discovering clusters for import, " +
+			"Kubernetes version, or etcd cluster UUID. This is useful for discovering clusters for import, " +
 			"building dependencies, or operational queries.",
 
 		Attributes: map[string]schema.Attribute{
@@ -105,6 +114,7 @@ func (d *CMKubeClustersDataSource) Schema(_ context.Context, _ datasource.Schema
 				MarkdownDescription: "List of Kubernetes clusters matching the filter criteria.",
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
+						// Identity fields
 						"id": schema.StringAttribute{
 							Computed:            true,
 							MarkdownDescription: "Cluster identifier (same as uuid).",
@@ -117,53 +127,149 @@ func (d *CMKubeClustersDataSource) Schema(_ context.Context, _ datasource.Schema
 							Computed:            true,
 							MarkdownDescription: "Cluster name.",
 						},
-						"master_nodes": schema.ListAttribute{
-							ElementType:         types.StringType,
+
+						// Network references
+						"internal_network": schema.StringAttribute{
 							Computed:            true,
-							MarkdownDescription: "List of master node UUIDs.",
+							MarkdownDescription: "UUID of the internal network for cluster node communication.",
 						},
-						"worker_nodes": schema.ListAttribute{
-							ElementType:         types.StringType,
+						"service_network": schema.StringAttribute{
 							Computed:            true,
-							MarkdownDescription: "List of worker node UUIDs.",
+							MarkdownDescription: "UUID of the service network for Kubernetes service IPs.",
 						},
-						"management_network": schema.StringAttribute{
+						"pod_network": schema.StringAttribute{
 							Computed:            true,
-							MarkdownDescription: "Management network UUID for cluster management traffic.",
+							MarkdownDescription: "UUID of the pod network for container IPs.",
 						},
-						"overlay_network": schema.StringAttribute{
+
+						// EtcdCluster reference
+						"etcd_cluster": schema.StringAttribute{
 							Computed:            true,
-							MarkdownDescription: "Pod network overlay configuration (CIDR).",
+							MarkdownDescription: "UUID of the EtcdCluster entity that backs this Kubernetes cluster.",
 						},
-						"dns_servers": schema.ListAttribute{
-							ElementType:         types.StringType,
-							Computed:            true,
-							MarkdownDescription: "List of DNS server IP addresses.",
-						},
+
+						// Kubernetes configuration
 						"version": schema.StringAttribute{
 							Computed:            true,
 							MarkdownDescription: "Kubernetes version (semver format).",
 						},
-						"cni_plugin": schema.StringAttribute{
+						"pod_network_node_mask": schema.StringAttribute{
 							Computed:            true,
-							MarkdownDescription: "Container Network Interface (CNI) plugin name.",
+							MarkdownDescription: "Pod network node mask for CIDR allocation (e.g., '/24').",
 						},
-						"storage_classes": schema.StringAttribute{
+						"kube_dns_ip": schema.StringAttribute{
 							Computed:            true,
-							MarkdownDescription: "Storage class definitions (JSON-encoded).",
+							MarkdownDescription: "Cluster DNS IP address.",
 						},
-						"load_balancer_mode": schema.StringAttribute{
+
+						// API server configuration
+						"kubernetes_api_server": schema.StringAttribute{
 							Computed:            true,
-							MarkdownDescription: "Load balancer mode/strategy.",
+							MarkdownDescription: "Kubernetes API server URL.",
 						},
-						"addons": schema.StringAttribute{
+						"kubernetes_api_server_proxy_port": schema.Int64Attribute{
 							Computed:            true,
-							MarkdownDescription: "Cluster addons configuration (JSON-encoded).",
+							MarkdownDescription: "Kubernetes API server proxy port.",
 						},
-						"ingress_controller": schema.StringAttribute{
+						"trusted_domains": schema.ListAttribute{
+							ElementType:         types.StringType,
 							Computed:            true,
-							MarkdownDescription: "Ingress controller configuration (JSON-encoded).",
+							MarkdownDescription: "List of trusted domains for certificate SANs.",
 						},
+
+						// Ingress proxy configuration
+						"ingress_proxy_enable": schema.BoolAttribute{
+							Computed:            true,
+							MarkdownDescription: "Enable ingress proxy for external traffic routing.",
+						},
+						"ingress_proxy_listen_port": schema.Int64Attribute{
+							Computed:            true,
+							MarkdownDescription: "Ingress proxy listen port.",
+						},
+						"ingress_proxy_backend_port": schema.Int64Attribute{
+							Computed:            true,
+							MarkdownDescription: "Ingress proxy backend port.",
+						},
+
+						// Extensible options
+						"options": schema.StringAttribute{
+							Computed:            true,
+							MarkdownDescription: "Extensible configuration options as JSON string.",
+						},
+
+						// Nested blocks as nested attributes for data source
+						"app_groups": schema.ListNestedAttribute{
+							Computed:            true,
+							MarkdownDescription: "Application groups for cluster addons.",
+							NestedObject: schema.NestedAttributeObject{
+								Attributes: map[string]schema.Attribute{
+									"name": schema.StringAttribute{
+										Computed:            true,
+										MarkdownDescription: "Application group name.",
+									},
+									"enabled": schema.BoolAttribute{
+										Computed:            true,
+										MarkdownDescription: "Whether the application group is enabled.",
+									},
+									"applications": schema.ListNestedAttribute{
+										Computed:            true,
+										MarkdownDescription: "Applications within this group.",
+										NestedObject: schema.NestedAttributeObject{
+											Attributes: map[string]schema.Attribute{
+												"name": schema.StringAttribute{
+													Computed:            true,
+													MarkdownDescription: "Application name.",
+												},
+												"enabled": schema.BoolAttribute{
+													Computed:            true,
+													MarkdownDescription: "Whether the application is enabled.",
+												},
+												"manifest": schema.StringAttribute{
+													Computed:            true,
+													MarkdownDescription: "Kubernetes manifest YAML/JSON content.",
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+						"label_sets": schema.ListNestedAttribute{
+							Computed:            true,
+							MarkdownDescription: "Label sets that can be applied to nodes, categories, or overlays.",
+							NestedObject: schema.NestedAttributeObject{
+								Attributes: map[string]schema.Attribute{
+									"name": schema.StringAttribute{
+										Computed:            true,
+										MarkdownDescription: "Label set name.",
+									},
+									"labels": schema.MapAttribute{
+										ElementType:         types.StringType,
+										Computed:            true,
+										MarkdownDescription: "Map of label key-value pairs.",
+									},
+								},
+							},
+						},
+						"users": schema.ListNestedAttribute{
+							Computed:            true,
+							MarkdownDescription: "Kubernetes users for kubeconfig management.",
+							NestedObject: schema.NestedAttributeObject{
+								Attributes: map[string]schema.Attribute{
+									"name": schema.StringAttribute{
+										Computed:            true,
+										MarkdownDescription: "User name.",
+									},
+									"groups": schema.ListAttribute{
+										ElementType:         types.StringType,
+										Computed:            true,
+										MarkdownDescription: "List of groups the user belongs to.",
+									},
+								},
+							},
+						},
+
+						// Computed metadata
 						"creation_time": schema.Int64Attribute{
 							Computed:            true,
 							MarkdownDescription: "Cluster creation timestamp (Unix epoch).",
@@ -184,15 +290,15 @@ func (d *CMKubeClustersDataSource) Schema(_ context.Context, _ datasource.Schema
 				Attributes: map[string]schema.Attribute{
 					"name_pattern": schema.StringAttribute{
 						Optional:            true,
-						MarkdownDescription: "Case-insensitive substring match for cluster name (e.g., 'prod' matches 'Prod-Cluster-01').",
+						MarkdownDescription: "Case-insensitive substring match for cluster name (e.g., 'prod' matches 'prod-cluster-01').",
 					},
 					"version": schema.StringAttribute{
 						Optional:            true,
 						MarkdownDescription: "Exact match for Kubernetes version (semver format, e.g., '1.28.0').",
 					},
-					"master_node_id": schema.StringAttribute{
+					"etcd_cluster": schema.StringAttribute{
 						Optional:            true,
-						MarkdownDescription: "Find clusters containing this master node UUID in their master_nodes list.",
+						MarkdownDescription: "Filter by EtcdCluster UUID reference.",
 					},
 				},
 			},
@@ -276,30 +382,15 @@ func (d *CMKubeClustersDataSource) Read(ctx context.Context, req datasource.Read
 			}
 		}
 
-		// Filter 3: master_node_id (ANY match in master_nodes list)
-		if include && data.Filter != nil && !data.Filter.MasterNodeID.IsNull() {
-			targetNodeID := data.Filter.MasterNodeID.ValueString()
-			found := false
-
-			// Extract master_nodes list from API response
-			if masterNodesRaw, ok := clusterData["masterNodes"]; ok && masterNodesRaw != nil {
-				if masterNodesSlice, ok := masterNodesRaw.([]interface{}); ok {
-					for _, nodeUUID := range masterNodesSlice {
-						if nodeStr, ok := nodeUUID.(string); ok && nodeStr == targetNodeID {
-							found = true
-							tflog.Trace(ctx, "Found matching master node", map[string]interface{}{
-								"nodeUUID": nodeStr,
-							})
-							break
-						}
-					}
-				}
-			}
-
-			if !found {
+		// Filter 3: etcd_cluster (exact match on etcdCluster UUID reference)
+		if include && data.Filter != nil && !data.Filter.EtcdCluster.IsNull() {
+			filterEtcdCluster := data.Filter.EtcdCluster.ValueString()
+			clusterEtcdCluster := getStringValue(clusterData, "etcdCluster").ValueString()
+			if clusterEtcdCluster != filterEtcdCluster {
 				include = false
-				tflog.Trace(ctx, "Cluster excluded by master_node_id filter", map[string]interface{}{
-					"targetNodeID": targetNodeID,
+				tflog.Trace(ctx, "Cluster excluded by etcd_cluster filter", map[string]interface{}{
+					"clusterEtcdCluster": clusterEtcdCluster,
+					"filterEtcdCluster":  filterEtcdCluster,
 				})
 			}
 		}
@@ -324,34 +415,8 @@ func (d *CMKubeClustersDataSource) Read(ctx context.Context, req datasource.Read
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
-// Helper functions for data extraction (will be used in REFACTOR phase)
-
-// getListValue extracts a list of strings from BCM API response with null handling.
-// Returns types.List with StringType elements, or types.ListNull if field missing/null.
-func getListValue(data map[string]interface{}, key string) types.List {
-	if val, ok := data[key]; ok && val != nil {
-		if slice, ok := val.([]interface{}); ok && len(slice) > 0 {
-			// Convert []interface{} to []attr.Value (StringValue elements)
-			elements := make([]attr.Value, 0, len(slice))
-			for _, item := range slice {
-				if str, ok := item.(string); ok && str != "" {
-					elements = append(elements, types.StringValue(str))
-				}
-			}
-
-			if len(elements) > 0 {
-				listValue, _ := types.ListValue(types.StringType, elements)
-				return listValue
-			}
-		}
-	}
-
-	// Return null list if field missing, null, or empty
-	return types.ListNull(types.StringType)
-}
-
 // mapClusterDataToModel maps BCM API fields (camelCase) to Terraform attributes (snake_case).
-// This will be used in REFACTOR phase when integrating with real BCM API.
+// Aligned with BCM CMKube API entity structure.
 func mapClusterDataToModel(apiData map[string]interface{}) KubeClusterModel {
 	model := KubeClusterModel{}
 
@@ -361,28 +426,77 @@ func mapClusterDataToModel(apiData map[string]interface{}) KubeClusterModel {
 	model.UUID = uuid
 	model.Name = getStringValue(apiData, "name")
 
-	// Node configuration
-	model.MasterNodes = getListValue(apiData, "masterNodes")
-	model.WorkerNodes = getListValue(apiData, "workerNodes")
+	// Network references
+	model.InternalNetwork = getStringValue(apiData, "internalNetwork")
+	model.ServiceNetwork = getStringValue(apiData, "serviceNetwork")
+	model.PodNetwork = getStringValue(apiData, "podNetwork")
 
-	// Network configuration
-	model.ManagementNetwork = getStringValue(apiData, "managementNetwork")
-	model.OverlayNetwork = getStringValue(apiData, "overlayNetwork")
-	model.DNSServers = getListValue(apiData, "dnsServers")
+	// EtcdCluster reference
+	model.EtcdCluster = getStringValue(apiData, "etcdCluster")
 
 	// Kubernetes configuration
 	model.Version = getStringValue(apiData, "version")
-	model.CNIPlugin = getStringValue(apiData, "cniPlugin")
+	model.PodNetworkNodeMask = getStringValue(apiData, "podNetworkNodeMask")
+	model.KubeDnsIP = getStringValue(apiData, "kubeDnsIp")
 
-	// Storage configuration
-	model.StorageClasses = getStringValue(apiData, "storageClasses")
+	// API server configuration
+	model.KubernetesAPIServer = getStringValue(apiData, "kubernetesApiServer")
+	model.KubernetesAPIServerProxyPort = getInt64Value(apiData, "kubernetesApiServerProxyPort")
 
-	// Load balancer configuration
-	model.LoadBalancerMode = getStringValue(apiData, "loadBalancerMode")
+	// Trusted domains
+	if trustedDomains, ok := apiData["trustedDomains"].([]interface{}); ok && len(trustedDomains) > 0 {
+		elements := make([]attr.Value, 0, len(trustedDomains))
+		for _, domain := range trustedDomains {
+			if domainStr, ok := domain.(string); ok {
+				elements = append(elements, types.StringValue(domainStr))
+			}
+		}
+		model.TrustedDomains, _ = types.ListValue(types.StringType, elements)
+	} else {
+		model.TrustedDomains, _ = types.ListValue(types.StringType, []attr.Value{})
+	}
 
-	// Cluster addons
-	model.Addons = getStringValue(apiData, "addons")
-	model.IngressController = getStringValue(apiData, "ingressController")
+	// Ingress proxy configuration
+	model.IngressProxyEnable = getBoolValue(apiData, "ingressProxyEnable")
+	model.IngressProxyListenPort = getInt64Value(apiData, "ingressProxyListenPort")
+	model.IngressProxyBackendPort = getInt64Value(apiData, "ingressProxyBackendPort")
+
+	// Options as JSON string
+	if options, ok := apiData["options"]; ok && options != nil {
+		if optMap, ok := options.(map[string]interface{}); ok {
+			optBytes, err := json.Marshal(optMap)
+			if err == nil {
+				model.Options = types.StringValue(string(optBytes))
+			} else {
+				model.Options = types.StringValue("{}")
+			}
+		} else {
+			model.Options = types.StringValue("{}")
+		}
+	} else {
+		model.Options = types.StringValue("{}")
+	}
+
+	// Nested blocks - AppGroups
+	if appGroupsData, ok := apiData["appGroups"].([]interface{}); ok && len(appGroupsData) > 0 {
+		model.AppGroups = mapAppGroupsToModel(appGroupsData)
+	} else {
+		model.AppGroups = types.ListNull(kubeAppGroupDataSourceType())
+	}
+
+	// Nested blocks - LabelSets
+	if labelSetsData, ok := apiData["labelSets"].([]interface{}); ok && len(labelSetsData) > 0 {
+		model.LabelSets = mapLabelSetsToModel(labelSetsData)
+	} else {
+		model.LabelSets = types.ListNull(kubeLabelSetDataSourceType())
+	}
+
+	// Nested blocks - Users
+	if usersData, ok := apiData["users"].([]interface{}); ok && len(usersData) > 0 {
+		model.Users = mapUsersToModel(usersData)
+	} else {
+		model.Users = types.ListNull(kubeUserDataSourceType())
+	}
 
 	// Computed metadata
 	model.CreationTime = getInt64Value(apiData, "creationTime")
@@ -391,5 +505,239 @@ func mapClusterDataToModel(apiData map[string]interface{}) KubeClusterModel {
 	return model
 }
 
-// Note: getStringValue and getInt64Value are already defined in data_source_cmpart_softwareimages.go
+// kubeAppGroupDataSourceType returns the object type for KubeAppGroup in data source context.
+func kubeAppGroupDataSourceType() types.ObjectType {
+	return types.ObjectType{
+		AttrTypes: map[string]attr.Type{
+			"name":    types.StringType,
+			"enabled": types.BoolType,
+			"applications": types.ListType{
+				ElemType: types.ObjectType{
+					AttrTypes: map[string]attr.Type{
+						"name":     types.StringType,
+						"enabled":  types.BoolType,
+						"manifest": types.StringType,
+					},
+				},
+			},
+		},
+	}
+}
+
+// kubeLabelSetDataSourceType returns the object type for KubeLabelSet in data source context.
+func kubeLabelSetDataSourceType() types.ObjectType {
+	return types.ObjectType{
+		AttrTypes: map[string]attr.Type{
+			"name": types.StringType,
+			"labels": types.MapType{
+				ElemType: types.StringType,
+			},
+		},
+	}
+}
+
+// kubeUserDataSourceType returns the object type for KubeUser in data source context.
+func kubeUserDataSourceType() types.ObjectType {
+	return types.ObjectType{
+		AttrTypes: map[string]attr.Type{
+			"name": types.StringType,
+			"groups": types.ListType{
+				ElemType: types.StringType,
+			},
+		},
+	}
+}
+
+// mapAppGroupsToModel maps BCM appGroups to Terraform types.List.
+func mapAppGroupsToModel(appGroupsData []interface{}) types.List {
+	appGroupElements := make([]attr.Value, 0, len(appGroupsData))
+
+	for _, agData := range appGroupsData {
+		agMap, ok := agData.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		// Parse applications within the group
+		var applicationsValue types.List
+		if appsData, ok := agMap["applications"].([]interface{}); ok && len(appsData) > 0 {
+			appElements := make([]attr.Value, 0, len(appsData))
+			for _, appData := range appsData {
+				appMap, ok := appData.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				appObj, _ := types.ObjectValue(
+					map[string]attr.Type{
+						"name":     types.StringType,
+						"enabled":  types.BoolType,
+						"manifest": types.StringType,
+					},
+					map[string]attr.Value{
+						"name":     getStringValueForTFDS(appMap, "name"),
+						"enabled":  getBoolValueForTFDS(appMap, "enabled"),
+						"manifest": getStringValueForTFDS(appMap, "manifest"),
+					},
+				)
+				appElements = append(appElements, appObj)
+			}
+			applicationsValue, _ = types.ListValue(
+				types.ObjectType{
+					AttrTypes: map[string]attr.Type{
+						"name":     types.StringType,
+						"enabled":  types.BoolType,
+						"manifest": types.StringType,
+					},
+				},
+				appElements,
+			)
+		} else {
+			applicationsValue, _ = types.ListValue(
+				types.ObjectType{
+					AttrTypes: map[string]attr.Type{
+						"name":     types.StringType,
+						"enabled":  types.BoolType,
+						"manifest": types.StringType,
+					},
+				},
+				[]attr.Value{},
+			)
+		}
+
+		agObj, _ := types.ObjectValue(
+			map[string]attr.Type{
+				"name":    types.StringType,
+				"enabled": types.BoolType,
+				"applications": types.ListType{
+					ElemType: types.ObjectType{
+						AttrTypes: map[string]attr.Type{
+							"name":     types.StringType,
+							"enabled":  types.BoolType,
+							"manifest": types.StringType,
+						},
+					},
+				},
+			},
+			map[string]attr.Value{
+				"name":         getStringValueForTFDS(agMap, "name"),
+				"enabled":      getBoolValueForTFDS(agMap, "enabled"),
+				"applications": applicationsValue,
+			},
+		)
+		appGroupElements = append(appGroupElements, agObj)
+	}
+
+	result, _ := types.ListValue(kubeAppGroupDataSourceType(), appGroupElements)
+	return result
+}
+
+// mapLabelSetsToModel maps BCM labelSets to Terraform types.List.
+func mapLabelSetsToModel(labelSetsData []interface{}) types.List {
+	labelSetElements := make([]attr.Value, 0, len(labelSetsData))
+
+	for _, lsData := range labelSetsData {
+		lsMap, ok := lsData.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		// Parse labels map
+		var labelsValue types.Map
+		if labelsData, ok := lsMap["labels"].(map[string]interface{}); ok && len(labelsData) > 0 {
+			labelElements := make(map[string]attr.Value)
+			for k, v := range labelsData {
+				if vStr, ok := v.(string); ok {
+					labelElements[k] = types.StringValue(vStr)
+				}
+			}
+			labelsValue, _ = types.MapValue(types.StringType, labelElements)
+		} else {
+			labelsValue, _ = types.MapValue(types.StringType, map[string]attr.Value{})
+		}
+
+		lsObj, _ := types.ObjectValue(
+			map[string]attr.Type{
+				"name": types.StringType,
+				"labels": types.MapType{
+					ElemType: types.StringType,
+				},
+			},
+			map[string]attr.Value{
+				"name":   getStringValueForTFDS(lsMap, "name"),
+				"labels": labelsValue,
+			},
+		)
+		labelSetElements = append(labelSetElements, lsObj)
+	}
+
+	result, _ := types.ListValue(kubeLabelSetDataSourceType(), labelSetElements)
+	return result
+}
+
+// mapUsersToModel maps BCM users to Terraform types.List.
+func mapUsersToModel(usersData []interface{}) types.List {
+	userElements := make([]attr.Value, 0, len(usersData))
+
+	for _, uData := range usersData {
+		uMap, ok := uData.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		// Parse groups list
+		var groupsValue types.List
+		if groupsData, ok := uMap["groups"].([]interface{}); ok && len(groupsData) > 0 {
+			groupElements := make([]attr.Value, 0, len(groupsData))
+			for _, g := range groupsData {
+				if gStr, ok := g.(string); ok {
+					groupElements = append(groupElements, types.StringValue(gStr))
+				}
+			}
+			groupsValue, _ = types.ListValue(types.StringType, groupElements)
+		} else {
+			groupsValue, _ = types.ListValue(types.StringType, []attr.Value{})
+		}
+
+		uObj, _ := types.ObjectValue(
+			map[string]attr.Type{
+				"name": types.StringType,
+				"groups": types.ListType{
+					ElemType: types.StringType,
+				},
+			},
+			map[string]attr.Value{
+				"name":   getStringValueForTFDS(uMap, "name"),
+				"groups": groupsValue,
+			},
+		)
+		userElements = append(userElements, uObj)
+	}
+
+	result, _ := types.ListValue(kubeUserDataSourceType(), userElements)
+	return result
+}
+
+// getStringValueForTFDS extracts a string value from a map and returns it as types.String.
+// DS suffix to avoid collision with resource helpers.
+func getStringValueForTFDS(data map[string]interface{}, key string) types.String {
+	if v, ok := data[key]; ok && v != nil {
+		if s, ok := v.(string); ok {
+			return types.StringValue(s)
+		}
+	}
+	return types.StringValue("")
+}
+
+// getBoolValueForTFDS extracts a bool value from a map and returns it as types.Bool.
+// DS suffix to avoid collision with resource helpers.
+func getBoolValueForTFDS(data map[string]interface{}, key string) types.Bool {
+	if v, ok := data[key]; ok && v != nil {
+		if b, ok := v.(bool); ok {
+			return types.BoolValue(b)
+		}
+	}
+	return types.BoolValue(false)
+}
+
+// Note: getStringValue, getInt64Value, getBoolValue are already defined elsewhere.
 // They will be reused for null-safe extraction.
