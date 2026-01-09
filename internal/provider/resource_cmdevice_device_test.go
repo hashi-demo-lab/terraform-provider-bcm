@@ -2477,13 +2477,13 @@ func TestAccCMDeviceDevice_RolesAddMultiple(t *testing.T) {
 // TestAccCMDeviceDevice_kubeletRole tests kubelet_role block for Kubernetes cluster membership.
 // T041: Tests adding a device to a Kubernetes cluster via kubelet_role.
 func TestAccCMDeviceDevice_kubeletRole(t *testing.T) {
-	deviceName := generateUniqueTestName("tftest-kubelet")
-	categoryName := generateUniqueTestName("tftest-cat-kubelet")
-	imageName := generateUniqueTestName("tftest-img-kubelet")
+	deviceName := generateShortTestName("d-kub")
+	categoryName := generateShortTestName("c-kub")
+	imageName := generateShortTestName("i-kub")
 	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 	mac := generateUniqueMAC()
-	etcdClusterName := generateUniqueTestName("tftest-etcd-kubelet")
-	kubeClusterName := generateUniqueTestName("tftest-kube-kubelet")
+	etcdClusterName := generateShortTestName("e-kub")
+	kubeClusterName := generateShortTestName("k-kub")
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -2531,12 +2531,12 @@ func TestAccCMDeviceDevice_kubeletRole(t *testing.T) {
 // TestAccCMDeviceDevice_etcdHostRole tests etcd_host_role block for etcd cluster membership.
 // T042: Tests adding a device to an etcd cluster via etcd_host_role.
 func TestAccCMDeviceDevice_etcdHostRole(t *testing.T) {
-	deviceName := generateUniqueTestName("tftest-etcdhost")
-	categoryName := generateUniqueTestName("tftest-cat-etcdhost")
-	imageName := generateUniqueTestName("tftest-img-etcdhost")
+	deviceName := generateShortTestName("d-etc")
+	categoryName := generateShortTestName("c-etc")
+	imageName := generateShortTestName("i-etc")
 	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 	mac := generateUniqueMAC()
-	etcdClusterName := generateUniqueTestName("tftest-etcd-host")
+	etcdClusterName := generateShortTestName("e-etc")
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -2579,13 +2579,13 @@ func TestAccCMDeviceDevice_etcdHostRole(t *testing.T) {
 // TestAccCMDeviceDevice_bothRoles tests combined kubelet + etcd roles on same device.
 // T043: Tests adding both Kubernetes and etcd roles to a single device.
 func TestAccCMDeviceDevice_bothRoles(t *testing.T) {
-	deviceName := generateUniqueTestName("tftest-bothroles")
-	categoryName := generateUniqueTestName("tftest-cat-both")
-	imageName := generateUniqueTestName("tftest-img-both")
+	deviceName := generateShortTestName("d-bth")
+	categoryName := generateShortTestName("c-bth")
+	imageName := generateShortTestName("i-bth")
 	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 	mac := generateUniqueMAC()
-	etcdClusterName := generateUniqueTestName("tftest-etcd-both")
-	kubeClusterName := generateUniqueTestName("tftest-kube-both")
+	etcdClusterName := generateShortTestName("e-bth")
+	kubeClusterName := generateShortTestName("k-bth")
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -2633,13 +2633,13 @@ func TestAccCMDeviceDevice_bothRoles(t *testing.T) {
 // TestAccCMDeviceDevice_roleUpdate tests modification of Kubernetes roles.
 // T044: Tests updating kubelet_role properties (control_plane, worker).
 func TestAccCMDeviceDevice_roleUpdate(t *testing.T) {
-	deviceName := generateUniqueTestName("tftest-roleupdate")
-	categoryName := generateUniqueTestName("tftest-cat-roleup")
-	imageName := generateUniqueTestName("tftest-img-roleup")
+	deviceName := generateShortTestName("d-upd")
+	categoryName := generateShortTestName("c-upd")
+	imageName := generateShortTestName("i-upd")
 	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 	mac := generateUniqueMAC()
-	etcdClusterName := generateUniqueTestName("tftest-etcd-roleup")
-	kubeClusterName := generateUniqueTestName("tftest-kube-roleup")
+	etcdClusterName := generateShortTestName("e-upd")
+	kubeClusterName := generateShortTestName("k-upd")
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -2729,9 +2729,12 @@ resource "bcm_cmpart_softwareimage" "test" {
 }
 
 resource "bcm_cmdevice_category" "test" {
-  name                  = %[6]q
-  software_image        = bcm_cmpart_softwareimage.test.uuid
-  use_software_image_proxy = false
+  name               = %[6]q
+  management_network = data.bcm_cmnet_networks.all.networks[0].id
+
+  software_image_proxy = {
+    parent_software_image = bcm_cmpart_softwareimage.test.id
+  }
 
   depends_on = [bcm_cmpart_softwareimage.test]
 }
@@ -2751,10 +2754,10 @@ resource "bcm_cmkube_cluster" "test" {
 }
 
 resource "bcm_cmdevice_device" "test" {
-  hostname = %[9]q
-  category = bcm_cmdevice_category.test.name
-  mac      = %[10]q
-  roles    = ["boot"]
+  hostname           = %[9]q
+  category           = bcm_cmdevice_category.test.id
+  management_network = data.bcm_cmnet_networks.all.networks[0].id
+  mac                = %[10]q
 
   kubelet_role {
     kube_cluster  = bcm_cmkube_cluster.test.uuid
@@ -2796,15 +2799,20 @@ provider "bcm" {
   insecure_skip_verify = true
 }
 
+data "bcm_cmnet_networks" "all" {}
+
 resource "bcm_cmpart_softwareimage" "test" {
   name = %[4]q
   path = %[5]q
 }
 
 resource "bcm_cmdevice_category" "test" {
-  name                  = %[6]q
-  software_image        = bcm_cmpart_softwareimage.test.uuid
-  use_software_image_proxy = false
+  name               = %[6]q
+  management_network = data.bcm_cmnet_networks.all.networks[0].id
+
+  software_image_proxy = {
+    parent_software_image = bcm_cmpart_softwareimage.test.id
+  }
 
   depends_on = [bcm_cmpart_softwareimage.test]
 }
@@ -2816,10 +2824,10 @@ resource "bcm_cmetcd_cluster" "test" {
 }
 
 resource "bcm_cmdevice_device" "test" {
-  hostname = %[8]q
-  category = bcm_cmdevice_category.test.name
-  mac      = %[9]q
-  roles    = ["boot"]
+  hostname           = %[8]q
+  category           = bcm_cmdevice_category.test.id
+  management_network = data.bcm_cmnet_networks.all.networks[0].id
+  mac                = %[9]q
 
   etcd_host_role {
     etcd_cluster = bcm_cmetcd_cluster.test.uuid
@@ -2864,9 +2872,12 @@ resource "bcm_cmpart_softwareimage" "test" {
 }
 
 resource "bcm_cmdevice_category" "test" {
-  name                  = %[6]q
-  software_image        = bcm_cmpart_softwareimage.test.uuid
-  use_software_image_proxy = false
+  name               = %[6]q
+  management_network = data.bcm_cmnet_networks.all.networks[0].id
+
+  software_image_proxy = {
+    parent_software_image = bcm_cmpart_softwareimage.test.id
+  }
 
   depends_on = [bcm_cmpart_softwareimage.test]
 }
@@ -2886,10 +2897,10 @@ resource "bcm_cmkube_cluster" "test" {
 }
 
 resource "bcm_cmdevice_device" "test" {
-  hostname = %[9]q
-  category = bcm_cmdevice_category.test.name
-  mac      = %[10]q
-  roles    = ["boot"]
+  hostname           = %[9]q
+  category           = bcm_cmdevice_category.test.id
+  management_network = data.bcm_cmnet_networks.all.networks[0].id
+  mac                = %[10]q
 
   kubelet_role {
     kube_cluster  = bcm_cmkube_cluster.test.uuid
