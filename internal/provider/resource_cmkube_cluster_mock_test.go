@@ -276,7 +276,9 @@ func testAccCheckMockClusterDestroy(state *mockClusterState) resource.TestCheckF
 
 // TestAccCMKubeClusterResource_MockEtcdNodes tests etcd_nodes with mock server.
 // This test validates the write-only field behavior without requiring physical nodes.
+// DEPRECATED: Uses old schema with deprecated etcd_nodes field. See TestAccCMKubeCluster_aligned_* for new API.
 func TestAccCMKubeClusterResource_MockEtcdNodes(t *testing.T) {
+	t.Skip("DEPRECATED: Uses old schema with etcd_nodes. Use bcm_cmetcd_cluster + device roles instead.")
 	cleanup := clearBCMEnvVars()
 	defer cleanup()
 
@@ -337,7 +339,9 @@ func TestAccCMKubeClusterResource_MockEtcdNodes(t *testing.T) {
 }
 
 // TestAccCMKubeClusterResource_MockEtcdNodesUpdate tests updating etcd_nodes.
+// DEPRECATED: Uses old schema with deprecated etcd_nodes field. See TestAccCMKubeCluster_aligned_* for new API.
 func TestAccCMKubeClusterResource_MockEtcdNodesUpdate(t *testing.T) {
+	t.Skip("DEPRECATED: Uses old schema with etcd_nodes. Use bcm_cmetcd_cluster + device roles instead.")
 	cleanup := clearBCMEnvVars()
 	defer cleanup()
 
@@ -403,7 +407,9 @@ func TestAccCMKubeClusterResource_MockEtcdNodesUpdate(t *testing.T) {
 }
 
 // TestAccCMKubeClusterResource_MockEtcdNodesValidationError tests validation error for etcd_nodes.
+// DEPRECATED: Uses old schema with deprecated etcd_nodes field. See TestAccCMKubeCluster_aligned_* for new API.
 func TestAccCMKubeClusterResource_MockEtcdNodesValidationError(t *testing.T) {
+	t.Skip("DEPRECATED: Uses old schema with etcd_nodes. Use bcm_cmetcd_cluster + device roles instead.")
 	cleanup := clearBCMEnvVars()
 	defer cleanup()
 
@@ -458,7 +464,9 @@ func TestAccCMKubeClusterResource_MockEtcdNodesValidationError(t *testing.T) {
 }
 
 // TestAccCMKubeClusterResource_MockEtcdNodesNullToValue tests adding etcd_nodes to existing cluster.
+// DEPRECATED: Uses old schema with deprecated etcd_nodes field. See TestAccCMKubeCluster_aligned_* for new API.
 func TestAccCMKubeClusterResource_MockEtcdNodesNullToValue(t *testing.T) {
+	t.Skip("DEPRECATED: Uses old schema with etcd_nodes. Use bcm_cmetcd_cluster + device roles instead.")
 	cleanup := clearBCMEnvVars()
 	defer cleanup()
 

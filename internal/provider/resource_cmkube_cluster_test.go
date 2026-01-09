@@ -187,7 +187,9 @@ func getTestManagementNetworkUUID(t *testing.T) string {
 }
 
 // TestAccCMKubeClusterResource_Basic tests complete CRUD lifecycle.
+// DEPRECATED: Uses old schema with master_nodes. See TestAccCMKubeCluster_aligned_* for new API.
 func TestAccCMKubeClusterResource_Basic(t *testing.T) {
+	t.Skip("DEPRECATED: Uses old schema with master_nodes. Use TestAccCMKubeCluster_aligned_basic instead.")
 	clusterName := generateUniqueTestName("tftest-cluster")
 	clusterNameUpdated := generateUniqueTestName("tftest-cluster-updated")
 
@@ -276,7 +278,9 @@ func TestAccCMKubeClusterResource_Basic(t *testing.T) {
 }
 
 // TestAccCMKubeClusterResource_DriftDetection tests external modification detection.
+// DEPRECATED: Uses old schema with master_nodes. See TestAccCMKubeCluster_aligned_drift for new API.
 func TestAccCMKubeClusterResource_DriftDetection(t *testing.T) {
+	t.Skip("DEPRECATED: Uses old schema with master_nodes. Use TestAccCMKubeCluster_aligned_drift instead.")
 	clusterName := generateUniqueTestName("tftest-cluster-drift")
 	masterNodeUUID := getTestMasterNodeUUID(t)
 
@@ -368,7 +372,9 @@ func TestAccCMKubeClusterResource_DriftDetection(t *testing.T) {
 }
 
 // TestAccCMKubeClusterResource_WorkerNodes tests worker node scaling.
+// DEPRECATED: Uses old schema with worker_nodes. Use device roles instead.
 func TestAccCMKubeClusterResource_WorkerNodes(t *testing.T) {
+	t.Skip("DEPRECATED: Uses old schema with worker_nodes. Use bcm_cmdevice_device kubelet_role instead.")
 	clusterName := generateUniqueTestName("tftest-cluster-workers")
 	masterNodeUUID := getTestMasterNodeUUID(t)
 	workerNodeUUID1 := getTestWorkerNodeUUID(t, 0)
@@ -429,7 +435,9 @@ func TestAccCMKubeClusterResource_WorkerNodes(t *testing.T) {
 }
 
 // TestAccCMKubeClusterResource_ValidationInvalidName tests invalid cluster name.
+// DEPRECATED: Uses old schema with deprecated fields. See TestAccCMKubeCluster_aligned_validationInvalidName for new API.
 func TestAccCMKubeClusterResource_ValidationInvalidName(t *testing.T) {
+	t.Skip("DEPRECATED: Uses old schema with master_nodes. See TestAccCMKubeCluster_aligned_validationInvalidName instead.")
 	masterNodeUUID := getTestMasterNodeUUID(t)
 
 	resource.Test(t, resource.TestCase{
@@ -445,7 +453,9 @@ func TestAccCMKubeClusterResource_ValidationInvalidName(t *testing.T) {
 }
 
 // TestAccCMKubeClusterResource_ValidationInvalidVersion tests invalid version format.
+// DEPRECATED: Uses old schema with deprecated fields. See TestAccCMKubeCluster_aligned_* for new API.
 func TestAccCMKubeClusterResource_ValidationInvalidVersion(t *testing.T) {
+	t.Skip("DEPRECATED: Uses old schema with master_nodes. Use aligned tests instead.")
 	clusterName := generateUniqueTestName("tftest-cluster")
 	masterNodeUUID := getTestMasterNodeUUID(t)
 
@@ -466,7 +476,9 @@ func TestAccCMKubeClusterResource_ValidationInvalidVersion(t *testing.T) {
 // func TestAccCMKubeClusterResource_ComputedFields(t *testing.T) { ... }
 
 // TestAccCMKubeClusterResource_CompleteConfiguration tests all optional fields.
+// DEPRECATED: Uses old schema with deprecated fields. See TestAccCMKubeCluster_aligned_* for new API.
 func TestAccCMKubeClusterResource_CompleteConfiguration(t *testing.T) {
+	t.Skip("DEPRECATED: Uses old schema with deprecated fields. See aligned tests for new API.")
 	clusterName := generateUniqueTestName("tftest-cluster-complete")
 	clusterNameUpdated := generateUniqueTestName("tftest-cluster-complete-updated")
 	masterNodeUUID := getTestMasterNodeUUID(t)
@@ -671,7 +683,9 @@ resource "bcm_cmkube_cluster" "test" {
 }
 
 // TestAccCMKubeClusterResource_P3AdvancedNetworking tests P3 networking features.
+// DEPRECATED: Uses old schema with deprecated fields. See TestAccCMKubeCluster_aligned_* for new API.
 func TestAccCMKubeClusterResource_P3AdvancedNetworking(t *testing.T) {
+	t.Skip("DEPRECATED: Uses old schema with deprecated fields. See aligned tests for new API.")
 	clusterName := generateUniqueTestName("tftest-cluster-p3-network")
 	masterNodeUUID := getTestMasterNodeUUID(t)
 
@@ -731,7 +745,9 @@ func TestAccCMKubeClusterResource_P3AdvancedNetworking(t *testing.T) {
 }
 
 // TestAccCMKubeClusterResource_P3StorageAndLoadBalancer tests P3 storage and LB features.
+// DEPRECATED: Uses old schema with deprecated fields. See TestAccCMKubeCluster_aligned_* for new API.
 func TestAccCMKubeClusterResource_P3StorageAndLoadBalancer(t *testing.T) {
+	t.Skip("DEPRECATED: Uses old schema with deprecated fields. See aligned tests for new API.")
 	clusterName := generateUniqueTestName("tftest-cluster-p3-storage")
 	masterNodeUUID := getTestMasterNodeUUID(t)
 
@@ -781,7 +797,9 @@ func TestAccCMKubeClusterResource_P3StorageAndLoadBalancer(t *testing.T) {
 }
 
 // TestAccCMKubeClusterResource_P3Addons tests P3 cluster addons.
+// DEPRECATED: Uses old schema with deprecated fields. See TestAccCMKubeCluster_aligned_appGroups for new API.
 func TestAccCMKubeClusterResource_P3Addons(t *testing.T) {
+	t.Skip("DEPRECATED: Uses old schema with deprecated fields. See TestAccCMKubeCluster_aligned_appGroups for new API.")
 	clusterName := generateUniqueTestName("tftest-cluster-p3-addons")
 	masterNodeUUID := getTestMasterNodeUUID(t)
 
@@ -837,7 +855,9 @@ func TestAccCMKubeClusterResource_P3Addons(t *testing.T) {
 }
 
 // TestAccCMKubeClusterResource_P3FullStack tests all P3 fields together.
+// DEPRECATED: Uses old schema with deprecated fields. See TestAccCMKubeCluster_aligned_* for new API.
 func TestAccCMKubeClusterResource_P3FullStack(t *testing.T) {
+	t.Skip("DEPRECATED: Uses old schema with deprecated fields. See aligned tests for new API.")
 	clusterName := generateUniqueTestName("tftest-cluster-p3-full")
 	masterNodeUUID := getTestMasterNodeUUID(t)
 
@@ -1173,7 +1193,9 @@ resource "bcm_cmkube_cluster" "test" {
 }
 
 // TestAccCMKubeClusterResource_ForceOption tests the force parameter.
+// DEPRECATED: Uses old schema with deprecated force field. See TestAccCMKubeCluster_aligned_* for new API.
 func TestAccCMKubeClusterResource_ForceOption(t *testing.T) {
+	t.Skip("DEPRECATED: Uses old schema with deprecated force field. See aligned tests for new API.")
 	clusterName := generateUniqueTestName("tftest-cluster-force")
 	masterNodeUUID := getTestMasterNodeUUID(t)
 
@@ -1248,7 +1270,9 @@ resource "bcm_cmkube_cluster" "test" {
 
 // TestAccCMKubeClusterResource_EtcdNodes tests etcd_nodes attribute for HA clusters.
 // NVIDIA DGX BasePOD deployments require dedicated etcd nodes for production HA.
+// DEPRECATED: Uses old schema with deprecated etcd_nodes field. Use bcm_cmetcd_cluster + device roles instead.
 func TestAccCMKubeClusterResource_EtcdNodes(t *testing.T) {
+	t.Skip("DEPRECATED: Uses old schema with etcd_nodes. Use bcm_cmetcd_cluster + bcm_cmdevice_device etcd_host_role instead.")
 	clusterName := generateUniqueTestName("tftest-cluster-etcd")
 	masterNodeUUID := getTestMasterNodeUUID(t)
 	etcdNodeUUID := getTestEtcdNodeUUID(t, 0)
