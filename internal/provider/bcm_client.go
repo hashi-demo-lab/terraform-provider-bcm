@@ -729,3 +729,130 @@ func getString(data map[string]interface{}, key string) string {
 	}
 	return ""
 }
+
+// =============================================================================
+// CMEtcd Service Methods (EtcdCluster management)
+// =============================================================================
+
+// AddEtcdCluster creates a new EtcdCluster entity via BCM API.
+//
+// Parameters:
+//   - entity: EtcdCluster entity data including name, heartbeatInterval, electionTimeout, etc.
+//
+// Returns:
+//   - Response body from BCM API (typically the created entity)
+//   - error: API communication error or BCM error response
+//
+// BCM API Method: cmetcd.addEtcdCluster(entity)
+func (c *BCMClient) AddEtcdCluster(ctx context.Context, entity map[string]interface{}) ([]byte, error) {
+	tflog.Debug(ctx, "Creating EtcdCluster", map[string]interface{}{
+		"name": entity["name"],
+		"uuid": entity["uuid"],
+	})
+
+	return c.CallJSONRPC(ctx, "cmetcd", "addEtcdCluster", entity)
+}
+
+// GetEtcdCluster retrieves an EtcdCluster entity by UUID or name via BCM API.
+//
+// Parameters:
+//   - identifier: UUID or name of the EtcdCluster
+//
+// Returns:
+//   - Response body from BCM API (the EtcdCluster entity)
+//   - error: API communication error or BCM error response
+//
+// BCM API Method: cmetcd.getEtcdCluster(identifier)
+func (c *BCMClient) GetEtcdCluster(ctx context.Context, identifier string) ([]byte, error) {
+	tflog.Debug(ctx, "Getting EtcdCluster", map[string]interface{}{
+		"identifier": identifier,
+	})
+
+	return c.CallJSONRPC(ctx, "cmetcd", "getEtcdCluster", identifier)
+}
+
+// GetEtcdClusters retrieves all EtcdCluster entities via BCM API.
+//
+// Returns:
+//   - Response body from BCM API (array of EtcdCluster entities)
+//   - error: API communication error or BCM error response
+//
+// BCM API Method: cmetcd.getEtcdClusters()
+func (c *BCMClient) GetEtcdClusters(ctx context.Context) ([]byte, error) {
+	tflog.Debug(ctx, "Listing EtcdClusters")
+
+	return c.CallJSONRPC(ctx, "cmetcd", "getEtcdClusters")
+}
+
+// UpdateEtcdCluster updates an existing EtcdCluster entity via BCM API.
+//
+// Parameters:
+//   - entity: EtcdCluster entity data with uuid and updated fields
+//
+// Returns:
+//   - Response body from BCM API
+//   - error: API communication error or BCM error response
+//
+// BCM API Method: cmetcd.updateEtcdCluster(entity)
+func (c *BCMClient) UpdateEtcdCluster(ctx context.Context, entity map[string]interface{}) ([]byte, error) {
+	tflog.Debug(ctx, "Updating EtcdCluster", map[string]interface{}{
+		"name": entity["name"],
+		"uuid": entity["uuid"],
+	})
+
+	return c.CallJSONRPC(ctx, "cmetcd", "updateEtcdCluster", entity)
+}
+
+// RemoveEtcdCluster deletes an EtcdCluster entity by UUID via BCM API.
+//
+// Parameters:
+//   - uuid: UUID of the EtcdCluster to delete
+//
+// Returns:
+//   - Response body from BCM API
+//   - error: API communication error or BCM error response
+//
+// BCM API Method: cmetcd.removeEtcdCluster(uuid)
+func (c *BCMClient) RemoveEtcdCluster(ctx context.Context, uuid string) ([]byte, error) {
+	tflog.Debug(ctx, "Removing EtcdCluster", map[string]interface{}{
+		"uuid": uuid,
+	})
+
+	return c.CallJSONRPC(ctx, "cmetcd", "removeEtcdCluster", uuid)
+}
+
+// ValidateEtcdCluster validates an EtcdCluster entity before CREATE or UPDATE.
+//
+// Parameters:
+//   - entity: EtcdCluster entity data to validate
+//   - isCreate: true for CREATE operations, false for UPDATE operations
+//
+// Returns:
+//   - []ValidationError: Array of validation errors/warnings (empty if validation passes)
+//   - error: API communication error
+//
+// BCM API Method: cmetcd.validateEtcdCluster(entity, isCreate)
+func (c *BCMClient) ValidateEtcdCluster(ctx context.Context, entity map[string]interface{}, isCreate bool) ([]ValidationError, error) {
+	return c.ValidateEntity(ctx, "cmetcd", "validateEtcdCluster", entity, isCreate)
+}
+
+// =============================================================================
+// CMKube Service Methods (KubeCluster management - aligned)
+// =============================================================================
+
+// ValidateKubeCluster validates a KubeCluster entity before CREATE or UPDATE.
+// NOTE: cmkube service uses lowercase (unlike most BCM services)
+//
+// Parameters:
+//   - entity: KubeCluster entity data to validate
+//   - isCreate: true for CREATE operations, false for UPDATE operations
+//
+// Returns:
+//   - []ValidationError: Array of validation errors/warnings (empty if validation passes)
+//   - error: API communication error
+//
+// BCM API Method: cmkube.validateKubeCluster(entity, isCreate)
+func (c *BCMClient) ValidateKubeCluster(ctx context.Context, entity map[string]interface{}, isCreate bool) ([]ValidationError, error) {
+	// IMPORTANT: cmkube is lowercase (exception to CamelCase pattern)
+	return c.ValidateEntity(ctx, "cmkube", "validateKubeCluster", entity, isCreate)
+}

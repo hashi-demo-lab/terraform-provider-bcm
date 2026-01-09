@@ -479,3 +479,189 @@ func generateUniqueMAC() string {
 
 	return fmt.Sprintf("02:00:00:%02X:%02X:%02X", byte1, byte2, byte3)
 }
+
+// =============================================================================
+// CMEtcd Test Helpers
+// =============================================================================
+
+// bcm_cmetcd_cluster Field Mappings:
+//
+//	Terraform Schema       BCM API Field
+//	-----------------      ---------------
+//	heartbeat_interval  → heartbeatInterval
+//	election_timeout    → electionTimeout
+//	options             → options (JSON-encoded)
+//	creation_time       → creationTime
+//	revision_id         → revisionID
+
+// getTestEtcdClusterUUID queries BCM for an existing EtcdCluster UUID by name.
+// This helper is useful for tests that need to reference an existing etcd cluster.
+//
+// Parameters:
+//
+//	t - Testing instance
+//	name - Etcd cluster name to look up
+//
+// Returns:
+//
+//	UUID string of the etcd cluster, or empty string if not found
+func getTestEtcdClusterUUID(t *testing.T, name string) string {
+	client := createTestBCMClient(t)
+	ctx := context.Background()
+
+	// Query BCM API with cluster name
+	body, err := client.CallJSONRPC(ctx, "cmetcd", "getEtcdCluster", name)
+	if err != nil {
+		// Cluster might not exist, return empty string
+		return ""
+	}
+
+	// Parse response to extract UUID
+	var clusterData map[string]interface{}
+	if err := json.Unmarshal(body, &clusterData); err != nil {
+		return ""
+	}
+
+	uuid, ok := clusterData["uuid"].(string)
+	if !ok {
+		return ""
+	}
+
+	return uuid
+}
+
+// createTestEtcdCluster creates an EtcdCluster via BCM API for test setup.
+// This is useful for tests that need a pre-existing etcd cluster to reference.
+//
+// Parameters:
+//
+//	t - Testing instance
+//	name - Etcd cluster name
+//
+// Returns:
+//
+//	UUID of the created etcd cluster
+func createTestEtcdCluster(t *testing.T, name string) string {
+	client := createTestBCMClient(t)
+	ctx := context.Background()
+
+	// Generate UUID for the cluster
+	clusterUUID := generateUUID()
+
+	// Build the etcd cluster entity
+	entity := map[string]interface{}{
+		"baseType":          "EtcdCluster",
+		"childType":         "",
+		"uuid":              clusterUUID,
+		"name":              name,
+		"heartbeatInterval": 100,
+		"electionTimeout":   1000,
+		"options":           map[string]interface{}{},
+		"modified":          true,
+		"to_be_removed":     false,
+		"revision":          "",
+	}
+
+	// Create via BCM API
+	_, err := client.CallJSONRPC(ctx, "cmetcd", "addEtcdCluster", entity)
+	if err != nil {
+		t.Fatalf("Failed to create test etcd cluster: %v", err)
+	}
+
+	// Wait for eventual consistency
+	time.Sleep(TestEventualConsistencyDelay)
+
+	return clusterUUID
+}
+
+// deleteTestEtcdCluster removes an EtcdCluster via BCM API for test cleanup.
+//
+// Parameters:
+//
+//	t - Testing instance
+//	uuid - Etcd cluster UUID to delete
+func deleteTestEtcdCluster(t *testing.T, uuid string) {
+	if uuid == "" {
+		return
+	}
+
+	client := createTestBCMClient(t)
+	ctx := context.Background()
+
+	_, err := client.CallJSONRPC(ctx, "cmetcd", "removeEtcdCluster", uuid)
+	if err != nil {
+		t.Logf("Warning: Failed to delete test etcd cluster %s: %v", uuid, err)
+	}
+
+	// Wait for eventual consistency
+	time.Sleep(TestEventualConsistencyDelay)
+}
+
+// =============================================================================
+// CMKube Aligned Test Helpers
+// =============================================================================
+
+// getTestNetworkUUID queries BCM for a network UUID by name.
+// Used for tests that need network UUIDs for KubeCluster configuration.
+//
+// Parameters:
+//
+//	t - Testing instance
+//	name - Network name to look up
+//
+// Returns:
+//
+//	UUID string of the network, or empty string if not found
+func getTestNetworkUUID(t *testing.T, name string) string {
+	client := createTestBCMClient(t)
+	ctx := context.Background()
+
+	body, err := client.CallJSONRPC(ctx, "cmnet", "getNetwork", name)
+	if err != nil {
+		return ""
+	}
+
+	var networkData map[string]interface{}
+	if err := json.Unmarshal(body, &networkData); err != nil {
+		return ""
+	}
+
+	uuid, ok := networkData["uuid"].(string)
+	if !ok {
+		return ""
+	}
+
+	return uuid
+}
+
+// getFirstAvailableNetworkUUID returns the UUID of the first available network.
+// Useful for tests that need any valid network reference.
+func getFirstAvailableNetworkUUID(t *testing.T) string {
+	client := createTestBCMClient(t)
+	ctx := context.Background()
+
+	body, err := client.CallJSONRPC(ctx, "cmnet", "getNetworks")
+	if err != nil {
+		t.Skipf("Failed to get networks: %v", err)
+		return ""
+	}
+
+	var networks []map[string]interface{}
+	if err := json.Unmarshal(body, &networks); err != nil {
+		t.Skipf("Failed to parse networks: %v", err)
+		return ""
+	}
+
+	if len(networks) == 0 {
+		t.Skip("No networks available for test")
+		return ""
+	}
+
+	uuid, ok := networks[0]["uuid"].(string)
+	if !ok {
+		t.Skip("First network has no valid UUID")
+		return ""
+	}
+
+	return uuid
+}
