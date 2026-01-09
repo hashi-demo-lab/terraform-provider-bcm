@@ -180,9 +180,11 @@ output "ipmi_devices" {
 - `boot_loader_protocol` (String) Boot loader protocol (e.g., HTTP, TFTP) - defaults to category value
 - `default_gateway` (String) Default gateway IP address for the device
 - `default_gateway_metric` (Number) Default gateway metric/priority (lower is preferred)
+- `etcd_host_role` (Block List) Etcd host role configuration. Defines this device as a member of an EtcdCluster. Each etcd_host_role block associates the device with one EtcdCluster as an etcd node. (see [below for nested schema](#nestedblock--etcd_host_role))
 - `force` (Boolean) Force operation (override BCM validation warnings)
 - `interfaces` (Block List) Network interface configurations for the device. When specified, provides full control over interface setup. Each interface can be physical, bond, or BMC type. (see [below for nested schema](#nestedblock--interfaces))
 - `kernel_parameters` (String) Kernel boot parameters
+- `kubelet_role` (Block List) Kubernetes kubelet role configuration. Defines this device as a member of a KubeCluster. Each kubelet_role block associates the device with one KubeCluster as a control plane node, worker node, or both. (see [below for nested schema](#nestedblock--kubelet_role))
 - `management_network` (String) Management network UUID reference (may be reset by BCM, required for device creation)
 - `notes` (String) Device notes/description
 - `part_number` (String) Hardware part number
@@ -211,6 +213,29 @@ resource "bcm_cmdevice_device" "node" {
 - `id` (String) Device identifier (same as UUID)
 - `uuid` (String) Device UUID assigned by BCM
 
+<a id="nestedblock--etcd_host_role"></a>
+### Nested Schema for `etcd_host_role`
+
+Required:
+
+- `etcd_cluster` (String) UUID of the EtcdCluster this device belongs to.
+
+Optional:
+
+- `advertise_client_urls` (List of String) URLs to advertise to clients for connecting to this member.
+- `advertise_peer_urls` (List of String) URLs to advertise to peers for connecting to this member.
+- `listen_client_urls` (List of String) URLs etcd listens on for client traffic.
+- `listen_peer_urls` (List of String) URLs etcd listens on for peer traffic.
+- `max_snapshots` (Number) Maximum number of snapshot files to retain. Default: 5.
+- `member_name` (String) Etcd member name. Default: '$hostname' (uses device hostname).
+- `snapshot_count` (Number) Number of committed transactions to trigger a snapshot. Default: 100000.
+- `spool` (String) Etcd data directory path. Default: '/var/lib/etcd'.
+
+Read-Only:
+
+- `uuid` (String) BCM-assigned role UUID.
+
+
 <a id="nestedblock--interfaces"></a>
 ### Nested Schema for `interfaces`
 
@@ -237,3 +262,24 @@ Read-Only:
 - `cardtype` (String) Hardware card type (Ethernet, InfiniBand, BMC).
 - `child_type` (String) Interface type (NetworkPhysicalInterface, NetworkBondInterface, NetworkBMCInterface).
 - `uuid` (String) BCM-assigned interface UUID.
+
+
+<a id="nestedblock--kubelet_role"></a>
+### Nested Schema for `kubelet_role`
+
+Required:
+
+- `kube_cluster` (String) UUID of the KubeCluster this device belongs to.
+
+Optional:
+
+- `container_runtime_service` (String) Container runtime service name (e.g., 'docker.service', 'containerd.service'). Default: 'docker.service'.
+- `control_plane` (Boolean) Whether this node runs control plane components (API server, controller manager, scheduler). Default: true.
+- `custom_yaml` (String) Custom kubelet configuration YAML.
+- `max_pods` (Number) Maximum number of pods that can run on this node. Default: 110.
+- `options` (String) Additional kubelet options as JSON string.
+- `worker` (Boolean) Whether this node can schedule workload pods. Default: true.
+
+Read-Only:
+
+- `uuid` (String) BCM-assigned role UUID.

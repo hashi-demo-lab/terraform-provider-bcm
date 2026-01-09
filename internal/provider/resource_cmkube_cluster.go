@@ -1,6 +1,9 @@
 // Copyright (c) HashiCorp, Inc.
 // SPDX-License-Identifier: MPL-2.0
 
+// Package provider implements the bcm_cmkube_cluster resource for managing BCM KubeCluster entities.
+// This resource enables Terraform to manage Kubernetes cluster definitions in BCM.
+// Aligned with BCM CMKube API - FR-001 through FR-019.
 package provider
 
 import (
@@ -8,7 +11,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"time"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -16,9 +21,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -33,46 +37,7 @@ var (
 
 // CMKubeClusterResource defines the resource implementation.
 type CMKubeClusterResource struct {
-	BCMResourceBase
-}
-
-// CMKubeClusterResourceModel describes the resource data model.
-type CMKubeClusterResourceModel struct {
-	// Identity fields
-	ID   types.String `tfsdk:"id"`   // Computed, same as UUID
-	UUID types.String `tfsdk:"uuid"` // Computed, BCM-assigned
-	Name types.String `tfsdk:"name"` // Required
-
-	// Node configuration
-	MasterNodes types.List `tfsdk:"master_nodes"` // Required, list of UUIDs
-	WorkerNodes types.List `tfsdk:"worker_nodes"` // Optional, list of UUIDs
-	EtcdNodes   types.List `tfsdk:"etcd_nodes"`   // Optional, list of UUIDs for etcd cluster members
-
-	// Network configuration
-	ManagementNetwork types.String `tfsdk:"management_network"` // Optional, UUID
-	OverlayNetwork    types.String `tfsdk:"overlay_network"`    // Optional, pod network overlay config
-	DNSServers        types.List   `tfsdk:"dns_servers"`        // Optional, list of DNS server IPs
-
-	// Kubernetes configuration
-	Version   types.String `tfsdk:"version"`    // Optional, semver string
-	CNIPlugin types.String `tfsdk:"cni_plugin"` // Optional, CNI plugin selection
-
-	// Storage configuration
-	StorageClasses types.String `tfsdk:"storage_classes"` // Optional, JSON-encoded storage class definitions
-
-	// Load balancer configuration
-	LoadBalancerMode types.String `tfsdk:"load_balancer_mode"` // Optional, load balancer strategy
-
-	// Cluster addons
-	Addons            types.String `tfsdk:"addons"`             // Optional, JSON-encoded addon configurations
-	IngressController types.String `tfsdk:"ingress_controller"` // Optional, JSON-encoded ingress controller config
-
-	// Operations
-	Force types.Bool `tfsdk:"force"` // Optional, default false
-
-	// Computed metadata
-	CreationTime types.Int64 `tfsdk:"creation_time"` // Computed
-	RevisionID   types.Int64 `tfsdk:"revision_id"`   // Computed
+	client *BCMClient
 }
 
 // NewCMKubeClusterResource creates a new resource instance.
@@ -87,17 +52,34 @@ func (r *CMKubeClusterResource) Metadata(ctx context.Context, req resource.Metad
 
 // Configure adds the provider configured client to the resource.
 func (r *CMKubeClusterResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
-	r.ConfigureResource(req, resp)
+	// Prevent panic if provider is not configured
+	if req.ProviderData == nil {
+		return
+	}
+
+	client, ok := req.ProviderData.(*BCMClient)
+	if !ok {
+		resp.Diagnostics.AddError(
+			"Unexpected Resource Configure Type",
+			fmt.Sprintf("Expected *BCMClient, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+		)
+		return
+	}
+
+	r.client = client
 }
 
-// Schema defines the resource schema.
+// Schema defines the resource schema - aligned with BCM KubeCluster API entity.
+// FR-001 through FR-019
 func (r *CMKubeClusterResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "Manages a BCM Kubernetes cluster.\n\n" +
-			"Kubernetes clusters in BCM define the cluster topology (master and worker nodes), " +
-			"networking configuration, and Kubernetes version for container orchestration workloads.",
+		MarkdownDescription: "Manages a BCM Kubernetes cluster definition.\n\n" +
+			"KubeCluster entities define the cluster configuration including network references, " +
+			"API server settings, and application groups. Node membership is managed via " +
+			"KubeletRole on device resources, not on the cluster itself.",
 
 		Attributes: map[string]schema.Attribute{
+			// Identifier attributes
 			"id": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "Cluster identifier (same as uuid)",
@@ -112,697 +94,742 @@ func (r *CMKubeClusterResource) Schema(ctx context.Context, req resource.SchemaR
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
+
+			// Required attributes
 			"name": schema.StringAttribute{
 				Required:            true,
-				MarkdownDescription: "Cluster name (alphanumeric, hyphens, underscores only)",
+				MarkdownDescription: "Cluster name (RFC 1123 DNS label: lowercase alphanumeric and hyphens, 1-63 characters).",
 				Validators: []validator.String{
+					stringvalidator.LengthBetween(1, 63),
 					stringvalidator.RegexMatches(
-						regexp.MustCompile(`^[a-zA-Z0-9_-]+$`),
-						"must contain only alphanumeric characters, hyphens, and underscores",
+						regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$`),
+						"must contain only lowercase alphanumeric characters and hyphens, must start and end with alphanumeric",
 					),
 				},
 			},
-			"master_nodes": schema.ListAttribute{
-				ElementType:         types.StringType,
+
+			// Network references (FR-001, FR-002, FR-003)
+			"internal_network": schema.StringAttribute{
 				Required:            true,
-				MarkdownDescription: "List of master node UUIDs (minimum 1 required)",
-			},
-			"worker_nodes": schema.ListAttribute{
-				ElementType:         types.StringType,
-				Optional:            true,
-				MarkdownDescription: "List of worker node UUIDs",
-				PlanModifiers: []planmodifier.List{
-					listplanmodifier.UseStateForUnknown(),
+				MarkdownDescription: "UUID of the internal network for cluster node communication.",
+				Validators: []validator.String{
+					stringvalidator.RegexMatches(
+						regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`),
+						"must be a valid UUID",
+					),
 				},
 			},
-			"etcd_nodes": schema.ListAttribute{
-				ElementType:         types.StringType,
-				Optional:            true,
-				MarkdownDescription: "List of node UUIDs designated as etcd cluster members. NVIDIA recommends 3 nodes for production high availability. If not specified, etcd runs on master nodes.",
-				PlanModifiers: []planmodifier.List{
-					listplanmodifier.UseStateForUnknown(),
+			"service_network": schema.StringAttribute{
+				Required:            true,
+				MarkdownDescription: "UUID of the service network for Kubernetes service IPs.",
+				Validators: []validator.String{
+					stringvalidator.RegexMatches(
+						regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`),
+						"must be a valid UUID",
+					),
 				},
 			},
-			"management_network": schema.StringAttribute{
-				Optional:            true,
-				Computed:            true,
-				MarkdownDescription: "Management network UUID for cluster management traffic",
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
+			"pod_network": schema.StringAttribute{
+				Required:            true,
+				MarkdownDescription: "UUID of the pod network for container IPs.",
+				Validators: []validator.String{
+					stringvalidator.RegexMatches(
+						regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`),
+						"must be a valid UUID",
+					),
 				},
 			},
-			"overlay_network": schema.StringAttribute{
-				Optional:            true,
-				Computed:            true,
-				MarkdownDescription: "Overlay network configuration for pod networking (UUID or configuration string)",
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
+
+			// EtcdCluster reference (FR-004)
+			"etcd_cluster": schema.StringAttribute{
+				Required:            true,
+				MarkdownDescription: "UUID of the EtcdCluster entity that backs this Kubernetes cluster.",
+				Validators: []validator.String{
+					stringvalidator.RegexMatches(
+						regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`),
+						"must be a valid UUID",
+					),
 				},
 			},
-			"dns_servers": schema.ListAttribute{
-				ElementType:         types.StringType,
-				Optional:            true,
-				Computed:            true,
-				MarkdownDescription: "List of custom DNS server IPs for the cluster",
-				PlanModifiers: []planmodifier.List{
-					listplanmodifier.UseStateForUnknown(),
-				},
-			},
+
+			// Kubernetes configuration (FR-005, FR-006, FR-009)
 			"version": schema.StringAttribute{
 				Optional:            true,
 				Computed:            true,
-				MarkdownDescription: "Kubernetes version (semver format, e.g., '1.28.0')",
+				MarkdownDescription: "Kubernetes version (semver format, e.g., '1.28.0').",
+				Default:             stringdefault.StaticString("1.28.0"),
 				Validators: []validator.String{
 					stringvalidator.RegexMatches(
 						regexp.MustCompile(`^\d+\.\d+\.\d+$`),
 						"must be valid semver format (e.g., '1.28.0')",
 					),
 				},
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
-				},
 			},
-			"cni_plugin": schema.StringAttribute{
+			"pod_network_node_mask": schema.StringAttribute{
 				Optional:            true,
 				Computed:            true,
-				MarkdownDescription: "CNI plugin selection (e.g., 'calico', 'flannel', 'weave')",
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
+				MarkdownDescription: "Pod network node mask for CIDR allocation (e.g., '/24').",
+				Default:             stringdefault.StaticString("/24"),
+				Validators: []validator.String{
+					stringvalidator.RegexMatches(
+						regexp.MustCompile(`^/\d{1,2}$`),
+						"must be a valid CIDR mask (e.g., '/24')",
+					),
 				},
 			},
-			"storage_classes": schema.StringAttribute{
+			"kube_dns_ip": schema.StringAttribute{
 				Optional:            true,
 				Computed:            true,
-				MarkdownDescription: "Storage class definitions (JSON-encoded array of storage class configurations)",
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
+				MarkdownDescription: "Cluster DNS IP address. BCM sets a default value if not specified.",
+				// No default - BCM is authoritative and may set server-side defaults
+			},
+
+			// API server configuration (FR-007, FR-008, FR-010)
+			"kubernetes_api_server": schema.StringAttribute{
+				Optional:            true,
+				Computed:            true,
+				MarkdownDescription: "Kubernetes API server URL.",
+				// No default - BCM is authoritative
+			},
+			"kubernetes_api_server_proxy_port": schema.Int64Attribute{
+				Optional:            true,
+				Computed:            true,
+				MarkdownDescription: "Kubernetes API server proxy port. BCM defaults to 6444.",
+				// No default - BCM is authoritative and sets 6444
+				Validators: []validator.Int64{
+					int64validator.Between(1, 65535),
 				},
 			},
-			"load_balancer_mode": schema.StringAttribute{
+			"trusted_domains": schema.ListAttribute{
+				ElementType:         types.StringType,
 				Optional:            true,
 				Computed:            true,
-				MarkdownDescription: "Load balancer strategy for the cluster",
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
+				MarkdownDescription: "List of trusted domains for certificate SANs.",
+				// No default - BCM is authoritative
+			},
+
+			// Ingress proxy configuration (FR-014)
+			"ingress_proxy_enable": schema.BoolAttribute{
+				Optional:            true,
+				Computed:            true,
+				MarkdownDescription: "Enable ingress proxy for external traffic routing.",
+				// No default - BCM is authoritative
+			},
+			"ingress_proxy_listen_port": schema.Int64Attribute{
+				Optional:            true,
+				Computed:            true,
+				MarkdownDescription: "Ingress proxy listen port. BCM may set a server-side default.",
+				// No default - BCM is authoritative and may set 443
+				Validators: []validator.Int64{
+					int64validator.Between(0, 65535),
 				},
 			},
-			"addons": schema.StringAttribute{
+			"ingress_proxy_backend_port": schema.Int64Attribute{
 				Optional:            true,
 				Computed:            true,
-				MarkdownDescription: "Cluster addons configuration (JSON-encoded array of addon definitions for monitoring, logging, etc.)",
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
+				MarkdownDescription: "Ingress proxy backend port.",
+				// No default - BCM is authoritative
+				Validators: []validator.Int64{
+					int64validator.Between(0, 65535),
 				},
 			},
-			"ingress_controller": schema.StringAttribute{
+
+			// Extensible options (FR-015)
+			"options": schema.StringAttribute{
 				Optional:            true,
 				Computed:            true,
-				MarkdownDescription: "Ingress controller configuration (JSON-encoded object)",
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
-				},
+				MarkdownDescription: "Extensible configuration options as JSON string.",
+				Default:             stringdefault.StaticString("{}"),
 			},
-			"force": schema.BoolAttribute{
-				Optional:            true,
-				Computed:            true,
-				Default:             booldefault.StaticBool(false),
-				MarkdownDescription: "Bypass validation warnings during operations (default: false)",
-			},
+
+			// Computed metadata
 			"creation_time": schema.Int64Attribute{
 				Computed:            true,
-				MarkdownDescription: "Cluster creation timestamp",
-				PlanModifiers: []planmodifier.Int64{
-					int64planmodifier.UseStateForUnknown(),
-				},
+				MarkdownDescription: "Unix timestamp of when the cluster was created.",
 			},
 			"revision_id": schema.Int64Attribute{
 				Computed:            true,
-				MarkdownDescription: "BCM revision ID for optimistic locking",
+				MarkdownDescription: "Revision number for change tracking.",
+			},
+		},
+
+		// Nested blocks (FR-011, FR-012, FR-013)
+		Blocks: map[string]schema.Block{
+			// AppGroups nested block (FR-011)
+			"app_groups": schema.ListNestedBlock{
+				MarkdownDescription: "Application groups for cluster addons. Each group contains applications (Kubernetes manifests) that can be enabled/disabled together.",
+				NestedObject: schema.NestedBlockObject{
+					Attributes: map[string]schema.Attribute{
+						"name": schema.StringAttribute{
+							Required:            true,
+							MarkdownDescription: "Application group name.",
+						},
+						"enabled": schema.BoolAttribute{
+							Optional:            true,
+							Computed:            true,
+							MarkdownDescription: "Whether the application group is enabled.",
+							Default:             booldefault.StaticBool(true),
+						},
+					},
+					Blocks: map[string]schema.Block{
+						"applications": schema.ListNestedBlock{
+							MarkdownDescription: "Applications within this group.",
+							NestedObject: schema.NestedBlockObject{
+								Attributes: map[string]schema.Attribute{
+									"name": schema.StringAttribute{
+										Required:            true,
+										MarkdownDescription: "Application name.",
+									},
+									"enabled": schema.BoolAttribute{
+										Optional:            true,
+										Computed:            true,
+										MarkdownDescription: "Whether the application is enabled.",
+										Default:             booldefault.StaticBool(true),
+									},
+									"manifest": schema.StringAttribute{
+										Optional:            true,
+										Computed:            true,
+										MarkdownDescription: "Kubernetes manifest YAML/JSON content.",
+										Default:             stringdefault.StaticString(""),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+
+			// LabelSets nested block (FR-012)
+			"label_sets": schema.ListNestedBlock{
+				MarkdownDescription: "Label sets that can be applied to nodes, categories, or overlays.",
+				NestedObject: schema.NestedBlockObject{
+					Attributes: map[string]schema.Attribute{
+						"name": schema.StringAttribute{
+							Required:            true,
+							MarkdownDescription: "Label set name.",
+						},
+						"labels": schema.MapAttribute{
+							ElementType:         types.StringType,
+							Optional:            true,
+							Computed:            true,
+							MarkdownDescription: "Map of label key-value pairs.",
+						},
+					},
+				},
+			},
+
+			// Users nested block (FR-013)
+			"users": schema.ListNestedBlock{
+				MarkdownDescription: "Kubernetes users for kubeconfig management.",
+				NestedObject: schema.NestedBlockObject{
+					Attributes: map[string]schema.Attribute{
+						"name": schema.StringAttribute{
+							Required:            true,
+							MarkdownDescription: "User name.",
+						},
+						"groups": schema.ListAttribute{
+							ElementType:         types.StringType,
+							Optional:            true,
+							Computed:            true,
+							MarkdownDescription: "List of groups the user belongs to.",
+						},
+					},
+				},
 			},
 		},
 	}
 }
 
-// Create creates a new Kubernetes cluster.
+// Create creates a new Kubernetes cluster (FR-018, FR-019).
 func (r *CMKubeClusterResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	if r.Client == nil {
-		resp.Diagnostics.AddError(
-			"Provider Not Configured",
-			"The provider has not been configured. Please ensure the provider block is properly configured.",
-		)
-		return
-	}
+	var data KubeClusterAlignedResourceModel
 
-	var plan CMKubeClusterResourceModel
-
-	// Read Terraform plan data
-	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	// Read Terraform plan data into model
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	// Generate UUID for new cluster (BCM cmkube API requires client-generated UUID)
+	// Nil client check
+	if r.client == nil {
+		resp.Diagnostics.AddError("Client Not Configured", "The BCM client is not configured. Please configure the provider.")
+		return
+	}
+
+	// Generate UUID for new cluster (FR-019: BCM cmkube API requires client-generated UUID)
 	clusterUUID := generateUUID()
 
-	// Build cluster entity for BCM API
-	entity, diags := buildClusterEntity(ctx, plan, clusterUUID)
+	// Build entity
+	entity, diags := r.buildEntity(ctx, &data, clusterUUID)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	// Pre-flight validation: Call validateKubeCluster before CREATE
-	// Note: Service name is "cmkube" (lowercase) - exception to CamelCase pattern
-	validationErrors, err := r.Client.ValidateEntity(ctx, "cmkube", "validateKubeCluster", entity, true)
+	// Pre-flight validation (FR-018)
+	validationErrors, err := r.client.ValidateEntity(ctx, "cmkube", "validateKubeCluster", entity, true)
 	if err != nil {
-		resp.Diagnostics.AddError(
-			"Validation API Error",
-			fmt.Sprintf("Could not validate cluster '%s': %s", plan.Name.ValueString(), err.Error()),
-		)
+		resp.Diagnostics.AddError("Validation API Failed", fmt.Sprintf("Failed to validate KubeCluster: %s", err))
 		return
 	}
-
-	// Process validation results - halt if errors found
 	if ProcessValidationErrors(validationErrors, &resp.Diagnostics) {
 		return
 	}
 
-	// Call BCM API to create cluster
-	tflog.Debug(ctx, "Creating Kubernetes cluster via BCM API", map[string]interface{}{
-		"name": plan.Name.ValueString(),
-	})
-
-	body, err := r.Client.CallJSONRPC(ctx, "cmkube", "addKubeCluster", entity, plan.Force.ValueBool())
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Error Creating Kubernetes Cluster",
-			fmt.Sprintf("Could not create cluster, unexpected error: %s", err.Error()),
-		)
-		return
-	}
-
-	// Parse response to check success
-	var apiResponse map[string]interface{}
-	if err := json.Unmarshal(body, &apiResponse); err != nil {
-		resp.Diagnostics.AddError(
-			"Error Parsing Cluster Creation Response",
-			fmt.Sprintf("Could not parse response: %s", err.Error()),
-		)
-		return
-	}
-
-	// Check for validation errors
-	if success, ok := apiResponse["success"].(bool); ok && !success {
-		resp.Diagnostics.AddError(
-			"Cluster Creation Failed",
-			fmt.Sprintf("BCM API returned success=false: %s", string(body)),
-		)
-		return
-	}
-
-	// Set UUID in state (we generated it, so use the generated value)
-	plan.UUID = types.StringValue(clusterUUID)
-	plan.ID = types.StringValue(clusterUUID)
-
-	tflog.Info(ctx, "Created Kubernetes cluster", map[string]interface{}{
+	// Create via BCM API
+	tflog.Debug(ctx, "Creating KubeCluster", map[string]interface{}{
+		"name": data.Name.ValueString(),
 		"uuid": clusterUUID,
-		"name": plan.Name.ValueString(),
 	})
 
-	// Read back full cluster state from BCM
-	// (This populates computed fields like creation_time, revision_id)
-	// CRITICAL: Preserve optional fields from plan before reading (BCM API may not return them)
-	// Node lists (master_nodes, worker_nodes, etcd_nodes) are write-only fields
-	planMasterNodes := plan.MasterNodes
-	planWorkerNodes := plan.WorkerNodes
-	planEtcdNodes := plan.EtcdNodes
-	planManagementNetwork := plan.ManagementNetwork
-	planOverlayNetwork := plan.OverlayNetwork
-	planDNSServers := plan.DNSServers
-	planVersion := plan.Version
-	planCNIPlugin := plan.CNIPlugin
-	planStorageClasses := plan.StorageClasses
-	planLoadBalancerMode := plan.LoadBalancerMode
-	planAddons := plan.Addons
-	planIngressController := plan.IngressController
-
-	readDiags := r.readCluster(ctx, &plan)
-	resp.Diagnostics.Append(readDiags...)
-	if resp.Diagnostics.HasError() {
+	body, err := r.client.CallJSONRPC(ctx, "cmkube", "addKubeCluster", entity, false)
+	if err != nil {
+		resp.Diagnostics.AddError("Create Failed", fmt.Sprintf("Failed to create KubeCluster: %s", err))
 		return
 	}
 
-	// CRITICAL FIX: Restore write-only node list fields from plan
-	// These fields are accepted by BCM API but NOT returned in getKubeCluster response
-	if !planMasterNodes.IsUnknown() && !planMasterNodes.IsNull() {
-		plan.MasterNodes = planMasterNodes
-	}
-	if !planWorkerNodes.IsUnknown() && !planWorkerNodes.IsNull() {
-		plan.WorkerNodes = planWorkerNodes
-	}
-	if !planEtcdNodes.IsUnknown() && !planEtcdNodes.IsNull() {
-		plan.EtcdNodes = planEtcdNodes
+	// Parse response - BCM returns validation response: {"success": true/false, "validation": [...]}
+	var validationResp struct {
+		Success    bool                     `json:"success"`
+		Validation []map[string]interface{} `json:"validation"`
 	}
 
-	// CRITICAL FIX: Restore optional P3 fields from plan ONLY if they're known values
-	// BCM API may not return these fields, but we want to keep the plan values in state
-	// Never propagate Unknown values - they cause "invalid result object" errors
-	if !planManagementNetwork.IsUnknown() && !planManagementNetwork.IsNull() {
-		plan.ManagementNetwork = planManagementNetwork
-	}
-	if !planOverlayNetwork.IsUnknown() && !planOverlayNetwork.IsNull() {
-		plan.OverlayNetwork = planOverlayNetwork
-	}
-	if !planDNSServers.IsUnknown() && !planDNSServers.IsNull() {
-		plan.DNSServers = planDNSServers
-	}
-	if !planVersion.IsUnknown() && !planVersion.IsNull() {
-		plan.Version = planVersion
-	}
-	if !planCNIPlugin.IsUnknown() && !planCNIPlugin.IsNull() {
-		plan.CNIPlugin = planCNIPlugin
-	}
-	if !planStorageClasses.IsUnknown() && !planStorageClasses.IsNull() {
-		plan.StorageClasses = planStorageClasses
-	}
-	if !planLoadBalancerMode.IsUnknown() && !planLoadBalancerMode.IsNull() {
-		plan.LoadBalancerMode = planLoadBalancerMode
-	}
-	if !planAddons.IsUnknown() && !planAddons.IsNull() {
-		plan.Addons = planAddons
-	}
-	if !planIngressController.IsUnknown() && !planIngressController.IsNull() {
-		plan.IngressController = planIngressController
+	if err := json.Unmarshal(body, &validationResp); err != nil {
+		resp.Diagnostics.AddError(
+			"Response Parse Error",
+			fmt.Sprintf("Failed to parse KubeCluster creation response: %s", err),
+		)
+		return
 	}
 
-	// Save state
-	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+	// Check validation response
+	if !validationResp.Success {
+		var errorMsgs []string
+		for _, v := range validationResp.Validation {
+			if field, ok := v["field"].(string); ok {
+				if msg, ok := v["message"].(string); ok {
+					errorMsgs = append(errorMsgs, fmt.Sprintf("%s: %s", field, msg))
+				}
+			}
+		}
+		resp.Diagnostics.AddError(
+			"KubeCluster Creation Failed",
+			fmt.Sprintf("Failed to create KubeCluster '%s': validation errors: %v", data.Name.ValueString(), errorMsgs),
+		)
+		return
+	}
+
+	// Set UUID in model for read
+	data.ID = types.StringValue(clusterUUID)
+	data.UUID = types.StringValue(clusterUUID)
+
+	tflog.Debug(ctx, "KubeCluster created successfully", map[string]interface{}{
+		"name": data.Name.ValueString(),
+		"uuid": clusterUUID,
+	})
+
+	// Preserve plan values for ALL optional fields that BCM may return different defaults for
+	// This is critical to prevent "inconsistent result after apply" errors
+	planOptions := data.Options
+	planAppGroups := data.AppGroups
+	planLabelSets := data.LabelSets
+	planUsers := data.Users
+	planKubeDnsIP := data.KubeDnsIP
+	planKubernetesAPIServer := data.KubernetesAPIServer
+	planKubernetesAPIServerProxyPort := data.KubernetesAPIServerProxyPort
+	planIngressProxyEnable := data.IngressProxyEnable
+	planIngressProxyListenPort := data.IngressProxyListenPort
+	planIngressProxyBackendPort := data.IngressProxyBackendPort
+	planVersion := data.Version
+	planPodNetworkNodeMask := data.PodNetworkNodeMask
+	planTrustedDomains := data.TrustedDomains
+
+	// Read back created entity to populate all fields with eventual consistency handling
+	maxRetries := 5
+	var lastReadErr error
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		readBody, err := r.client.CallJSONRPC(ctx, "cmkube", "getKubeCluster", clusterUUID)
+		if err != nil {
+			lastReadErr = err
+			if attempt < maxRetries-1 {
+				sleepDuration := time.Duration(1<<attempt) * time.Second
+				tflog.Warn(ctx, "KubeCluster read after create failed, retrying", map[string]interface{}{
+					"attempt":       attempt + 1,
+					"sleep_seconds": sleepDuration.Seconds(),
+					"error":         err.Error(),
+				})
+				time.Sleep(sleepDuration)
+				continue
+			}
+			resp.Diagnostics.AddError(
+				"Read After Create Failed",
+				fmt.Sprintf("Failed to read KubeCluster after create: %s", lastReadErr),
+			)
+			return
+		}
+
+		// Parse the read response
+		var responseData map[string]interface{}
+		if err := json.Unmarshal(readBody, &responseData); err != nil {
+			lastReadErr = err
+			if attempt < maxRetries-1 {
+				sleepDuration := time.Duration(1<<attempt) * time.Second
+				tflog.Warn(ctx, "KubeCluster response parse failed, retrying", map[string]interface{}{
+					"attempt":       attempt + 1,
+					"sleep_seconds": sleepDuration.Seconds(),
+				})
+				time.Sleep(sleepDuration)
+				continue
+			}
+			resp.Diagnostics.AddError(
+				"Response Parse Failed",
+				fmt.Sprintf("Failed to parse KubeCluster response: %s", err),
+			)
+			return
+		}
+
+		// Check if response has expected fields
+		if responseData["name"] != nil && responseData["uuid"] != nil {
+			diags := r.parseResponseIntoModel(ctx, responseData, &data)
+			resp.Diagnostics.Append(diags...)
+			if resp.Diagnostics.HasError() {
+				return
+			}
+			tflog.Debug(ctx, "Successfully read KubeCluster after create", map[string]interface{}{
+				"uuid":    data.UUID.ValueString(),
+				"name":    data.Name.ValueString(),
+				"attempt": attempt + 1,
+			})
+			break
+		}
+
+		if attempt < maxRetries-1 {
+			sleepDuration := time.Duration(1<<attempt) * time.Second
+			tflog.Warn(ctx, "KubeCluster fields not populated, retrying", map[string]interface{}{
+				"attempt":       attempt + 1,
+				"sleep_seconds": sleepDuration.Seconds(),
+			})
+			time.Sleep(sleepDuration)
+		}
+	}
+
+	// Restore plan values ONLY for nested blocks that BCM may not return or returns differently
+	// BCM does return scalar fields (kube_dns_ip, ingress ports, etc.) so we accept those values
+	if !planOptions.IsNull() && !planOptions.IsUnknown() {
+		data.Options = planOptions
+	}
+	if !planAppGroups.IsNull() && !planAppGroups.IsUnknown() {
+		data.AppGroups = planAppGroups
+	}
+	if !planLabelSets.IsNull() && !planLabelSets.IsUnknown() {
+		data.LabelSets = planLabelSets
+	}
+	if !planUsers.IsNull() && !planUsers.IsUnknown() {
+		data.Users = planUsers
+	}
+
+	// Note: We do NOT preserve scalar optional fields (kube_dns_ip, ingress_proxy_listen_port, etc.)
+	// because BCM returns actual values for these and we should accept the server values
+	// This is the Terraform provider pattern for "eventually consistent" APIs where the server
+	// applies defaults - we accept the server's authoritative state
+	_ = planKubeDnsIP
+	_ = planKubernetesAPIServer
+	_ = planKubernetesAPIServerProxyPort
+	_ = planIngressProxyEnable
+	_ = planIngressProxyListenPort
+	_ = planIngressProxyBackendPort
+	_ = planVersion
+	_ = planPodNetworkNodeMask
+	_ = planTrustedDomains
+
+	// Save data into Terraform state
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
 // Read reads the current cluster state from BCM.
 func (r *CMKubeClusterResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	if r.Client == nil {
-		resp.Diagnostics.AddError(
-			"Provider Not Configured",
-			"The provider has not been configured. Please ensure the provider block is properly configured.",
-		)
-		return
-	}
+	var data KubeClusterAlignedResourceModel
 
-	var state CMKubeClusterResourceModel
-
-	// Read current state
-	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	// Read Terraform state data into model
+	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	// CRITICAL: Preserve optional fields from state before reading (BCM API may not return them)
-	// Node lists (master_nodes, worker_nodes, etcd_nodes) are write-only fields
-	stateMasterNodes := state.MasterNodes
-	stateWorkerNodes := state.WorkerNodes
-	stateEtcdNodes := state.EtcdNodes
-	stateManagementNetwork := state.ManagementNetwork
-	stateOverlayNetwork := state.OverlayNetwork
-	stateDNSServers := state.DNSServers
-	stateVersion := state.Version
-	stateCNIPlugin := state.CNIPlugin
-	stateStorageClasses := state.StorageClasses
-	stateLoadBalancerMode := state.LoadBalancerMode
-	stateAddons := state.Addons
-	stateIngressController := state.IngressController
+	// Nil client check
+	if r.client == nil {
+		resp.Diagnostics.AddError("Client Not Configured", "The BCM client is not configured. Please configure the provider.")
+		return
+	}
 
-	// Read cluster from BCM API
-	diags := r.readCluster(ctx, &state)
+	// Preserve state values for fields BCM may not return
+	stateOptions := data.Options
+	stateAppGroups := data.AppGroups
+	stateLabelSets := data.LabelSets
+	stateUsers := data.Users
+
+	// Get from BCM API using UUID
+	identifier := data.UUID.ValueString()
+	if identifier == "" {
+		identifier = data.ID.ValueString()
+	}
+
+	tflog.Debug(ctx, "Reading KubeCluster", map[string]interface{}{
+		"id": identifier,
+	})
+
+	body, err := r.client.CallJSONRPC(ctx, "cmkube", "getKubeCluster", identifier)
+	if err != nil {
+		// Check if resource no longer exists
+		if containsAny(err.Error(), []string{"not found", "does not exist", "404", "null"}) {
+			tflog.Info(ctx, "KubeCluster not found, removing from state", map[string]interface{}{
+				"id": identifier,
+			})
+			resp.State.RemoveResource(ctx)
+			return
+		}
+		resp.Diagnostics.AddError("Read Failed", fmt.Sprintf("Failed to read KubeCluster: %s", err))
+		return
+	}
+
+	// Parse response
+	var responseData map[string]interface{}
+	if err := json.Unmarshal(body, &responseData); err != nil {
+		resp.Diagnostics.AddError("Parse Failed", fmt.Sprintf("Failed to parse KubeCluster response: %s", err))
+		return
+	}
+
+	// Check if response is empty (deleted)
+	if len(responseData) == 0 {
+		tflog.Info(ctx, "KubeCluster returned empty response, removing from state", map[string]interface{}{
+			"id": identifier,
+		})
+		resp.State.RemoveResource(ctx)
+		return
+	}
+
+	// Update model from response
+	diags := r.parseResponseIntoModel(ctx, responseData, &data)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	// CRITICAL FIX: Restore write-only node list fields from prior state
-	// These fields are accepted by BCM API but NOT returned in getKubeCluster response
-	if state.MasterNodes.IsNull() && !stateMasterNodes.IsNull() && !stateMasterNodes.IsUnknown() {
-		state.MasterNodes = stateMasterNodes
+	// Restore state values for fields BCM may not return
+	if !stateOptions.IsNull() && !stateOptions.IsUnknown() && (data.Options.IsNull() || data.Options.ValueString() == "{}") {
+		data.Options = stateOptions
 	}
-	if state.WorkerNodes.IsNull() && !stateWorkerNodes.IsNull() && !stateWorkerNodes.IsUnknown() {
-		state.WorkerNodes = stateWorkerNodes
+	if !stateAppGroups.IsNull() && !stateAppGroups.IsUnknown() && data.AppGroups.IsNull() {
+		data.AppGroups = stateAppGroups
 	}
-	if state.EtcdNodes.IsNull() && !stateEtcdNodes.IsNull() && !stateEtcdNodes.IsUnknown() {
-		state.EtcdNodes = stateEtcdNodes
+	if !stateLabelSets.IsNull() && !stateLabelSets.IsUnknown() && data.LabelSets.IsNull() {
+		data.LabelSets = stateLabelSets
 	}
-
-	// CRITICAL FIX: Restore optional P3 fields from prior state ONLY if BCM returned null
-	// This allows drift detection to work for fields BCM does return (like version, management_network)
-	// while preserving state for P3 fields BCM may not return
-	if state.ManagementNetwork.IsNull() && !stateManagementNetwork.IsNull() && !stateManagementNetwork.IsUnknown() {
-		state.ManagementNetwork = stateManagementNetwork
-	}
-	if state.OverlayNetwork.IsNull() && !stateOverlayNetwork.IsNull() && !stateOverlayNetwork.IsUnknown() {
-		state.OverlayNetwork = stateOverlayNetwork
-	}
-	if state.DNSServers.IsNull() && !stateDNSServers.IsNull() && !stateDNSServers.IsUnknown() {
-		state.DNSServers = stateDNSServers
-	}
-	if state.Version.IsNull() && !stateVersion.IsNull() && !stateVersion.IsUnknown() {
-		state.Version = stateVersion
-	}
-	if state.CNIPlugin.IsNull() && !stateCNIPlugin.IsNull() && !stateCNIPlugin.IsUnknown() {
-		state.CNIPlugin = stateCNIPlugin
-	}
-	if state.StorageClasses.IsNull() && !stateStorageClasses.IsNull() && !stateStorageClasses.IsUnknown() {
-		state.StorageClasses = stateStorageClasses
-	}
-	if state.LoadBalancerMode.IsNull() && !stateLoadBalancerMode.IsNull() && !stateLoadBalancerMode.IsUnknown() {
-		state.LoadBalancerMode = stateLoadBalancerMode
-	}
-	if state.Addons.IsNull() && !stateAddons.IsNull() && !stateAddons.IsUnknown() {
-		state.Addons = stateAddons
-	}
-	if state.IngressController.IsNull() && !stateIngressController.IsNull() && !stateIngressController.IsUnknown() {
-		state.IngressController = stateIngressController
+	if !stateUsers.IsNull() && !stateUsers.IsUnknown() && data.Users.IsNull() {
+		data.Users = stateUsers
 	}
 
-	// Save updated state
-	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
-}
-
-// readCluster is a helper function to read cluster state from BCM API.
-func (r *CMKubeClusterResource) readCluster(ctx context.Context, model *CMKubeClusterResourceModel) diag.Diagnostics {
-	var diags diag.Diagnostics
-
-	clusterUUID := model.UUID.ValueString()
-
-	tflog.Debug(ctx, "Reading Kubernetes cluster from BCM API", map[string]interface{}{
-		"uuid": clusterUUID,
-	})
-
-	// Call BCM API with direct UUID lookup (args pattern)
-	body, err := r.Client.CallJSONRPC(ctx, "cmkube", "getKubeCluster", clusterUUID)
-	if err != nil {
-		diags.AddError(
-			"Error Reading Kubernetes Cluster",
-			fmt.Sprintf("Could not read cluster UUID %s: %s", clusterUUID, err.Error()),
-		)
-		return diags
-	}
-
-	// Parse cluster data
-	var clusterData map[string]interface{}
-	if err := json.Unmarshal(body, &clusterData); err != nil {
-		diags.AddError(
-			"Error Parsing Cluster Data",
-			fmt.Sprintf("Could not parse cluster response: %s", err.Error()),
-		)
-		return diags
-	}
-
-	// Map BCM API fields to Terraform model
-	model.Name = getStringValue(clusterData, "name")
-
-	// Master nodes and Worker nodes
-	// NOTE: BCM cmkube API behavior for node lists:
-	// - masterNodes and workerNodes are write-only fields (used during create/update)
-	// - getKubeCluster does NOT return these fields in the response
-	// - We preserve the plan values to maintain state consistency
-	// - ImportState ignores these fields (see test ImportStateVerifyIgnore)
-	if masterNodes, ok := clusterData["masterNodes"].([]interface{}); ok && len(masterNodes) > 0 {
-		elements := make([]attr.Value, len(masterNodes))
-		for i, node := range masterNodes {
-			if nodeStr, ok := node.(string); ok {
-				elements[i] = types.StringValue(nodeStr)
-			}
-		}
-		model.MasterNodes, _ = types.ListValue(types.StringType, elements)
-	} else {
-		// If BCM doesn't return master nodes, preserve existing value or set empty list
-		if model.MasterNodes.IsNull() || model.MasterNodes.IsUnknown() {
-			model.MasterNodes, _ = types.ListValue(types.StringType, []attr.Value{})
-		}
-	}
-
-	// Worker nodes
-	if workerNodes, ok := clusterData["workerNodes"].([]interface{}); ok && len(workerNodes) > 0 {
-		elements := make([]attr.Value, len(workerNodes))
-		for i, node := range workerNodes {
-			if nodeStr, ok := node.(string); ok {
-				elements[i] = types.StringValue(nodeStr)
-			}
-		}
-		model.WorkerNodes, _ = types.ListValue(types.StringType, elements)
-	} else {
-		// CRITICAL FIX: Preserve null vs empty list distinction
-		// - If model currently has null/unknown, keep it null (don't convert to empty list)
-		// - If model currently has empty list, preserve it as empty list
-		// - This prevents "Provider produced inconsistent result after apply" errors
-		if model.WorkerNodes.IsNull() || model.WorkerNodes.IsUnknown() {
-			model.WorkerNodes = types.ListNull(types.StringType)
-		}
-		// else: preserve existing plan value (which might be an empty list)
-	}
-
-	// Etcd nodes (write-only field - same pattern as master_nodes/worker_nodes)
-	// BCM cmkube API accepts etcdNodes during create/update but does NOT return them in getKubeCluster
-	if model.EtcdNodes.IsNull() || model.EtcdNodes.IsUnknown() {
-		model.EtcdNodes = types.ListNull(types.StringType)
-	}
-	// else: preserve existing state value (which was set via plan)
-
-	// Network configuration (optional)
-	model.ManagementNetwork = getStringValue(clusterData, "managementNetwork")
-	model.OverlayNetwork = getStringValue(clusterData, "overlayNetwork")
-
-	// DNS servers (optional list)
-	if dnsServers, ok := clusterData["dnsServers"].([]interface{}); ok && len(dnsServers) > 0 {
-		elements := make([]attr.Value, len(dnsServers))
-		for i, server := range dnsServers {
-			if serverStr, ok := server.(string); ok {
-				elements[i] = types.StringValue(serverStr)
-			}
-		}
-		model.DNSServers, _ = types.ListValue(types.StringType, elements)
-	} else {
-		if model.DNSServers.IsNull() || model.DNSServers.IsUnknown() {
-			model.DNSServers = types.ListNull(types.StringType)
-		}
-	}
-
-	// Kubernetes configuration (optional)
-	model.Version = getStringValue(clusterData, "version")
-	model.CNIPlugin = getStringValue(clusterData, "cniPlugin")
-
-	// Storage configuration (optional, JSON-encoded)
-	model.StorageClasses = getStringValue(clusterData, "storageClasses")
-
-	// Load balancer configuration (optional)
-	model.LoadBalancerMode = getStringValue(clusterData, "loadBalancerMode")
-
-	// Cluster addons (optional, JSON-encoded)
-	model.Addons = getStringValue(clusterData, "addons")
-
-	// Ingress controller (optional, JSON-encoded)
-	model.IngressController = getStringValue(clusterData, "ingressController")
-
-	// Computed fields
-	model.CreationTime = getInt64Value(clusterData, "creationTime")
-	model.RevisionID = getInt64Value(clusterData, "revisionID")
-
-	// Force is a client-side operation parameter, not stored in BCM
-	// Preserve current value or default to false if null/unknown
-	if model.Force.IsNull() || model.Force.IsUnknown() {
-		model.Force = types.BoolValue(false)
-	}
-
-	return diags
+	// Save updated data into Terraform state
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
 // Update updates an existing Kubernetes cluster.
 func (r *CMKubeClusterResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	if r.Client == nil {
-		resp.Diagnostics.AddError(
-			"Provider Not Configured",
-			"The provider has not been configured. Please ensure the provider block is properly configured.",
-		)
-		return
-	}
+	var data KubeClusterAlignedResourceModel
 
-	var plan CMKubeClusterResourceModel
-	var state CMKubeClusterResourceModel
-
-	// Read plan and current state
-	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
-	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	// Read Terraform plan data into model
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	// Build cluster entity with UUID for update
-	entity, diags := buildClusterEntity(ctx, plan, state.UUID.ValueString())
+	// Nil client check
+	if r.client == nil {
+		resp.Diagnostics.AddError("Client Not Configured", "The BCM client is not configured. Please configure the provider.")
+		return
+	}
+
+	// Preserve plan values for fields BCM may not return
+	planOptions := data.Options
+	planAppGroups := data.AppGroups
+	planLabelSets := data.LabelSets
+	planUsers := data.Users
+
+	// Get current state to preserve UUID
+	var stateData KubeClusterAlignedResourceModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &stateData)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Preserve UUID from state
+	data.UUID = stateData.UUID
+	data.ID = stateData.ID
+
+	// Build entity with existing UUID
+	entity, diags := r.buildEntity(ctx, &data, data.UUID.ValueString())
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	// Pre-flight validation: Call validateKubeCluster before UPDATE
-	// Note: Service name is "cmkube" (lowercase) - exception to CamelCase pattern
-	validationErrors, err := r.Client.ValidateEntity(ctx, "cmkube", "validateKubeCluster", entity, false)
+	// Pre-flight validation (FR-018)
+	validationErrors, err := r.client.ValidateEntity(ctx, "cmkube", "validateKubeCluster", entity, false)
 	if err != nil {
-		resp.Diagnostics.AddError(
-			"Validation API Error",
-			fmt.Sprintf("Could not validate cluster '%s': %s", plan.Name.ValueString(), err.Error()),
-		)
+		resp.Diagnostics.AddError("Validation API Failed", fmt.Sprintf("Failed to validate KubeCluster: %s", err))
 		return
 	}
-
-	// Process validation results - halt if errors found
 	if ProcessValidationErrors(validationErrors, &resp.Diagnostics) {
 		return
 	}
 
-	// Call BCM API to update cluster
-	tflog.Debug(ctx, "Updating Kubernetes cluster via BCM API", map[string]interface{}{
-		"uuid": state.UUID.ValueString(),
-		"name": plan.Name.ValueString(),
+	tflog.Debug(ctx, "Updating KubeCluster", map[string]interface{}{
+		"id":   data.UUID.ValueString(),
+		"name": data.Name.ValueString(),
 	})
 
-	_, err = r.Client.CallJSONRPC(ctx, "cmkube", "updateKubeCluster", entity, plan.Force.ValueBool())
+	// Update via BCM API
+	body, err := r.client.CallJSONRPC(ctx, "cmkube", "updateKubeCluster", entity, false)
 	if err != nil {
+		resp.Diagnostics.AddError("Update Failed", fmt.Sprintf("Failed to update KubeCluster: %s", err))
+		return
+	}
+
+	// Parse response
+	var validationResp struct {
+		Success    bool                     `json:"success"`
+		Validation []map[string]interface{} `json:"validation"`
+	}
+
+	if err := json.Unmarshal(body, &validationResp); err != nil {
 		resp.Diagnostics.AddError(
-			"Error Updating Kubernetes Cluster",
-			fmt.Sprintf("Could not update cluster UUID %s: %s", state.UUID.ValueString(), err.Error()),
+			"Response Parse Error",
+			fmt.Sprintf("Failed to parse KubeCluster update response: %s", err),
 		)
 		return
 	}
 
-	tflog.Info(ctx, "Updated Kubernetes cluster", map[string]interface{}{
-		"uuid": state.UUID.ValueString(),
-	})
+	// Check validation response
+	if !validationResp.Success {
+		var errorMsgs []string
+		for _, v := range validationResp.Validation {
+			if field, ok := v["field"].(string); ok {
+				if msg, ok := v["message"].(string); ok {
+					errorMsgs = append(errorMsgs, fmt.Sprintf("%s: %s", field, msg))
+				}
+			}
+		}
+		resp.Diagnostics.AddError(
+			"KubeCluster Update Failed",
+			fmt.Sprintf("Failed to update KubeCluster '%s': validation errors: %v", data.Name.ValueString(), errorMsgs),
+		)
+		return
+	}
 
-	// Preserve UUID and ID from state
-	plan.UUID = state.UUID
-	plan.ID = state.ID
+	// Read back updated entity
+	readBody, err := r.client.CallJSONRPC(ctx, "cmkube", "getKubeCluster", data.UUID.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Read After Update Failed",
+			fmt.Sprintf("Failed to read KubeCluster after update: %s", err),
+		)
+		return
+	}
 
-	// Read back updated state
-	// CRITICAL: Preserve optional fields from plan before reading (BCM API may not return them)
-	// Node lists (master_nodes, worker_nodes, etcd_nodes) are write-only fields
-	planMasterNodes := plan.MasterNodes
-	planWorkerNodes := plan.WorkerNodes
-	planEtcdNodes := plan.EtcdNodes
-	planManagementNetwork := plan.ManagementNetwork
-	planOverlayNetwork := plan.OverlayNetwork
-	planDNSServers := plan.DNSServers
-	planVersion := plan.Version
-	planCNIPlugin := plan.CNIPlugin
-	planStorageClasses := plan.StorageClasses
-	planLoadBalancerMode := plan.LoadBalancerMode
-	planAddons := plan.Addons
-	planIngressController := plan.IngressController
+	var responseData map[string]interface{}
+	if err := json.Unmarshal(readBody, &responseData); err != nil {
+		resp.Diagnostics.AddError(
+			"Response Parse Failed",
+			fmt.Sprintf("Failed to parse KubeCluster response: %s", err),
+		)
+		return
+	}
 
-	readDiags := r.readCluster(ctx, &plan)
-	resp.Diagnostics.Append(readDiags...)
+	parseDiags := r.parseResponseIntoModel(ctx, responseData, &data)
+	resp.Diagnostics.Append(parseDiags...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	// CRITICAL FIX: Restore write-only node list fields from plan
-	// These fields are accepted by BCM API but NOT returned in getKubeCluster response
-	if !planMasterNodes.IsUnknown() && !planMasterNodes.IsNull() {
-		plan.MasterNodes = planMasterNodes
+	// Restore plan values for fields BCM may not return
+	if !planOptions.IsNull() && !planOptions.IsUnknown() {
+		data.Options = planOptions
 	}
-	if !planWorkerNodes.IsUnknown() && !planWorkerNodes.IsNull() {
-		plan.WorkerNodes = planWorkerNodes
+	if !planAppGroups.IsNull() && !planAppGroups.IsUnknown() {
+		data.AppGroups = planAppGroups
 	}
-	if !planEtcdNodes.IsUnknown() && !planEtcdNodes.IsNull() {
-		plan.EtcdNodes = planEtcdNodes
+	if !planLabelSets.IsNull() && !planLabelSets.IsUnknown() {
+		data.LabelSets = planLabelSets
 	}
-
-	// CRITICAL FIX: Restore optional P3 fields from plan ONLY if they're known values
-	// BCM API may not return these fields, but we want to keep the plan values in state
-	// Never propagate Unknown values - they cause "invalid result object" errors
-	if !planManagementNetwork.IsUnknown() && !planManagementNetwork.IsNull() {
-		plan.ManagementNetwork = planManagementNetwork
-	}
-	if !planOverlayNetwork.IsUnknown() && !planOverlayNetwork.IsNull() {
-		plan.OverlayNetwork = planOverlayNetwork
-	}
-	if !planDNSServers.IsUnknown() && !planDNSServers.IsNull() {
-		plan.DNSServers = planDNSServers
-	}
-	if !planVersion.IsUnknown() && !planVersion.IsNull() {
-		plan.Version = planVersion
-	}
-	if !planCNIPlugin.IsUnknown() && !planCNIPlugin.IsNull() {
-		plan.CNIPlugin = planCNIPlugin
-	}
-	if !planStorageClasses.IsUnknown() && !planStorageClasses.IsNull() {
-		plan.StorageClasses = planStorageClasses
-	}
-	if !planLoadBalancerMode.IsUnknown() && !planLoadBalancerMode.IsNull() {
-		plan.LoadBalancerMode = planLoadBalancerMode
-	}
-	if !planAddons.IsUnknown() && !planAddons.IsNull() {
-		plan.Addons = planAddons
-	}
-	if !planIngressController.IsUnknown() && !planIngressController.IsNull() {
-		plan.IngressController = planIngressController
+	if !planUsers.IsNull() && !planUsers.IsUnknown() {
+		data.Users = planUsers
 	}
 
-	// Save state
-	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+	tflog.Debug(ctx, "Updated KubeCluster", map[string]interface{}{
+		"id":   data.ID.ValueString(),
+		"name": data.Name.ValueString(),
+	})
+
+	// Save updated data into Terraform state
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
 // Delete removes a Kubernetes cluster.
 func (r *CMKubeClusterResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	if r.Client == nil {
-		resp.Diagnostics.AddError(
-			"Provider Not Configured",
-			"The provider has not been configured. Please ensure the provider block is properly configured.",
-		)
-		return
-	}
+	var data KubeClusterAlignedResourceModel
 
-	var state CMKubeClusterResourceModel
-
-	// Read current state
-	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	// Read Terraform state data into model
+	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	clusterUUID := state.UUID.ValueString()
-
-	tflog.Debug(ctx, "Deleting Kubernetes cluster via BCM API", map[string]interface{}{
-		"uuid": clusterUUID,
-	})
-
-	// Call BCM API to delete cluster
-	_, err := r.Client.CallJSONRPC(ctx, "cmkube", "removeKubeCluster", clusterUUID, state.Force.ValueBool())
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Error Deleting Kubernetes Cluster",
-			fmt.Sprintf("Could not delete cluster UUID %s: %s", clusterUUID, err.Error()),
-		)
+	// Nil client check
+	if r.client == nil {
+		resp.Diagnostics.AddError("Client Not Configured", "The BCM client is not configured. Please configure the provider.")
 		return
 	}
 
-	tflog.Info(ctx, "Deleted Kubernetes cluster", map[string]interface{}{
-		"uuid": clusterUUID,
+	uuid := data.UUID.ValueString()
+	if uuid == "" {
+		uuid = data.ID.ValueString()
+	}
+
+	tflog.Debug(ctx, "Deleting KubeCluster", map[string]interface{}{
+		"id":   uuid,
+		"name": data.Name.ValueString(),
 	})
 
-	// State is automatically cleared by framework after successful Delete
+	// Delete via BCM API
+	_, err := r.client.CallJSONRPC(ctx, "cmkube", "removeKubeCluster", uuid, false)
+	if err != nil {
+		// Ignore "not found" errors during delete (idempotent)
+		if !containsAny(err.Error(), []string{"not found", "does not exist", "404"}) {
+			resp.Diagnostics.AddError("Delete Failed", fmt.Sprintf("Failed to delete KubeCluster: %s", err))
+			return
+		}
+		tflog.Info(ctx, "KubeCluster already deleted", map[string]interface{}{
+			"id": uuid,
+		})
+	}
+
+	tflog.Debug(ctx, "Deleted KubeCluster", map[string]interface{}{
+		"id": uuid,
+	})
 }
 
-// ImportState imports an existing cluster by UUID.
+// ImportState imports an existing cluster by UUID (FR-017).
 func (r *CMKubeClusterResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	// Import by ID (consistent with other resources - id and uuid are equivalent)
+	// Import by UUID
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
-
-	// Also set UUID to same value for consistency
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("uuid"), req.ID)...)
 }
 
-// buildClusterEntity constructs a BCM KubeCluster entity from Terraform model.
-// NOTE: BCM cmkube API requires client-generated UUIDs (unlike other BCM services).
-func buildClusterEntity(ctx context.Context, model CMKubeClusterResourceModel, uuid string) (map[string]interface{}, diag.Diagnostics) {
+// =============================================================================
+// Helper Methods
+// =============================================================================
+
+// buildEntity constructs a BCM KubeCluster entity from Terraform model.
+func (r *CMKubeClusterResource) buildEntity(ctx context.Context, data *KubeClusterAlignedResourceModel, uuid string) (map[string]interface{}, diag.Diagnostics) {
 	var diags diag.Diagnostics
 
 	entity := map[string]interface{}{
@@ -813,80 +840,450 @@ func buildClusterEntity(ctx context.Context, model CMKubeClusterResourceModel, u
 		"revision":      "",
 	}
 
-	// Add UUID if updating
+	// Set or use provided UUID
 	if uuid != "" {
 		entity["uuid"] = uuid
+	} else {
+		entity["uuid"] = generateUUID()
 	}
 
 	// Required fields
-	entity["name"] = model.Name.ValueString()
+	entity["name"] = data.Name.ValueString()
 
-	// Master nodes (required)
-	var masterNodes []string
-	diags.Append(model.MasterNodes.ElementsAs(ctx, &masterNodes, false)...)
-	entity["masterNodes"] = masterNodes
+	// Network references (FR-001, FR-002, FR-003)
+	entity["internalNetwork"] = data.InternalNetwork.ValueString()
+	entity["serviceNetwork"] = data.ServiceNetwork.ValueString()
+	entity["podNetwork"] = data.PodNetwork.ValueString()
 
-	// Worker nodes (optional)
-	if !model.WorkerNodes.IsNull() && !model.WorkerNodes.IsUnknown() {
-		var workerNodes []string
-		diags.Append(model.WorkerNodes.ElementsAs(ctx, &workerNodes, false)...)
-		entity["workerNodes"] = workerNodes
+	// EtcdCluster reference (FR-004)
+	entity["etcdCluster"] = data.EtcdCluster.ValueString()
+
+	// Kubernetes configuration (FR-005, FR-006, FR-009)
+	if !data.Version.IsNull() && !data.Version.IsUnknown() {
+		entity["version"] = data.Version.ValueString()
+	}
+	if !data.PodNetworkNodeMask.IsNull() && !data.PodNetworkNodeMask.IsUnknown() {
+		entity["podNetworkNodeMask"] = data.PodNetworkNodeMask.ValueString()
+	}
+	if !data.KubeDnsIP.IsNull() && !data.KubeDnsIP.IsUnknown() && data.KubeDnsIP.ValueString() != "" {
+		entity["kubeDnsIp"] = data.KubeDnsIP.ValueString()
+	}
+
+	// API server configuration (FR-007, FR-008, FR-010)
+	if !data.KubernetesAPIServer.IsNull() && !data.KubernetesAPIServer.IsUnknown() && data.KubernetesAPIServer.ValueString() != "" {
+		entity["kubernetesApiServer"] = data.KubernetesAPIServer.ValueString()
+	}
+	if !data.KubernetesAPIServerProxyPort.IsNull() && !data.KubernetesAPIServerProxyPort.IsUnknown() {
+		entity["kubernetesApiServerProxyPort"] = data.KubernetesAPIServerProxyPort.ValueInt64()
+	}
+
+	// Trusted domains (FR-010)
+	if !data.TrustedDomains.IsNull() && !data.TrustedDomains.IsUnknown() {
+		var trustedDomains []string
+		diags.Append(data.TrustedDomains.ElementsAs(ctx, &trustedDomains, false)...)
+		entity["trustedDomains"] = trustedDomains
 	} else {
-		entity["workerNodes"] = []string{}
+		entity["trustedDomains"] = []string{}
 	}
 
-	// Etcd nodes (optional) - for dedicated etcd cluster members
-	if !model.EtcdNodes.IsNull() && !model.EtcdNodes.IsUnknown() {
-		var etcdNodes []string
-		diags.Append(model.EtcdNodes.ElementsAs(ctx, &etcdNodes, false)...)
-		entity["etcdNodes"] = etcdNodes
+	// Ingress proxy configuration (FR-014)
+	if !data.IngressProxyEnable.IsNull() && !data.IngressProxyEnable.IsUnknown() {
+		entity["ingressProxyEnable"] = data.IngressProxyEnable.ValueBool()
+	}
+	if !data.IngressProxyListenPort.IsNull() && !data.IngressProxyListenPort.IsUnknown() && data.IngressProxyListenPort.ValueInt64() > 0 {
+		entity["ingressProxyListenPort"] = data.IngressProxyListenPort.ValueInt64()
+	}
+	if !data.IngressProxyBackendPort.IsNull() && !data.IngressProxyBackendPort.IsUnknown() && data.IngressProxyBackendPort.ValueInt64() > 0 {
+		entity["ingressProxyBackendPort"] = data.IngressProxyBackendPort.ValueInt64()
 	}
 
-	// Network configuration (optional)
-	if !model.ManagementNetwork.IsNull() && !model.ManagementNetwork.IsUnknown() {
-		entity["managementNetwork"] = model.ManagementNetwork.ValueString()
+	// Options (FR-015)
+	if !data.Options.IsNull() && !data.Options.IsUnknown() && data.Options.ValueString() != "" && data.Options.ValueString() != "{}" {
+		var options map[string]interface{}
+		if err := json.Unmarshal([]byte(data.Options.ValueString()), &options); err == nil {
+			entity["options"] = options
+		} else {
+			entity["options"] = map[string]interface{}{}
+		}
+	} else {
+		entity["options"] = map[string]interface{}{}
 	}
 
-	if !model.OverlayNetwork.IsNull() && !model.OverlayNetwork.IsUnknown() {
-		entity["overlayNetwork"] = model.OverlayNetwork.ValueString()
+	// AppGroups (FR-011)
+	if !data.AppGroups.IsNull() && !data.AppGroups.IsUnknown() {
+		var appGroups []KubeAppGroupModel
+		diags.Append(data.AppGroups.ElementsAs(ctx, &appGroups, false)...)
+		if len(appGroups) > 0 {
+			appGroupsData := make([]map[string]interface{}, len(appGroups))
+			for i, ag := range appGroups {
+				appGroupsData[i] = map[string]interface{}{
+					"baseType":  "KubeAppGroup",
+					"childType": "",
+					"name":      ag.Name.ValueString(),
+					"enabled":   ag.Enabled.ValueBool(),
+				}
+
+				// Applications within the group
+				if !ag.Applications.IsNull() && !ag.Applications.IsUnknown() {
+					var apps []KubeAppModel
+					diags.Append(ag.Applications.ElementsAs(ctx, &apps, false)...)
+					if len(apps) > 0 {
+						appsData := make([]map[string]interface{}, len(apps))
+						for j, app := range apps {
+							appsData[j] = map[string]interface{}{
+								"baseType":  "KubeApp",
+								"childType": "",
+								"name":      app.Name.ValueString(),
+								"enabled":   app.Enabled.ValueBool(),
+								"manifest":  app.Manifest.ValueString(),
+							}
+						}
+						appGroupsData[i]["applications"] = appsData
+					} else {
+						appGroupsData[i]["applications"] = []map[string]interface{}{}
+					}
+				} else {
+					appGroupsData[i]["applications"] = []map[string]interface{}{}
+				}
+			}
+			entity["appGroups"] = appGroupsData
+		}
 	}
 
-	// DNS servers (optional list)
-	if !model.DNSServers.IsNull() && !model.DNSServers.IsUnknown() {
-		var dnsServers []string
-		diags.Append(model.DNSServers.ElementsAs(ctx, &dnsServers, false)...)
-		entity["dnsServers"] = dnsServers
+	// LabelSets (FR-012)
+	if !data.LabelSets.IsNull() && !data.LabelSets.IsUnknown() {
+		var labelSets []KubeLabelSetModel
+		diags.Append(data.LabelSets.ElementsAs(ctx, &labelSets, false)...)
+		if len(labelSets) > 0 {
+			labelSetsData := make([]map[string]interface{}, len(labelSets))
+			for i, ls := range labelSets {
+				labelSetsData[i] = map[string]interface{}{
+					"baseType":  "KubeLabelSet",
+					"childType": "",
+					"name":      ls.Name.ValueString(),
+				}
+				if !ls.Labels.IsNull() && !ls.Labels.IsUnknown() {
+					var labels map[string]string
+					diags.Append(ls.Labels.ElementsAs(ctx, &labels, false)...)
+					labelSetsData[i]["labels"] = labels
+				} else {
+					labelSetsData[i]["labels"] = map[string]string{}
+				}
+			}
+			entity["labelSets"] = labelSetsData
+		}
 	}
 
-	// Kubernetes configuration (optional)
-	if !model.Version.IsNull() && !model.Version.IsUnknown() {
-		entity["version"] = model.Version.ValueString()
-	}
-
-	if !model.CNIPlugin.IsNull() && !model.CNIPlugin.IsUnknown() {
-		entity["cniPlugin"] = model.CNIPlugin.ValueString()
-	}
-
-	// Storage configuration (optional, JSON-encoded)
-	if !model.StorageClasses.IsNull() && !model.StorageClasses.IsUnknown() {
-		// Store as JSON string that BCM API will parse
-		entity["storageClasses"] = model.StorageClasses.ValueString()
-	}
-
-	// Load balancer configuration (optional)
-	if !model.LoadBalancerMode.IsNull() && !model.LoadBalancerMode.IsUnknown() {
-		entity["loadBalancerMode"] = model.LoadBalancerMode.ValueString()
-	}
-
-	// Cluster addons (optional, JSON-encoded)
-	if !model.Addons.IsNull() && !model.Addons.IsUnknown() {
-		entity["addons"] = model.Addons.ValueString()
-	}
-
-	// Ingress controller (optional, JSON-encoded)
-	if !model.IngressController.IsNull() && !model.IngressController.IsUnknown() {
-		entity["ingressController"] = model.IngressController.ValueString()
+	// Users (FR-013)
+	if !data.Users.IsNull() && !data.Users.IsUnknown() {
+		var users []KubeUserModel
+		diags.Append(data.Users.ElementsAs(ctx, &users, false)...)
+		if len(users) > 0 {
+			usersData := make([]map[string]interface{}, len(users))
+			for i, u := range users {
+				usersData[i] = map[string]interface{}{
+					"baseType":  "KubeUser",
+					"childType": "",
+					"name":      u.Name.ValueString(),
+				}
+				if !u.Groups.IsNull() && !u.Groups.IsUnknown() {
+					var groups []string
+					diags.Append(u.Groups.ElementsAs(ctx, &groups, false)...)
+					usersData[i]["groups"] = groups
+				} else {
+					usersData[i]["groups"] = []string{}
+				}
+			}
+			entity["users"] = usersData
+		}
 	}
 
 	return entity, diags
+}
+
+// parseResponseIntoModel updates the Terraform model from BCM API response.
+func (r *CMKubeClusterResource) parseResponseIntoModel(ctx context.Context, data map[string]interface{}, model *KubeClusterAlignedResourceModel) diag.Diagnostics {
+	var diags diag.Diagnostics
+
+	// Parse identifiers
+	model.UUID = getStringValue(data, "uuid")
+	model.ID = model.UUID
+	model.Name = getStringValue(data, "name")
+
+	// Parse network references
+	model.InternalNetwork = getStringValue(data, "internalNetwork")
+	model.ServiceNetwork = getStringValue(data, "serviceNetwork")
+	model.PodNetwork = getStringValue(data, "podNetwork")
+	model.EtcdCluster = getStringValue(data, "etcdCluster")
+
+	// Parse Kubernetes configuration
+	model.Version = getStringValue(data, "version")
+	model.PodNetworkNodeMask = getStringValue(data, "podNetworkNodeMask")
+	model.KubeDnsIP = getStringValue(data, "kubeDnsIp")
+
+	// Parse API server configuration
+	model.KubernetesAPIServer = getStringValue(data, "kubernetesApiServer")
+	model.KubernetesAPIServerProxyPort = getInt64Value(data, "kubernetesApiServerProxyPort")
+
+	// Parse trusted domains
+	if trustedDomains, ok := data["trustedDomains"].([]interface{}); ok && len(trustedDomains) > 0 {
+		elements := make([]attr.Value, len(trustedDomains))
+		for i, domain := range trustedDomains {
+			if domainStr, ok := domain.(string); ok {
+				elements[i] = types.StringValue(domainStr)
+			}
+		}
+		model.TrustedDomains, _ = types.ListValue(types.StringType, elements)
+	} else {
+		model.TrustedDomains, _ = types.ListValue(types.StringType, []attr.Value{})
+	}
+
+	// Parse ingress proxy configuration
+	model.IngressProxyEnable = getBoolValue(data, "ingressProxyEnable")
+	model.IngressProxyListenPort = getInt64Value(data, "ingressProxyListenPort")
+	model.IngressProxyBackendPort = getInt64Value(data, "ingressProxyBackendPort")
+
+	// Parse options as JSON string
+	if options, ok := data["options"]; ok && options != nil {
+		if optMap, ok := options.(map[string]interface{}); ok {
+			optBytes, err := json.Marshal(optMap)
+			if err == nil {
+				model.Options = types.StringValue(string(optBytes))
+			} else {
+				model.Options = types.StringValue("{}")
+			}
+		} else {
+			model.Options = types.StringValue("{}")
+		}
+	} else {
+		model.Options = types.StringValue("{}")
+	}
+
+	// Parse AppGroups (complex nested structure)
+	if appGroupsData, ok := data["appGroups"].([]interface{}); ok && len(appGroupsData) > 0 {
+		appGroupsList, appGroupsDiags := parseAppGroupsFromAPI(ctx, appGroupsData)
+		diags.Append(appGroupsDiags...)
+		model.AppGroups = appGroupsList
+	} else {
+		model.AppGroups = types.ListNull(types.ObjectType{AttrTypes: kubeAppGroupAttrTypes()})
+	}
+
+	// Parse LabelSets
+	if labelSetsData, ok := data["labelSets"].([]interface{}); ok && len(labelSetsData) > 0 {
+		labelSetsList, labelSetsDiags := parseLabelSetsFromAPI(ctx, labelSetsData)
+		diags.Append(labelSetsDiags...)
+		model.LabelSets = labelSetsList
+	} else {
+		model.LabelSets = types.ListNull(types.ObjectType{AttrTypes: kubeLabelSetAttrTypes()})
+	}
+
+	// Parse Users
+	if usersData, ok := data["users"].([]interface{}); ok && len(usersData) > 0 {
+		usersList, usersDiags := parseUsersFromAPI(ctx, usersData)
+		diags.Append(usersDiags...)
+		model.Users = usersList
+	} else {
+		model.Users = types.ListNull(types.ObjectType{AttrTypes: kubeUserAttrTypes()})
+	}
+
+	// Parse computed fields
+	model.CreationTime = getInt64Value(data, "creationTime")
+	model.RevisionID = getInt64Value(data, "revisionID")
+
+	return diags
+}
+
+// =============================================================================
+// Nested Type Helpers
+// =============================================================================
+
+// kubeAppGroupAttrTypes returns the attribute types for KubeAppGroup.
+func kubeAppGroupAttrTypes() map[string]attr.Type {
+	return map[string]attr.Type{
+		"name":    types.StringType,
+		"enabled": types.BoolType,
+		"applications": types.ListType{
+			ElemType: types.ObjectType{
+				AttrTypes: kubeAppAttrTypes(),
+			},
+		},
+	}
+}
+
+// kubeAppAttrTypes returns the attribute types for KubeApp.
+func kubeAppAttrTypes() map[string]attr.Type {
+	return map[string]attr.Type{
+		"name":     types.StringType,
+		"enabled":  types.BoolType,
+		"manifest": types.StringType,
+	}
+}
+
+// kubeLabelSetAttrTypes returns the attribute types for KubeLabelSet.
+func kubeLabelSetAttrTypes() map[string]attr.Type {
+	return map[string]attr.Type{
+		"name": types.StringType,
+		"labels": types.MapType{
+			ElemType: types.StringType,
+		},
+	}
+}
+
+// kubeUserAttrTypes returns the attribute types for KubeUser.
+func kubeUserAttrTypes() map[string]attr.Type {
+	return map[string]attr.Type{
+		"name": types.StringType,
+		"groups": types.ListType{
+			ElemType: types.StringType,
+		},
+	}
+}
+
+// parseAppGroupsFromAPI parses appGroups from BCM API response into Terraform types.
+func parseAppGroupsFromAPI(ctx context.Context, appGroupsData []interface{}) (types.List, diag.Diagnostics) {
+	var diags diag.Diagnostics
+
+	appGroupElements := make([]attr.Value, 0, len(appGroupsData))
+	for _, agData := range appGroupsData {
+		agMap, ok := agData.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		// Parse applications within the group
+		var applicationsValue types.List
+		if appsData, ok := agMap["applications"].([]interface{}); ok && len(appsData) > 0 {
+			appElements := make([]attr.Value, 0, len(appsData))
+			for _, appData := range appsData {
+				appMap, ok := appData.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				appObj, appDiags := types.ObjectValue(kubeAppAttrTypes(), map[string]attr.Value{
+					"name":     getStringValueForTF(appMap, "name"),
+					"enabled":  getBoolValueForTF(appMap, "enabled"),
+					"manifest": getStringValueForTF(appMap, "manifest"),
+				})
+				diags.Append(appDiags...)
+				appElements = append(appElements, appObj)
+			}
+			var listDiags diag.Diagnostics
+			applicationsValue, listDiags = types.ListValue(types.ObjectType{AttrTypes: kubeAppAttrTypes()}, appElements)
+			diags.Append(listDiags...)
+		} else {
+			applicationsValue, _ = types.ListValue(types.ObjectType{AttrTypes: kubeAppAttrTypes()}, []attr.Value{})
+		}
+
+		agObj, agDiags := types.ObjectValue(kubeAppGroupAttrTypes(), map[string]attr.Value{
+			"name":         getStringValueForTF(agMap, "name"),
+			"enabled":      getBoolValueForTF(agMap, "enabled"),
+			"applications": applicationsValue,
+		})
+		diags.Append(agDiags...)
+		appGroupElements = append(appGroupElements, agObj)
+	}
+
+	result, listDiags := types.ListValue(types.ObjectType{AttrTypes: kubeAppGroupAttrTypes()}, appGroupElements)
+	diags.Append(listDiags...)
+	return result, diags
+}
+
+// parseLabelSetsFromAPI parses labelSets from BCM API response into Terraform types.
+func parseLabelSetsFromAPI(ctx context.Context, labelSetsData []interface{}) (types.List, diag.Diagnostics) {
+	var diags diag.Diagnostics
+
+	labelSetElements := make([]attr.Value, 0, len(labelSetsData))
+	for _, lsData := range labelSetsData {
+		lsMap, ok := lsData.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		// Parse labels map
+		var labelsValue types.Map
+		if labelsData, ok := lsMap["labels"].(map[string]interface{}); ok && len(labelsData) > 0 {
+			labelElements := make(map[string]attr.Value)
+			for k, v := range labelsData {
+				if vStr, ok := v.(string); ok {
+					labelElements[k] = types.StringValue(vStr)
+				}
+			}
+			var mapDiags diag.Diagnostics
+			labelsValue, mapDiags = types.MapValue(types.StringType, labelElements)
+			diags.Append(mapDiags...)
+		} else {
+			labelsValue, _ = types.MapValue(types.StringType, map[string]attr.Value{})
+		}
+
+		lsObj, lsDiags := types.ObjectValue(kubeLabelSetAttrTypes(), map[string]attr.Value{
+			"name":   getStringValueForTF(lsMap, "name"),
+			"labels": labelsValue,
+		})
+		diags.Append(lsDiags...)
+		labelSetElements = append(labelSetElements, lsObj)
+	}
+
+	result, listDiags := types.ListValue(types.ObjectType{AttrTypes: kubeLabelSetAttrTypes()}, labelSetElements)
+	diags.Append(listDiags...)
+	return result, diags
+}
+
+// parseUsersFromAPI parses users from BCM API response into Terraform types.
+func parseUsersFromAPI(ctx context.Context, usersData []interface{}) (types.List, diag.Diagnostics) {
+	var diags diag.Diagnostics
+
+	userElements := make([]attr.Value, 0, len(usersData))
+	for _, uData := range usersData {
+		uMap, ok := uData.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		// Parse groups list
+		var groupsValue types.List
+		if groupsData, ok := uMap["groups"].([]interface{}); ok && len(groupsData) > 0 {
+			groupElements := make([]attr.Value, len(groupsData))
+			for i, g := range groupsData {
+				if gStr, ok := g.(string); ok {
+					groupElements[i] = types.StringValue(gStr)
+				}
+			}
+			var listDiags diag.Diagnostics
+			groupsValue, listDiags = types.ListValue(types.StringType, groupElements)
+			diags.Append(listDiags...)
+		} else {
+			groupsValue, _ = types.ListValue(types.StringType, []attr.Value{})
+		}
+
+		uObj, uDiags := types.ObjectValue(kubeUserAttrTypes(), map[string]attr.Value{
+			"name":   getStringValueForTF(uMap, "name"),
+			"groups": groupsValue,
+		})
+		diags.Append(uDiags...)
+		userElements = append(userElements, uObj)
+	}
+
+	result, listDiags := types.ListValue(types.ObjectType{AttrTypes: kubeUserAttrTypes()}, userElements)
+	diags.Append(listDiags...)
+	return result, diags
+}
+
+// getStringValueForTF extracts a string value from a map and returns it as types.String.
+func getStringValueForTF(data map[string]interface{}, key string) types.String {
+	if v, ok := data[key]; ok && v != nil {
+		if s, ok := v.(string); ok {
+			return types.StringValue(s)
+		}
+	}
+	return types.StringValue("")
+}
+
+// getBoolValueForTF extracts a bool value from a map and returns it as types.Bool.
+func getBoolValueForTF(data map[string]interface{}, key string) types.Bool {
+	if v, ok := data[key]; ok && v != nil {
+		if b, ok := v.(bool); ok {
+			return types.BoolValue(b)
+		}
+	}
+	return types.BoolValue(false)
 }
