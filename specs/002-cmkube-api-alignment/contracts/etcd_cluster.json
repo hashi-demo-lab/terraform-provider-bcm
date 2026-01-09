@@ -1,0 +1,125 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "BCM EtcdCluster Entity",
+  "description": "BCM CMEtcd service EtcdCluster entity for Terraform provider",
+  "type": "object",
+  "required": ["baseType", "uuid", "name"],
+  "properties": {
+    "baseType": {
+      "type": "string",
+      "const": "EtcdCluster",
+      "description": "Entity base type, always 'EtcdCluster'"
+    },
+    "childType": {
+      "type": "string",
+      "default": "",
+      "description": "Entity child type (empty for EtcdCluster)"
+    },
+    "uuid": {
+      "type": "string",
+      "format": "uuid",
+      "description": "BCM-assigned UUID (RFC 4122)"
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$",
+      "description": "Cluster name (RFC 1123 DNS label)"
+    },
+    "heartbeatInterval": {
+      "type": "integer",
+      "default": 100,
+      "minimum": 50,
+      "maximum": 500,
+      "description": "Etcd heartbeat interval in milliseconds"
+    },
+    "electionTimeout": {
+      "type": "integer",
+      "default": 1000,
+      "minimum": 500,
+      "maximum": 5000,
+      "description": "Etcd election timeout in milliseconds (should be >= 5x heartbeat)"
+    },
+    "options": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Extensible configuration options (JSON object)"
+    },
+    "modified": {
+      "type": "boolean",
+      "default": true,
+      "description": "Entity modification flag"
+    },
+    "to_be_removed": {
+      "type": "boolean",
+      "default": false,
+      "description": "Entity deletion flag"
+    },
+    "revision": {
+      "type": "string",
+      "default": "",
+      "description": "Entity revision for optimistic locking"
+    },
+    "creationTime": {
+      "type": "integer",
+      "description": "Unix timestamp of creation (computed)"
+    },
+    "revisionID": {
+      "type": "integer",
+      "description": "Revision number for change tracking (computed)"
+    }
+  },
+  "examples": [
+    {
+      "baseType": "EtcdCluster",
+      "childType": "",
+      "uuid": "e1e2e3e4-f5f6-7890-abcd-ef1234567890",
+      "name": "production-etcd",
+      "heartbeatInterval": 100,
+      "electionTimeout": 1000,
+      "options": {},
+      "modified": true,
+      "to_be_removed": false,
+      "revision": "",
+      "creationTime": 1704844800,
+      "revisionID": 1
+    }
+  ],
+  "apiMethods": {
+    "create": {
+      "service": "cmetcd",
+      "method": "addEtcdCluster",
+      "parameters": ["entity"],
+      "description": "Create a new EtcdCluster"
+    },
+    "read": {
+      "service": "cmetcd",
+      "method": "getEtcdCluster",
+      "parameters": ["uuid"],
+      "description": "Get EtcdCluster by UUID"
+    },
+    "update": {
+      "service": "cmetcd",
+      "method": "updateEtcdCluster",
+      "parameters": ["entity"],
+      "description": "Update an existing EtcdCluster"
+    },
+    "delete": {
+      "service": "cmetcd",
+      "method": "removeEtcdCluster",
+      "parameters": ["uuid"],
+      "description": "Delete an EtcdCluster"
+    },
+    "list": {
+      "service": "cmetcd",
+      "method": "getEtcdClusters",
+      "parameters": [],
+      "description": "List all EtcdClusters"
+    },
+    "validate": {
+      "service": "cmetcd",
+      "method": "validateEtcdCluster",
+      "parameters": ["entity", "isCreate"],
+      "description": "Validate an EtcdCluster entity before create/update"
+    }
+  }
+}

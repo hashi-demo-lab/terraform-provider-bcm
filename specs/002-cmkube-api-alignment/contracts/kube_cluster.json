@@ -1,0 +1,279 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "BCM KubeCluster Entity",
+  "description": "BCM CMKube service KubeCluster entity for Terraform provider",
+  "type": "object",
+  "required": ["baseType", "uuid", "name", "internalNetwork", "serviceNetwork", "podNetwork", "etcdCluster"],
+  "properties": {
+    "baseType": {
+      "type": "string",
+      "const": "KubeCluster",
+      "description": "Entity base type, always 'KubeCluster'"
+    },
+    "childType": {
+      "type": "string",
+      "default": "",
+      "description": "Entity child type (empty for KubeCluster)"
+    },
+    "uuid": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Client-generated UUID (RFC 4122)"
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$",
+      "description": "Cluster name (RFC 1123 DNS label)"
+    },
+    "internalNetwork": {
+      "type": "string",
+      "format": "uuid",
+      "description": "UUID reference to Network entity for internal cluster traffic"
+    },
+    "serviceNetwork": {
+      "type": "string",
+      "format": "uuid",
+      "description": "UUID reference to Network entity for Kubernetes services"
+    },
+    "podNetwork": {
+      "type": "string",
+      "format": "uuid",
+      "description": "UUID reference to Network entity for pod networking"
+    },
+    "etcdCluster": {
+      "type": "string",
+      "format": "uuid",
+      "description": "UUID reference to EtcdCluster entity"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+(-[a-zA-Z0-9.]+)?(\\+[a-zA-Z0-9.]+)?$",
+      "description": "Kubernetes version in semver format (e.g., '1.28.0')"
+    },
+    "podNetworkNodeMask": {
+      "type": "string",
+      "pattern": "^/\\d{1,2}$",
+      "default": "/24",
+      "description": "Pod network CIDR mask per node (e.g., '/24')"
+    },
+    "kubeDnsIp": {
+      "type": "string",
+      "format": "ipv4",
+      "description": "Cluster DNS service IP address"
+    },
+    "kubernetesApiServer": {
+      "type": "string",
+      "format": "uri",
+      "description": "Kubernetes API server URL"
+    },
+    "kubernetesApiServerProxyPort": {
+      "type": "integer",
+      "default": 6444,
+      "minimum": 1024,
+      "maximum": 65535,
+      "description": "API server proxy port"
+    },
+    "trustedDomains": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Certificate SANs for API server certificate"
+    },
+    "ingressProxyEnable": {
+      "type": "boolean",
+      "default": false,
+      "description": "Enable ingress proxy"
+    },
+    "ingressProxyListenPort": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 65535,
+      "description": "Ingress proxy listen port"
+    },
+    "ingressProxyBackendPort": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 65535,
+      "description": "Ingress proxy backend port"
+    },
+    "options": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Extensible configuration options (JSON object)"
+    },
+    "appGroups": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/KubeAppGroup"
+      },
+      "description": "Application groups for cluster addons"
+    },
+    "labelSets": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/KubeLabelSet"
+      },
+      "description": "Node label definitions"
+    },
+    "users": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/KubeUser"
+      },
+      "description": "Kubeconfig user definitions"
+    },
+    "modified": {
+      "type": "boolean",
+      "default": true,
+      "description": "Entity modification flag"
+    },
+    "to_be_removed": {
+      "type": "boolean",
+      "default": false,
+      "description": "Entity deletion flag"
+    },
+    "revision": {
+      "type": "string",
+      "default": "",
+      "description": "Entity revision for optimistic locking"
+    },
+    "creationTime": {
+      "type": "integer",
+      "description": "Unix timestamp of creation (computed)"
+    },
+    "revisionID": {
+      "type": "integer",
+      "description": "Revision number for change tracking (computed)"
+    }
+  },
+  "definitions": {
+    "KubeAppGroup": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "baseType": {
+          "type": "string",
+          "const": "KubeAppGroup"
+        },
+        "name": {
+          "type": "string",
+          "description": "Application group name"
+        },
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether the group is enabled"
+        },
+        "applications": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/KubeApp"
+          },
+          "description": "Applications in this group"
+        }
+      }
+    },
+    "KubeApp": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "baseType": {
+          "type": "string",
+          "const": "KubeApp"
+        },
+        "name": {
+          "type": "string",
+          "description": "Application name"
+        },
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether the application is enabled"
+        },
+        "manifest": {
+          "type": "string",
+          "description": "Kubernetes manifest YAML content"
+        }
+      }
+    },
+    "KubeLabelSet": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "baseType": {
+          "type": "string",
+          "const": "KubeLabelSet"
+        },
+        "name": {
+          "type": "string",
+          "description": "Label set name"
+        },
+        "labels": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Key-value label pairs"
+        }
+      }
+    },
+    "KubeUser": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "baseType": {
+          "type": "string",
+          "const": "KubeUser"
+        },
+        "name": {
+          "type": "string",
+          "description": "User name"
+        },
+        "groups": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "User group memberships"
+        }
+      }
+    }
+  },
+  "examples": [
+    {
+      "baseType": "KubeCluster",
+      "childType": "",
+      "uuid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "name": "production-cluster",
+      "internalNetwork": "net-internal-uuid",
+      "serviceNetwork": "net-service-uuid",
+      "podNetwork": "net-pod-uuid",
+      "etcdCluster": "etcd-cluster-uuid",
+      "version": "1.28.0",
+      "podNetworkNodeMask": "/24",
+      "kubeDnsIp": "10.96.0.10",
+      "kubernetesApiServerProxyPort": 6444,
+      "trustedDomains": ["kubernetes.local", "api.cluster.local"],
+      "ingressProxyEnable": false,
+      "appGroups": [
+        {
+          "baseType": "KubeAppGroup",
+          "name": "monitoring",
+          "enabled": true,
+          "applications": [
+            {
+              "baseType": "KubeApp",
+              "name": "prometheus",
+              "enabled": true,
+              "manifest": "apiVersion: v1\nkind: Namespace\nmetadata:\n  name: monitoring"
+            }
+          ]
+        }
+      ],
+      "modified": true,
+      "to_be_removed": false,
+      "revision": ""
+    }
+  ]
+}

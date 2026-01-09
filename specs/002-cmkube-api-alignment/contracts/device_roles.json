@@ -1,0 +1,357 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "BCM Device Kubernetes Roles",
+  "description": "KubeletRole and EtcdHostRole entities embedded in Device.roles[]",
+  "definitions": {
+    "KubeletRole": {
+      "type": "object",
+      "required": ["baseType", "childType", "uuid", "kubeCluster"],
+      "properties": {
+        "baseType": {
+          "type": "string",
+          "const": "Role",
+          "description": "Entity base type, always 'Role'"
+        },
+        "childType": {
+          "type": "string",
+          "const": "KubeletRole",
+          "description": "Entity child type, always 'KubeletRole'"
+        },
+        "uuid": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Provider-generated UUID (RFC 4122)"
+        },
+        "name": {
+          "type": "string",
+          "const": "kubelet",
+          "description": "Role name, always 'kubelet'"
+        },
+        "kubeCluster": {
+          "type": "string",
+          "format": "uuid",
+          "description": "UUID reference to KubeCluster entity"
+        },
+        "controlPlane": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether this node is a control plane node"
+        },
+        "worker": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether this node is a worker node"
+        },
+        "containerRuntimeService": {
+          "type": "string",
+          "default": "docker.service",
+          "description": "Container runtime service name"
+        },
+        "maxPods": {
+          "type": "integer",
+          "default": 110,
+          "minimum": 1,
+          "maximum": 1000,
+          "description": "Maximum pods per node"
+        },
+        "options": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "Kubelet CLI flags (JSON object)"
+        },
+        "customYaml": {
+          "type": "string",
+          "description": "Custom kubelet config.yaml content"
+        },
+        "modified": {
+          "type": "boolean",
+          "default": true,
+          "description": "Entity modification flag"
+        },
+        "to_be_removed": {
+          "type": "boolean",
+          "default": false,
+          "description": "Entity deletion flag"
+        },
+        "revision": {
+          "type": "string",
+          "default": "",
+          "description": "Entity revision"
+        }
+      },
+      "examples": [
+        {
+          "baseType": "Role",
+          "childType": "KubeletRole",
+          "uuid": "k1k2k3k4-e5f6-7890-abcd-ef1234567890",
+          "name": "kubelet",
+          "kubeCluster": "kube-cluster-uuid",
+          "controlPlane": true,
+          "worker": false,
+          "containerRuntimeService": "containerd.service",
+          "maxPods": 110,
+          "options": {
+            "image-gc-high-threshold": "85",
+            "image-gc-low-threshold": "80"
+          },
+          "customYaml": "",
+          "modified": true,
+          "to_be_removed": false,
+          "revision": ""
+        }
+      ]
+    },
+    "EtcdHostRole": {
+      "type": "object",
+      "required": ["baseType", "childType", "uuid", "etcdCluster"],
+      "properties": {
+        "baseType": {
+          "type": "string",
+          "const": "Role",
+          "description": "Entity base type, always 'Role'"
+        },
+        "childType": {
+          "type": "string",
+          "const": "EtcdHostRole",
+          "description": "Entity child type, always 'EtcdHostRole'"
+        },
+        "uuid": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Provider-generated UUID (RFC 4122)"
+        },
+        "name": {
+          "type": "string",
+          "const": "etcdhost",
+          "description": "Role name, always 'etcdhost'"
+        },
+        "etcdCluster": {
+          "type": "string",
+          "format": "uuid",
+          "description": "UUID reference to EtcdCluster entity"
+        },
+        "memberName": {
+          "type": "string",
+          "default": "$hostname",
+          "description": "Etcd member name (supports $hostname variable)"
+        },
+        "spool": {
+          "type": "string",
+          "default": "/var/lib/etcd",
+          "description": "Etcd data directory path"
+        },
+        "listenClientUrls": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uri"
+          },
+          "default": ["https://0.0.0.0:2379"],
+          "description": "URLs to listen for client connections"
+        },
+        "listenPeerUrls": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uri"
+          },
+          "default": ["https://0.0.0.0:2380"],
+          "description": "URLs to listen for peer connections"
+        },
+        "advertiseClientUrls": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": ["https://$ip:2379"],
+          "description": "URLs to advertise for client connections (supports $ip variable)"
+        },
+        "advertisePeerUrls": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": ["https://$ip:2380"],
+          "description": "URLs to advertise for peer connections (supports $ip variable)"
+        },
+        "snapshotCount": {
+          "type": "integer",
+          "default": 100000,
+          "minimum": 1000,
+          "description": "Number of committed transactions to trigger a snapshot"
+        },
+        "maxSnapshots": {
+          "type": "integer",
+          "default": 5,
+          "minimum": 0,
+          "description": "Maximum number of snapshot files to retain (0 = unlimited)"
+        },
+        "modified": {
+          "type": "boolean",
+          "default": true,
+          "description": "Entity modification flag"
+        },
+        "to_be_removed": {
+          "type": "boolean",
+          "default": false,
+          "description": "Entity deletion flag"
+        },
+        "revision": {
+          "type": "string",
+          "default": "",
+          "description": "Entity revision"
+        }
+      },
+      "examples": [
+        {
+          "baseType": "Role",
+          "childType": "EtcdHostRole",
+          "uuid": "e1e2e3e4-f5f6-7890-abcd-ef1234567890",
+          "name": "etcdhost",
+          "etcdCluster": "etcd-cluster-uuid",
+          "memberName": "$hostname",
+          "spool": "/var/lib/etcd",
+          "listenClientUrls": ["https://0.0.0.0:2379"],
+          "listenPeerUrls": ["https://0.0.0.0:2380"],
+          "advertiseClientUrls": ["https://$ip:2379"],
+          "advertisePeerUrls": ["https://$ip:2380"],
+          "snapshotCount": 100000,
+          "maxSnapshots": 5,
+          "modified": true,
+          "to_be_removed": false,
+          "revision": ""
+        }
+      ]
+    }
+  },
+  "terraformBlocks": {
+    "kubelet_role": {
+      "description": "Nested block in bcm_cmdevice_device for Kubernetes node assignment",
+      "schema": {
+        "uuid": {
+          "type": "string",
+          "computed": true,
+          "description": "Role UUID (computed)"
+        },
+        "kube_cluster": {
+          "type": "string",
+          "required": true,
+          "description": "KubeCluster UUID reference"
+        },
+        "control_plane": {
+          "type": "bool",
+          "optional": true,
+          "default": true,
+          "description": "Is control plane node"
+        },
+        "worker": {
+          "type": "bool",
+          "optional": true,
+          "default": true,
+          "description": "Is worker node"
+        },
+        "container_runtime_service": {
+          "type": "string",
+          "optional": true,
+          "default": "docker.service",
+          "description": "Container runtime systemd service"
+        },
+        "max_pods": {
+          "type": "int",
+          "optional": true,
+          "default": 110,
+          "description": "Maximum pods per node"
+        },
+        "options": {
+          "type": "string",
+          "optional": true,
+          "description": "JSON-encoded kubelet flags"
+        },
+        "custom_yaml": {
+          "type": "string",
+          "optional": true,
+          "description": "Custom kubelet config.yaml content"
+        }
+      }
+    },
+    "etcd_host_role": {
+      "description": "Nested block in bcm_cmdevice_device for etcd node assignment",
+      "schema": {
+        "uuid": {
+          "type": "string",
+          "computed": true,
+          "description": "Role UUID (computed)"
+        },
+        "etcd_cluster": {
+          "type": "string",
+          "required": true,
+          "description": "EtcdCluster UUID reference"
+        },
+        "member_name": {
+          "type": "string",
+          "optional": true,
+          "default": "$hostname",
+          "description": "Etcd member name"
+        },
+        "spool": {
+          "type": "string",
+          "optional": true,
+          "default": "/var/lib/etcd",
+          "description": "Etcd data directory"
+        },
+        "listen_client_urls": {
+          "type": "list(string)",
+          "optional": true,
+          "description": "Client listen URLs"
+        },
+        "listen_peer_urls": {
+          "type": "list(string)",
+          "optional": true,
+          "description": "Peer listen URLs"
+        },
+        "advertise_client_urls": {
+          "type": "list(string)",
+          "optional": true,
+          "description": "Client advertise URLs"
+        },
+        "advertise_peer_urls": {
+          "type": "list(string)",
+          "optional": true,
+          "description": "Peer advertise URLs"
+        },
+        "snapshot_count": {
+          "type": "int",
+          "optional": true,
+          "default": 100000,
+          "description": "Snapshot transaction threshold"
+        },
+        "max_snapshots": {
+          "type": "int",
+          "optional": true,
+          "default": 5,
+          "description": "Max snapshots to retain"
+        }
+      }
+    }
+  },
+  "integration": {
+    "deviceRoleMerging": {
+      "description": "How KubeletRole and EtcdHostRole integrate with Device.roles[]",
+      "steps": [
+        "1. Read current device roles from BCM API",
+        "2. Filter out existing KubeletRole/EtcdHostRole for the referenced clusters",
+        "3. Build new role objects from Terraform config",
+        "4. Merge new roles with existing non-Kubernetes roles",
+        "5. Update device with complete roles array via updateDevice"
+      ],
+      "preservedRoles": [
+        "All roles where childType NOT IN ('KubeletRole', 'EtcdHostRole')",
+        "KubeletRole/EtcdHostRole for different clusters than those in Terraform config"
+      ],
+      "removedRoles": [
+        "KubeletRole/EtcdHostRole for clusters referenced in Terraform config",
+        "Replaced with roles from current Terraform state"
+      ]
+    }
+  }
+}
