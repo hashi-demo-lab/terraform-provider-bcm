@@ -282,7 +282,9 @@ func TestDeviceRoleMerging(t *testing.T) {
 		// Verify non-Kubernetes roles are preserved
 		childTypes := make([]string, len(result))
 		for i, r := range result {
-			childTypes[i] = r["childType"].(string)
+			if ct, ok := r["childType"].(string); ok {
+				childTypes[i] = ct
+			}
 		}
 		assert.Contains(t, childTypes, "BackupRole")
 		assert.Contains(t, childTypes, "ProvisioningRole")
@@ -552,9 +554,10 @@ func TestDeviceRoleUUIDPreservation(t *testing.T) {
 		// cluster-1 role should have its original UUID
 		// cluster-2 role should keep its new UUID (no existing to preserve from)
 		for _, r := range result {
-			if r["kubeCluster"] == "kube-cluster-1" {
+			switch r["kubeCluster"] {
+			case "kube-cluster-1":
 				assert.Equal(t, "cluster1-kubelet-uuid", r["uuid"])
-			} else if r["kubeCluster"] == "kube-cluster-2" {
+			case "kube-cluster-2":
 				assert.Equal(t, "cluster2-new-uuid", r["uuid"],
 					"New cluster should keep its generated UUID")
 			}

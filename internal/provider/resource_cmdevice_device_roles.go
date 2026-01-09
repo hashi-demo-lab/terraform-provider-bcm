@@ -28,14 +28,16 @@ import (
 //	max_pods                  → maxPods
 //	options                   → options (JSON-encoded string)
 //	custom_yaml               → customYaml
+//
+//nolint:unparam // error return reserved for future validation
 func buildKubeletRoleEntity(_ context.Context, model KubeletRoleModel) (map[string]any, error) {
 	entity := map[string]any{
-		"baseType":    "Role",
-		"childType":   "KubeletRole",
-		"name":        "kubelet",
-		"modified":    true,
+		"baseType":      "Role",
+		"childType":     "KubeletRole",
+		"name":          "kubelet",
+		"modified":      true,
 		"to_be_removed": false,
-		"revision":    "",
+		"revision":      "",
 	}
 
 	// UUID - use existing or generate new
@@ -106,14 +108,16 @@ func buildKubeletRoleEntity(_ context.Context, model KubeletRoleModel) (map[stri
 //	advertise_peer_urls     → advertisePeerUrls (list)
 //	snapshot_count          → snapshotCount
 //	max_snapshots           → maxSnapshots
+//
+//nolint:unparam // error return reserved for future validation
 func buildEtcdHostRoleEntity(ctx context.Context, model EtcdHostRoleModel) (map[string]any, error) {
 	entity := map[string]any{
-		"baseType":    "Role",
-		"childType":   "EtcdHostRole",
-		"name":        "etcdhost",
-		"modified":    true,
+		"baseType":      "Role",
+		"childType":     "EtcdHostRole",
+		"name":          "etcdhost",
+		"modified":      true,
 		"to_be_removed": false,
-		"revision":    "",
+		"revision":      "",
 	}
 
 	// UUID - use existing or generate new
@@ -251,19 +255,15 @@ func mergeDeviceRoles(
 	etcdClusters := make(map[string]bool)
 
 	// Track which clusters are being managed by Terraform
-	if newKubeletRoles != nil {
-		for _, role := range newKubeletRoles {
-			if cluster, ok := role["kubeCluster"].(string); ok {
-				kubeletClusters[cluster] = true
-			}
+	for _, role := range newKubeletRoles {
+		if cluster, ok := role["kubeCluster"].(string); ok {
+			kubeletClusters[cluster] = true
 		}
 	}
 
-	if newEtcdHostRoles != nil {
-		for _, role := range newEtcdHostRoles {
-			if cluster, ok := role["etcdCluster"].(string); ok {
-				etcdClusters[cluster] = true
-			}
+	for _, role := range newEtcdHostRoles {
+		if cluster, ok := role["etcdCluster"].(string); ok {
+			etcdClusters[cluster] = true
 		}
 	}
 

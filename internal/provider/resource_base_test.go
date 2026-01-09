@@ -210,7 +210,7 @@ func TestBCMDataSourceBase_ConfigureDataSource_OtherStruct(t *testing.T) {
 // Embedding Tests - verify the embedding pattern works correctly
 // =============================================================================
 
-// TestResourceEmbeddingPattern verifies that resources can properly embed BCMResourceBase
+// TestResourceEmbeddingPattern verifies that resources can properly embed BCMResourceBase.
 func TestResourceEmbeddingPattern(t *testing.T) {
 	t.Parallel()
 
@@ -236,12 +236,12 @@ func TestResourceEmbeddingPattern(t *testing.T) {
 	if testRes.Client != mockClient {
 		t.Error("Should be able to access Client via embedding")
 	}
-	if testRes.BCMResourceBase.Client != mockClient {
-		t.Error("Should be able to access Client via explicit BCMResourceBase path")
+	if testRes.Client != mockClient {
+		t.Error("Should be able to access Client via explicit embedded path")
 	}
 }
 
-// TestDataSourceEmbeddingPattern verifies that data sources can properly embed BCMDataSourceBase
+// TestDataSourceEmbeddingPattern verifies that data sources can properly embed BCMDataSourceBase.
 func TestDataSourceEmbeddingPattern(t *testing.T) {
 	t.Parallel()
 
@@ -267,7 +267,7 @@ func TestDataSourceEmbeddingPattern(t *testing.T) {
 	if testDS.Client != mockClient {
 		t.Error("Should be able to access Client via embedding")
 	}
-	if testDS.BCMDataSourceBase.Client != mockClient {
-		t.Error("Should be able to access Client via explicit BCMDataSourceBase path")
+	if testDS.Client != mockClient {
+		t.Error("Should be able to access Client via explicit embedded path")
 	}
 }

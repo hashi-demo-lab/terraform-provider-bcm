@@ -396,6 +396,8 @@ func (c *BCMClient) doHTTPRequest(ctx context.Context, req *http.Request, jsonBo
 
 		// Check for HTTP 5xx errors which may be retryable
 		if resp.StatusCode >= 500 && attempt < c.MaxRetries {
+			// Track the 5xx error so final error message is accurate if all retries fail
+			lastErr = fmt.Errorf("HTTP %d server error", resp.StatusCode)
 			backoff := c.calculateBackoff(attempt)
 			tflog.Warn(ctx, fmt.Sprintf("%s server error, retrying", logPrefix), map[string]interface{}{
 				"attempt":     attempt + 1,
@@ -747,7 +749,7 @@ func getString(data map[string]interface{}, key string) string {
 //   - Response body from BCM API (typically the created entity)
 //   - error: API communication error or BCM error response
 //
-// BCM API Method: cmetcd.addEtcdCluster(entity)
+// BCM API Method: cmetcd.addEtcdCluster(entity).
 func (c *BCMClient) AddEtcdCluster(ctx context.Context, entity map[string]interface{}) ([]byte, error) {
 	tflog.Debug(ctx, "Creating EtcdCluster", map[string]interface{}{
 		"name": entity["name"],
@@ -766,7 +768,7 @@ func (c *BCMClient) AddEtcdCluster(ctx context.Context, entity map[string]interf
 //   - Response body from BCM API (the EtcdCluster entity)
 //   - error: API communication error or BCM error response
 //
-// BCM API Method: cmetcd.getEtcdCluster(identifier)
+// BCM API Method: cmetcd.getEtcdCluster(identifier).
 func (c *BCMClient) GetEtcdCluster(ctx context.Context, identifier string) ([]byte, error) {
 	tflog.Debug(ctx, "Getting EtcdCluster", map[string]interface{}{
 		"identifier": identifier,
@@ -781,7 +783,7 @@ func (c *BCMClient) GetEtcdCluster(ctx context.Context, identifier string) ([]by
 //   - Response body from BCM API (array of EtcdCluster entities)
 //   - error: API communication error or BCM error response
 //
-// BCM API Method: cmetcd.getEtcdClusters()
+// BCM API Method: cmetcd.getEtcdClusters().
 func (c *BCMClient) GetEtcdClusters(ctx context.Context) ([]byte, error) {
 	tflog.Debug(ctx, "Listing EtcdClusters")
 
@@ -797,7 +799,7 @@ func (c *BCMClient) GetEtcdClusters(ctx context.Context) ([]byte, error) {
 //   - Response body from BCM API
 //   - error: API communication error or BCM error response
 //
-// BCM API Method: cmetcd.updateEtcdCluster(entity)
+// BCM API Method: cmetcd.updateEtcdCluster(entity).
 func (c *BCMClient) UpdateEtcdCluster(ctx context.Context, entity map[string]interface{}) ([]byte, error) {
 	tflog.Debug(ctx, "Updating EtcdCluster", map[string]interface{}{
 		"name": entity["name"],
@@ -816,7 +818,7 @@ func (c *BCMClient) UpdateEtcdCluster(ctx context.Context, entity map[string]int
 //   - Response body from BCM API
 //   - error: API communication error or BCM error response
 //
-// BCM API Method: cmetcd.removeEtcdCluster(uuid)
+// BCM API Method: cmetcd.removeEtcdCluster(uuid).
 func (c *BCMClient) RemoveEtcdCluster(ctx context.Context, uuid string) ([]byte, error) {
 	tflog.Debug(ctx, "Removing EtcdCluster", map[string]interface{}{
 		"uuid": uuid,
@@ -835,7 +837,7 @@ func (c *BCMClient) RemoveEtcdCluster(ctx context.Context, uuid string) ([]byte,
 //   - []ValidationError: Array of validation errors/warnings (empty if validation passes)
 //   - error: API communication error
 //
-// BCM API Method: cmetcd.validateEtcdCluster(entity, isCreate)
+// BCM API Method: cmetcd.validateEtcdCluster(entity, isCreate).
 func (c *BCMClient) ValidateEtcdCluster(ctx context.Context, entity map[string]interface{}, isCreate bool) ([]ValidationError, error) {
 	return c.ValidateEntity(ctx, "cmetcd", "validateEtcdCluster", entity, isCreate)
 }
@@ -855,7 +857,7 @@ func (c *BCMClient) ValidateEtcdCluster(ctx context.Context, entity map[string]i
 //   - []ValidationError: Array of validation errors/warnings (empty if validation passes)
 //   - error: API communication error
 //
-// BCM API Method: cmkube.validateKubeCluster(entity, isCreate)
+// BCM API Method: cmkube.validateKubeCluster(entity, isCreate).
 func (c *BCMClient) ValidateKubeCluster(ctx context.Context, entity map[string]interface{}, isCreate bool) ([]ValidationError, error) {
 	// IMPORTANT: cmkube is lowercase (exception to CamelCase pattern)
 	return c.ValidateEntity(ctx, "cmkube", "validateKubeCluster", entity, isCreate)

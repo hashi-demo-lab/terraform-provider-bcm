@@ -87,7 +87,7 @@ func testAccCheckCMEtcdClusterDestroy(s *terraform.State) error {
 // TestCMEtcdClusterEntityBuilder tests the entity construction for EtcdCluster.
 func TestCMEtcdClusterEntityBuilder(t *testing.T) {
 	t.Run("build_minimal_entity", func(t *testing.T) {
-		entity := buildEtcdClusterEntity("test-etcd", "", 100, 1000, "")
+		entity := buildEtcdClusterEntity("", 100, 1000, "")
 
 		// Verify required fields
 		if entity["baseType"] != "EtcdCluster" {
@@ -110,7 +110,7 @@ func TestCMEtcdClusterEntityBuilder(t *testing.T) {
 
 	t.Run("build_entity_with_uuid", func(t *testing.T) {
 		testUUID := "12345678-1234-1234-1234-123456789012"
-		entity := buildEtcdClusterEntity("test-etcd", testUUID, 100, 1000, "")
+		entity := buildEtcdClusterEntity(testUUID, 100, 1000, "")
 
 		if entity["uuid"] != testUUID {
 			t.Errorf("expected uuid=%s, got %v", testUUID, entity["uuid"])
@@ -119,7 +119,7 @@ func TestCMEtcdClusterEntityBuilder(t *testing.T) {
 
 	t.Run("build_entity_with_options", func(t *testing.T) {
 		optionsJSON := `{"custom_key": "custom_value"}`
-		entity := buildEtcdClusterEntity("test-etcd", "", 100, 1000, optionsJSON)
+		entity := buildEtcdClusterEntity("", 100, 1000, optionsJSON)
 
 		options, ok := entity["options"].(map[string]interface{})
 		if !ok {
@@ -137,7 +137,7 @@ func TestCMEtcdClusterEntityBuilder(t *testing.T) {
 		electionOK := int64(500)  // 5x heartbeat - should be OK
 		electionLow := int64(400) // 4x heartbeat - may trigger warning
 
-		entityOK := buildEtcdClusterEntity("test-etcd", "", heartbeat, electionOK, "")
+		entityOK := buildEtcdClusterEntity("", heartbeat, electionOK, "")
 		if entityOK["heartBeatInterval"] != heartbeat {
 			t.Errorf("expected heartBeatInterval=%d, got %v", heartbeat, entityOK["heartBeatInterval"])
 		}
@@ -145,7 +145,7 @@ func TestCMEtcdClusterEntityBuilder(t *testing.T) {
 			t.Errorf("expected electionTimeout=%d, got %v", electionOK, entityOK["electionTimeout"])
 		}
 
-		entityLow := buildEtcdClusterEntity("test-etcd", "", heartbeat, electionLow, "")
+		entityLow := buildEtcdClusterEntity("", heartbeat, electionLow, "")
 		if entityLow["electionTimeout"] != electionLow {
 			t.Errorf("expected electionTimeout=%d, got %v", electionLow, entityLow["electionTimeout"])
 		}
@@ -154,15 +154,15 @@ func TestCMEtcdClusterEntityBuilder(t *testing.T) {
 
 // buildEtcdClusterEntity is a test helper to construct EtcdCluster entities.
 // This mirrors the implementation in resource_cmetcd_cluster.go.
-// Note: BCM uses camelCase: heartBeatInterval (with capital B)
-func buildEtcdClusterEntity(name, uuid string, heartbeatInterval, electionTimeout int64, optionsJSON string) map[string]interface{} {
+// Note: BCM uses camelCase: heartBeatInterval (with capital B).
+func buildEtcdClusterEntity(uuid string, heartbeatInterval, electionTimeout int64, optionsJSON string) map[string]interface{} {
 	entity := map[string]interface{}{
 		"baseType":          "EtcdCluster",
 		"childType":         "",
 		"modified":          true,
 		"to_be_removed":     false,
 		"revision":          "",
-		"name":              name,
+		"name":              "test-etcd",
 		"heartBeatInterval": heartbeatInterval, // BCM uses capital B
 		"electionTimeout":   electionTimeout,
 	}

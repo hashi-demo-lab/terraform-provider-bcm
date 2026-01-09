@@ -511,6 +511,8 @@ func generateUniqueMAC() string {
 // Returns:
 //
 //	UUID string of the etcd cluster, or empty string if not found
+//
+//nolint:unused // test helper available for future tests
 func getTestEtcdClusterUUID(t *testing.T, name string) string {
 	client := createTestBCMClient(t)
 	ctx := context.Background()
@@ -547,6 +549,8 @@ func getTestEtcdClusterUUID(t *testing.T, name string) string {
 // Returns:
 //
 //	UUID of the created etcd cluster
+//
+//nolint:unused // test helper available for future tests
 func createTestEtcdCluster(t *testing.T, name string) string {
 	client := createTestBCMClient(t)
 	ctx := context.Background()
@@ -586,6 +590,8 @@ func createTestEtcdCluster(t *testing.T, name string) string {
 //
 //	t - Testing instance
 //	uuid - Etcd cluster UUID to delete
+//
+//nolint:unused // test helper available for future tests
 func deleteTestEtcdCluster(t *testing.T, uuid string) {
 	if uuid == "" {
 		return
@@ -618,6 +624,8 @@ func deleteTestEtcdCluster(t *testing.T, uuid string) {
 // Returns:
 //
 //	UUID string of the network, or empty string if not found
+//
+//nolint:unused // test helper available for future tests
 func getTestNetworkUUID(t *testing.T, name string) string {
 	client := createTestBCMClient(t)
 	ctx := context.Background()
@@ -642,6 +650,8 @@ func getTestNetworkUUID(t *testing.T, name string) string {
 
 // getFirstAvailableNetworkUUID returns the UUID of the first available network.
 // Useful for tests that need any valid network reference.
+//
+//nolint:unused // test helper available for future tests
 func getFirstAvailableNetworkUUID(t *testing.T) string {
 	client := createTestBCMClient(t)
 	ctx := context.Background()

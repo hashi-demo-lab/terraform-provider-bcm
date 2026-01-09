@@ -2868,6 +2868,8 @@ resource "bcm_cmdevice_device" "test" {
 }
 
 // testAccCMDeviceDeviceConfigWithKubeletRole returns device config with kubelet_role.
+//
+//nolint:unparam // worker param kept for flexibility in future tests
 func testAccCMDeviceDeviceConfigWithKubeletRole(
 	hostname, categoryName, imageName, imagePath, mac string,
 	etcdClusterName, kubeClusterName string,

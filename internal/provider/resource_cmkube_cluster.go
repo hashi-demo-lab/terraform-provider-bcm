@@ -69,8 +69,7 @@ func (r *CMKubeClusterResource) Configure(ctx context.Context, req resource.Conf
 	r.client = client
 }
 
-// Schema defines the resource schema - aligned with BCM KubeCluster API entity.
-// FR-001 through FR-019
+// Schema defines the resource schema - aligned with BCM KubeCluster API entity (FR-001 through FR-019).
 func (r *CMKubeClusterResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		MarkdownDescription: "Manages a BCM Kubernetes cluster definition.\n\n" +
@@ -471,7 +470,6 @@ func (r *CMKubeClusterResource) Create(ctx context.Context, req resource.CreateR
 		// Parse the read response
 		var responseData map[string]interface{}
 		if err := json.Unmarshal(readBody, &responseData); err != nil {
-			lastReadErr = err
 			if attempt < maxRetries-1 {
 				sleepDuration := time.Duration(1<<attempt) * time.Second
 				tflog.Warn(ctx, "KubeCluster response parse failed, retrying", map[string]interface{}{
@@ -759,7 +757,6 @@ func (r *CMKubeClusterResource) Update(ctx context.Context, req resource.UpdateR
 
 		var responseData map[string]interface{}
 		if err := json.Unmarshal(readBody, &responseData); err != nil {
-			lastReadErr = err
 			if attempt < maxRetries-1 {
 				sleepDuration := time.Duration(1<<attempt) * time.Second
 				tflog.Warn(ctx, "KubeCluster response parse after update failed, retrying", map[string]interface{}{
@@ -1065,12 +1062,12 @@ func (r *CMKubeClusterResource) parseResponseIntoModel(ctx context.Context, data
 	model.KubernetesAPIServer = getStringValue(data, "kubernetesApiServer")
 	model.KubernetesAPIServerProxyPort = getInt64Value(data, "kubernetesApiServerProxyPort")
 
-	// Parse trusted domains
+	// Parse trusted domains - dynamically build slice to skip non-string values
 	if trustedDomains, ok := data["trustedDomains"].([]interface{}); ok && len(trustedDomains) > 0 {
-		elements := make([]attr.Value, len(trustedDomains))
-		for i, domain := range trustedDomains {
+		elements := make([]attr.Value, 0, len(trustedDomains))
+		for _, domain := range trustedDomains {
 			if domainStr, ok := domain.(string); ok {
-				elements[i] = types.StringValue(domainStr)
+				elements = append(elements, types.StringValue(domainStr))
 			}
 		}
 		model.TrustedDomains, _ = types.ListValue(types.StringType, elements)
@@ -1180,7 +1177,7 @@ func kubeUserAttrTypes() map[string]attr.Type {
 }
 
 // parseAppGroupsFromAPI parses appGroups from BCM API response into Terraform types.
-func parseAppGroupsFromAPI(ctx context.Context, appGroupsData []interface{}) (types.List, diag.Diagnostics) {
+func parseAppGroupsFromAPI(_ context.Context, appGroupsData []interface{}) (types.List, diag.Diagnostics) {
 	var diags diag.Diagnostics
 
 	appGroupElements := make([]attr.Value, 0, len(appGroupsData))
@@ -1229,7 +1226,7 @@ func parseAppGroupsFromAPI(ctx context.Context, appGroupsData []interface{}) (ty
 }
 
 // parseLabelSetsFromAPI parses labelSets from BCM API response into Terraform types.
-func parseLabelSetsFromAPI(ctx context.Context, labelSetsData []interface{}) (types.List, diag.Diagnostics) {
+func parseLabelSetsFromAPI(_ context.Context, labelSetsData []interface{}) (types.List, diag.Diagnostics) {
 	var diags diag.Diagnostics
 
 	labelSetElements := make([]attr.Value, 0, len(labelSetsData))
@@ -1269,7 +1266,7 @@ func parseLabelSetsFromAPI(ctx context.Context, labelSetsData []interface{}) (ty
 }
 
 // parseUsersFromAPI parses users from BCM API response into Terraform types.
-func parseUsersFromAPI(ctx context.Context, usersData []interface{}) (types.List, diag.Diagnostics) {
+func parseUsersFromAPI(_ context.Context, usersData []interface{}) (types.List, diag.Diagnostics) {
 	var diags diag.Diagnostics
 
 	userElements := make([]attr.Value, 0, len(usersData))

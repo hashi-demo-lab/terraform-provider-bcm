@@ -26,7 +26,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
-// Ensure provider-defined types implement resource interfaces
+// Ensure provider-defined types implement resource interfaces.
 var (
 	_ resource.Resource                = &CMEtcdClusterResource{}
 	_ resource.ResourceWithImportState = &CMEtcdClusterResource{}
@@ -265,7 +265,6 @@ func (r *CMEtcdClusterResource) Create(ctx context.Context, req resource.CreateR
 		// Parse the read response
 		var responseData map[string]interface{}
 		if err := json.Unmarshal(readBody, &responseData); err != nil {
-			lastReadErr = err
 			if attempt < maxRetries-1 {
 				sleepDuration := time.Duration(1<<attempt) * time.Second
 				tflog.Warn(ctx, "EtcdCluster response parse failed, retrying", map[string]interface{}{
@@ -503,7 +502,6 @@ func (r *CMEtcdClusterResource) Update(ctx context.Context, req resource.UpdateR
 
 		var responseData map[string]interface{}
 		if err := json.Unmarshal(readBody, &responseData); err != nil {
-			lastReadErr = err
 			if attempt < maxRetries-1 {
 				sleepDuration := time.Duration(1<<attempt) * time.Second
 				tflog.Warn(ctx, "EtcdCluster response parse after update failed, retrying", map[string]interface{}{

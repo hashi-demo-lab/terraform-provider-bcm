@@ -38,16 +38,16 @@ func TestUUIDValidator_InvalidUUIDs(t *testing.T) {
 	t.Parallel()
 
 	invalidUUIDs := []string{
-		"",                                        // empty
-		"not-a-uuid",                              // wrong format
-		"12345678123412341234123456789abc",        // no dashes
-		"12345678-1234-1234-1234-123456789ab",     // too short
-		"12345678-1234-1234-1234-123456789abcd",   // too long
-		"AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA",    // uppercase (RFC 4122 lowercase only)
-		"12345678-1234-1234-1234-123456789ABC",    // mixed case
-		"g2345678-1234-1234-1234-123456789abc",    // invalid hex character
-		"12345678_1234_1234_1234_123456789abc",    // underscores instead of dashes
-		"123456781234-1234-1234-123456789abc",     // wrong dash positions
+		"",                                      // empty
+		"not-a-uuid",                            // wrong format
+		"12345678123412341234123456789abc",      // no dashes
+		"12345678-1234-1234-1234-123456789ab",   // too short
+		"12345678-1234-1234-1234-123456789abcd", // too long
+		"AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA",  // uppercase (RFC 4122 lowercase only)
+		"12345678-1234-1234-1234-123456789ABC",  // mixed case
+		"g2345678-1234-1234-1234-123456789abc",  // invalid hex character
+		"12345678_1234_1234_1234_123456789abc",  // underscores instead of dashes
+		"123456781234-1234-1234-123456789abc",   // wrong dash positions
 	}
 
 	for _, uuid := range invalidUUIDs {
@@ -67,8 +67,6 @@ func TestUUIDValidator_Function(t *testing.T) {
 		t.Fatal("UUIDValidator() returned nil")
 	}
 
-	// Verify it implements the validator.String interface
-	var _ validator.String = v
 }
 
 // =============================================================================
