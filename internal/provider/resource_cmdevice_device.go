@@ -1831,6 +1831,10 @@ func parseRolesFromAPI(rolesData interface{}) types.Set {
 		roleValues[i] = types.StringValue(name)
 	}
 
-	rolesSet, _ := types.SetValue(types.StringType, roleValues)
+	rolesSet, diags := types.SetValue(types.StringType, roleValues)
+	if diags.HasError() {
+		// Fall back to null set if construction fails (should not happen with valid string elements)
+		return types.SetNull(types.StringType)
+	}
 	return rolesSet
 }
