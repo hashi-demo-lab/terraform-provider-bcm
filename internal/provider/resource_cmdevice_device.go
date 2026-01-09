@@ -77,6 +77,11 @@ type CMDeviceDeviceResourceModel struct {
 	// Roles - set of role UUIDs assigned to this device
 	// Used for Kubernetes cluster topology (control-plane, worker, etcd, master)
 	Roles types.Set `tfsdk:"roles"`
+
+	// Kubernetes roles - nested blocks for cluster membership
+	// These define the device's role in Kubernetes/etcd clusters
+	KubeletRoles  []KubeletRoleModel  `tfsdk:"kubelet_role"`
+	EtcdHostRoles []EtcdHostRoleModel `tfsdk:"etcd_host_role"`
 }
 
 // NewCMDeviceDeviceResource creates a new resource instance.
@@ -355,6 +360,118 @@ func (r *CMDeviceDeviceResource) Schema(ctx context.Context, req resource.Schema
 					},
 				},
 			},
+			"kubelet_role": schema.ListNestedBlock{
+				MarkdownDescription: "Kubernetes kubelet role configuration. Defines this device as a member of a KubeCluster. " +
+					"Each kubelet_role block associates the device with one KubeCluster as a control plane node, worker node, or both.",
+				NestedObject: schema.NestedBlockObject{
+					Attributes: map[string]schema.Attribute{
+						"uuid": schema.StringAttribute{
+							Computed:            true,
+							MarkdownDescription: "BCM-assigned role UUID.",
+						},
+						"kube_cluster": schema.StringAttribute{
+							Required:            true,
+							MarkdownDescription: "UUID of the KubeCluster this device belongs to.",
+							Validators: []validator.String{
+								stringvalidator.RegexMatches(
+									regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`),
+									"must be valid UUID (RFC 4122)",
+								),
+							},
+						},
+						"control_plane": schema.BoolAttribute{
+							Optional:            true,
+							Computed:            true,
+							MarkdownDescription: "Whether this node runs control plane components (API server, controller manager, scheduler). Default: true.",
+						},
+						"worker": schema.BoolAttribute{
+							Optional:            true,
+							Computed:            true,
+							MarkdownDescription: "Whether this node can schedule workload pods. Default: true.",
+						},
+						"container_runtime_service": schema.StringAttribute{
+							Optional:            true,
+							Computed:            true,
+							MarkdownDescription: "Container runtime service name (e.g., 'docker.service', 'containerd.service'). Default: 'docker.service'.",
+						},
+						"max_pods": schema.Int64Attribute{
+							Optional:            true,
+							Computed:            true,
+							MarkdownDescription: "Maximum number of pods that can run on this node. Default: 110.",
+						},
+						"options": schema.StringAttribute{
+							Optional:            true,
+							MarkdownDescription: "Additional kubelet options as JSON string.",
+						},
+						"custom_yaml": schema.StringAttribute{
+							Optional:            true,
+							MarkdownDescription: "Custom kubelet configuration YAML.",
+						},
+					},
+				},
+			},
+			"etcd_host_role": schema.ListNestedBlock{
+				MarkdownDescription: "Etcd host role configuration. Defines this device as a member of an EtcdCluster. " +
+					"Each etcd_host_role block associates the device with one EtcdCluster as an etcd node.",
+				NestedObject: schema.NestedBlockObject{
+					Attributes: map[string]schema.Attribute{
+						"uuid": schema.StringAttribute{
+							Computed:            true,
+							MarkdownDescription: "BCM-assigned role UUID.",
+						},
+						"etcd_cluster": schema.StringAttribute{
+							Required:            true,
+							MarkdownDescription: "UUID of the EtcdCluster this device belongs to.",
+							Validators: []validator.String{
+								stringvalidator.RegexMatches(
+									regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`),
+									"must be valid UUID (RFC 4122)",
+								),
+							},
+						},
+						"member_name": schema.StringAttribute{
+							Optional:            true,
+							Computed:            true,
+							MarkdownDescription: "Etcd member name. Default: '$hostname' (uses device hostname).",
+						},
+						"spool": schema.StringAttribute{
+							Optional:            true,
+							Computed:            true,
+							MarkdownDescription: "Etcd data directory path. Default: '/var/lib/etcd'.",
+						},
+						"listen_client_urls": schema.ListAttribute{
+							Optional:            true,
+							ElementType:         types.StringType,
+							MarkdownDescription: "URLs etcd listens on for client traffic.",
+						},
+						"listen_peer_urls": schema.ListAttribute{
+							Optional:            true,
+							ElementType:         types.StringType,
+							MarkdownDescription: "URLs etcd listens on for peer traffic.",
+						},
+						"advertise_client_urls": schema.ListAttribute{
+							Optional:            true,
+							ElementType:         types.StringType,
+							MarkdownDescription: "URLs to advertise to clients for connecting to this member.",
+						},
+						"advertise_peer_urls": schema.ListAttribute{
+							Optional:            true,
+							ElementType:         types.StringType,
+							MarkdownDescription: "URLs to advertise to peers for connecting to this member.",
+						},
+						"snapshot_count": schema.Int64Attribute{
+							Optional:            true,
+							Computed:            true,
+							MarkdownDescription: "Number of committed transactions to trigger a snapshot. Default: 100000.",
+						},
+						"max_snapshots": schema.Int64Attribute{
+							Optional:            true,
+							Computed:            true,
+							MarkdownDescription: "Maximum number of snapshot files to retain. Default: 5.",
+						},
+					},
+				},
+			},
 		},
 	}
 }
@@ -448,6 +565,17 @@ func (r *CMDeviceDeviceResource) Create(ctx context.Context, req resource.Create
 			fmt.Sprintf("Could not resolve role UUIDs for device '%s': %s\n\n"+
 				"Ensure the role UUIDs exist in the cluster. You can find available roles using "+
 				"the bcm_cmdevice_roles data source.", plan.Hostname.ValueString(), err.Error()),
+		)
+		return
+	}
+
+	// Build Kubernetes roles (kubelet_role, etcd_host_role) and merge with existing roles
+	// Pass nil for existingRoles since this is a new device
+	if err := r.buildKubernetesRolesForEntity(ctx, plan, deviceEntity, nil); err != nil {
+		resp.Diagnostics.AddError(
+			"Error Building Kubernetes Roles",
+			fmt.Sprintf("Could not build Kubernetes roles for device '%s': %s",
+				plan.Hostname.ValueString(), err.Error()),
 		)
 		return
 	}
@@ -598,6 +726,19 @@ func (r *CMDeviceDeviceResource) Create(ctx context.Context, req resource.Create
 		state.Interfaces = nil
 	}
 
+	// Handle Kubernetes roles - preserve state with computed defaults merged
+	// Only include roles if user defined them in plan
+	if len(plan.KubeletRoles) == 0 {
+		state.KubeletRoles = nil
+	} else {
+		state.KubeletRoles = mergeKubeletRolesWithDefaults(state.KubeletRoles, plan.KubeletRoles)
+	}
+	if len(plan.EtcdHostRoles) == 0 {
+		state.EtcdHostRoles = nil
+	} else {
+		state.EtcdHostRoles = mergeEtcdHostRolesWithDefaults(state.EtcdHostRoles, plan.EtcdHostRoles)
+	}
+
 	// Set state - use what BCM returns for all other fields
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
@@ -633,9 +774,9 @@ func (r *CMDeviceDeviceResource) waitForPartitionCommit(ctx context.Context, cli
 			return nil // Partition is accessible
 		}
 
-		// If not the last retry, wait with exponential backoff (capped at maxDelay)
+		// If not the last retry, wait with linear backoff (capped at maxDelay)
 		if i < maxRetries-1 {
-			// Exponential backoff: 2s, 4s, 6s, 8s, 10s, 10s, ...
+			// Linear backoff: 2s, 4s, 6s, 8s, 10s, 10s, ...
 			delay := baseDelay * time.Duration(i+1)
 			if delay > maxDelay {
 				delay = maxDelay
@@ -883,6 +1024,28 @@ func (r *CMDeviceDeviceResource) Read(ctx context.Context, req resource.ReadRequ
 		newState.Roles = types.SetNull(types.StringType)
 	}
 
+	// Handle Kubernetes roles based on mode
+	// During import, use all roles from BCM; during normal read, preserve state-based handling
+	if isImport {
+		// Import: Keep Kubernetes roles from BCM API response (already parsed in newState)
+		tflog.Debug(ctx, "Import path - keeping Kubernetes roles from BCM API", map[string]interface{}{
+			"kubelet_role_count":   len(newState.KubeletRoles),
+			"etcd_host_role_count": len(newState.EtcdHostRoles),
+		})
+	} else {
+		// Normal read: Only include roles if user defined them in state
+		if len(state.KubeletRoles) == 0 {
+			newState.KubeletRoles = nil
+		} else {
+			newState.KubeletRoles = mergeKubeletRolesWithDefaults(newState.KubeletRoles, state.KubeletRoles)
+		}
+		if len(state.EtcdHostRoles) == 0 {
+			newState.EtcdHostRoles = nil
+		} else {
+			newState.EtcdHostRoles = mergeEtcdHostRolesWithDefaults(newState.EtcdHostRoles, state.EtcdHostRoles)
+		}
+	}
+
 	// Set state - use what BCM returns (with preserved fields)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &newState)...)
 }
@@ -937,6 +1100,36 @@ func (r *CMDeviceDeviceResource) Update(ctx context.Context, req resource.Update
 			fmt.Sprintf("Could not resolve role UUIDs for device '%s': %s\n\n"+
 				"Ensure the role UUIDs exist in the cluster. You can find available roles using "+
 				"the bcm_cmdevice_roles data source.", plan.Hostname.ValueString(), err.Error()),
+		)
+		return
+	}
+
+	// Get existing roles from current device state for merging
+	// This preserves non-Kubernetes roles that aren't being explicitly managed
+	var existingKubeRoles []map[string]any
+	if len(state.KubeletRoles) > 0 || len(state.EtcdHostRoles) > 0 {
+		// Read current device to get existing roles
+		existingBody, existingErr := r.Client.CallJSONRPC(ctx, "cmdevice", "getDevice", state.UUID.ValueString())
+		if existingErr == nil {
+			var existingData map[string]interface{}
+			if json.Unmarshal(existingBody, &existingData) == nil {
+				if rolesData, ok := existingData["roles"].([]interface{}); ok {
+					for _, r := range rolesData {
+						if roleMap, ok := r.(map[string]interface{}); ok {
+							existingKubeRoles = append(existingKubeRoles, roleMap)
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Build Kubernetes roles (kubelet_role, etcd_host_role) and merge with existing roles
+	if err := r.buildKubernetesRolesForEntity(ctx, plan, deviceEntity, existingKubeRoles); err != nil {
+		resp.Diagnostics.AddError(
+			"Error Building Kubernetes Roles",
+			fmt.Sprintf("Could not build Kubernetes roles for device '%s': %s",
+				plan.Hostname.ValueString(), err.Error()),
 		)
 		return
 	}
@@ -1064,6 +1257,19 @@ func (r *CMDeviceDeviceResource) Update(ctx context.Context, req resource.Update
 		// Legacy mode: Don't populate interfaces in state (user didn't define interfaces block)
 		// BCM creates/maintains interfaces, but we don't expose them in legacy mode
 		newState.Interfaces = nil
+	}
+
+	// Handle Kubernetes roles - preserve state with computed defaults merged
+	// Only include roles if user defined them in plan
+	if len(plan.KubeletRoles) == 0 {
+		newState.KubeletRoles = nil
+	} else {
+		newState.KubeletRoles = mergeKubeletRolesWithDefaults(newState.KubeletRoles, plan.KubeletRoles)
+	}
+	if len(plan.EtcdHostRoles) == 0 {
+		newState.EtcdHostRoles = nil
+	} else {
+		newState.EtcdHostRoles = mergeEtcdHostRolesWithDefaults(newState.EtcdHostRoles, plan.EtcdHostRoles)
 	}
 
 	// Set state
@@ -1248,10 +1454,76 @@ func (r *CMDeviceDeviceResource) buildDeviceAPIEntityWithExisting(plan CMDeviceD
 		entity["partNumber"] = plan.PartNumber.ValueString()
 	}
 
-	// Roles handling is done separately via lookupAndBuildRolesForEntity
+	// Legacy roles handling is done separately via lookupAndBuildRolesForEntity
 	// because it requires BCM API access to get full role objects
 
+	// Build Kubernetes roles from kubelet_role and etcd_host_role blocks
+	// These are added to the entity's roles array by buildKubernetesRolesForEntity
+
 	return entity
+}
+
+// buildKubernetesRolesForEntity builds KubeletRole and EtcdHostRole entities
+// and merges them with existing roles on the device entity.
+// This must be called after lookupAndBuildRolesForEntity to properly merge with legacy roles.
+func (r *CMDeviceDeviceResource) buildKubernetesRolesForEntity(ctx context.Context, plan CMDeviceDeviceResourceModel, entity map[string]interface{}, existingRoles []map[string]any) error {
+	// Build KubeletRole entities from plan
+	var kubeletRoles []map[string]any
+	if len(plan.KubeletRoles) > 0 {
+		kubeletRoles = make([]map[string]any, 0, len(plan.KubeletRoles))
+		for _, roleModel := range plan.KubeletRoles {
+			roleEntity, err := buildKubeletRoleEntity(ctx, roleModel)
+			if err != nil {
+				return fmt.Errorf("failed to build kubelet role: %w", err)
+			}
+			kubeletRoles = append(kubeletRoles, roleEntity)
+		}
+	}
+
+	// Build EtcdHostRole entities from plan
+	var etcdHostRoles []map[string]any
+	if len(plan.EtcdHostRoles) > 0 {
+		etcdHostRoles = make([]map[string]any, 0, len(plan.EtcdHostRoles))
+		for _, roleModel := range plan.EtcdHostRoles {
+			roleEntity, err := buildEtcdHostRoleEntity(ctx, roleModel)
+			if err != nil {
+				return fmt.Errorf("failed to build etcd host role: %w", err)
+			}
+			etcdHostRoles = append(etcdHostRoles, roleEntity)
+		}
+	}
+
+	// If no Kubernetes roles defined and no existing roles, nothing to do
+	if len(kubeletRoles) == 0 && len(etcdHostRoles) == 0 && len(existingRoles) == 0 {
+		return nil
+	}
+
+	// Get existing roles from entity if already set (from legacy roles lookup)
+	var currentRoles []map[string]any
+	if rolesData, ok := entity["roles"].([]interface{}); ok {
+		for _, r := range rolesData {
+			if roleMap, ok := r.(map[string]interface{}); ok {
+				currentRoles = append(currentRoles, roleMap)
+			}
+		}
+	}
+
+	// Merge: existing legacy roles + new Kubernetes roles
+	// mergeDeviceRoles preserves non-Kubernetes roles and replaces Kubernetes roles
+	mergedRoles := mergeDeviceRoles(
+		append(existingRoles, currentRoles...),
+		kubeletRoles,
+		etcdHostRoles,
+	)
+
+	// Convert to interface{} slice for JSON marshaling
+	rolesInterface := make([]interface{}, len(mergedRoles))
+	for i, r := range mergedRoles {
+		rolesInterface[i] = r
+	}
+	entity["roles"] = rolesInterface
+
+	return nil
 }
 
 // lookupAndBuildRolesForEntity looks up role objects by name and adds them to the device entity.
@@ -1485,7 +1757,43 @@ func (r *CMDeviceDeviceResource) parseDeviceFromAPI(data map[string]interface{})
 	// BCM returns roles as an array of role objects with "name" field, or as an array of strings
 	model.Roles = parseRolesFromAPI(data["roles"])
 
+	// Parse Kubernetes roles (kubelet_role, etcd_host_role) from BCM response
+	model.KubeletRoles, model.EtcdHostRoles = parseKubernetesRolesFromAPI(data["roles"])
+
 	return model
+}
+
+// parseKubernetesRolesFromAPI extracts KubeletRole and EtcdHostRole from BCM device roles array.
+// Returns slices of models for each role type.
+func parseKubernetesRolesFromAPI(rolesData interface{}) ([]KubeletRoleModel, []EtcdHostRoleModel) {
+	if rolesData == nil {
+		return nil, nil
+	}
+
+	rolesArray, ok := rolesData.([]interface{})
+	if !ok || len(rolesArray) == 0 {
+		return nil, nil
+	}
+
+	var kubeletRoles []KubeletRoleModel
+	var etcdHostRoles []EtcdHostRoleModel
+
+	for _, roleItem := range rolesArray {
+		roleMap, ok := roleItem.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		childType, _ := roleMap["childType"].(string)
+		switch childType {
+		case "KubeletRole":
+			kubeletRoles = append(kubeletRoles, parseKubeletRoleFromAPI(roleMap))
+		case "EtcdHostRole":
+			etcdHostRoles = append(etcdHostRoles, parseEtcdHostRoleFromAPI(roleMap))
+		}
+	}
+
+	return kubeletRoles, etcdHostRoles
 }
 
 // parseRolesFromAPI parses BCM API roles response into a Terraform set of role names.
@@ -1523,6 +1831,10 @@ func parseRolesFromAPI(rolesData interface{}) types.Set {
 		roleValues[i] = types.StringValue(name)
 	}
 
-	rolesSet, _ := types.SetValue(types.StringType, roleValues)
+	rolesSet, diags := types.SetValue(types.StringType, roleValues)
+	if diags.HasError() {
+		// Fall back to null set if construction fails (should not happen with valid string elements)
+		return types.SetNull(types.StringType)
+	}
 	return rolesSet
 }

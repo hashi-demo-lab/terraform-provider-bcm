@@ -244,8 +244,11 @@ func (r *CMUserUserResource) Configure(ctx context.Context, req resource.Configu
 	r.ConfigureResource(req, resp)
 }
 
-// getNextAvailableUID queries existing users and returns the next available UID.
+// getNextAvailableUID finds the next available UID in the 60000+ range.
 // Starts from 60000 to avoid conflicts with system users (0-999) and regular users (1000-59999).
+// Note: There is an inherent race condition between querying users and creating a new one.
+// Concurrent user creations could potentially select the same UID. For production use with
+// high concurrency, consider explicitly specifying UIDs in Terraform configuration.
 func (r *CMUserUserResource) getNextAvailableUID(ctx context.Context) (int64, error) {
 	body, err := r.Client.CallJSONRPC(ctx, "cmuser", "getUsers")
 	if err != nil {
@@ -257,20 +260,26 @@ func (r *CMUserUserResource) getNextAvailableUID(ctx context.Context) (int64, er
 		return 0, fmt.Errorf("failed to parse users response: %w", err)
 	}
 
-	// Find the maximum UID currently in use
-	maxUID := int64(59999) // Start just below our range
+	// Collect all UIDs currently in use
+	usedUIDs := make(map[int64]bool)
 	for _, user := range users {
 		if idStr, ok := user["ID"].(string); ok && idStr != "" {
 			var uid int64
 			_, _ = fmt.Sscanf(idStr, "%d", &uid)
-			if uid > maxUID && uid < 65535 {
-				maxUID = uid
+			if uid >= 60000 && uid < 65535 {
+				usedUIDs[uid] = true
 			}
 		}
 	}
 
-	// Return next available UID
-	return maxUID + 1, nil
+	// Find first available UID in our range (60000-65534)
+	for uid := int64(60000); uid < 65535; uid++ {
+		if !usedUIDs[uid] {
+			return uid, nil
+		}
+	}
+
+	return 0, fmt.Errorf("no available UIDs in range 60000-65534")
 }
 
 // Create implements the resource Create operation.

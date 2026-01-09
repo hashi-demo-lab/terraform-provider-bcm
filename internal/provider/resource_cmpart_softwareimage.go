@@ -418,12 +418,19 @@ func (r *CMPartSoftwareImageResource) Create(ctx context.Context, req resource.C
 	planOriginalImage := plan.OriginalImage
 	r.readSoftwareImage(ctx, &plan, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
-		// Attempt to clean up orphaned resource
+		// Attempt to clean up orphaned resource using correct API method
 		if !plan.ID.IsNull() && !plan.ID.IsUnknown() {
 			tflog.Warn(ctx, "Attempting to clean up orphaned software image after read failure", map[string]interface{}{
 				"uuid": plan.ID.ValueString(),
 			})
-			_, _ = r.Client.CallJSONRPC(ctx, "CMPart", "removeSoftwareImages", []string{plan.Name.ValueString()}, false)
+			// Use removeSoftwareImage (singular) with UUID, matching Delete method signature
+			_, cleanupErr := r.Client.CallJSONRPC(ctx, "CMPart", "removeSoftwareImage", plan.ID.ValueString(), false, false, false)
+			if cleanupErr != nil {
+				tflog.Error(ctx, "Failed to clean up orphaned software image", map[string]interface{}{
+					"uuid":  plan.ID.ValueString(),
+					"error": cleanupErr.Error(),
+				})
+			}
 		}
 		return
 	}
@@ -599,13 +606,14 @@ func (r *CMPartSoftwareImageResource) Delete(ctx context.Context, req resource.D
 
 		result, err := CheckCategoriesUsingImage(ctx, r.Client, state.Name.ValueString())
 		if err != nil {
-			// Dependency check failed - log warning but allow user to proceed with force
-			resp.Diagnostics.AddWarning(
+			// Dependency check failed - report error so resource is NOT removed from state
+			// User can retry or use force=true to skip dependency check
+			resp.Diagnostics.AddError(
 				"Dependency Check Failed",
 				fmt.Sprintf(
 					"Unable to verify dependencies for software image '%s': %s\n\n"+
-						"You can proceed with deletion by setting 'force = true', "+
-						"but this may create orphaned references if dependencies exist.",
+						"Please retry the deletion. If the issue persists, you can set 'force = true' "+
+						"to skip the dependency check, but this may create orphaned references.",
 					state.Name.ValueString(),
 					err.Error(),
 				),

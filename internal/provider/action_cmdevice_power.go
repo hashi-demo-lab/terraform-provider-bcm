@@ -120,6 +120,15 @@ func (a *CMDevicePowerAction) Configure(ctx context.Context, req action.Configur
 // Invoke executes the power operation on the specified device.
 // This is the main entry point for action execution.
 func (a *CMDevicePowerAction) Invoke(ctx context.Context, req action.InvokeRequest, resp *action.InvokeResponse) {
+	// Verify client was configured - prevents nil pointer dereference
+	if a.client == nil {
+		resp.Diagnostics.AddError(
+			"Action Not Configured",
+			"The BCM client was not configured. Please ensure the provider block is properly configured before using this action.",
+		)
+		return
+	}
+
 	var config CMDevicePowerActionModel
 
 	// Read configuration from request

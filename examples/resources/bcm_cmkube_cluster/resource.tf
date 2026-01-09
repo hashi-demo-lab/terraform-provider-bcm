@@ -1,82 +1,115 @@
-# Basic Kubernetes cluster resource example
+# BCM Kubernetes Cluster Resource Examples
+#
+# The bcm_cmkube_cluster resource aligns with BCM's KubeCluster API entity.
+# Cluster node membership is managed via roles on bcm_cmdevice_device resources,
+# not directly on the cluster resource.
 
-# Query available nodes for the cluster
-data "bcm_cmdevice_nodes" "masters" {
-  filter {
-    hostname_pattern = "master"
-  }
-}
-
-data "bcm_cmdevice_nodes" "workers" {
-  filter {
-    hostname_pattern = "worker"
-  }
-}
-
-# Query available networks for cluster management
+# Query available networks for cluster networking
 data "bcm_cmnet_networks" "all" {}
 
-# Create a Kubernetes cluster with minimal configuration
-# Note: Requires at least 1 master node in the environment
-resource "bcm_cmkube_cluster" "example" {
-  name         = "my-k8s-cluster"
-  master_nodes = length(data.bcm_cmdevice_nodes.masters.nodes) > 0 ? [data.bcm_cmdevice_nodes.masters.nodes[0].id] : []
+# Create an EtcdCluster first (required for KubeCluster)
+resource "bcm_cmetcd_cluster" "example" {
+  name               = "example-etcd"
+  heartbeat_interval = 100
+  election_timeout   = 1000
 }
 
-# Create a Kubernetes cluster with worker nodes
-# Note: Requires at least 1 master node and 1+ worker nodes
-resource "bcm_cmkube_cluster" "with_workers" {
-  name         = "prod-cluster"
-  master_nodes = length(data.bcm_cmdevice_nodes.masters.nodes) > 0 ? [data.bcm_cmdevice_nodes.masters.nodes[0].id] : []
-  worker_nodes = slice(data.bcm_cmdevice_nodes.workers.nodes[*].id, 0, min(3, length(data.bcm_cmdevice_nodes.workers.nodes)))
+# Basic Kubernetes cluster with minimal configuration
+resource "bcm_cmkube_cluster" "basic" {
+  name = "basic-cluster"
 
-  version = "1.28.0"
+  # Required network references (must be valid Network UUIDs)
+  etcd_cluster     = bcm_cmetcd_cluster.example.uuid
+  internal_network = data.bcm_cmnet_networks.all.networks[0].uuid
+  service_network  = data.bcm_cmnet_networks.all.networks[1].uuid
+  pod_network      = data.bcm_cmnet_networks.all.networks[2].uuid
 }
 
-# Create a Kubernetes cluster with full configuration
-# Note: Requires at least 1 master node, 1+ worker nodes, and 1+ networks
-resource "bcm_cmkube_cluster" "advanced" {
-  name         = "advanced-cluster"
-  master_nodes = slice(data.bcm_cmdevice_nodes.masters.nodes[*].id, 0, min(3, length(data.bcm_cmdevice_nodes.masters.nodes)))
-  worker_nodes = slice(data.bcm_cmdevice_nodes.workers.nodes[*].id, 0, min(5, length(data.bcm_cmdevice_nodes.workers.nodes)))
+# Production Kubernetes cluster with full configuration
+resource "bcm_cmkube_cluster" "production" {
+  name = "production-cluster"
 
-  version            = "1.29.0"
-  management_network = length(data.bcm_cmnet_networks.all.networks) > 0 ? data.bcm_cmnet_networks.all.networks[0].id : null
+  # Required network references
+  etcd_cluster     = bcm_cmetcd_cluster.example.uuid
+  internal_network = data.bcm_cmnet_networks.all.networks[0].uuid
+  service_network  = data.bcm_cmnet_networks.all.networks[1].uuid
+  pod_network      = data.bcm_cmnet_networks.all.networks[2].uuid
 
-  force = false # Set to true to bypass validation
-}
+  # Kubernetes version
+  version = "1.29.0"
 
-# Query etcd nodes for HA configuration
-data "bcm_cmdevice_nodes" "etcd" {
-  filter {
-    hostname_pattern = "etcd"
+  # Pod networking configuration
+  pod_network_node_mask = "/24"
+
+  # DNS configuration
+  kube_dns_ip = "10.96.0.10"
+
+  # API server configuration
+  kubernetes_api_server            = "https://api.cluster.local:6443"
+  kubernetes_api_server_proxy_port = 6444
+
+  # Certificate SANs
+  trusted_domains = [
+    "kubernetes.local",
+    "api.cluster.local",
+    "192.168.1.100"
+  ]
+
+  # Ingress proxy settings
+  ingress_proxy_enable       = true
+  ingress_proxy_listen_port  = 443
+  ingress_proxy_backend_port = 8443
+
+  # Application groups for cluster addons
+  app_groups {
+    name    = "monitoring"
+    enabled = true
   }
-}
 
-# Create a production HA Kubernetes cluster with dedicated etcd nodes
-# NVIDIA DGX BasePOD deployments require 3 dedicated etcd nodes for quorum
-# Note: Requires at least 1 master, 3 etcd nodes, and 1+ worker nodes
-resource "bcm_cmkube_cluster" "production_ha" {
-  name         = "production-ha-cluster"
-  master_nodes = slice(data.bcm_cmdevice_nodes.masters.nodes[*].id, 0, min(3, length(data.bcm_cmdevice_nodes.masters.nodes)))
-  worker_nodes = slice(data.bcm_cmdevice_nodes.workers.nodes[*].id, 0, min(5, length(data.bcm_cmdevice_nodes.workers.nodes)))
-  etcd_nodes   = slice(data.bcm_cmdevice_nodes.etcd.nodes[*].id, 0, min(3, length(data.bcm_cmdevice_nodes.etcd.nodes)))
+  app_groups {
+    name    = "networking"
+    enabled = true
+  }
 
-  version            = "1.29.0"
-  management_network = length(data.bcm_cmnet_networks.all.networks) > 0 ? data.bcm_cmnet_networks.all.networks[0].id : null
+  # Node label sets
+  label_sets {
+    name = "gpu-nodes"
+    labels = {
+      "nvidia.com/gpu" = "true"
+      "gpu-type"       = "a100"
+    }
+  }
 
-  force = false
+  # Kubernetes users for kubeconfig
+  users {
+    name   = "admin"
+    groups = ["system:masters"]
+  }
+
+  users {
+    name   = "developer"
+    groups = ["developers", "viewers"]
+  }
+
+  # Extensible options (JSON)
+  options = jsonencode({
+    "custom-setting" = "value"
+  })
 }
 
 # Output cluster information
-output "cluster_id" {
-  value = bcm_cmkube_cluster.example.id
+output "basic_cluster_id" {
+  value = bcm_cmkube_cluster.basic.id
 }
 
-output "cluster_uuid" {
-  value = bcm_cmkube_cluster.example.uuid
+output "basic_cluster_uuid" {
+  value = bcm_cmkube_cluster.basic.uuid
 }
 
-output "cluster_creation_time" {
-  value = bcm_cmkube_cluster.example.creation_time
+output "production_cluster_creation_time" {
+  value = bcm_cmkube_cluster.production.creation_time
+}
+
+output "production_cluster_revision" {
+  value = bcm_cmkube_cluster.production.revision_id
 }

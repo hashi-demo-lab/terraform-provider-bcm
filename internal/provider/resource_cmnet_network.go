@@ -379,6 +379,13 @@ func (r *CMNetNetworkResource) Update(ctx context.Context, req resource.UpdateRe
 		return
 	}
 
+	// Get current state for revision (computed field comes from state, not plan)
+	var state CMNetNetworkResourceModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	// Build API entity (includes UUID and revision for update)
 	entity, err := buildNetworkAPIEntity(ctx, &plan, plan.UUID.ValueString())
 	if err != nil {
@@ -386,8 +393,8 @@ func (r *CMNetNetworkResource) Update(ctx context.Context, req resource.UpdateRe
 		return
 	}
 
-	// Include revision from state for concurrency control
-	entity["revision"] = plan.Revision.ValueString()
+	// Include revision from state for concurrency control (revision is a computed field)
+	entity["revision"] = state.Revision.ValueString()
 
 	// Pre-flight validation: Call validateNetwork before UPDATE
 	validationErrors, err := r.Client.ValidateEntity(ctx, "CMNet", "validateNetwork", entity, false)
@@ -575,8 +582,9 @@ func mapNetworkAPIResponseToState(ctx context.Context, apiData map[string]interf
 		data.NetmaskBits = netmaskBits
 		subnet := formatCIDR(baseAddr.ValueString(), netmaskBits.ValueInt64())
 		data.Subnet = types.StringValue(subnet)
-	} else if data.Subnet.IsNull() {
-		// Preserve null state if plan was null and BCM returned default
+	} else {
+		// BCM returned default/empty value - reset to null to reflect actual API state
+		// This handles both: 1) plan was null, and 2) BCM externally cleared the subnet
 		data.BaseAddress = types.StringNull()
 		data.NetmaskBits = types.Int64Null()
 		data.Subnet = types.StringNull()
@@ -588,13 +596,15 @@ func mapNetworkAPIResponseToState(ctx context.Context, apiData map[string]interf
 
 	if !rangeStart.IsNull() && rangeStart.ValueString() != "0.0.0.0" && rangeStart.ValueString() != "" {
 		data.DHCPRangeStart = rangeStart
-	} else if data.DHCPRangeStart.IsNull() {
+	} else {
+		// BCM returned default/empty - reset to null to reflect actual API state
 		data.DHCPRangeStart = types.StringNull()
 	}
 
 	if !rangeEnd.IsNull() && rangeEnd.ValueString() != "0.0.0.0" && rangeEnd.ValueString() != "" {
 		data.DHCPRangeEnd = rangeEnd
-	} else if data.DHCPRangeEnd.IsNull() {
+	} else {
+		// BCM returned default/empty - reset to null to reflect actual API state
 		data.DHCPRangeEnd = types.StringNull()
 	}
 
@@ -609,7 +619,8 @@ func mapNetworkAPIResponseToState(ctx context.Context, apiData map[string]interf
 	gateway := getStringValue(apiData, "gateway")
 	if !gateway.IsNull() && gateway.ValueString() != "0.0.0.0" && gateway.ValueString() != "" {
 		data.Gateway = gateway
-	} else if data.Gateway.IsNull() {
+	} else {
+		// BCM returned default/empty - reset to null to reflect actual API state
 		data.Gateway = types.StringNull()
 	}
 
@@ -617,22 +628,25 @@ func mapNetworkAPIResponseToState(ctx context.Context, apiData map[string]interf
 	if !mtu.IsNull() && mtu.ValueInt64() != 1500 {
 		// Only set MTU if different from BCM default (1500)
 		data.MTU = mtu
-	} else if data.MTU.IsNull() {
+	} else {
+		// BCM returned default (1500) - reset to null to reflect actual API state
 		data.MTU = types.Int64Null()
 	}
 
-	// Domain name and notes - preserve plan values if BCM returns empty
+	// Domain name and notes - reset to null if BCM returns empty
 	domainName := getStringValue(apiData, "domainName")
 	if !domainName.IsNull() && domainName.ValueString() != "" {
 		data.DomainName = domainName
-	} else if data.DomainName.IsNull() {
+	} else {
+		// BCM returned empty - reset to null to reflect actual API state
 		data.DomainName = types.StringNull()
 	}
 
 	notes := getStringValue(apiData, "notes")
 	if !notes.IsNull() && notes.ValueString() != "" {
 		data.Notes = notes
-	} else if data.Notes.IsNull() {
+	} else {
+		// BCM returned empty - reset to null to reflect actual API state
 		data.Notes = types.StringNull()
 	}
 

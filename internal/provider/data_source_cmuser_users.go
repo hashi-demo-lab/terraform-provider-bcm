@@ -254,11 +254,13 @@ func (d *CMUserUsersDataSource) Read(ctx context.Context, req datasource.ReadReq
 
 // computeAccountActive determines if user account is active based on shadowExpire.
 // Account is active if:
+//   - shadowExpire is null (no expiration set - standard Unix behavior), OR
 //   - shadowExpire is -1 (never expires), OR
 //   - shadowExpire > current_epoch_day
 func computeAccountActive(shadowExpire types.Int64) types.Bool {
 	if shadowExpire.IsNull() {
-		return types.BoolValue(false)
+		// Null shadowExpire means no expiration is set - account is active (standard Unix behavior)
+		return types.BoolValue(true)
 	}
 
 	expireDays := shadowExpire.ValueInt64()
