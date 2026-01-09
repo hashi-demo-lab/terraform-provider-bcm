@@ -186,12 +186,15 @@ func buildEtcdHostRoleEntity(ctx context.Context, model EtcdHostRoleModel) (map[
 }
 
 // =============================================================================
-// Role Merging Logic (T052)
+// Role Merging Logic (T052, T058)
 // =============================================================================
 
 // mergeDeviceRoles merges new Kubernetes roles with existing device roles.
 // It replaces KubeletRole/EtcdHostRole for the same cluster references while
 // preserving all other roles (non-Kubernetes roles and roles for different clusters).
+//
+// UUID Preservation (T058): When updating a role for the same cluster, the
+// existing role's UUID is preserved to maintain BCM entity identity.
 //
 // Parameters:
 //   - existingRoles: Current roles from BCM device entity
@@ -205,6 +208,43 @@ func mergeDeviceRoles(
 	newEtcdHostRoles []map[string]any,
 ) []map[string]any {
 	result := make([]map[string]any, 0)
+
+	// Build maps of existing role UUIDs by cluster reference for UUID preservation (T058)
+	existingKubeletUUIDs := make(map[string]string) // kubeCluster -> uuid
+	existingEtcdUUIDs := make(map[string]string)    // etcdCluster -> uuid
+
+	for _, role := range existingRoles {
+		childType, _ := role["childType"].(string)
+		uuid, _ := role["uuid"].(string)
+
+		switch childType {
+		case "KubeletRole":
+			if cluster, ok := role["kubeCluster"].(string); ok && uuid != "" {
+				existingKubeletUUIDs[cluster] = uuid
+			}
+		case "EtcdHostRole":
+			if cluster, ok := role["etcdCluster"].(string); ok && uuid != "" {
+				existingEtcdUUIDs[cluster] = uuid
+			}
+		}
+	}
+
+	// Preserve UUIDs for new roles that replace existing roles (T058)
+	for _, role := range newKubeletRoles {
+		if cluster, ok := role["kubeCluster"].(string); ok {
+			if existingUUID, found := existingKubeletUUIDs[cluster]; found {
+				role["uuid"] = existingUUID
+			}
+		}
+	}
+
+	for _, role := range newEtcdHostRoles {
+		if cluster, ok := role["etcdCluster"].(string); ok {
+			if existingUUID, found := existingEtcdUUIDs[cluster]; found {
+				role["uuid"] = existingUUID
+			}
+		}
+	}
 
 	// Build a set of cluster UUIDs that will be replaced by new roles
 	kubeletClusters := make(map[string]bool)

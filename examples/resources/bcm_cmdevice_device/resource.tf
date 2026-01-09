@@ -118,6 +118,137 @@ resource "bcm_cmdevice_device" "storage_node" {
   notes = "Storage node for Ceph cluster"
 }
 
+# =============================================================================
+# Kubernetes Cluster Integration Examples
+# =============================================================================
+# The following examples demonstrate how to assign Kubernetes and etcd roles
+# to devices. Node membership is managed via role blocks on device resources,
+# not directly on cluster resources.
+
+# Create an EtcdCluster for Kubernetes backing store
+resource "bcm_cmetcd_cluster" "k8s_etcd" {
+  name               = "citest-k8s-etcd"
+  heartbeat_interval = 100
+  election_timeout   = 1000
+}
+
+# Create a KubeCluster for Kubernetes workloads
+resource "bcm_cmkube_cluster" "production" {
+  name = "citest-production"
+
+  # Required network references
+  etcd_cluster     = bcm_cmetcd_cluster.k8s_etcd.uuid
+  internal_network = data.bcm_cmnet_networks.all.networks[0].uuid
+  service_network  = data.bcm_cmnet_networks.all.networks[0].uuid
+  pod_network      = data.bcm_cmnet_networks.all.networks[0].uuid
+
+  # Kubernetes version
+  version = "1.29.0"
+}
+
+# Example 6: Kubernetes control plane node with kubelet_role
+# This device runs the Kubernetes control plane components (API server, etc.)
+resource "bcm_cmdevice_device" "k8s_control_plane" {
+  hostname           = "citest-k8s-cp-01"
+  mac                = "00:11:22:33:44:60"
+  category           = bcm_cmdevice_category.compute.id
+  management_network = data.bcm_cmnet_networks.all.networks[0].id
+
+  # Power control
+  power_control = "ipmi"
+
+  # Network configuration
+  default_gateway        = "192.168.1.1"
+  default_gateway_metric = 100
+
+  # Kubernetes control plane role
+  kubelet_role {
+    kube_cluster  = bcm_cmkube_cluster.production.uuid
+    control_plane = true
+    worker        = false # Control plane only, no workloads
+  }
+
+  notes = "Kubernetes control plane node"
+}
+
+# Example 7: Kubernetes worker node with kubelet_role
+# This device runs application workloads scheduled by Kubernetes
+resource "bcm_cmdevice_device" "k8s_worker" {
+  hostname           = "citest-k8s-worker-01"
+  mac                = "00:11:22:33:44:61"
+  category           = bcm_cmdevice_category.compute.id
+  management_network = data.bcm_cmnet_networks.all.networks[0].id
+
+  # Power control
+  power_control = "ipmi"
+
+  # Network configuration
+  default_gateway        = "192.168.1.1"
+  default_gateway_metric = 100
+
+  # Kubernetes worker role
+  kubelet_role {
+    kube_cluster  = bcm_cmkube_cluster.production.uuid
+    control_plane = false
+    worker        = true
+  }
+
+  notes = "Kubernetes worker node for application workloads"
+}
+
+# Example 8: Etcd host node with etcd_host_role
+# This device hosts an etcd cluster member for distributed key-value storage
+resource "bcm_cmdevice_device" "etcd_host" {
+  hostname           = "citest-etcd-host-01"
+  mac                = "00:11:22:33:44:62"
+  category           = bcm_cmdevice_category.compute.id
+  management_network = data.bcm_cmnet_networks.all.networks[0].id
+
+  # Power control
+  power_control = "ipmi"
+
+  # Network configuration
+  default_gateway        = "192.168.1.1"
+  default_gateway_metric = 100
+
+  # Etcd host role
+  etcd_host_role {
+    etcd_cluster = bcm_cmetcd_cluster.k8s_etcd.uuid
+  }
+
+  notes = "Etcd cluster member node"
+}
+
+# Example 9: Combined control plane node with both roles
+# This device runs both etcd and Kubernetes control plane (common in small clusters)
+resource "bcm_cmdevice_device" "k8s_combined_cp" {
+  hostname           = "citest-k8s-combined-01"
+  mac                = "00:11:22:33:44:63"
+  category           = bcm_cmdevice_category.compute.id
+  management_network = data.bcm_cmnet_networks.all.networks[0].id
+
+  # Power control
+  power_control = "ipmi"
+
+  # Network configuration
+  default_gateway        = "192.168.1.1"
+  default_gateway_metric = 100
+
+  # Etcd host role - runs etcd for cluster state
+  etcd_host_role {
+    etcd_cluster = bcm_cmetcd_cluster.k8s_etcd.uuid
+  }
+
+  # Kubernetes control plane role - runs API server, scheduler, etc.
+  kubelet_role {
+    kube_cluster  = bcm_cmkube_cluster.production.uuid
+    control_plane = true
+    worker        = true # Also accepts workloads (useful for small clusters)
+  }
+
+  notes = "Combined etcd + Kubernetes control plane node"
+}
+
 # Output device information for reference
 output "compute_basic_id" {
   description = "ID of the basic compute device"
@@ -145,5 +276,41 @@ output "ipmi_devices" {
       serial_number = bcm_cmdevice_device.storage_node.serial_number
       power_control = bcm_cmdevice_device.storage_node.power_control
     }
+  }
+}
+
+# Kubernetes cluster outputs
+output "kubernetes_cluster" {
+  description = "Kubernetes cluster information"
+  value = {
+    uuid    = bcm_cmkube_cluster.production.uuid
+    name    = bcm_cmkube_cluster.production.name
+    version = bcm_cmkube_cluster.production.version
+  }
+}
+
+output "kubernetes_nodes" {
+  description = "Kubernetes cluster node information"
+  value = {
+    control_plane = {
+      id       = bcm_cmdevice_device.k8s_control_plane.id
+      hostname = bcm_cmdevice_device.k8s_control_plane.hostname
+    }
+    worker = {
+      id       = bcm_cmdevice_device.k8s_worker.id
+      hostname = bcm_cmdevice_device.k8s_worker.hostname
+    }
+    combined = {
+      id       = bcm_cmdevice_device.k8s_combined_cp.id
+      hostname = bcm_cmdevice_device.k8s_combined_cp.hostname
+    }
+  }
+}
+
+output "etcd_cluster" {
+  description = "Etcd cluster information"
+  value = {
+    uuid = bcm_cmetcd_cluster.k8s_etcd.uuid
+    name = bcm_cmetcd_cluster.k8s_etcd.name
   }
 }

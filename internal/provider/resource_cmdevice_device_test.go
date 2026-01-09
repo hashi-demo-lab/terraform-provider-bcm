@@ -2469,3 +2469,454 @@ func TestAccCMDeviceDevice_RolesAddMultiple(t *testing.T) {
 		},
 	})
 }
+
+// ========================================
+// Phase 9: Kubernetes Role Tests (T041-T044)
+// ========================================
+
+// TestAccCMDeviceDevice_kubeletRole tests kubelet_role block for Kubernetes cluster membership.
+// T041: Tests adding a device to a Kubernetes cluster via kubelet_role.
+func TestAccCMDeviceDevice_kubeletRole(t *testing.T) {
+	deviceName := generateUniqueTestName("tftest-kubelet")
+	categoryName := generateUniqueTestName("tftest-cat-kubelet")
+	imageName := generateUniqueTestName("tftest-img-kubelet")
+	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
+	mac := generateUniqueMAC()
+	etcdClusterName := generateUniqueTestName("tftest-etcd-kubelet")
+	kubeClusterName := generateUniqueTestName("tftest-kube-kubelet")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+			testAccCMDeviceDevicePreCheck(t, deviceName)
+		},
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceDeviceDestroy,
+		Steps: []resource.TestStep{
+			// Create device with kubelet_role
+			{
+				Config: testAccCMDeviceDeviceConfigWithKubeletRole(
+					deviceName, categoryName, imageName, imagePath, mac,
+					etcdClusterName, kubeClusterName, true, true,
+				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("kubelet_role").AtSliceIndex(0).AtMapKey("control_plane"),
+						knownvalue.Bool(true),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("kubelet_role").AtSliceIndex(0).AtMapKey("worker"),
+						knownvalue.Bool(true),
+					),
+				},
+			},
+			// Idempotency check
+			{
+				Config: testAccCMDeviceDeviceConfigWithKubeletRole(
+					deviceName, categoryName, imageName, imagePath, mac,
+					etcdClusterName, kubeClusterName, true, true,
+				),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+		},
+	})
+}
+
+// TestAccCMDeviceDevice_etcdHostRole tests etcd_host_role block for etcd cluster membership.
+// T042: Tests adding a device to an etcd cluster via etcd_host_role.
+func TestAccCMDeviceDevice_etcdHostRole(t *testing.T) {
+	deviceName := generateUniqueTestName("tftest-etcdhost")
+	categoryName := generateUniqueTestName("tftest-cat-etcdhost")
+	imageName := generateUniqueTestName("tftest-img-etcdhost")
+	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
+	mac := generateUniqueMAC()
+	etcdClusterName := generateUniqueTestName("tftest-etcd-host")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+			testAccCMDeviceDevicePreCheck(t, deviceName)
+		},
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceDeviceDestroy,
+		Steps: []resource.TestStep{
+			// Create device with etcd_host_role
+			{
+				Config: testAccCMDeviceDeviceConfigWithEtcdHostRole(
+					deviceName, categoryName, imageName, imagePath, mac,
+					etcdClusterName,
+				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("etcd_host_role").AtSliceIndex(0).AtMapKey("member_name"),
+						knownvalue.StringExact("$hostname"),
+					),
+				},
+			},
+			// Idempotency check
+			{
+				Config: testAccCMDeviceDeviceConfigWithEtcdHostRole(
+					deviceName, categoryName, imageName, imagePath, mac,
+					etcdClusterName,
+				),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+		},
+	})
+}
+
+// TestAccCMDeviceDevice_bothRoles tests combined kubelet + etcd roles on same device.
+// T043: Tests adding both Kubernetes and etcd roles to a single device.
+func TestAccCMDeviceDevice_bothRoles(t *testing.T) {
+	deviceName := generateUniqueTestName("tftest-bothroles")
+	categoryName := generateUniqueTestName("tftest-cat-both")
+	imageName := generateUniqueTestName("tftest-img-both")
+	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
+	mac := generateUniqueMAC()
+	etcdClusterName := generateUniqueTestName("tftest-etcd-both")
+	kubeClusterName := generateUniqueTestName("tftest-kube-both")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+			testAccCMDeviceDevicePreCheck(t, deviceName)
+		},
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceDeviceDestroy,
+		Steps: []resource.TestStep{
+			// Create device with both roles
+			{
+				Config: testAccCMDeviceDeviceConfigWithBothRoles(
+					deviceName, categoryName, imageName, imagePath, mac,
+					etcdClusterName, kubeClusterName,
+				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("kubelet_role"),
+						knownvalue.ListSizeExact(1),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("etcd_host_role"),
+						knownvalue.ListSizeExact(1),
+					),
+				},
+			},
+			// Idempotency check
+			{
+				Config: testAccCMDeviceDeviceConfigWithBothRoles(
+					deviceName, categoryName, imageName, imagePath, mac,
+					etcdClusterName, kubeClusterName,
+				),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+		},
+	})
+}
+
+// TestAccCMDeviceDevice_roleUpdate tests modification of Kubernetes roles.
+// T044: Tests updating kubelet_role properties (control_plane, worker).
+func TestAccCMDeviceDevice_roleUpdate(t *testing.T) {
+	deviceName := generateUniqueTestName("tftest-roleupdate")
+	categoryName := generateUniqueTestName("tftest-cat-roleup")
+	imageName := generateUniqueTestName("tftest-img-roleup")
+	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
+	mac := generateUniqueMAC()
+	etcdClusterName := generateUniqueTestName("tftest-etcd-roleup")
+	kubeClusterName := generateUniqueTestName("tftest-kube-roleup")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+			testAccCMDeviceDevicePreCheck(t, deviceName)
+		},
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceDeviceDestroy,
+		Steps: []resource.TestStep{
+			// Create with control_plane=true, worker=true
+			{
+				Config: testAccCMDeviceDeviceConfigWithKubeletRole(
+					deviceName, categoryName, imageName, imagePath, mac,
+					etcdClusterName, kubeClusterName, true, true,
+				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("kubelet_role").AtSliceIndex(0).AtMapKey("control_plane"),
+						knownvalue.Bool(true),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("kubelet_role").AtSliceIndex(0).AtMapKey("worker"),
+						knownvalue.Bool(true),
+					),
+				},
+			},
+			// Update to worker-only (control_plane=false, worker=true)
+			{
+				Config: testAccCMDeviceDeviceConfigWithKubeletRole(
+					deviceName, categoryName, imageName, imagePath, mac,
+					etcdClusterName, kubeClusterName, false, true,
+				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("kubelet_role").AtSliceIndex(0).AtMapKey("control_plane"),
+						knownvalue.Bool(false),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("kubelet_role").AtSliceIndex(0).AtMapKey("worker"),
+						knownvalue.Bool(true),
+					),
+				},
+			},
+			// Idempotency check
+			{
+				Config: testAccCMDeviceDeviceConfigWithKubeletRole(
+					deviceName, categoryName, imageName, imagePath, mac,
+					etcdClusterName, kubeClusterName, false, true,
+				),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+		},
+	})
+}
+
+// ========================================
+// Kubernetes Role Test Configuration Helpers
+// ========================================
+
+// testAccCMDeviceDeviceConfigWithKubeletRole returns device config with kubelet_role.
+func testAccCMDeviceDeviceConfigWithKubeletRole(
+	hostname, categoryName, imageName, imagePath, mac string,
+	etcdClusterName, kubeClusterName string,
+	controlPlane, worker bool,
+) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmnet_networks" "all" {}
+
+resource "bcm_cmpart_softwareimage" "test" {
+  name = %[4]q
+  path = %[5]q
+}
+
+resource "bcm_cmdevice_category" "test" {
+  name                  = %[6]q
+  software_image        = bcm_cmpart_softwareimage.test.uuid
+  use_software_image_proxy = false
+
+  depends_on = [bcm_cmpart_softwareimage.test]
+}
+
+resource "bcm_cmetcd_cluster" "test" {
+  name               = %[7]q
+  heartbeat_interval = 100
+  election_timeout   = 1000
+}
+
+resource "bcm_cmkube_cluster" "test" {
+  name             = %[8]q
+  etcd_cluster     = bcm_cmetcd_cluster.test.uuid
+  internal_network = data.bcm_cmnet_networks.all.networks[0].uuid
+  service_network  = data.bcm_cmnet_networks.all.networks[0].uuid
+  pod_network      = data.bcm_cmnet_networks.all.networks[0].uuid
+}
+
+resource "bcm_cmdevice_device" "test" {
+  hostname = %[9]q
+  category = bcm_cmdevice_category.test.name
+  mac      = %[10]q
+  roles    = ["boot"]
+
+  kubelet_role {
+    kube_cluster  = bcm_cmkube_cluster.test.uuid
+    control_plane = %[11]t
+    worker        = %[12]t
+  }
+
+  depends_on = [
+    bcm_cmdevice_category.test,
+    bcm_cmkube_cluster.test,
+  ]
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		imageName,
+		imagePath,
+		categoryName,
+		etcdClusterName,
+		kubeClusterName,
+		hostname,
+		mac,
+		controlPlane,
+		worker,
+	)
+}
+
+// testAccCMDeviceDeviceConfigWithEtcdHostRole returns device config with etcd_host_role.
+func testAccCMDeviceDeviceConfigWithEtcdHostRole(
+	hostname, categoryName, imageName, imagePath, mac string,
+	etcdClusterName string,
+) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+resource "bcm_cmpart_softwareimage" "test" {
+  name = %[4]q
+  path = %[5]q
+}
+
+resource "bcm_cmdevice_category" "test" {
+  name                  = %[6]q
+  software_image        = bcm_cmpart_softwareimage.test.uuid
+  use_software_image_proxy = false
+
+  depends_on = [bcm_cmpart_softwareimage.test]
+}
+
+resource "bcm_cmetcd_cluster" "test" {
+  name               = %[7]q
+  heartbeat_interval = 100
+  election_timeout   = 1000
+}
+
+resource "bcm_cmdevice_device" "test" {
+  hostname = %[8]q
+  category = bcm_cmdevice_category.test.name
+  mac      = %[9]q
+  roles    = ["boot"]
+
+  etcd_host_role {
+    etcd_cluster = bcm_cmetcd_cluster.test.uuid
+  }
+
+  depends_on = [
+    bcm_cmdevice_category.test,
+    bcm_cmetcd_cluster.test,
+  ]
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		imageName,
+		imagePath,
+		categoryName,
+		etcdClusterName,
+		hostname,
+		mac,
+	)
+}
+
+// testAccCMDeviceDeviceConfigWithBothRoles returns device config with both kubelet_role and etcd_host_role.
+func testAccCMDeviceDeviceConfigWithBothRoles(
+	hostname, categoryName, imageName, imagePath, mac string,
+	etcdClusterName, kubeClusterName string,
+) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmnet_networks" "all" {}
+
+resource "bcm_cmpart_softwareimage" "test" {
+  name = %[4]q
+  path = %[5]q
+}
+
+resource "bcm_cmdevice_category" "test" {
+  name                  = %[6]q
+  software_image        = bcm_cmpart_softwareimage.test.uuid
+  use_software_image_proxy = false
+
+  depends_on = [bcm_cmpart_softwareimage.test]
+}
+
+resource "bcm_cmetcd_cluster" "test" {
+  name               = %[7]q
+  heartbeat_interval = 100
+  election_timeout   = 1000
+}
+
+resource "bcm_cmkube_cluster" "test" {
+  name             = %[8]q
+  etcd_cluster     = bcm_cmetcd_cluster.test.uuid
+  internal_network = data.bcm_cmnet_networks.all.networks[0].uuid
+  service_network  = data.bcm_cmnet_networks.all.networks[0].uuid
+  pod_network      = data.bcm_cmnet_networks.all.networks[0].uuid
+}
+
+resource "bcm_cmdevice_device" "test" {
+  hostname = %[9]q
+  category = bcm_cmdevice_category.test.name
+  mac      = %[10]q
+  roles    = ["boot"]
+
+  kubelet_role {
+    kube_cluster  = bcm_cmkube_cluster.test.uuid
+    control_plane = true
+    worker        = true
+  }
+
+  etcd_host_role {
+    etcd_cluster = bcm_cmetcd_cluster.test.uuid
+  }
+
+  depends_on = [
+    bcm_cmdevice_category.test,
+    bcm_cmkube_cluster.test,
+    bcm_cmetcd_cluster.test,
+  ]
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		imageName,
+		imagePath,
+		categoryName,
+		etcdClusterName,
+		kubeClusterName,
+		hostname,
+		mac,
+	)
+}

@@ -289,7 +289,7 @@ func TestDeviceRoleMerging(t *testing.T) {
 		assert.Contains(t, childTypes, "KubeletRole")
 	})
 
-	t.Run("merge replaces existing kubelet role for same cluster", func(t *testing.T) {
+	t.Run("merge replaces existing kubelet role for same cluster preserving UUID", func(t *testing.T) {
 		// Given existing KubeletRole for the same cluster
 		existingRoles := []map[string]interface{}{
 			{
@@ -309,9 +309,10 @@ func TestDeviceRoleMerging(t *testing.T) {
 		// When merging
 		result := mergeDeviceRoles(existingRoles, []map[string]interface{}{newKubeletRole}, nil)
 
-		// Then result should contain only the new role (old one replaced)
+		// Then result should contain only one role (old one replaced)
+		// But UUID should be preserved from the existing role (T058)
 		require.Len(t, result, 1)
-		assert.Equal(t, "new-kubelet-uuid", result[0]["uuid"])
+		assert.Equal(t, "old-kubelet-uuid", result[0]["uuid"], "UUID should be preserved from existing role")
 	})
 
 	t.Run("merge preserves kubelet role for different cluster", func(t *testing.T) {
@@ -384,6 +385,180 @@ func TestDeviceRoleMerging(t *testing.T) {
 		// Then KubeletRole should be removed, BackupRole should remain
 		require.Len(t, result, 1)
 		assert.Equal(t, "BackupRole", result[0]["childType"])
+	})
+}
+
+// =============================================================================
+// Unit Tests for UUID Preservation During Role Updates (T058)
+// =============================================================================
+
+// TestDeviceRoleUUIDPreservation tests that UUIDs are preserved when updating
+// roles for the same cluster reference.
+func TestDeviceRoleUUIDPreservation(t *testing.T) {
+	t.Run("preserve kubelet role UUID on update for same cluster", func(t *testing.T) {
+		// Given an existing KubeletRole with a UUID
+		existingRoles := []map[string]any{
+			{
+				"baseType":     "Role",
+				"childType":    "KubeletRole",
+				"uuid":         "existing-kubelet-uuid-12345",
+				"kubeCluster":  "kube-cluster-uuid",
+				"controlPlane": true,
+				"worker":       false,
+			},
+		}
+
+		// And a new KubeletRole for the same cluster with different settings but new UUID
+		newKubeletRole := map[string]any{
+			"baseType":     "Role",
+			"childType":    "KubeletRole",
+			"uuid":         "newly-generated-uuid", // This would be from buildKubeletRoleEntity
+			"kubeCluster":  "kube-cluster-uuid",
+			"controlPlane": false, // Changed setting
+			"worker":       true,  // Changed setting
+		}
+
+		// When merging
+		result := mergeDeviceRoles(existingRoles, []map[string]any{newKubeletRole}, nil)
+
+		// Then the existing UUID should be preserved (not replaced with new one)
+		require.Len(t, result, 1)
+		assert.Equal(t, "existing-kubelet-uuid-12345", result[0]["uuid"],
+			"UUID should be preserved from existing role for same cluster")
+
+		// And the new settings should be applied
+		assert.Equal(t, false, result[0]["controlPlane"])
+		assert.Equal(t, true, result[0]["worker"])
+	})
+
+	t.Run("preserve etcd host role UUID on update for same cluster", func(t *testing.T) {
+		// Given an existing EtcdHostRole with a UUID
+		existingRoles := []map[string]any{
+			{
+				"baseType":    "Role",
+				"childType":   "EtcdHostRole",
+				"uuid":        "existing-etcd-uuid-67890",
+				"etcdCluster": "etcd-cluster-uuid",
+				"memberName":  "etcd-node-1",
+			},
+		}
+
+		// And a new EtcdHostRole for the same cluster with different settings
+		newEtcdRole := map[string]any{
+			"baseType":    "Role",
+			"childType":   "EtcdHostRole",
+			"uuid":        "newly-generated-uuid",
+			"etcdCluster": "etcd-cluster-uuid",
+			"memberName":  "etcd-node-renamed", // Changed setting
+		}
+
+		// When merging
+		result := mergeDeviceRoles(existingRoles, nil, []map[string]any{newEtcdRole})
+
+		// Then the existing UUID should be preserved
+		require.Len(t, result, 1)
+		assert.Equal(t, "existing-etcd-uuid-67890", result[0]["uuid"],
+			"UUID should be preserved from existing role for same cluster")
+
+		// And the new settings should be applied
+		assert.Equal(t, "etcd-node-renamed", result[0]["memberName"])
+	})
+
+	t.Run("preserve UUIDs for multiple roles on update", func(t *testing.T) {
+		// Given existing roles for both types
+		existingRoles := []map[string]any{
+			{
+				"baseType":    "Role",
+				"childType":   "KubeletRole",
+				"uuid":        "kubelet-uuid-preserve",
+				"kubeCluster": "kube-cluster-1",
+			},
+			{
+				"baseType":    "Role",
+				"childType":   "EtcdHostRole",
+				"uuid":        "etcd-uuid-preserve",
+				"etcdCluster": "etcd-cluster-1",
+			},
+			{
+				"baseType":  "Role",
+				"childType": "BackupRole",
+				"uuid":      "backup-uuid",
+			},
+		}
+
+		// And new roles for the same clusters
+		newKubeletRole := map[string]any{
+			"baseType":    "Role",
+			"childType":   "KubeletRole",
+			"uuid":        "new-gen-kubelet",
+			"kubeCluster": "kube-cluster-1",
+		}
+		newEtcdRole := map[string]any{
+			"baseType":    "Role",
+			"childType":   "EtcdHostRole",
+			"uuid":        "new-gen-etcd",
+			"etcdCluster": "etcd-cluster-1",
+		}
+
+		// When merging
+		result := mergeDeviceRoles(existingRoles, []map[string]any{newKubeletRole}, []map[string]any{newEtcdRole})
+
+		// Then all UUIDs should be preserved appropriately
+		require.Len(t, result, 3)
+
+		// Find each role in result
+		var foundKubelet, foundEtcd, foundBackup bool
+		for _, r := range result {
+			switch r["childType"] {
+			case "KubeletRole":
+				assert.Equal(t, "kubelet-uuid-preserve", r["uuid"], "KubeletRole UUID should be preserved")
+				foundKubelet = true
+			case "EtcdHostRole":
+				assert.Equal(t, "etcd-uuid-preserve", r["uuid"], "EtcdHostRole UUID should be preserved")
+				foundEtcd = true
+			case "BackupRole":
+				assert.Equal(t, "backup-uuid", r["uuid"], "Non-K8s role UUID unchanged")
+				foundBackup = true
+			}
+		}
+		assert.True(t, foundKubelet && foundEtcd && foundBackup, "All roles should be present")
+	})
+
+	t.Run("new cluster gets new UUID not preserved", func(t *testing.T) {
+		// Given existing KubeletRole for cluster-1
+		existingRoles := []map[string]any{
+			{
+				"baseType":    "Role",
+				"childType":   "KubeletRole",
+				"uuid":        "cluster1-kubelet-uuid",
+				"kubeCluster": "kube-cluster-1",
+			},
+		}
+
+		// And a new KubeletRole for cluster-2 (different cluster)
+		newKubeletRole := map[string]any{
+			"baseType":    "Role",
+			"childType":   "KubeletRole",
+			"uuid":        "cluster2-new-uuid",
+			"kubeCluster": "kube-cluster-2", // Different cluster
+		}
+
+		// When merging
+		result := mergeDeviceRoles(existingRoles, []map[string]any{newKubeletRole}, nil)
+
+		// Then both roles should exist
+		require.Len(t, result, 2)
+
+		// cluster-1 role should have its original UUID
+		// cluster-2 role should keep its new UUID (no existing to preserve from)
+		for _, r := range result {
+			if r["kubeCluster"] == "kube-cluster-1" {
+				assert.Equal(t, "cluster1-kubelet-uuid", r["uuid"])
+			} else if r["kubeCluster"] == "kube-cluster-2" {
+				assert.Equal(t, "cluster2-new-uuid", r["uuid"],
+					"New cluster should keep its generated UUID")
+			}
+		}
 	})
 }
 

@@ -138,10 +138,10 @@
 
 > **TDD**: Write these tests FIRST, ensure they FAIL before implementation
 
-- [ ] T041 [P] [US3] Write acceptance test TestAccCMDeviceDevice_kubeletRole for kubelet_role block in internal/provider/resource_cmdevice_device_test.go
-- [ ] T042 [P] [US3] Write acceptance test TestAccCMDeviceDevice_etcdHostRole for etcd_host_role block in internal/provider/resource_cmdevice_device_test.go
-- [ ] T043 [P] [US3] Write acceptance test TestAccCMDeviceDevice_bothRoles for combined kubelet + etcd roles in internal/provider/resource_cmdevice_device_test.go
-- [ ] T044 [P] [US3] Write acceptance test TestAccCMDeviceDevice_roleUpdate for role modification in internal/provider/resource_cmdevice_device_test.go
+- [X] T041 [P] [US3] Write acceptance test TestAccCMDeviceDevice_kubeletRole for kubelet_role block in internal/provider/resource_cmdevice_device_test.go
+- [X] T042 [P] [US3] Write acceptance test TestAccCMDeviceDevice_etcdHostRole for etcd_host_role block in internal/provider/resource_cmdevice_device_test.go
+- [X] T043 [P] [US3] Write acceptance test TestAccCMDeviceDevice_bothRoles for combined kubelet + etcd roles in internal/provider/resource_cmdevice_device_test.go
+- [X] T044 [P] [US3] Write acceptance test TestAccCMDeviceDevice_roleUpdate for role modification in internal/provider/resource_cmdevice_device_test.go
 - [X] T045 [P] [US3] Write unit test TestKubeletRoleEntityBuilder for role construction in internal/provider/resource_cmdevice_device_roles_test.go
 - [X] T046 [P] [US3] Write unit test TestEtcdHostRoleEntityBuilder for role construction in internal/provider/resource_cmdevice_device_roles_test.go
 - [X] T047 [P] [US3] Write unit test TestDeviceRoleMerging for role array handling in internal/provider/resource_cmdevice_device_roles_test.go
@@ -160,8 +160,8 @@
 
 ### REFACTOR Phase for US3
 
-- [ ] T057 [P] [US3] Update device example with role blocks in examples/resources/bcm_cmdevice_device/resource.tf
-- [ ] T058 [P] [US3] Add UUID preservation for existing roles during updates in internal/provider/resource_cmdevice_device_roles.go
+- [X] T057 [P] [US3] Update device example with role blocks in examples/resources/bcm_cmdevice_device/resource.tf
+- [X] T058 [P] [US3] Add UUID preservation for existing roles during updates in internal/provider/resource_cmdevice_device_roles.go
 
 **Checkpoint**: User Story 3 complete - Devices can be assigned to Kubernetes/Etcd clusters via roles
 
