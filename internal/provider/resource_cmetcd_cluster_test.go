@@ -155,6 +155,8 @@ func TestCMEtcdClusterEntityBuilder(t *testing.T) {
 // buildEtcdClusterEntity is a test helper to construct EtcdCluster entities.
 // This mirrors the implementation in resource_cmetcd_cluster.go.
 // Note: BCM uses camelCase: heartBeatInterval (with capital B).
+//
+//nolint:unparam // heartbeatInterval param kept for flexibility in future tests
 func buildEtcdClusterEntity(uuid string, heartbeatInterval, electionTimeout int64, optionsJSON string) map[string]interface{} {
 	entity := map[string]interface{}{
 		"baseType":          "EtcdCluster",
