@@ -162,6 +162,9 @@
 
 - [X] T057 [P] [US3] Update device example with role blocks in examples/resources/bcm_cmdevice_device/resource.tf
 - [X] T058 [P] [US3] Add UUID preservation for existing roles during updates in internal/provider/resource_cmdevice_device_roles.go
+- [X] T059a [P] [US3] Add examples for provisioning Kubernetes on existing devices (Examples 10-11) in examples/resources/bcm_cmdevice_device/resource.tf
+- [X] T059b [P] [US3] Write acceptance test TestAccCMDeviceDevice_addRolesToExisting for role addition workflow in internal/provider/resource_cmdevice_device_test.go
+- [X] T059c [P] [US3] Fix golangci-lint issues for CI compliance (37 issues: forcetypeassert, godot, gofmt, ineffassign, staticcheck, unparam, unused)
 
 **Checkpoint**: User Story 3 complete - Devices can be assigned to Kubernetes/Etcd clusters via roles
 
@@ -177,21 +180,21 @@
 
 > **TDD**: Write these tests FIRST, ensure they FAIL before implementation
 
-- [ ] T059 [P] [US4] Write acceptance test TestAccCMKubeCluster_import_existing for import and plan verification in internal/provider/resource_cmkube_cluster_test.go
-- [ ] T060 [P] [US4] Write acceptance test TestAccCMEtcdCluster_import_existing for import and plan verification in internal/provider/resource_cmetcd_cluster_test.go
-- [ ] T061 [P] [US4] Write acceptance test TestAccCMDeviceDevice_import_withRoles for device import with Kubernetes roles in internal/provider/resource_cmdevice_device_test.go
+- [ ] T060 [P] [US4] Write acceptance test TestAccCMKubeCluster_import_existing for import and plan verification in internal/provider/resource_cmkube_cluster_test.go
+- [ ] T061 [P] [US4] Write acceptance test TestAccCMEtcdCluster_import_existing for import and plan verification in internal/provider/resource_cmetcd_cluster_test.go
+- [ ] T062 [P] [US4] Write acceptance test TestAccCMDeviceDevice_import_withRoles for device import with Kubernetes roles in internal/provider/resource_cmdevice_device_test.go
 
 ### GREEN Phase - Implement to Pass Tests for US4
 
-- [ ] T062 [US4] Verify ImportState preserves all fields for bcm_cmkube_cluster in internal/provider/resource_cmkube_cluster.go
-- [ ] T063 [US4] Verify ImportState preserves all fields for bcm_cmetcd_cluster in internal/provider/resource_cmetcd_cluster.go
-- [ ] T064 [US4] Update device ImportState to parse Kubernetes roles from BCM response in internal/provider/resource_cmdevice_device.go
-- [ ] T065 [US4] Run tests to verify GREEN status for all US4 tests
+- [ ] T063 [US4] Verify ImportState preserves all fields for bcm_cmkube_cluster in internal/provider/resource_cmkube_cluster.go
+- [ ] T064 [US4] Verify ImportState preserves all fields for bcm_cmetcd_cluster in internal/provider/resource_cmetcd_cluster.go
+- [ ] T065 [US4] Update device ImportState to parse Kubernetes roles from BCM response in internal/provider/resource_cmdevice_device.go
+- [ ] T066 [US4] Run tests to verify GREEN status for all US4 tests
 
 ### REFACTOR Phase for US4
 
-- [ ] T066 [P] [US4] Add import examples to documentation in examples/resources/bcm_cmkube_cluster/import.sh
-- [ ] T067 [P] [US4] Add import examples for etcd cluster in examples/resources/bcm_cmetcd_cluster/import.sh
+- [ ] T067 [P] [US4] Add import examples to documentation in examples/resources/bcm_cmkube_cluster/import.sh
+- [ ] T068 [P] [US4] Add import examples for etcd cluster in examples/resources/bcm_cmetcd_cluster/import.sh
 
 **Checkpoint**: User Story 4 complete - Existing infrastructure can be imported
 
@@ -207,15 +210,15 @@
 
 > **TDD**: Write these tests FIRST, ensure they FAIL before implementation
 
-- [ ] T068 [P] [US5] Write acceptance test TestAccCMKubeCluster_apiServer for API server URL and proxy port in internal/provider/resource_cmkube_cluster_test.go
-- [ ] T069 [P] [US5] Write acceptance test TestAccCMKubeCluster_trustedDomains for certificate SANs in internal/provider/resource_cmkube_cluster_test.go
+- [ ] T069 [P] [US5] Write acceptance test TestAccCMKubeCluster_apiServer for API server URL and proxy port in internal/provider/resource_cmkube_cluster_test.go
+- [ ] T070 [P] [US5] Write acceptance test TestAccCMKubeCluster_trustedDomains for certificate SANs in internal/provider/resource_cmkube_cluster_test.go
 
 ### GREEN Phase - Implement to Pass Tests for US5
 
-- [ ] T070 [US5] Ensure kubernetes_api_server attribute is properly mapped in schema in internal/provider/resource_cmkube_cluster.go
-- [ ] T071 [US5] Ensure kubernetes_api_server_proxy_port has default value 6444 in internal/provider/resource_cmkube_cluster.go
-- [ ] T072 [US5] Ensure trusted_domains list attribute is properly handled in internal/provider/resource_cmkube_cluster.go
-- [ ] T073 [US5] Run tests to verify GREEN status for all US5 tests
+- [ ] T071 [US5] Ensure kubernetes_api_server attribute is properly mapped in schema in internal/provider/resource_cmkube_cluster.go
+- [ ] T072 [US5] Ensure kubernetes_api_server_proxy_port has default value 6444 in internal/provider/resource_cmkube_cluster.go
+- [ ] T073 [US5] Ensure trusted_domains list attribute is properly handled in internal/provider/resource_cmkube_cluster.go
+- [ ] T074 [US5] Run tests to verify GREEN status for all US5 tests
 
 **Checkpoint**: User Story 5 complete - API server settings configurable
 
@@ -231,13 +234,13 @@
 
 > **TDD**: Write these tests FIRST, ensure they FAIL before implementation
 
-- [ ] T074 [P] [US6] Write acceptance test TestAccCMKubeCluster_ingressProxy for ingress configuration in internal/provider/resource_cmkube_cluster_test.go
+- [ ] T075 [P] [US6] Write acceptance test TestAccCMKubeCluster_ingressProxy for ingress configuration in internal/provider/resource_cmkube_cluster_test.go
 
 ### GREEN Phase - Implement to Pass Tests for US6
 
-- [ ] T075 [US6] Ensure ingress_proxy_enable attribute defaults to false in internal/provider/resource_cmkube_cluster.go
-- [ ] T076 [US6] Ensure ingress_proxy_listen_port and ingress_proxy_backend_port are mapped correctly in internal/provider/resource_cmkube_cluster.go
-- [ ] T077 [US6] Run tests to verify GREEN status for all US6 tests
+- [ ] T076 [US6] Ensure ingress_proxy_enable attribute defaults to false in internal/provider/resource_cmkube_cluster.go
+- [ ] T077 [US6] Ensure ingress_proxy_listen_port and ingress_proxy_backend_port are mapped correctly in internal/provider/resource_cmkube_cluster.go
+- [ ] T078 [US6] Run tests to verify GREEN status for all US6 tests
 
 **Checkpoint**: User Story 6 complete - Ingress proxy configurable
 
@@ -247,14 +250,14 @@
 
 **Purpose**: Improvements that affect multiple user stories
 
-- [ ] T078 [P] Update data source bcm_cmkube_clusters model to align with new schema in internal/provider/data_source_cmkube_clusters.go
-- [ ] T079 [P] Create data source bcm_cmetcd_clusters for listing etcd clusters in internal/provider/data_source_cmetcd_clusters.go
-- [ ] T080 [P] Write test for bcm_cmetcd_clusters data source in internal/provider/data_source_cmetcd_clusters_test.go
-- [ ] T081 Register bcm_cmetcd_clusters data source in provider.go DataSources() in internal/provider/provider.go
-- [ ] T082 Run make generate to update documentation in docs/
-- [ ] T083 Run make lint to verify code quality
-- [ ] T084 Run full test suite (make test && TF_ACC=1 go test ./internal/provider/ -v)
-- [ ] T085 Validate quickstart.md examples work end-to-end
+- [ ] T079 [P] Update data source bcm_cmkube_clusters model to align with new schema in internal/provider/data_source_cmkube_clusters.go
+- [ ] T080 [P] Create data source bcm_cmetcd_clusters for listing etcd clusters in internal/provider/data_source_cmetcd_clusters.go
+- [ ] T081 [P] Write test for bcm_cmetcd_clusters data source in internal/provider/data_source_cmetcd_clusters_test.go
+- [ ] T082 Register bcm_cmetcd_clusters data source in provider.go DataSources() in internal/provider/provider.go
+- [X] T083 Run make generate to update documentation in docs/
+- [X] T084 Run make lint to verify code quality (completed as part of T059c)
+- [ ] T085 Run full test suite (make test && TF_ACC=1 go test ./internal/provider/ -v)
+- [ ] T086 Validate quickstart.md examples work end-to-end
 
 ---
 
@@ -354,33 +357,33 @@ For each user story:
 
 ## Task Summary
 
-| Phase | Description | Task Count | Parallel Tasks |
-|-------|-------------|------------|----------------|
-| 1 | Setup | 4 | 3 |
-| 2 | Foundational | 4 | 3 |
-| 3 | US2 - EtcdCluster | 15 | 7 |
-| 4 | US1 - KubeCluster | 17 | 8 |
-| 5 | US3 - Device Roles | 18 | 9 |
-| 6 | US4 - Import | 9 | 5 |
-| 7 | US5 - API Server | 6 | 2 |
-| 8 | US6 - Ingress | 4 | 1 |
-| 9 | Polish | 8 | 4 |
-| **Total** | | **85** | **42** |
+| Phase | Description | Task Count | Completed | Status |
+|-------|-------------|------------|-----------|--------|
+| 1 | Setup | 4 | 4 | ✅ Complete |
+| 2 | Foundational | 4 | 4 | ✅ Complete |
+| 3 | US2 - EtcdCluster | 15 | 15 | ✅ Complete |
+| 4 | US1 - KubeCluster | 17 | 17 | ✅ Complete |
+| 5 | US3 - Device Roles | 21 | 21 | ✅ Complete |
+| 6 | US4 - Import | 9 | 0 | 🔲 Pending |
+| 7 | US5 - API Server | 6 | 0 | 🔲 Pending |
+| 8 | US6 - Ingress | 4 | 0 | 🔲 Pending |
+| 9 | Polish | 8 | 2 | 🔄 In Progress |
+| **Total** | | **88** | **63** | **72%** |
 
 ### Per User Story
 
-| User Story | Priority | Task Count | Description |
-|------------|----------|------------|-------------|
-| US2 | P1 | 15 | Manage Etcd Clusters Independently |
-| US1 | P1 | 17 | Create Kubernetes Cluster with Correct BCM Entity Mapping |
-| US3 | P1 | 18 | Assign Kubernetes Roles to Devices |
-| US4 | P2 | 9 | Import Existing Kubernetes Infrastructure |
-| US5 | P2 | 6 | Configure Kubernetes API Server Settings |
-| US6 | P3 | 4 | Configure Ingress Proxy Settings |
+| User Story | Priority | Task Count | Status | Description |
+|------------|----------|------------|--------|-------------|
+| US2 | P1 | 15 | ✅ | Manage Etcd Clusters Independently |
+| US1 | P1 | 17 | ✅ | Create Kubernetes Cluster with Correct BCM Entity Mapping |
+| US3 | P1 | 21 | ✅ | Assign Kubernetes Roles to Devices |
+| US4 | P2 | 9 | 🔲 | Import Existing Kubernetes Infrastructure |
+| US5 | P2 | 6 | 🔲 | Configure Kubernetes API Server Settings |
+| US6 | P3 | 4 | 🔲 | Configure Ingress Proxy Settings |
 
 ### MVP Scope
 
-**MVP = US2 + US1 + US3** (50 tasks total, ~30 parallelizable)
+**MVP = US2 + US1 + US3** (53 tasks total) - **✅ COMPLETE**
 
 This delivers:
 - EtcdCluster management (bcm_cmetcd_cluster resource)
