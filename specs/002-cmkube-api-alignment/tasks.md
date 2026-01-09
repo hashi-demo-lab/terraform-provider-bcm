@@ -250,7 +250,7 @@
 
 **Purpose**: Improvements that affect multiple user stories
 
-- [ ] T079 [P] Update data source bcm_cmkube_clusters model to align with new schema in internal/provider/data_source_cmkube_clusters.go
+- [X] T079 [P] Update data source bcm_cmkube_clusters model to align with new schema in internal/provider/data_source_cmkube_clusters.go (completed in PR #104)
 - [ ] T080 [P] Create data source bcm_cmetcd_clusters for listing etcd clusters in internal/provider/data_source_cmetcd_clusters.go
 - [ ] T081 [P] Write test for bcm_cmetcd_clusters data source in internal/provider/data_source_cmetcd_clusters_test.go
 - [ ] T082 Register bcm_cmetcd_clusters data source in provider.go DataSources() in internal/provider/provider.go
