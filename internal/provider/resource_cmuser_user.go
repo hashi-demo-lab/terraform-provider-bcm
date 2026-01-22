@@ -191,7 +191,7 @@ func (r *CMUserUserResource) Schema(ctx context.Context, req resource.SchemaRequ
 			},
 			"authorized_ssh_keys": schema.StringAttribute{
 				Optional:            true,
-				MarkdownDescription: "SSH authorized public keys (may be multi-line for multiple keys)",
+				MarkdownDescription: "SSH authorized public keys (may be multi-line for multiple keys). **Known Limitation**: BCM API does not return this field on read - values are stored in Terraform state only.",
 			},
 			"shadow_max": schema.Int64Attribute{
 				Optional:            true,
@@ -421,15 +421,17 @@ func (r *CMUserUserResource) Create(ctx context.Context, req resource.CreateRequ
 	time.Sleep(1 * time.Second)
 
 	// Read back created resource to populate computed fields
-	// Preserve password from plan (BCM API returns empty string)
+	// Preserve password and authorized_ssh_keys from plan (BCM API returns empty string for both)
 	planPassword := plan.Password
+	planAuthorizedSSHKeys := plan.AuthorizedSSHKeys
 	r.readUser(ctx, &plan, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	// Restore password from plan (write-only field)
+	// Restore write-only fields from plan
 	plan.Password = planPassword
+	plan.AuthorizedSSHKeys = planAuthorizedSSHKeys
 
 	tflog.Info(ctx, "Created user resource", map[string]interface{}{
 		"username": plan.Username.ValueString(),
@@ -455,8 +457,9 @@ func (r *CMUserUserResource) Read(ctx context.Context, req resource.ReadRequest,
 		return
 	}
 
-	// Preserve password from state (BCM API returns empty string)
+	// Preserve password and authorized_ssh_keys from state (BCM API returns empty string for both)
 	statePassword := state.Password
+	stateAuthorizedSSHKeys := state.AuthorizedSSHKeys
 
 	// Fetch current state from BCM API
 	r.readUser(ctx, &state, &resp.Diagnostics)
@@ -464,8 +467,9 @@ func (r *CMUserUserResource) Read(ctx context.Context, req resource.ReadRequest,
 		return
 	}
 
-	// Restore password from prior state (write-only field)
+	// Restore write-only fields from prior state
 	state.Password = statePassword
+	state.AuthorizedSSHKeys = stateAuthorizedSSHKeys
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
@@ -545,15 +549,17 @@ func (r *CMUserUserResource) Update(ctx context.Context, req resource.UpdateRequ
 	time.Sleep(1 * time.Second)
 
 	// Read back updated resource to verify changes
-	// Preserve password from plan
+	// Preserve password and authorized_ssh_keys from plan (BCM API returns empty string for both)
 	planPassword := plan.Password
+	planAuthorizedSSHKeys := plan.AuthorizedSSHKeys
 	r.readUser(ctx, &plan, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	// Restore password from plan (write-only field)
+	// Restore write-only fields from plan
 	plan.Password = planPassword
+	plan.AuthorizedSSHKeys = planAuthorizedSSHKeys
 
 	tflog.Info(ctx, "Updated user resource", map[string]interface{}{
 		"username": plan.Username.ValueString(),

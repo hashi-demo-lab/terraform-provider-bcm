@@ -91,7 +91,7 @@ variable "service_password" {
 
 ### Optional
 
-- `authorized_ssh_keys` (String) SSH authorized public keys (may be multi-line for multiple keys)
+- `authorized_ssh_keys` (String) SSH authorized public keys (may be multi-line for multiple keys). **Known Limitation**: BCM API does not return this field on read - values are stored in Terraform state only.
 - `email` (String) User's email address
 - `force` (Boolean) Force operation even with validation warnings. Defaults to `false`.
 - `full_name` (String) User's full display name (maps to commonName in BCM). Defaults to username if not specified.

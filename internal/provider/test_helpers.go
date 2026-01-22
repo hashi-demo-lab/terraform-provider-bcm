@@ -160,8 +160,8 @@ func verifyResourceDeleted(ctx context.Context, client *BCMClient, service, meth
 		if err != nil {
 			errStr := err.Error()
 			// Only treat "not found" type errors as successful deletion
-			// Common patterns: HTTP 404, "not found", "does not exist", empty result
-			if containsAny(errStr, []string{"404", "not found", "does not exist", "unknown", "no such"}) {
+			// Common patterns: HTTP 404, "not found", "does not exist", empty result, null response
+			if containsAny(errStr, []string{"404", "not found", "does not exist", "unknown", "no such", "null"}) {
 				return true
 			}
 			// Other errors (network, auth, server errors) - resource status unknown, keep retrying

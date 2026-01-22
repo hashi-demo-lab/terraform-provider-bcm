@@ -101,6 +101,31 @@ resource "bcm_cmuser_user" "test" {
 	)
 }
 
+// testAccCMUserUserConfigWithSSHKeys generates configuration with authorized SSH keys.
+func testAccCMUserUserConfigWithSSHKeys(username, password, sshKeys string) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+resource "bcm_cmuser_user" "test" {
+  username            = %[4]q
+  password            = %[5]q
+  authorized_ssh_keys = %[6]q
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		username,
+		password,
+		sshKeys,
+	)
+}
+
 // testAccCheckCMUserUserDestroy verifies user is deleted.
 func testAccCheckCMUserUserDestroy(s *terraform.State) error {
 	client := createTestBCMClient(&testing.T{})
@@ -616,6 +641,72 @@ func TestAccCMUserUser_PasswordSensitive(t *testing.T) {
 						"bcm_cmuser_user.test",
 						tfjsonpath.New("password"),
 						knownvalue.NotNull(),
+					),
+					compareID.AddStateValue(
+						"bcm_cmuser_user.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+		},
+	})
+}
+
+// TestAccCMUserUser_AuthorizedSSHKeys tests that authorized_ssh_keys is preserved
+// after apply (BCM API returns empty string for this field, similar to password).
+// This test verifies the fix for the "inconsistent result after apply" error.
+func TestAccCMUserUser_AuthorizedSSHKeys(t *testing.T) {
+	if os.Getenv("TF_ACC") == "" {
+		t.Skip("Acceptance tests skipped unless env 'TF_ACC' set")
+	}
+
+	username := generateUniqueUnixUsername()
+	password := "SSHKeyTestPass123!"
+	sshKey := "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7example test@host"
+
+	// ID consistency tracking
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMUserUserDestroy,
+		Steps: []resource.TestStep{
+			// Create with authorized_ssh_keys
+			{
+				Config: testAccCMUserUserConfigWithSSHKeys(username, password, sshKey),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmuser_user.test",
+						tfjsonpath.New("username"),
+						knownvalue.StringExact(username),
+					),
+					// authorized_ssh_keys should be preserved in state
+					statecheck.ExpectKnownValue(
+						"bcm_cmuser_user.test",
+						tfjsonpath.New("authorized_ssh_keys"),
+						knownvalue.StringExact(sshKey),
+					),
+					compareID.AddStateValue(
+						"bcm_cmuser_user.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+			// Re-apply same config (idempotency check)
+			{
+				Config: testAccCMUserUserConfigWithSSHKeys(username, password, sshKey),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					// authorized_ssh_keys should still be preserved
+					statecheck.ExpectKnownValue(
+						"bcm_cmuser_user.test",
+						tfjsonpath.New("authorized_ssh_keys"),
+						knownvalue.StringExact(sshKey),
 					),
 					compareID.AddStateValue(
 						"bcm_cmuser_user.test",
