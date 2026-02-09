@@ -20,5 +20,6 @@
   "enabledMcpjsonServers": [
     "terraform",
     "aws-knowledge-mcp-server"
-  ]
+  ],
+  "disableAllHooks": true
 }
