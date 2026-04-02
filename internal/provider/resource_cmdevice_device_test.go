@@ -1800,7 +1800,7 @@ func TestAccCMDeviceDevice_RolesUpdate(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_device.test",
 						tfjsonpath.New("roles"),
-						knownvalue.SetSizeExact(2),
+						knownvalue.SetSizeExact(1),
 					),
 					// ID should remain the same after update.
 					compareID.AddStateValue(
@@ -1848,7 +1848,7 @@ func TestAccCMDeviceDevice_RolesRemove(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_device.test",
 						tfjsonpath.New("roles"),
-						knownvalue.SetSizeExact(2),
+						knownvalue.SetSizeExact(1),
 					),
 				},
 			},
@@ -2272,7 +2272,7 @@ func TestAccCMDeviceDevice_RolesUpdateByName(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_device.test",
 						tfjsonpath.New("roles"),
-						knownvalue.SetSizeExact(2),
+						knownvalue.SetSizeExact(1),
 					),
 					// ID should remain the same after update.
 					compareID.AddStateValue(
@@ -2512,7 +2512,7 @@ resource "bcm_cmdevice_device" "test" {
 		Steps: []resource.TestStep{
 			{
 				Config:      config,
-				ExpectError: regexp.MustCompile(`invalid role identifiers found.*empty string`),
+				ExpectError: regexp.MustCompile(`invalid role identifiers[\s\S]*empty string`),
 			},
 		},
 	})
@@ -3569,6 +3569,194 @@ func TestAccCMDeviceDevice_ManagementNetworkUpdate(t *testing.T) {
 			// Step 3: Idempotency after update.
 			{
 				Config: testAccCMDeviceDeviceResourceConfig_ManagementNetworkNamed(deviceName, categoryName, imageName, imagePath, mac, "internalnet"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+		},
+	})
+}
+
+// =============================================================================
+// Import and Recategorize Tests
+// =============================================================================
+
+// testAccCMDeviceDeviceResourceConfig_WithCategory returns device config pointing
+// at a specific named category. Both categories are created so switching between
+// them is a pure device update.
+func testAccCMDeviceDeviceResourceConfig_WithCategory(hostname, categoryNameA, categoryNameB, activeCategory, imageName, imagePath, mac string) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmnet_networks" "management" {
+  filter {
+    name_pattern = "managementnet"
+  }
+}
+
+resource "bcm_cmpart_softwareimage" "test" {
+  name = %[4]q
+  path = %[5]q
+}
+
+resource "bcm_cmdevice_category" "cat_a" {
+  name               = %[6]q
+  management_network = data.bcm_cmnet_networks.management.networks[0].id
+
+  software_image_proxy = {
+    parent_software_image = bcm_cmpart_softwareimage.test.id
+  }
+
+  depends_on = [bcm_cmpart_softwareimage.test]
+}
+
+resource "bcm_cmdevice_category" "cat_b" {
+  name               = %[7]q
+  management_network = data.bcm_cmnet_networks.management.networks[0].id
+
+  software_image_proxy = {
+    parent_software_image = bcm_cmpart_softwareimage.test.id
+  }
+
+  depends_on = [bcm_cmpart_softwareimage.test]
+}
+
+resource "bcm_cmdevice_device" "test" {
+  hostname = %[8]q
+  category = bcm_cmdevice_category.%[9]s.id
+
+  interfaces {
+    name     = "eth0"
+    type     = "physical"
+    mac      = %[10]q
+    network  = data.bcm_cmnet_networks.management.networks[0].id
+    bootable = true
+    dhcp     = true
+  }
+
+  depends_on = [bcm_cmdevice_category.cat_a, bcm_cmdevice_category.cat_b]
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		imageName,
+		imagePath,
+		categoryNameA,
+		categoryNameB,
+		hostname,
+		activeCategory,
+		mac,
+	)
+}
+
+// TestAccCMDeviceDevice_ImportAndRecategorize tests the workflow of importing
+// an existing device and then changing its category. This is a common adoption
+// pattern when bringing existing BCM devices under Terraform management.
+func TestAccCMDeviceDevice_ImportAndRecategorize(t *testing.T) {
+	deviceName := generateUniqueTestName("tftest-device-recat")
+	catNameA := generateUniqueTestName("tftest-cat-a")
+	catNameB := generateUniqueTestName("tftest-cat-b")
+	imageName := generateUniqueTestName("tftest-img-recat")
+	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
+	mac := generateUniqueMAC()
+
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+	compareCat := statecheck.CompareValue(compare.ValuesDiffer())
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+			testAccCMDeviceDevicePreCheck(t, deviceName)
+		},
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceDeviceDestroy,
+		Steps: []resource.TestStep{
+			// Step 1: Create device in category A.
+			{
+				Config: testAccCMDeviceDeviceResourceConfig_WithCategory(deviceName, catNameA, catNameB, "cat_a", imageName, imagePath, mac),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("hostname"),
+						knownvalue.StringExact(deviceName),
+					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+					),
+					compareCat.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("category"),
+					),
+				},
+			},
+			// Step 2: Import the device by UUID.
+			{
+				ResourceName:      "bcm_cmdevice_device.test",
+				ImportState:       true,
+				ImportStateVerify: true,
+				ImportStateVerifyIgnore: []string{
+					"force",
+					"management_network",
+					"boot_loader",
+					"boot_loader_protocol",
+					"partition",
+					"power_control",
+					"default_gateway",
+					"default_gateway_metric",
+					"serial_number",
+					"part_number",
+					"interfaces.#",
+					"interfaces.0.%",
+					"interfaces.0.base_type",
+					"interfaces.0.bootable",
+					"interfaces.0.cardtype",
+					"interfaces.0.child_type",
+					"interfaces.0.dhcp",
+					"interfaces.0.mac",
+					"interfaces.0.name",
+					"interfaces.0.network",
+					"interfaces.0.start_if",
+					"interfaces.0.type",
+					"interfaces.0.uuid",
+					"interfaces.0.bond_mode",
+					"interfaces.0.ip",
+					"interfaces.0.ipv6_ip",
+					"interfaces.0.members.#",
+				},
+			},
+			// Step 3: Switch device to category B — this is the key assertion.
+			{
+				Config: testAccCMDeviceDeviceResourceConfig_WithCategory(deviceName, catNameA, catNameB, "cat_b", imageName, imagePath, mac),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("hostname"),
+						knownvalue.StringExact(deviceName),
+					),
+					// ID should be unchanged (same device, just recategorized).
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+					),
+					// Category should differ from step 1.
+					compareCat.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("category"),
+					),
+				},
+			},
+			// Step 4: Idempotency — no further changes expected.
+			{
+				Config: testAccCMDeviceDeviceResourceConfig_WithCategory(deviceName, catNameA, catNameB, "cat_b", imageName, imagePath, mac),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),

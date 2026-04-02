@@ -752,9 +752,14 @@ func (r *CMDeviceDeviceResource) Create(ctx context.Context, req resource.Create
 		state.PartNumber = types.StringNull()
 	}
 
-	// Handle roles - preserve null from plan if user didn't specify roles
+	// Preserve the distinction between omitted roles (null) and explicit empty roles ([]).
 	if plan.Roles.IsNull() {
 		state.Roles = types.SetNull(types.StringType)
+	} else if !plan.Roles.IsUnknown() {
+		var plannedRoles []string
+		if diags := plan.Roles.ElementsAs(ctx, &plannedRoles, false); !diags.HasError() && len(plannedRoles) == 0 {
+			state.Roles = emptyStringSet()
+		}
 	}
 
 	// Normalize interface order to match plan order (prevents spurious diffs)
@@ -836,6 +841,15 @@ func (r *CMDeviceDeviceResource) waitForPartitionCommit(ctx context.Context, cli
 type PartitionResolutionResult struct {
 	PartitionUUID string
 	UsesProxy     bool
+}
+
+func emptyStringSet() types.Set {
+	rolesSet, diags := types.SetValue(types.StringType, []attr.Value{})
+	if diags.HasError() {
+		return types.SetNull(types.StringType)
+	}
+
+	return rolesSet
 }
 
 // resolvePartitionFromCategory resolves the partition UUID for a device.
@@ -1049,9 +1063,16 @@ func (r *CMDeviceDeviceResource) Read(ctx context.Context, req resource.ReadRequ
 		newState.Interfaces = normalizeInterfaceOrder(newState.Interfaces, state.Interfaces)
 	}
 
-	// Handle roles - preserve null from state if user didn't specify roles (non-import path)
-	if !isImport && state.Roles.IsNull() {
-		newState.Roles = types.SetNull(types.StringType)
+	// Preserve the distinction between omitted roles (null) and explicit empty roles ([]).
+	if !isImport {
+		if state.Roles.IsNull() {
+			newState.Roles = types.SetNull(types.StringType)
+		} else {
+			var existingRoles []string
+			if diags := state.Roles.ElementsAs(ctx, &existingRoles, false); !diags.HasError() && len(existingRoles) == 0 {
+				newState.Roles = emptyStringSet()
+			}
+		}
 	}
 
 	// Handle Kubernetes roles based on mode
@@ -1279,9 +1300,14 @@ func (r *CMDeviceDeviceResource) Update(ctx context.Context, req resource.Update
 		newState.PartNumber = types.StringNull()
 	}
 
-	// Handle roles - preserve null from plan if user didn't specify roles
+	// Preserve the distinction between omitted roles (null) and explicit empty roles ([]).
 	if plan.Roles.IsNull() {
 		newState.Roles = types.SetNull(types.StringType)
+	} else if !plan.Roles.IsUnknown() {
+		var plannedRoles []string
+		if diags := plan.Roles.ElementsAs(ctx, &plannedRoles, false); !diags.HasError() && len(plannedRoles) == 0 {
+			newState.Roles = emptyStringSet()
+		}
 	}
 
 	// Normalize interface order to match plan order (prevents spurious diffs)
@@ -1811,7 +1837,7 @@ func parseRolesFromAPI(rolesData interface{}) types.Set {
 
 	rolesArray, ok := rolesData.([]interface{})
 	if !ok || len(rolesArray) == 0 {
-		return types.SetNull(types.StringType)
+		return emptyStringSet()
 	}
 
 	// Extract role names from the array
@@ -1826,7 +1852,7 @@ func parseRolesFromAPI(rolesData interface{}) types.Set {
 	}
 
 	if len(roleNames) == 0 {
-		return types.SetNull(types.StringType)
+		return emptyStringSet()
 	}
 
 	// Convert to Terraform set (order doesn't matter for sets)
