@@ -17,6 +17,9 @@
 
 set -euo pipefail
 
+# Resolve repo root from script location (works from any working directory)
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
 # T031: Trap handlers for cleanup on exit/interrupt
 INTERRUPTED=false
 
@@ -363,7 +366,7 @@ build_provider() {
     fi
 
     log_info "Detected platform: ${os}_${arch}"
-    log_debug "Build directory: /workspace"
+    log_debug "Build directory: $REPO_ROOT"
 
     # Build binary
     local binary_name="terraform-provider-bcm_v${PROVIDER_VERSION}"
@@ -374,7 +377,7 @@ build_provider() {
     export GOARCH="$arch"
     log_debug "Executing: GOOS=$os GOARCH=$arch go build -o $binary_name ."
 
-    cd /workspace
+    cd "$REPO_ROOT"
     local build_output
     if ! build_output=$(go build -o "$binary_name" . 2>&1); then
         log_error "Build failed: go build command failed"
@@ -403,7 +406,7 @@ build_provider() {
     if [ ! -f "$binary_name" ]; then
         log_error "Build failed: binary not found after build"
         log_error "Context: Phase 2 - Provider build verification"
-        log_error "Expected: $binary_name in /workspace"
+        log_error "Expected: $binary_name in $REPO_ROOT"
         log_error "Suggestion: Check disk space and permissions"
         exit "$EXIT_BUILD_FAILURE"
     fi
@@ -411,7 +414,7 @@ build_provider() {
     local binary_size
     binary_size=$(du -h "$binary_name" | cut -f1)
     log_info "✓ Provider built successfully ($binary_size)"
-    log_debug "Binary path: /workspace/$binary_name"
+    log_debug "Binary path: $REPO_ROOT/$binary_name"
 
     # Install to appropriate directory based on dev_overrides configuration
     if [ "$USE_DEV_OVERRIDES" = true ] && [ -n "$DEV_OVERRIDES_PATH" ]; then
@@ -442,7 +445,7 @@ build_provider() {
 #############################################################################
 
 discover_examples() {
-    local examples_dir="/workspace/examples"
+    local examples_dir="$REPO_ROOT/examples"
     local data_source_examples=()
     local resource_examples=()
 
@@ -590,7 +593,7 @@ EOF
     fi
 
     # Cleanup temp directory
-    cd /workspace
+    cd "$REPO_ROOT"
     rm -rf "$temp_dir"
 
     local test_end
@@ -699,7 +702,7 @@ EOF
     fi
 
     # Cleanup temp directory
-    cd /workspace
+    cd "$REPO_ROOT"
     rm -rf "$temp_dir"
 
     if [ "$test_passed" = true ]; then
