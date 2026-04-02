@@ -3659,39 +3659,6 @@ func (c managementNetworkInBCMCheck) CheckState(ctx context.Context, req statech
 	}
 }
 
-// testAccCheckDeviceManagementNetworkInBCM verifies via direct BCM API call that
-// the device's managementNetwork field is set to a non-zero UUID.
-func testAccCheckDeviceManagementNetworkInBCM(deviceName string) resource.TestCheckFunc {
-	return func(s *terraform.State) error {
-		client := createTestBCMClient(&testing.T{})
-		ctx := context.Background()
-
-		body, err := client.CallJSONRPC(ctx, "cmdevice", "getDevice", deviceName)
-		if err != nil {
-			return fmt.Errorf("failed to get device %s from BCM API: %w", deviceName, err)
-		}
-
-		var deviceData map[string]interface{}
-		if err := json.Unmarshal(body, &deviceData); err != nil {
-			return fmt.Errorf("failed to parse device data: %w", err)
-		}
-
-		managementNetwork, ok := deviceData["managementNetwork"].(string)
-		if !ok || managementNetwork == "" {
-			return fmt.Errorf("managementNetwork field not found or empty in BCM API response for device %s", deviceName)
-		}
-
-		if managementNetwork == "00000000-0000-0000-0000-000000000000" {
-			return fmt.Errorf(
-				"management_network was NOT sent to BCM API for device %s: BCM still has zero UUID",
-				deviceName,
-			)
-		}
-
-		return nil
-	}
-}
-
 // TestAccCMDeviceDevice_ManagementNetworkDrift tests that external modification
 // of managementNetwork is detected and corrected by Terraform.
 func TestAccCMDeviceDevice_ManagementNetworkDrift(t *testing.T) {
