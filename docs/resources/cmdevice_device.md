@@ -550,7 +550,7 @@ output "etcd_cluster" {
 - `kernel_parameters` (String) Kernel boot parameters
 - `kubelet_role` (Block List) Kubernetes kubelet role configuration. Defines this device as a member of a KubeCluster. Each kubelet_role block associates the device with one KubeCluster as a control plane node, worker node, or both. (see [below for nested schema](#nestedblock--kubelet_role))
 - `mac` (String) Device MAC address, computed from the first interface. Can be set explicitly to override.
-- `management_network` (String) Management network UUID reference (may be reset by BCM, required for device creation)
+- `management_network` (String) Management network UUID reference. BCM stores exactly what is sent; omitting defaults to unset (zero UUID).
 - `notes` (String) Device notes/description
 - `part_number` (String) Hardware part number
 - `partition` (String) Partition UUID reference (uses category default if not specified)
