@@ -36,13 +36,33 @@ func TestAccCMDeviceRolesDataSource_All(t *testing.T) {
 					),
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmdevice_roles.test",
-						tfjsonpath.New("roles").AtSliceIndex(0).AtMapKey("uuid"),
-						knownvalue.NotNull(),
+						tfjsonpath.New("roles"),
+						knownvalue.ListSizeExact(4),
 					),
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmdevice_roles.test",
 						tfjsonpath.New("roles").AtSliceIndex(0).AtMapKey("name"),
-						knownvalue.NotNull(),
+						knownvalue.StringExact("boot"),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmdevice_roles.test",
+						tfjsonpath.New("roles").AtSliceIndex(0).AtMapKey("child_type"),
+						knownvalue.StringExact("BootRole"),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmdevice_roles.test",
+						tfjsonpath.New("roles").AtSliceIndex(1).AtMapKey("name"),
+						knownvalue.StringExact("headnode"),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmdevice_roles.test",
+						tfjsonpath.New("roles").AtSliceIndex(2).AtMapKey("name"),
+						knownvalue.StringExact("provisioning"),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmdevice_roles.test",
+						tfjsonpath.New("roles").AtSliceIndex(3).AtMapKey("name"),
+						knownvalue.StringExact("storage"),
 					),
 				},
 			},
@@ -69,6 +89,16 @@ func TestAccCMDeviceRolesDataSource_FilterByChildType(t *testing.T) {
 					),
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmdevice_roles.test",
+						tfjsonpath.New("roles"),
+						knownvalue.ListSizeExact(1),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmdevice_roles.test",
+						tfjsonpath.New("roles").AtSliceIndex(0).AtMapKey("name"),
+						knownvalue.StringExact("headnode"),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmdevice_roles.test",
 						tfjsonpath.New("roles").AtSliceIndex(0).AtMapKey("child_type"),
 						knownvalue.StringExact("HeadNodeRole"),
 					),
@@ -86,8 +116,7 @@ func TestAccCMDeviceRolesDataSource_FilterByNamePattern(t *testing.T) {
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				// Test filtering with wildcard pattern that matches all roles
-				Config: testAccCMDeviceRolesDataSourceConfigFilterByNamePattern("*"),
+				Config: testAccCMDeviceRolesDataSourceConfigFilterByNamePattern("pro*"),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmdevice_roles.test",
@@ -96,8 +125,18 @@ func TestAccCMDeviceRolesDataSource_FilterByNamePattern(t *testing.T) {
 					),
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmdevice_roles.test",
+						tfjsonpath.New("roles"),
+						knownvalue.ListSizeExact(1),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmdevice_roles.test",
 						tfjsonpath.New("roles").AtSliceIndex(0).AtMapKey("name"),
-						knownvalue.NotNull(),
+						knownvalue.StringExact("provisioning"),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmdevice_roles.test",
+						tfjsonpath.New("roles").AtSliceIndex(0).AtMapKey("child_type"),
+						knownvalue.StringExact("ProvisioningRole"),
 					),
 				},
 			},
@@ -114,12 +153,22 @@ func TestAccCMDeviceRolesDataSource_CombinedFilters(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				// Test combined filters - both must match (AND logic)
-				Config: testAccCMDeviceRolesDataSourceConfigCombinedFilters("*", "HeadNodeRole"),
+				Config: testAccCMDeviceRolesDataSourceConfigCombinedFilters("head*", "HeadNodeRole"),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmdevice_roles.test",
 						tfjsonpath.New("id"),
 						knownvalue.StringExact("roles"),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmdevice_roles.test",
+						tfjsonpath.New("roles"),
+						knownvalue.ListSizeExact(1),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmdevice_roles.test",
+						tfjsonpath.New("roles").AtSliceIndex(0).AtMapKey("name"),
+						knownvalue.StringExact("headnode"),
 					),
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmdevice_roles.test",

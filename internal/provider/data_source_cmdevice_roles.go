@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"sort"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
@@ -188,6 +189,16 @@ func (d *CMDeviceRolesDataSource) Read(ctx context.Context, req datasource.ReadR
 			data.Roles = append(data.Roles, role)
 		}
 	}
+
+	sort.Slice(data.Roles, func(i, j int) bool {
+		if data.Roles[i].Name.ValueString() != data.Roles[j].Name.ValueString() {
+			return data.Roles[i].Name.ValueString() < data.Roles[j].Name.ValueString()
+		}
+		if data.Roles[i].ChildType.ValueString() != data.Roles[j].ChildType.ValueString() {
+			return data.Roles[i].ChildType.ValueString() < data.Roles[j].ChildType.ValueString()
+		}
+		return data.Roles[i].UUID.ValueString() < data.Roles[j].UUID.ValueString()
+	})
 
 	tflog.Debug(ctx, fmt.Sprintf("Returning %d roles after filtering", len(data.Roles)))
 
