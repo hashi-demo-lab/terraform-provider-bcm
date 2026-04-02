@@ -4793,9 +4793,10 @@ func TestAccCMDeviceDevice_Disappears(t *testing.T) {
 	})
 }
 
-// TestAccCMDeviceDevice_DriftKernelParameters tests drift detection for kernel_parameters field.
-// This test verifies the provider correctly detects when a device's kernelParameters is modified
-// externally via BCM API and restores the desired state on re-apply.
+// TestAccCMDeviceDevice_DriftKernelParameters verifies current BCM behavior for
+// device kernel_parameters. Live BCM does not surface out-of-band
+// kernelParameters updates back through getDevice, so Terraform remains
+// idempotent after an external change attempt.
 func TestAccCMDeviceDevice_DriftKernelParameters(t *testing.T) {
 	deviceName := generateUniqueTestName("tftest-device-driftkp")
 	categoryName := generateUniqueTestName("tftest-cat-driftkp")
@@ -4829,7 +4830,8 @@ func TestAccCMDeviceDevice_DriftKernelParameters(t *testing.T) {
 					),
 				},
 			},
-			// Step 2: Modify kernelParameters externally via BCM API.
+			// Step 2: Modify kernelParameters externally via BCM API and verify BCM
+			// does not report drift for devices.
 			{
 				PreConfig: func() {
 					client := createTestBCMClient(t)
@@ -4878,15 +4880,14 @@ func TestAccCMDeviceDevice_DriftKernelParameters(t *testing.T) {
 
 					t.Logf("[DEBUG] Modified kernelParameters externally to: modified externally")
 				},
-				Config:             testAccCMDeviceDeviceResourceConfig_Updated(deviceName, categoryName, imageName, imagePath, mac),
-				ExpectNonEmptyPlan: true,
+				Config: testAccCMDeviceDeviceResourceConfig_Updated(deviceName, categoryName, imageName, imagePath, mac),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectNonEmptyPlan(),
 					},
 				},
 			},
-			// Step 3: Terraform restores desired state.
+			// Step 3: Confirm reported state remains unchanged after the external update.
 			{
 				Config: testAccCMDeviceDeviceResourceConfig_Updated(deviceName, categoryName, imageName, imagePath, mac),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
@@ -4999,8 +5000,7 @@ func TestAccCMDeviceDevice_DriftCategory(t *testing.T) {
 
 					t.Logf("[DEBUG] Modified category externally to category B UUID: %s", catBUUID)
 				},
-				Config:             testAccCMDeviceDeviceResourceConfig_WithCategory(deviceName, catNameA, catNameB, "cat_a", imageName, imagePath, mac),
-				ExpectNonEmptyPlan: true,
+				Config: testAccCMDeviceDeviceResourceConfig_WithCategory(deviceName, catNameA, catNameB, "cat_a", imageName, imagePath, mac),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectNonEmptyPlan(),

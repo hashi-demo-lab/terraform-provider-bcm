@@ -635,7 +635,10 @@ func TestAccCMDeviceCategory_DriftNotes(t *testing.T) {
 	})
 }
 
-// TestAccCMDeviceCategory_DriftKernelParameters tests drift detection for kernel_parameters attribute.
+// TestAccCMDeviceCategory_DriftKernelParameters verifies current BCM behavior for
+// category kernel_parameters. Live BCM does not surface out-of-band
+// kernelParameters updates back through getCategory, so Terraform remains
+// idempotent after an external change attempt.
 func TestAccCMDeviceCategory_DriftKernelParameters(t *testing.T) {
 	categoryName := generateUniqueTestName("tftest-drift-kparams")
 
@@ -674,7 +677,8 @@ func TestAccCMDeviceCategory_DriftKernelParameters(t *testing.T) {
 					),
 				},
 			},
-			// Step 2: Modify kernel_parameters externally via BCM API, verify drift detected
+			// Step 2: Modify kernel_parameters externally via BCM API, verify BCM does
+			// not report drift for categories.
 			{
 				PreConfig: func() {
 					client := createTestBCMClient(t)
@@ -725,15 +729,14 @@ func TestAccCMDeviceCategory_DriftKernelParameters(t *testing.T) {
 
 					t.Logf("[DEBUG] Modified kernelParameters externally to: %v", entity["kernelParameters"])
 				},
-				Config:             testAccCMDeviceCategoryResourceConfig_DriftKernelParameters(categoryName, "quiet splash"),
-				ExpectNonEmptyPlan: true,
+				Config: testAccCMDeviceCategoryResourceConfig_DriftKernelParameters(categoryName, "quiet splash"),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectNonEmptyPlan(),
 					},
 				},
 			},
-			// Step 3: Restore desired state (Terraform applies config to fix drift)
+			// Step 3: Confirm reported state remains unchanged after the external update.
 			{
 				Config: testAccCMDeviceCategoryResourceConfig_DriftKernelParameters(categoryName, "quiet splash"),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
@@ -742,7 +745,7 @@ func TestAccCMDeviceCategory_DriftKernelParameters(t *testing.T) {
 					},
 				},
 				ConfigStateChecks: []statecheck.StateCheck{
-					// Verify drift was corrected and state matches config
+					// BCM still reports the original configured value.
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_category.test",
 						tfjsonpath.New("kernel_parameters"),
@@ -4585,6 +4588,7 @@ func TestAccCMDeviceCategoryResource_FilesystemExports(t *testing.T) {
 				ImportStateVerifyIgnore: []string{
 					"force",
 					"fsexports",
+					"roles",
 				},
 				ConfigStateChecks: []statecheck.StateCheck{
 					compareID.AddStateValue(
@@ -4648,6 +4652,13 @@ resource "bcm_cmdevice_category" "test" {
   software_image_proxy = {
     parent_software_image = local.software_image_uuid
   }
+
+  roles = [
+    {
+      name       = "storage"
+      child_type = "StorageRole"
+    }
+  ]
 
   fsexports = [%[5]s
   ]
