@@ -7,7 +7,7 @@ This directory contains comprehensive examples for the `bcm_cmdevice_device` res
 ### basic.tf
 Minimal device configuration demonstrating:
 - Basic compute device setup
-- Required fields: hostname, mac, category, management_network
+- Required fields: hostname, category, interfaces (at least one)
 - Data source lookups for category and network
 
 **Use case:** Quick device provisioning with minimal configuration.
@@ -124,9 +124,16 @@ These are created first, then used by device resources.
 
 ### MAC Address Management
 
-Each device requires a unique MAC address:
+Each device requires at least one interface with a unique MAC address:
 ```hcl
-mac = "00:11:22:33:44:55"  # Unique per device
+interfaces {
+  name     = "eth0"
+  type     = "physical"
+  mac      = "00:11:22:33:44:55"  # Unique per device
+  network  = data.bcm_cmnet_networks.management.networks[0].id
+  bootable = true
+  dhcp     = true
+}
 ```
 
 For testing, use the AA-FF range to avoid conflicts:
@@ -164,7 +171,7 @@ resource "bcm_cmdevice_device" "example" {
 
 ### Network Configuration
 
-Management network is required:
+Network assignment is configured per-interface via the `interfaces` block:
 ```hcl
 data "bcm_cmnet_networks" "management" {
   filter {
@@ -173,8 +180,17 @@ data "bcm_cmnet_networks" "management" {
 }
 
 resource "bcm_cmdevice_device" "example" {
-  management_network = data.bcm_cmnet_networks.management.networks[0].id
-  # ...
+  hostname = "example-node"
+  category = bcm_cmdevice_category.compute.id
+
+  interfaces {
+    name     = "eth0"
+    type     = "physical"
+    mac      = "00:11:22:33:44:55"
+    network  = data.bcm_cmnet_networks.management.networks[0].id
+    bootable = true
+    dhcp     = true
+  }
 }
 ```
 

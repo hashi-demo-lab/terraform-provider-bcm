@@ -36,10 +36,17 @@ resource "bcm_cmdevice_category" "basic_category" {
 # Note: partition is NOT specified because the category has a software_image_proxy
 # which provides the partition automatically
 resource "bcm_cmdevice_device" "basic" {
-  hostname           = "citest-device-${local.test_suffix}"
-  mac                = "00:11:22:33:44:AA"
-  category           = bcm_cmdevice_category.basic_category.id
-  management_network = data.bcm_cmnet_networks.management.networks[0].id
+  hostname = "citest-device-${local.test_suffix}"
+  category = bcm_cmdevice_category.basic_category.id
+
+  interfaces {
+    name     = "eth0"
+    type     = "physical"
+    mac      = "00:11:22:33:44:AA"
+    network  = data.bcm_cmnet_networks.management.networks[0].id
+    bootable = true
+    dhcp     = true
+  }
 
   notes = "Basic test device (run: ${local.test_suffix})"
 

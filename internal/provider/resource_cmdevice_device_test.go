@@ -213,10 +213,17 @@ resource "bcm_cmdevice_category" "test" {
 }
 
 resource "bcm_cmdevice_device" "test" {
-  hostname           = %[7]q
-  mac                = %[8]q
-  category           = bcm_cmdevice_category.test.id
-  management_network = data.bcm_cmnet_networks.management.networks[0].id
+  hostname = %[7]q
+  category = bcm_cmdevice_category.test.id
+
+  interfaces {
+    name     = "eth0"
+    type     = "physical"
+    mac      = %[8]q
+    network  = data.bcm_cmnet_networks.management.networks[0].id
+    bootable = true
+    dhcp     = true
+  }
 
   depends_on = [bcm_cmdevice_category.test]
 }
@@ -265,12 +272,19 @@ resource "bcm_cmdevice_category" "test" {
 }
 
 resource "bcm_cmdevice_device" "test" {
-  hostname           = %[7]q
-  mac                = %[8]q
-  category           = bcm_cmdevice_category.test.id
-  management_network = data.bcm_cmnet_networks.management.networks[0].id
-  notes              = "Updated device notes"
-  kernel_parameters  = "quiet splash"
+  hostname          = %[7]q
+  category          = bcm_cmdevice_category.test.id
+  notes             = "Updated device notes"
+  kernel_parameters = "quiet splash"
+
+  interfaces {
+    name     = "eth0"
+    type     = "physical"
+    mac      = %[8]q
+    network  = data.bcm_cmnet_networks.management.networks[0].id
+    bootable = true
+    dhcp     = true
+  }
 
   depends_on = [bcm_cmdevice_category.test]
 }
@@ -460,11 +474,18 @@ resource "bcm_cmdevice_category" "test" {
 }
 
 resource "bcm_cmdevice_device" "test" {
-  hostname           = %[7]q
-  mac                = %[8]q
-  category           = bcm_cmdevice_category.test.id
-  management_network = data.bcm_cmnet_networks.management.networks[0].id
-  notes              = "initial-notes"
+  hostname = %[7]q
+  category = bcm_cmdevice_category.test.id
+  notes    = "initial-notes"
+
+  interfaces {
+    name     = "eth0"
+    type     = "physical"
+    mac      = %[8]q
+    network  = data.bcm_cmnet_networks.management.networks[0].id
+    bootable = true
+    dhcp     = true
+  }
 
   depends_on = [bcm_cmdevice_category.test]
 }
@@ -868,10 +889,17 @@ resource "bcm_cmdevice_category" "test" {
 }
 
 resource "bcm_cmdevice_device" "test" {
-  hostname           = %[5]q
-  mac                = %[6]q
-  category           = bcm_cmdevice_category.test.id
-  management_network = data.bcm_cmnet_networks.management.networks[0].id
+  hostname = %[5]q
+  category = bcm_cmdevice_category.test.id
+
+  interfaces {
+    name     = "eth0"
+    type     = "physical"
+    mac      = %[6]q
+    network  = data.bcm_cmnet_networks.management.networks[0].id
+    bootable = true
+    dhcp     = true
+  }
 
   depends_on = [bcm_cmdevice_category.test]
 }
@@ -906,10 +934,17 @@ locals {
 }
 
 resource "bcm_cmdevice_device" "test" {
-  hostname           = %[4]q
-  mac                = %[5]q
-  category           = local.category_uuid
-  management_network = local.network_uuid
+  hostname = %[4]q
+  category = local.category_uuid
+
+  interfaces {
+    name     = "eth0"
+    type     = "physical"
+    mac      = %[5]q
+    network  = local.network_uuid
+    bootable = true
+    dhcp     = true
+  }
 }
 `,
 		os.Getenv("BCM_ENDPOINT"),
@@ -1399,11 +1434,18 @@ resource "bcm_cmdevice_category" "test" {
 }
 
 resource "bcm_cmdevice_device" "test" {
-  hostname           = %[7]q
-  mac                = %[8]q
-  category           = bcm_cmdevice_category.test.id
-  management_network = data.bcm_cmnet_networks.management.networks[0].id
+  hostname = %[7]q
+  category = bcm_cmdevice_category.test.id
   %[9]s
+
+  interfaces {
+    name     = "eth0"
+    type     = "physical"
+    mac      = %[8]q
+    network  = data.bcm_cmnet_networks.management.networks[0].id
+    bootable = true
+    dhcp     = true
+  }
 
   depends_on = [bcm_cmdevice_category.test]
 }
@@ -1452,10 +1494,17 @@ resource "bcm_cmdevice_category" "test" {
 }
 
 resource "bcm_cmdevice_device" "test" {
-  hostname           = %[7]q
-  mac                = %[8]q
-  category           = bcm_cmdevice_category.test.id
-  management_network = data.bcm_cmnet_networks.management.networks[0].id
+  hostname = %[7]q
+  category = bcm_cmdevice_category.test.id
+
+  interfaces {
+    name     = "eth0"
+    type     = "physical"
+    mac      = %[8]q
+    network  = data.bcm_cmnet_networks.management.networks[0].id
+    bootable = true
+    dhcp     = true
+  }
 
   depends_on = [bcm_cmdevice_category.test]
 }
@@ -1960,11 +2009,18 @@ resource "bcm_cmdevice_category" "test" {
 }
 
 resource "bcm_cmdevice_device" "test" {
-  hostname           = %[7]q
-  mac                = %[8]q
-  category           = bcm_cmdevice_category.test.id
-  management_network = data.bcm_cmnet_networks.management.networks[0].id
-  roles              = %[9]s
+  hostname = %[7]q
+  category = bcm_cmdevice_category.test.id
+  roles    = %[9]s
+
+  interfaces {
+    name     = "eth0"
+    type     = "physical"
+    mac      = %[8]q
+    network  = data.bcm_cmnet_networks.management.networks[0].id
+    bootable = true
+    dhcp     = true
+  }
 
   depends_on = [bcm_cmdevice_category.test]
 }
@@ -2355,11 +2411,18 @@ resource "bcm_cmdevice_category" "test" {
 }
 
 resource "bcm_cmdevice_device" "test" {
-  hostname           = %[7]q
-  mac                = %[8]q
-  category           = bcm_cmdevice_category.test.id
-  management_network = data.bcm_cmnet_networks.management.networks[0].id
-  roles              = [""]
+  hostname = %[7]q
+  category = bcm_cmdevice_category.test.id
+  roles    = [""]
+
+  interfaces {
+    name     = "eth0"
+    type     = "physical"
+    mac      = %[8]q
+    network  = data.bcm_cmnet_networks.management.networks[0].id
+    bootable = true
+    dhcp     = true
+  }
 
   depends_on = [bcm_cmdevice_category.test]
 }
@@ -2841,12 +2904,19 @@ resource "bcm_cmkube_cluster" "test" {
 }
 
 resource "bcm_cmdevice_device" "test" {
-  hostname           = %[9]q
-  category           = bcm_cmdevice_category.test.id
-  management_network = data.bcm_cmnet_networks.all.networks[0].id
-  mac                = %[10]q
+  hostname = %[9]q
+  category = bcm_cmdevice_category.test.id
 
   # No kubelet_role or etcd_host_role - device exists without K8s roles
+
+  interfaces {
+    name     = "eth0"
+    type     = "physical"
+    mac      = %[10]q
+    network  = data.bcm_cmnet_networks.all.networks[0].id
+    bootable = true
+    dhcp     = true
+  }
 
   depends_on = [
     bcm_cmdevice_category.test,
@@ -2916,10 +2986,17 @@ resource "bcm_cmkube_cluster" "test" {
 }
 
 resource "bcm_cmdevice_device" "test" {
-  hostname           = %[9]q
-  category           = bcm_cmdevice_category.test.id
-  management_network = data.bcm_cmnet_networks.all.networks[0].id
-  mac                = %[10]q
+  hostname = %[9]q
+  category = bcm_cmdevice_category.test.id
+
+  interfaces {
+    name     = "eth0"
+    type     = "physical"
+    mac      = %[10]q
+    network  = data.bcm_cmnet_networks.all.networks[0].id
+    bootable = true
+    dhcp     = true
+  }
 
   kubelet_role {
     kube_cluster  = bcm_cmkube_cluster.test.uuid
@@ -2986,10 +3063,17 @@ resource "bcm_cmetcd_cluster" "test" {
 }
 
 resource "bcm_cmdevice_device" "test" {
-  hostname           = %[8]q
-  category           = bcm_cmdevice_category.test.id
-  management_network = data.bcm_cmnet_networks.all.networks[0].id
-  mac                = %[9]q
+  hostname = %[8]q
+  category = bcm_cmdevice_category.test.id
+
+  interfaces {
+    name     = "eth0"
+    type     = "physical"
+    mac      = %[9]q
+    network  = data.bcm_cmnet_networks.all.networks[0].id
+    bootable = true
+    dhcp     = true
+  }
 
   etcd_host_role {
     etcd_cluster = bcm_cmetcd_cluster.test.uuid
@@ -3059,10 +3143,17 @@ resource "bcm_cmkube_cluster" "test" {
 }
 
 resource "bcm_cmdevice_device" "test" {
-  hostname           = %[9]q
-  category           = bcm_cmdevice_category.test.id
-  management_network = data.bcm_cmnet_networks.all.networks[0].id
-  mac                = %[10]q
+  hostname = %[9]q
+  category = bcm_cmdevice_category.test.id
+
+  interfaces {
+    name     = "eth0"
+    type     = "physical"
+    mac      = %[10]q
+    network  = data.bcm_cmnet_networks.all.networks[0].id
+    bootable = true
+    dhcp     = true
+  }
 
   kubelet_role {
     kube_cluster  = bcm_cmkube_cluster.test.uuid

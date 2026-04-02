@@ -54,10 +54,17 @@ resource "bcm_cmdevice_category" "roles_category" {
 
 # Create device with roles assigned BY NAME
 resource "bcm_cmdevice_device" "with_roles" {
-  hostname           = "citest-roles-${local.test_suffix}"
-  mac                = "00:11:22:33:44:BB"
-  category           = bcm_cmdevice_category.roles_category.id
-  management_network = data.bcm_cmnet_networks.management.networks[0].id
+  hostname = "citest-roles-${local.test_suffix}"
+  category = bcm_cmdevice_category.roles_category.id
+
+  interfaces {
+    name     = "eth0"
+    type     = "physical"
+    mac      = "00:11:22:33:44:BB"
+    network  = data.bcm_cmnet_networks.management.networks[0].id
+    bootable = true
+    dhcp     = true
+  }
 
   # Assign roles by name - provider validates against BCM cluster
   roles = local.device_roles
