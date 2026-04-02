@@ -189,7 +189,6 @@ func TestAccCMUserUsersDataSource_AccountActive(t *testing.T) {
 // against a Terraform-managed user instead of relying on ambient BCM users.
 func TestAccCMUserUsersDataSource_FilterManagedUser(t *testing.T) {
 	username := generateUniqueUnixUsername()
-	password := "TestPass123!"
 	unixID := getAvailableTestUnixID(t)
 	unixIDString := strconv.FormatInt(unixID, 10)
 	groupIDString := "1000"
@@ -204,7 +203,6 @@ func TestAccCMUserUsersDataSource_FilterManagedUser(t *testing.T) {
 			{
 				Config: testAccCMUserUsersDataSourceConfigManagedUser(
 					username,
-					password,
 					unixID,
 					1000,
 					homeDirectory,
@@ -259,7 +257,6 @@ func TestAccCMUserUsersDataSource_FilterManagedUser(t *testing.T) {
 			{
 				Config: testAccCMUserUsersDataSourceConfigManagedUser(
 					username,
-					password,
 					unixID,
 					1000,
 					homeDirectory,
@@ -289,7 +286,6 @@ func TestAccCMUserUsersDataSource_FilterManagedUser(t *testing.T) {
 			{
 				Config: testAccCMUserUsersDataSourceConfigManagedUser(
 					username,
-					password,
 					unixID,
 					1000,
 					homeDirectory,
@@ -309,7 +305,6 @@ func TestAccCMUserUsersDataSource_FilterManagedUser(t *testing.T) {
 			{
 				Config: testAccCMUserUsersDataSourceConfigManagedUser(
 					username,
-					password,
 					unixID,
 					1000,
 					homeDirectory,
@@ -471,7 +466,8 @@ data "bcm_cmuser_users" "test" {
 	)
 }
 
-func testAccCMUserUsersDataSourceConfigManagedUser(username, password string, unixID, groupID int64, homeDirectory, shell, usernamePattern, groupIDFilter, userID string) string {
+func testAccCMUserUsersDataSourceConfigManagedUser(username string, unixID, groupID int64, homeDirectory, shell, usernamePattern, groupIDFilter, userID string) string {
+	password := "TestPass123!"
 	filterConfig := ""
 	if usernamePattern != "" {
 		filterConfig += fmt.Sprintf("  username_pattern = %q\n", usernamePattern)
