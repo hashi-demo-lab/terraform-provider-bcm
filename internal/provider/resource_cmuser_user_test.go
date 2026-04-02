@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"regexp"
 	"testing"
 	"time"
 
@@ -716,4 +717,163 @@ func TestAccCMUserUser_AuthorizedSSHKeys(t *testing.T) {
 			},
 		},
 	})
+}
+
+// userDisappearsCheck is a custom statecheck.StateCheck that deletes a user
+// resource via the BCM API after the apply, simulating external deletion.
+// This causes Terraform to detect the resource as "disappeared" on next refresh.
+type userDisappearsCheck struct {
+	resourceAddress string
+}
+
+func (c userDisappearsCheck) CheckState(ctx context.Context, req statecheck.CheckStateRequest, resp *statecheck.CheckStateResponse) {
+	// Find the resource in state and extract the UUID
+	var uuid string
+	for _, rc := range req.State.Values.RootModule.Resources {
+		if rc.Address == c.resourceAddress {
+			if v, ok := rc.AttributeValues["uuid"]; ok {
+				uuid, ok = v.(string)
+				if !ok || uuid == "" {
+					resp.Error = fmt.Errorf("uuid attribute is not a non-empty string for %s", c.resourceAddress)
+					return
+				}
+			} else {
+				resp.Error = fmt.Errorf("uuid attribute not found for %s", c.resourceAddress)
+				return
+			}
+			break
+		}
+	}
+
+	if uuid == "" {
+		resp.Error = fmt.Errorf("resource %s not found in state", c.resourceAddress)
+		return
+	}
+
+	// Delete the resource externally via BCM API
+	client := createTestBCMClient(&testing.T{})
+	_, err := client.CallJSONRPC(ctx, "cmuser", "removeUser", uuid)
+	if err != nil {
+		resp.Error = fmt.Errorf("failed to delete user externally (uuid=%s): %s", uuid, err)
+		return
+	}
+
+	// Wait for eventual consistency
+	time.Sleep(2 * time.Second)
+}
+
+// TestAccCMUserUser_Disappears tests that Terraform detects when a user is
+// deleted externally (outside of Terraform) and plans to recreate it.
+func TestAccCMUserUser_Disappears(t *testing.T) {
+	username := generateUniqueUnixUsername()
+	password := "TestPass123!"
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMUserUserDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccCMUserUserConfig(username, password),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmuser_user.test",
+						tfjsonpath.New("username"),
+						knownvalue.StringExact(username),
+					),
+					userDisappearsCheck{resourceAddress: "bcm_cmuser_user.test"},
+				},
+				ExpectNonEmptyPlan: true,
+			},
+		},
+	})
+}
+
+// TestAccCMUserUser_ValidationEmptyUsername tests that an empty username is rejected
+// by the schema validator (LengthBetween 1-32).
+func TestAccCMUserUser_ValidationEmptyUsername(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMUserUserDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config:      testAccCMUserUserConfig("", "TestPass123!"),
+				ExpectError: regexp.MustCompile(`(?i)username`),
+			},
+		},
+	})
+}
+
+// TestAccCMUserUser_ValidationInvalidUsernameStartsWithDigit tests that a username
+// beginning with a digit is rejected by the regex validator.
+func TestAccCMUserUser_ValidationInvalidUsernameStartsWithDigit(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMUserUserDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config:      testAccCMUserUserConfig("1baduser", "TestPass123!"),
+				ExpectError: regexp.MustCompile(`must start with a letter`),
+			},
+		},
+	})
+}
+
+// TestAccCMUserUser_ValidationInvalidShellPath tests that a non-absolute shell path
+// is rejected by the regex validator.
+func TestAccCMUserUser_ValidationInvalidShellPath(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMUserUserDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config:      testAccCMUserUserConfigWithShell(generateUniqueUnixUsername(), "TestPass123!", "relative/path"),
+				ExpectError: regexp.MustCompile(`must be an absolute path`),
+			},
+		},
+	})
+}
+
+// TestAccCMUserUser_ValidationInvalidHomeDirectory tests that a non-absolute
+// home directory path is rejected by the regex validator.
+func TestAccCMUserUser_ValidationInvalidHomeDirectory(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMUserUserDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config:      testAccCMUserUserConfigWithHomeDir(generateUniqueUnixUsername(), "TestPass123!", "noslash/home"),
+				ExpectError: regexp.MustCompile(`must be an absolute path`),
+			},
+		},
+	})
+}
+
+// testAccCMUserUserConfigWithHomeDir generates configuration with a specific home_directory.
+func testAccCMUserUserConfigWithHomeDir(username, password, homeDir string) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+resource "bcm_cmuser_user" "test" {
+  username       = %[4]q
+  password       = %[5]q
+  home_directory = %[6]q
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		username,
+		password,
+		homeDir,
+	)
 }

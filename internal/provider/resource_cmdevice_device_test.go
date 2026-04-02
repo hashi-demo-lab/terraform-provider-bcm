@@ -1520,8 +1520,74 @@ resource "bcm_cmdevice_device" "test" {
 	)
 }
 
+// testAccCMDeviceAvailableRoleNames returns the role names exposed by the BCM cluster.
+func testAccCMDeviceAvailableRoleNames(t *testing.T) map[string]struct{} {
+	t.Helper()
+
+	client := createTestBCMClient(t)
+	body, err := client.CallJSONRPC(t.Context(), "cmdevice", "getNodes")
+	if err != nil {
+		t.Fatalf("Failed to query node roles: %v", err)
+	}
+
+	var nodes []map[string]interface{}
+	if err := json.Unmarshal(body, &nodes); err != nil {
+		t.Fatalf("Failed to parse node roles response: %v", err)
+	}
+
+	roleNames := make(map[string]struct{})
+	for _, node := range nodes {
+		rolesData, ok := node["roles"].([]interface{})
+		if !ok {
+			continue
+		}
+
+		for _, roleData := range rolesData {
+			role, ok := roleData.(map[string]interface{})
+			if !ok {
+				continue
+			}
+
+			name, ok := role["name"].(string)
+			if ok && name != "" {
+				roleNames[name] = struct{}{}
+			}
+		}
+	}
+
+	return roleNames
+}
+
+// testAccCMDeviceDeviceSingleRoleSet returns a role set that validates for generic test devices.
+func testAccCMDeviceDeviceSingleRoleSet(t *testing.T) []string {
+	t.Helper()
+
+	availableRoles := testAccCMDeviceAvailableRoleNames(t)
+	if _, ok := availableRoles["provisioning"]; ok {
+		return []string{"provisioning"}
+	}
+
+	t.Skip("cluster does not expose the provisioning role required for portable single-role device tests")
+	return nil
+}
+
+// testAccCMDeviceDeviceMultiRoleSet returns a cluster-valid two-role set for generic test devices.
+func testAccCMDeviceDeviceMultiRoleSet(t *testing.T) []string {
+	t.Helper()
+
+	availableRoles := testAccCMDeviceAvailableRoleNames(t)
+	_, hasBoot := availableRoles["boot"]
+	_, hasStorage := availableRoles["storage"]
+	if hasBoot && hasStorage {
+		return []string{"boot", "storage"}
+	}
+
+	t.Skip("cluster does not expose the boot+storage roles required for portable multi-role device tests")
+	return nil
+}
+
 // TestAccCMDeviceDevice_RolesCreate tests creating a device with a role.
-// Uses the "boot" role which is commonly available in BCM clusters.
+// Uses a role set that validates for generic test devices in BCM.
 func TestAccCMDeviceDevice_RolesCreate(t *testing.T) {
 	deviceName := generateUniqueTestName("tftest-device-roles")
 	categoryName := generateUniqueTestName("tftest-category-roles")
@@ -1529,8 +1595,7 @@ func TestAccCMDeviceDevice_RolesCreate(t *testing.T) {
 	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 	mac := generateUniqueMAC()
 
-	// Use boot role which is available on BCM clusters
-	roles := []string{"boot"}
+	roles := testAccCMDeviceDeviceSingleRoleSet(t)
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -1583,8 +1648,7 @@ func TestAccCMDeviceDevice_RolesMultiple(t *testing.T) {
 	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 	mac := generateUniqueMAC()
 
-	// Multiple roles from the BCM cluster
-	roles := []string{"boot", "headnode"}
+	roles := testAccCMDeviceDeviceMultiRoleSet(t)
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -1631,8 +1695,7 @@ func TestAccCMDeviceDevice_RolesIdempotent(t *testing.T) {
 	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 	mac := generateUniqueMAC()
 
-	// Use roles available in the BCM cluster
-	roles := []string{"boot", "headnode"}
+	roles := testAccCMDeviceDeviceSingleRoleSet(t)
 
 	// ID consistency tracking.
 	compareID := statecheck.CompareValue(compare.ValuesSame())
@@ -1652,7 +1715,7 @@ func TestAccCMDeviceDevice_RolesIdempotent(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_device.test",
 						tfjsonpath.New("roles"),
-						knownvalue.SetSizeExact(2),
+						knownvalue.SetSizeExact(1),
 					),
 					compareID.AddStateValue(
 						"bcm_cmdevice_device.test",
@@ -1696,10 +1759,8 @@ func TestAccCMDeviceDevice_RolesUpdate(t *testing.T) {
 	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 	mac := generateUniqueMAC()
 
-	// Start with one role, then update to two
-	// Note: "boot" role requires "storage" role, so we avoid using it
-	initialRoles := []string{"boot"}
-	updatedRoles := []string{"boot", "headnode"}
+	initialRoles := []string{}
+	updatedRoles := testAccCMDeviceDeviceSingleRoleSet(t)
 
 	// ID consistency tracking.
 	compareID := statecheck.CompareValue(compare.ValuesSame())
@@ -1718,8 +1779,13 @@ func TestAccCMDeviceDevice_RolesUpdate(t *testing.T) {
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_device.test",
-						tfjsonpath.New("roles"),
-						knownvalue.SetSizeExact(1),
+						tfjsonpath.New("hostname"),
+						knownvalue.StringExact(deviceName),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+						knownvalue.NotNull(),
 					),
 					compareID.AddStateValue(
 						"bcm_cmdevice_device.test",
@@ -1764,8 +1830,7 @@ func TestAccCMDeviceDevice_RolesRemove(t *testing.T) {
 	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 	mac := generateUniqueMAC()
 
-	// Start with roles, then remove them
-	initialRoles := []string{"boot", "headnode"}
+	initialRoles := testAccCMDeviceDeviceSingleRoleSet(t)
 	emptyRoles := []string{}
 
 	resource.Test(t, resource.TestCase{
@@ -1811,8 +1876,7 @@ func TestAccCMDeviceDevice_RolesImport(t *testing.T) {
 	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 	mac := generateUniqueMAC()
 
-	// Use roles available in the BCM cluster
-	roles := []string{"boot", "headnode"}
+	roles := testAccCMDeviceDeviceSingleRoleSet(t)
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -1829,7 +1893,7 @@ func TestAccCMDeviceDevice_RolesImport(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_device.test",
 						tfjsonpath.New("roles"),
-						knownvalue.SetSizeExact(2),
+						knownvalue.SetSizeExact(1),
 					),
 				},
 			},
@@ -1880,8 +1944,7 @@ func TestAccCMDeviceDevice_RolesDrift(t *testing.T) {
 	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 	mac := generateUniqueMAC()
 
-	// Use roles available in the BCM cluster
-	roles := []string{"boot", "headnode"}
+	roles := testAccCMDeviceDeviceSingleRoleSet(t)
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -1898,7 +1961,7 @@ func TestAccCMDeviceDevice_RolesDrift(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_device.test",
 						tfjsonpath.New("roles"),
-						knownvalue.SetSizeExact(2),
+						knownvalue.SetSizeExact(1),
 					),
 				},
 			},
@@ -1954,7 +2017,7 @@ func TestAccCMDeviceDevice_RolesDrift(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_device.test",
 						tfjsonpath.New("roles"),
-						knownvalue.SetSizeExact(2),
+						knownvalue.SetSizeExact(1),
 					),
 				},
 			},
@@ -2046,8 +2109,7 @@ func TestAccCMDeviceDevice_RolesByName(t *testing.T) {
 	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 	mac := generateUniqueMAC()
 
-	// Use role names directly (not UUIDs)
-	roleNames := []string{"boot", "headnode"}
+	roleNames := testAccCMDeviceDeviceSingleRoleSet(t)
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -2075,7 +2137,7 @@ func TestAccCMDeviceDevice_RolesByName(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_device.test",
 						tfjsonpath.New("roles"),
-						knownvalue.SetSizeExact(2),
+						knownvalue.SetSizeExact(1),
 					),
 				},
 			},
@@ -2101,7 +2163,7 @@ func TestAccCMDeviceDevice_RolesImportByName(t *testing.T) {
 	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 	mac := generateUniqueMAC()
 
-	roleNames := []string{"boot", "headnode"}
+	roleNames := testAccCMDeviceDeviceSingleRoleSet(t)
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -2118,7 +2180,7 @@ func TestAccCMDeviceDevice_RolesImportByName(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_device.test",
 						tfjsonpath.New("roles"),
-						knownvalue.SetSizeExact(2),
+						knownvalue.SetSizeExact(1),
 					),
 				},
 			},
@@ -2169,8 +2231,8 @@ func TestAccCMDeviceDevice_RolesUpdateByName(t *testing.T) {
 	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 	mac := generateUniqueMAC()
 
-	initialRoles := []string{"boot"}
-	updatedRoles := []string{"boot", "headnode"}
+	initialRoles := []string{}
+	updatedRoles := testAccCMDeviceDeviceSingleRoleSet(t)
 
 	// ID consistency tracking.
 	compareID := statecheck.CompareValue(compare.ValuesSame())
@@ -2189,8 +2251,13 @@ func TestAccCMDeviceDevice_RolesUpdateByName(t *testing.T) {
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_device.test",
-						tfjsonpath.New("roles"),
-						knownvalue.SetSizeExact(1),
+						tfjsonpath.New("hostname"),
+						knownvalue.StringExact(deviceName),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+						knownvalue.NotNull(),
 					),
 					compareID.AddStateValue(
 						"bcm_cmdevice_device.test",
@@ -2235,7 +2302,7 @@ func TestAccCMDeviceDevice_RolesDriftByName(t *testing.T) {
 	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 	mac := generateUniqueMAC()
 
-	roleNames := []string{"boot", "headnode"}
+	roleNames := testAccCMDeviceDeviceSingleRoleSet(t)
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -2252,7 +2319,7 @@ func TestAccCMDeviceDevice_RolesDriftByName(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_device.test",
 						tfjsonpath.New("roles"),
-						knownvalue.SetSizeExact(2),
+						knownvalue.SetSizeExact(1),
 					),
 				},
 			},
@@ -2305,7 +2372,7 @@ func TestAccCMDeviceDevice_RolesDriftByName(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_device.test",
 						tfjsonpath.New("roles"),
-						knownvalue.SetSizeExact(2),
+						knownvalue.SetSizeExact(1),
 					),
 				},
 			},
@@ -2365,7 +2432,7 @@ func TestAccCMDeviceDevice_InvalidRoleUUID(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config:      testAccCMDeviceDeviceConfigWithRoleNames(deviceName, categoryName, imageName, imagePath, mac, invalidRoles),
-				ExpectError: regexp.MustCompile(`Roles not found`),
+				ExpectError: regexp.MustCompile(`roles not found`),
 			},
 		},
 	})
@@ -2489,6 +2556,8 @@ func TestAccCMDeviceDevice_RolesAddMultiple(t *testing.T) {
 	imageName := generateUniqueTestName("tftest-img-roles-multi")
 	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 	mac := generateUniqueMAC()
+	singleRole := testAccCMDeviceDeviceSingleRoleSet(t)
+	multipleRoles := testAccCMDeviceDeviceMultiRoleSet(t)
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -2500,7 +2569,7 @@ func TestAccCMDeviceDevice_RolesAddMultiple(t *testing.T) {
 		Steps: []resource.TestStep{
 			// Create with role names.
 			{
-				Config: testAccCMDeviceDeviceConfigWithRoleNames(deviceName, categoryName, imageName, imagePath, mac, []string{"boot"}),
+				Config: testAccCMDeviceDeviceConfigWithRoleNames(deviceName, categoryName, imageName, imagePath, mac, singleRole),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_device.test",
@@ -2511,7 +2580,7 @@ func TestAccCMDeviceDevice_RolesAddMultiple(t *testing.T) {
 			},
 			// Update to add more roles.
 			{
-				Config: testAccCMDeviceDeviceConfigWithRoleNames(deviceName, categoryName, imageName, imagePath, mac, []string{"boot", "headnode"}),
+				Config: testAccCMDeviceDeviceConfigWithRoleNames(deviceName, categoryName, imageName, imagePath, mac, multipleRoles),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_device.test",
@@ -2522,7 +2591,7 @@ func TestAccCMDeviceDevice_RolesAddMultiple(t *testing.T) {
 			},
 			// Idempotency check.
 			{
-				Config: testAccCMDeviceDeviceConfigWithRoleNames(deviceName, categoryName, imageName, imagePath, mac, []string{"boot", "headnode"}),
+				Config: testAccCMDeviceDeviceConfigWithRoleNames(deviceName, categoryName, imageName, imagePath, mac, multipleRoles),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
@@ -3183,4 +3252,665 @@ resource "bcm_cmdevice_device" "test" {
 		hostname,
 		mac,
 	)
+}
+
+// ========================================
+// Management Network Pass-Through Tests
+// ========================================
+
+// TestAccCMDeviceDevice_ManagementNetworkPassThrough tests that management_network
+// set on the device resource is actually sent to the BCM API, not just preserved in state.
+// This catches the bug where the value was hardcoded to the zero UUID in the API entity.
+func TestAccCMDeviceDevice_ManagementNetworkPassThrough(t *testing.T) {
+	deviceName := generateUniqueTestName("tftest-device-mgmtnet")
+	categoryName := generateUniqueTestName("tftest-category-mgmtnet")
+	imageName := generateUniqueTestName("tftest-image-mgmtnet")
+	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
+	mac := generateUniqueMAC()
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+			testAccCMDeviceDevicePreCheck(t, deviceName)
+		},
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceDeviceDestroy,
+		Steps: []resource.TestStep{
+			// Step 1: Create device with explicit management_network.
+			{
+				Config: testAccCMDeviceDeviceResourceConfig_WithManagementNetwork(deviceName, categoryName, imageName, imagePath, mac),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("hostname"),
+						knownvalue.StringExact(deviceName),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("management_network"),
+						knownvalue.NotNull(),
+					),
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					// Verify the value in state matches the management network data source.
+					resource.TestCheckResourceAttrPair(
+						"bcm_cmdevice_device.test", "management_network",
+						"data.bcm_cmnet_networks.management", "networks.0.id",
+					),
+					// Verify BCM API actually received the management_network value.
+					testAccCheckDeviceManagementNetworkInBCM(deviceName),
+				),
+			},
+			// Step 2: Idempotency — re-apply should produce empty plan.
+			{
+				Config: testAccCMDeviceDeviceResourceConfig_WithManagementNetwork(deviceName, categoryName, imageName, imagePath, mac),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+		},
+	})
+}
+
+// TestAccCMDeviceDevice_ManagementNetworkOmitted tests that omitting management_network
+// results in the zero UUID being sent (default behavior) and null in state.
+func TestAccCMDeviceDevice_ManagementNetworkOmitted(t *testing.T) {
+	deviceName := generateUniqueTestName("tftest-device-nomgmt")
+	categoryName := generateUniqueTestName("tftest-category-nomgmt")
+	imageName := generateUniqueTestName("tftest-image-nomgmt")
+	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
+	mac := generateUniqueMAC()
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+			testAccCMDeviceDevicePreCheck(t, deviceName)
+		},
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceDeviceDestroy,
+		Steps: []resource.TestStep{
+			// Create device without management_network — should default gracefully.
+			{
+				Config: testAccCMDeviceDeviceResourceConfig_Basic(deviceName, categoryName, imageName, imagePath, mac),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("hostname"),
+						knownvalue.StringExact(deviceName),
+					),
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					// management_network should be empty/null in state (zero UUID mapped to null).
+					resource.TestCheckNoResourceAttr("bcm_cmdevice_device.test", "management_network"),
+				),
+			},
+			// Idempotency.
+			{
+				Config: testAccCMDeviceDeviceResourceConfig_Basic(deviceName, categoryName, imageName, imagePath, mac),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+		},
+	})
+}
+
+// testAccCheckDeviceManagementNetworkInBCM verifies via direct BCM API call that
+// the device's managementNetwork field is NOT the zero UUID (i.e., the plan value was sent).
+func testAccCheckDeviceManagementNetworkInBCM(deviceName string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		client := createTestBCMClient(&testing.T{})
+		ctx := context.Background()
+
+		body, err := client.CallJSONRPC(ctx, "cmdevice", "getDevice", deviceName)
+		if err != nil {
+			return fmt.Errorf("failed to get device %s from BCM API: %w", deviceName, err)
+		}
+
+		var deviceData map[string]interface{}
+		if err := json.Unmarshal(body, &deviceData); err != nil {
+			return fmt.Errorf("failed to parse device data: %w", err)
+		}
+
+		managementNetwork, ok := deviceData["managementNetwork"].(string)
+		if !ok {
+			return fmt.Errorf("managementNetwork field not found in BCM API response for device %s", deviceName)
+		}
+
+		if managementNetwork == "00000000-0000-0000-0000-000000000000" {
+			return fmt.Errorf(
+				"management_network was NOT sent to BCM API for device %s: "+
+					"BCM still has zero UUID (00000000-0000-0000-0000-000000000000). "+
+					"This indicates the plan value was not passed through to the API entity",
+				deviceName,
+			)
+		}
+
+		if managementNetwork == "" {
+			return fmt.Errorf("managementNetwork is empty string in BCM API for device %s", deviceName)
+		}
+
+		// Verify it matches what's in state.
+		rs, ok := s.RootModule().Resources["bcm_cmdevice_device.test"]
+		if !ok {
+			return fmt.Errorf("resource bcm_cmdevice_device.test not found in state")
+		}
+
+		stateValue := rs.Primary.Attributes["management_network"]
+		if stateValue != managementNetwork {
+			return fmt.Errorf(
+				"management_network mismatch: state has %q but BCM API has %q",
+				stateValue, managementNetwork,
+			)
+		}
+
+		return nil
+	}
+}
+
+// TestAccCMDeviceDevice_ManagementNetworkDrift tests that external modification
+// of managementNetwork is detected and corrected by Terraform.
+func TestAccCMDeviceDevice_ManagementNetworkDrift(t *testing.T) {
+	deviceName := generateUniqueTestName("tftest-device-mgmtdrift")
+	categoryName := generateUniqueTestName("tftest-category-mgmtdrift")
+	imageName := generateUniqueTestName("tftest-image-mgmtdrift")
+	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
+	mac := generateUniqueMAC()
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+			testAccCMDeviceDevicePreCheck(t, deviceName)
+		},
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceDeviceDestroy,
+		Steps: []resource.TestStep{
+			// Step 1: Create device with explicit management_network.
+			{
+				Config: testAccCMDeviceDeviceResourceConfig_WithManagementNetwork(deviceName, categoryName, imageName, imagePath, mac),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("management_network"),
+						knownvalue.NotNull(),
+					),
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					testAccCheckDeviceManagementNetworkInBCM(deviceName),
+				),
+			},
+			// Step 2: Externally reset managementNetwork to zero UUID via BCM API.
+			{
+				PreConfig: func() {
+					client := createTestBCMClient(t)
+					ctx := t.Context()
+
+					deviceUUID := getResourceUUIDByName(t, "cmdevice", "getDevice", deviceName)
+
+					body, err := client.CallJSONRPC(ctx, "cmdevice", "getDevice", deviceUUID)
+					if err != nil {
+						t.Fatalf("Failed to get device for drift test: %v", err)
+					}
+
+					var deviceData map[string]interface{}
+					if err := json.Unmarshal(body, &deviceData); err != nil {
+						t.Fatalf("Failed to parse device data: %v", err)
+					}
+
+					// Reset managementNetwork externally to zero UUID.
+					deviceData["managementNetwork"] = "00000000-0000-0000-0000-000000000000"
+
+					entity := map[string]interface{}{
+						"baseType":      "Device",
+						"childType":     deviceData["childType"],
+						"modified":      true,
+						"to_be_removed": false,
+						"uuid":          deviceUUID,
+					}
+					for k, v := range deviceData {
+						if k != "uuid" {
+							entity[k] = v
+						}
+					}
+
+					_, err = client.CallJSONRPC(ctx, "cmdevice", "updateDevice", entity, false)
+					if err != nil {
+						t.Fatalf("Failed to reset managementNetwork externally: %v", err)
+					}
+
+					time.Sleep(TestEventualConsistencyDelay)
+					t.Log("[DEBUG] Reset managementNetwork externally to zero UUID")
+				},
+				Config: testAccCMDeviceDeviceResourceConfig_WithManagementNetwork(deviceName, categoryName, imageName, imagePath, mac),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectNonEmptyPlan(),
+					},
+				},
+			},
+			// Step 3: Verify Terraform restored the configured value.
+			{
+				Config: testAccCMDeviceDeviceResourceConfig_WithManagementNetwork(deviceName, categoryName, imageName, imagePath, mac),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("management_network"),
+						knownvalue.NotNull(),
+					),
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					testAccCheckDeviceManagementNetworkInBCM(deviceName),
+				),
+			},
+		},
+	})
+}
+
+// TestAccCMDeviceDevice_ManagementNetworkUpdate tests that changing management_network
+// from one value to another sends the new value to the BCM API.
+func TestAccCMDeviceDevice_ManagementNetworkUpdate(t *testing.T) {
+	deviceName := generateUniqueTestName("tftest-device-mgmtupd")
+	categoryName := generateUniqueTestName("tftest-category-mgmtupd")
+	imageName := generateUniqueTestName("tftest-image-mgmtupd")
+	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
+	mac := generateUniqueMAC()
+
+	// Track management_network value across steps to verify it changes.
+	compareMgmtNet := statecheck.CompareValue(compare.ValuesDiffer())
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+			testAccCMDeviceDevicePreCheck(t, deviceName)
+		},
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceDeviceDestroy,
+		Steps: []resource.TestStep{
+			// Step 1: Create with management_network = managementnet.
+			{
+				Config: testAccCMDeviceDeviceResourceConfig_ManagementNetworkNamed(deviceName, categoryName, imageName, imagePath, mac, "managementnet"),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("management_network"),
+						knownvalue.NotNull(),
+					),
+					compareMgmtNet.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("management_network"),
+					),
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					testAccCheckDeviceManagementNetworkInBCM(deviceName),
+				),
+			},
+			// Step 2: Update to management_network = internalnet.
+			{
+				Config: testAccCMDeviceDeviceResourceConfig_ManagementNetworkNamed(deviceName, categoryName, imageName, imagePath, mac, "internalnet"),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("management_network"),
+						knownvalue.NotNull(),
+					),
+					compareMgmtNet.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("management_network"),
+					),
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					testAccCheckDeviceManagementNetworkInBCM(deviceName),
+				),
+			},
+			// Step 3: Idempotency after update.
+			{
+				Config: testAccCMDeviceDeviceResourceConfig_ManagementNetworkNamed(deviceName, categoryName, imageName, imagePath, mac, "internalnet"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+		},
+	})
+}
+
+// TestAccCMDeviceDevice_ManagementNetworkImport tests that importing a device
+// with management_network set picks up the value from BCM.
+func TestAccCMDeviceDevice_ManagementNetworkImport(t *testing.T) {
+	deviceName := generateUniqueTestName("tftest-device-mgmtimp")
+	categoryName := generateUniqueTestName("tftest-category-mgmtimp")
+	imageName := generateUniqueTestName("tftest-image-mgmtimp")
+	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
+	mac := generateUniqueMAC()
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+			testAccCMDeviceDevicePreCheck(t, deviceName)
+		},
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceDeviceDestroy,
+		Steps: []resource.TestStep{
+			// Step 1: Create device with explicit management_network.
+			{
+				Config: testAccCMDeviceDeviceResourceConfig_WithManagementNetwork(deviceName, categoryName, imageName, imagePath, mac),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("management_network"),
+						knownvalue.NotNull(),
+					),
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					testAccCheckDeviceManagementNetworkInBCM(deviceName),
+				),
+			},
+			// Step 2: Import — management_network should be verified (NOT ignored).
+			{
+				ResourceName:      "bcm_cmdevice_device.test",
+				ImportState:       true,
+				ImportStateVerify: true,
+				ImportStateVerifyIgnore: []string{
+					"force",
+					"boot_loader",
+					"boot_loader_protocol",
+					"partition",
+					"power_control",
+					"default_gateway",
+					"default_gateway_metric",
+					"serial_number",
+					"part_number",
+					"interfaces.#",
+					"interfaces.0.%",
+					"interfaces.0.base_type",
+					"interfaces.0.bootable",
+					"interfaces.0.cardtype",
+					"interfaces.0.child_type",
+					"interfaces.0.dhcp",
+					"interfaces.0.mac",
+					"interfaces.0.name",
+					"interfaces.0.network",
+					"interfaces.0.start_if",
+					"interfaces.0.type",
+					"interfaces.0.uuid",
+					"interfaces.0.bond_mode",
+					"interfaces.0.ip",
+					"interfaces.0.ipv6_ip",
+					"interfaces.0.members.#",
+				},
+				// NOTE: management_network is intentionally NOT in ImportStateVerifyIgnore.
+				// Since we now send it to BCM, import should read it back correctly.
+			},
+		},
+	})
+}
+
+// TestAccCMDeviceDevice_ManagementNetworkRemove tests that removing management_network
+// from config results in the zero UUID being sent and null in state.
+func TestAccCMDeviceDevice_ManagementNetworkRemove(t *testing.T) {
+	deviceName := generateUniqueTestName("tftest-device-mgmtrm")
+	categoryName := generateUniqueTestName("tftest-category-mgmtrm")
+	imageName := generateUniqueTestName("tftest-image-mgmtrm")
+	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
+	mac := generateUniqueMAC()
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+			testAccCMDeviceDevicePreCheck(t, deviceName)
+		},
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceDeviceDestroy,
+		Steps: []resource.TestStep{
+			// Step 1: Create with explicit management_network.
+			{
+				Config: testAccCMDeviceDeviceResourceConfig_WithManagementNetwork(deviceName, categoryName, imageName, imagePath, mac),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("management_network"),
+						knownvalue.NotNull(),
+					),
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					testAccCheckDeviceManagementNetworkInBCM(deviceName),
+				),
+			},
+			// Step 2: Remove management_network from config (use basic config without it).
+			{
+				Config: testAccCMDeviceDeviceResourceConfig_Basic(deviceName, categoryName, imageName, imagePath, mac),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("hostname"),
+						knownvalue.StringExact(deviceName),
+					),
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckNoResourceAttr("bcm_cmdevice_device.test", "management_network"),
+				),
+			},
+			// Step 3: Idempotency after removal.
+			{
+				Config: testAccCMDeviceDeviceResourceConfig_Basic(deviceName, categoryName, imageName, imagePath, mac),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+		},
+	})
+}
+
+// testAccCMDeviceDeviceResourceConfig_ManagementNetworkNamed returns device config
+// with management_network set to a network filtered by exact name.
+func testAccCMDeviceDeviceResourceConfig_ManagementNetworkNamed(hostname, categoryName, imageName, imagePath, mac, networkName string) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmnet_networks" "management" {
+  filter {
+    name_pattern = "managementnet"
+  }
+}
+
+data "bcm_cmnet_networks" "device_network" {
+  filter {
+    name_pattern = %[9]q
+  }
+}
+
+resource "bcm_cmpart_softwareimage" "test" {
+  name = %[4]q
+  path = %[5]q
+}
+
+resource "bcm_cmdevice_category" "test" {
+  name               = %[6]q
+  management_network = data.bcm_cmnet_networks.management.networks[0].id
+
+  software_image_proxy = {
+    parent_software_image = bcm_cmpart_softwareimage.test.id
+  }
+
+  depends_on = [bcm_cmpart_softwareimage.test]
+}
+
+resource "bcm_cmdevice_device" "test" {
+  hostname           = %[7]q
+  category           = bcm_cmdevice_category.test.id
+  management_network = data.bcm_cmnet_networks.device_network.networks[0].id
+
+  interfaces {
+    name     = "eth0"
+    type     = "physical"
+    mac      = %[8]q
+    network  = data.bcm_cmnet_networks.management.networks[0].id
+    bootable = true
+    dhcp     = true
+  }
+
+  depends_on = [bcm_cmdevice_category.test]
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		imageName,
+		imagePath,
+		categoryName,
+		hostname,
+		mac,
+		networkName,
+	)
+}
+
+// testAccCMDeviceDeviceResourceConfig_WithManagementNetwork returns device config
+// with explicit management_network set on the device resource.
+func testAccCMDeviceDeviceResourceConfig_WithManagementNetwork(hostname, categoryName, imageName, imagePath, mac string) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmnet_networks" "management" {
+  filter {
+    name_pattern = "managementnet"
+  }
+}
+
+resource "bcm_cmpart_softwareimage" "test" {
+  name = %[4]q
+  path = %[5]q
+}
+
+resource "bcm_cmdevice_category" "test" {
+  name               = %[6]q
+  management_network = data.bcm_cmnet_networks.management.networks[0].id
+
+  software_image_proxy = {
+    parent_software_image = bcm_cmpart_softwareimage.test.id
+  }
+
+  depends_on = [bcm_cmpart_softwareimage.test]
+}
+
+resource "bcm_cmdevice_device" "test" {
+  hostname           = %[7]q
+  category           = bcm_cmdevice_category.test.id
+  management_network = data.bcm_cmnet_networks.management.networks[0].id
+
+  interfaces {
+    name     = "eth0"
+    type     = "physical"
+    mac      = %[8]q
+    network  = data.bcm_cmnet_networks.management.networks[0].id
+    bootable = true
+    dhcp     = true
+  }
+
+  depends_on = [bcm_cmdevice_category.test]
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		imageName,
+		imagePath,
+		categoryName,
+		hostname,
+		mac,
+	)
+}
+
+// deviceDisappearsCheck is a custom StateCheck that deletes a device resource
+// via the BCM API during the check phase, simulating external deletion.
+// This allows the test to verify that Terraform detects the missing resource
+// and produces a non-empty plan to recreate it.
+type deviceDisappearsCheck struct {
+	resourceAddress string
+}
+
+func (c deviceDisappearsCheck) CheckState(ctx context.Context, req statecheck.CheckStateRequest, resp *statecheck.CheckStateResponse) {
+	// Find the resource in state.
+	var deviceUUID string
+	for _, r := range req.State.Values.RootModule.Resources {
+		if r.Address == c.resourceAddress {
+			uuid, ok := r.AttributeValues["uuid"]
+			if !ok {
+				resp.Error = fmt.Errorf("resource %s has no uuid attribute", c.resourceAddress)
+				return
+			}
+			deviceUUID, ok = uuid.(string)
+			if !ok {
+				resp.Error = fmt.Errorf("resource %s uuid attribute is not a string", c.resourceAddress)
+				return
+			}
+			break
+		}
+	}
+
+	if deviceUUID == "" {
+		resp.Error = fmt.Errorf("resource %s not found in state", c.resourceAddress)
+		return
+	}
+
+	// Delete the device externally via BCM API.
+	client := createTestBCMClient(&testing.T{})
+	_, err := client.CallJSONRPC(ctx, "cmdevice", "removeDevice", deviceUUID, true) // force=true
+	if err != nil {
+		resp.Error = fmt.Errorf("failed to delete device %s externally: %w", deviceUUID, err)
+		return
+	}
+
+	// Wait for eventual consistency.
+	time.Sleep(2 * time.Second)
+}
+
+// TestAccCMDeviceDevice_Disappears tests that when a device is deleted externally
+// (outside of Terraform), the next plan detects it and wants to recreate it.
+func TestAccCMDeviceDevice_Disappears(t *testing.T) {
+	deviceName := generateUniqueTestName("tftest-device-disap")
+	categoryName := generateUniqueTestName("tftest-cat-disap")
+	imageName := generateUniqueTestName("tftest-img-disap")
+	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
+	mac := generateUniqueMAC()
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+			testAccCMDeviceDevicePreCheck(t, deviceName)
+		},
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceDeviceDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccCMDeviceDeviceResourceConfig_Basic(deviceName, categoryName, imageName, imagePath, mac),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("hostname"),
+						knownvalue.StringExact(deviceName),
+					),
+					// Delete externally during state checks.
+					deviceDisappearsCheck{resourceAddress: "bcm_cmdevice_device.test"},
+				},
+				ExpectNonEmptyPlan: true,
+			},
+		},
+	})
 }

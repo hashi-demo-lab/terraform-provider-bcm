@@ -444,6 +444,7 @@ func TestAccCMEtcdCluster_validationInvalidName(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheckCMEtcdCluster(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMEtcdClusterDestroy,
 		Steps: []resource.TestStep{
 			{
 				Config:      testAccCMEtcdClusterResourceConfig("Invalid Name!"),
@@ -460,6 +461,7 @@ func TestAccCMEtcdCluster_validationHeartbeatRange(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheckCMEtcdCluster(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMEtcdClusterDestroy,
 		Steps: []resource.TestStep{
 			{
 				// Heartbeat too low (min 50ms)
@@ -477,6 +479,7 @@ func TestAccCMEtcdCluster_validationElectionTimeoutRange(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheckCMEtcdCluster(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMEtcdClusterDestroy,
 		Steps: []resource.TestStep{
 			{
 				// Election timeout too low (min 500ms)
@@ -607,4 +610,72 @@ resource "bcm_cmetcd_cluster" "test" {
 		name,
 		options,
 	)
+}
+
+// =============================================================================
+// Acceptance Tests - Disappears
+// =============================================================================
+
+// etcdClusterDisappearsCheck is a custom StateCheck that deletes an etcd cluster
+// via the BCM API to simulate external deletion (disappearance).
+type etcdClusterDisappearsCheck struct {
+	resourceAddress string
+}
+
+func (c etcdClusterDisappearsCheck) CheckState(ctx context.Context, req statecheck.CheckStateRequest, resp *statecheck.CheckStateResponse) {
+	// Find the resource in state by address
+	var uuid string
+	for _, r := range req.State.Values.RootModule.Resources {
+		if r.Address == c.resourceAddress {
+			var ok bool
+			uuid, ok = r.AttributeValues["uuid"].(string)
+			if !ok || uuid == "" {
+				resp.Error = fmt.Errorf("resource %s has no uuid attribute in state", c.resourceAddress)
+				return
+			}
+			break
+		}
+	}
+
+	if uuid == "" {
+		resp.Error = fmt.Errorf("resource %s not found in state", c.resourceAddress)
+		return
+	}
+
+	// Delete the etcd cluster externally via BCM API
+	client := createTestBCMClient(&testing.T{})
+	_, err := client.CallJSONRPC(ctx, "cmetcd", "removeEtcdCluster", uuid)
+	if err != nil {
+		resp.Error = fmt.Errorf("failed to delete etcd cluster %s via BCM API: %w", uuid, err)
+		return
+	}
+
+	// Wait for eventual consistency
+	time.Sleep(2 * time.Second)
+}
+
+// TestAccCMEtcdCluster_Disappears verifies that when an etcd cluster is deleted
+// externally (outside Terraform), the next plan detects the disappearance.
+func TestAccCMEtcdCluster_Disappears(t *testing.T) {
+	clusterName := generateShortTestName("etcd-dis")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheckCMEtcdCluster(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMEtcdClusterDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccCMEtcdClusterResourceConfig(clusterName),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmetcd_cluster.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(clusterName),
+					),
+					etcdClusterDisappearsCheck{resourceAddress: "bcm_cmetcd_cluster.test"},
+				},
+				ExpectNonEmptyPlan: true,
+			},
+		},
+	})
 }

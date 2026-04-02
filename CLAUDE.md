@@ -103,6 +103,26 @@ BCM API accepts but doesn't store these fields:
 
 **Reference:** [Issue #73](https://github.com/hashi-demo-lab/terraform-provider-bcm/issues/73)
 
+### Device `managementNetwork` (API-verified)
+
+BCM stores `managementNetwork` on devices exactly as sent — it does NOT auto-inherit from the category.
+
+| Sent to API | BCM Returns on Read |
+|-------------|---------------------|
+| Valid network UUID | Same UUID (stored) |
+| Zero UUID (`00000000-...`) | Zero UUID |
+| Field omitted | Zero UUID (default) |
+| Non-existent UUID | `BAD_VALUE` validation error |
+
+- Zero UUID and omitted are equivalent — both mean "not set"
+- Updates are fully round-trippable (set, clear, change all persist)
+- Categories always have a real `managementNetwork` UUID; devices default to zero
+- On devices, `management_network` is Optional+Computed with a `nullIfRemovedFromConfig` plan modifier
+- On categories, `management_network` is Required
+- Provider maps zero UUID to `types.StringNull()` on read to avoid false drift
+
+**Investigation script:** `sampleRest/investigate_management_network_create.py`
+
 ### disksetup XML
 
 Root element must be `<diskSetup>` (camelCase). See [Issue #48](https://github.com/hashi-demo-lab/terraform-provider-bcm/issues/48).

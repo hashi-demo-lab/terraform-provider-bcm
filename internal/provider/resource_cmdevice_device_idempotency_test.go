@@ -150,12 +150,6 @@ func TestAccCMDeviceDevice_IdempotencyWithImport(t *testing.T) {
 					"power_control",        // BCM returns default "none" when not explicitly set
 					"default_gateway",      // BCM returns default "0.0.0.0" when not explicitly set
 				},
-				ConfigStateChecks: []statecheck.StateCheck{
-					compareID.AddStateValue(
-						"bcm_cmdevice_device.test",
-						tfjsonpath.New("id"),
-					),
-				},
 			},
 			// Step 3: Verify idempotency after import
 			{

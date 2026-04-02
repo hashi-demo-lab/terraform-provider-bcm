@@ -150,7 +150,10 @@ func (r *CMDeviceDeviceResource) Schema(ctx context.Context, req resource.Schema
 			"management_network": schema.StringAttribute{
 				Optional:            true,
 				Computed:            true,
-				MarkdownDescription: "Management network UUID reference (may be reset by BCM, required for device creation)",
+				MarkdownDescription: "Management network UUID reference. BCM stores exactly what is sent; omitting defaults to unset (zero UUID).",
+				PlanModifiers: []planmodifier.String{
+					nullIfRemovedFromConfig(),
+				},
 				Validators: []validator.String{
 					stringvalidator.RegexMatches(
 						regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`),
@@ -593,8 +596,8 @@ func (r *CMDeviceDeviceResource) Create(ctx context.Context, req resource.Create
 	if err := r.lookupAndBuildRolesForEntity(ctx, plan, deviceEntity); err != nil {
 		resp.Diagnostics.AddError(
 			"Error Looking Up Roles",
-			fmt.Sprintf("Could not resolve role UUIDs for device '%s': %s\n\n"+
-				"Ensure the role UUIDs exist in the cluster. You can find available roles using "+
+			fmt.Sprintf("Could not resolve roles for device '%s': %s\n\n"+
+				"Ensure the role names exist in the cluster. You can find available roles using "+
 				"the bcm_cmdevice_roles data source.", plan.Hostname.ValueString(), err.Error()),
 		)
 		return
@@ -720,12 +723,11 @@ func (r *CMDeviceDeviceResource) Create(ctx context.Context, req resource.Create
 		}
 	}
 
-	// BCM returns nil UUID for management_network - preserve the configured value
-	// Still needed when user explicitly sets management_network as an optional field
-	if !plan.ManagementNetwork.IsNull() && !plan.ManagementNetwork.IsUnknown() {
-		if state.ManagementNetwork.IsNull() || state.ManagementNetwork.ValueString() == "00000000-0000-0000-0000-000000000000" {
-			state.ManagementNetwork = plan.ManagementNetwork
-		}
+	// management_network: parseDeviceFromAPI maps zero UUID to null.
+	// If user didn't set it (plan is null) but BCM returns a non-zero value,
+	// preserve null to match the plan.
+	if plan.ManagementNetwork.IsNull() && !state.ManagementNetwork.IsNull() {
+		state.ManagementNetwork = types.StringNull()
 	}
 
 	// BCM returns default values for Optional+Computed fields when not explicitly set
@@ -978,17 +980,20 @@ func (r *CMDeviceDeviceResource) Read(ctx context.Context, req resource.ReadRequ
 	// During import (state is empty), we should NOT preserve null values - instead use what BCM returns
 	// During normal Read (state has values), preserve null if user didn't explicitly set the field
 
-	isImport := state.ManagementNetwork.IsNull() && state.BootLoader.IsNull() && state.BootLoaderProtocol.IsNull()
+	// Detect import: during import via ImportStatePassthroughID, only "id" is set.
+	// Required fields like Hostname and Category will be null. In normal Read after
+	// Create/Update, these are always populated.
+	isImport := state.Hostname.IsNull() || state.Category.IsNull()
 
 	if !isImport {
 		// Normal Read path: Preserve null values from state to avoid drift
 
-		// BCM returns nil UUID for management_network - preserve the configured value
-		// Still needed when user explicitly sets management_network as an optional field
-		if !state.ManagementNetwork.IsNull() && !state.ManagementNetwork.IsUnknown() {
-			if newState.ManagementNetwork.IsNull() || newState.ManagementNetwork.ValueString() == "00000000-0000-0000-0000-000000000000" {
-				newState.ManagementNetwork = state.ManagementNetwork
-			}
+		// management_network: BCM stores exactly what was sent. If state is null
+		// (user didn't set it) but BCM returns a non-zero value, preserve null
+		// to avoid false drift. If state has a real UUID and BCM returns zero UUID
+		// (mapped to null by parseDeviceFromAPI), that IS drift — detected automatically.
+		if state.ManagementNetwork.IsNull() && !newState.ManagementNetwork.IsNull() {
+			newState.ManagementNetwork = types.StringNull()
 		}
 
 		// BCM returns "CATEGORY" for boot_loader/boot_loader_protocol when inheriting from category
@@ -1122,8 +1127,8 @@ func (r *CMDeviceDeviceResource) Update(ctx context.Context, req resource.Update
 	if err := r.lookupAndBuildRolesForEntity(ctx, plan, deviceEntity); err != nil {
 		resp.Diagnostics.AddError(
 			"Error Looking Up Roles",
-			fmt.Sprintf("Could not resolve role UUIDs for device '%s': %s\n\n"+
-				"Ensure the role UUIDs exist in the cluster. You can find available roles using "+
+			fmt.Sprintf("Could not resolve roles for device '%s': %s\n\n"+
+				"Ensure the role names exist in the cluster. You can find available roles using "+
 				"the bcm_cmdevice_roles data source.", plan.Hostname.ValueString(), err.Error()),
 		)
 		return
@@ -1228,13 +1233,10 @@ func (r *CMDeviceDeviceResource) Update(ctx context.Context, req resource.Update
 		}
 	}
 
-	// BCM sets management_network to nil UUID - preserve plan value if set, otherwise use state or null
-	// Still needed when user explicitly sets management_network as an optional field
-	if !plan.ManagementNetwork.IsNull() && !plan.ManagementNetwork.IsUnknown() {
-		newState.ManagementNetwork = plan.ManagementNetwork
-	} else if !state.ManagementNetwork.IsNull() && !state.ManagementNetwork.IsUnknown() {
-		newState.ManagementNetwork = state.ManagementNetwork
-	} else {
+	// management_network: parseDeviceFromAPI already maps zero UUID to null.
+	// If user removed it from config (plan is null) but BCM still returns a value,
+	// preserve null to match the plan — the next read will reconcile.
+	if plan.ManagementNetwork.IsNull() && !newState.ManagementNetwork.IsNull() {
 		newState.ManagementNetwork = types.StringNull()
 	}
 
@@ -1359,9 +1361,20 @@ func (r *CMDeviceDeviceResource) ImportState(ctx context.Context, req resource.I
 func (r *CMDeviceDeviceResource) buildDeviceAPIEntityWithExisting(plan CMDeviceDeviceResourceModel, deviceUUID string, partitionUUID string, existingInterfaces []DeviceInterfaceModel) map[string]interface{} {
 	// Build interfaces from the interfaces block
 	interfaces := buildInterfacesAPIArray(plan.Interfaces, existingInterfaces)
-	provisioningInterfaceUUID := getProvisioningInterfaceUUID(plan.Interfaces)
 
-	// If no provisioning interface found from plan, get from built interfaces
+	// Derive provisioningInterface from built interfaces (which have correct UUIDs).
+	// Find the first bootable interface; fall back to interfaces[0] if none is bootable.
+	provisioningInterfaceUUID := ""
+	for _, iface := range interfaces {
+		if ifaceMap, ok := iface.(map[string]interface{}); ok {
+			if bootable, ok := ifaceMap["bootable"].(bool); ok && bootable {
+				if ifaceUUID, ok := ifaceMap["uuid"].(string); ok {
+					provisioningInterfaceUUID = ifaceUUID
+					break
+				}
+			}
+		}
+	}
 	if provisioningInterfaceUUID == "" && len(interfaces) > 0 {
 		if firstIface, ok := interfaces[0].(map[string]interface{}); ok {
 			if ifaceUUID, ok := firstIface["uuid"].(string); ok {
@@ -1385,13 +1398,18 @@ func (r *CMDeviceDeviceResource) buildDeviceAPIEntityWithExisting(plan CMDeviceD
 		"hostname":              plan.Hostname.ValueString(),
 		"mac":                   deviceMAC,
 		"category":              plan.Category.ValueString(),
-		"managementNetwork":     "00000000-0000-0000-0000-000000000000",
 		"modified":              true,
 		"to_be_removed":         false,
 		"revision":              "",
 		"uuid":                  deviceUUID,
 		"provisioningInterface": provisioningInterfaceUUID,
 		"interfaces":            interfaces,
+	}
+
+	// Only include managementNetwork when explicitly set by the user.
+	// BCM treats omitted and zero UUID identically (both default to zero UUID on read).
+	if !plan.ManagementNetwork.IsNull() && !plan.ManagementNetwork.IsUnknown() {
+		entity["managementNetwork"] = plan.ManagementNetwork.ValueString()
 	}
 
 	// Always include partition field as BCM requires it
@@ -1644,7 +1662,8 @@ func (r *CMDeviceDeviceResource) parseDeviceFromAPI(data map[string]interface{})
 		model.Category = types.StringValue(category)
 	}
 
-	// BCM often returns nil UUID for managementNetwork - handle gracefully
+	// BCM returns exactly what was sent for managementNetwork.
+	// Zero UUID means "not set" — map it to null in Terraform state.
 	if managementNetwork, ok := data["managementNetwork"].(string); ok && managementNetwork != "" && managementNetwork != "00000000-0000-0000-0000-000000000000" {
 		model.ManagementNetwork = types.StringValue(managementNetwork)
 	} else {

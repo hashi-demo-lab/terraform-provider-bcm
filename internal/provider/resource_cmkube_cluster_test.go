@@ -443,6 +443,7 @@ func TestAccCMKubeClusterResource_ValidationInvalidName(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheckCMKubeCluster(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMKubeClusterDestroy,
 		Steps: []resource.TestStep{
 			{
 				Config:      testAccCMKubeClusterResourceConfig("invalid name!", masterNodeUUID),
@@ -462,6 +463,7 @@ func TestAccCMKubeClusterResource_ValidationInvalidVersion(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheckCMKubeCluster(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMKubeClusterDestroy,
 		Steps: []resource.TestStep{
 			{
 				Config:      testAccCMKubeClusterResourceConfigWithVersion(clusterName, masterNodeUUID, "invalid"),

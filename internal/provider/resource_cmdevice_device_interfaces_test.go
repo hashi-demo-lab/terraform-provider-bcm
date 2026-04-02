@@ -11,12 +11,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-testing/compare"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
 	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/statecheck"
 	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // testAccCMDeviceDeviceConfigInterfaceSingle generates a config for a device with a single interface.
@@ -1058,4 +1061,141 @@ func TestAccCMDeviceDevice_InterfaceDrift(t *testing.T) {
 			},
 		},
 	})
+}
+
+// =============================================================================
+// Unit Tests for provisioningInterface derivation from built interfaces array
+// =============================================================================
+
+// TestBuildDeviceAPIEntity_ProvisioningInterfaceFromBuiltArray verifies that
+// provisioningInterface UUID is derived from the built interfaces array (which
+// preserves UUIDs from existing state) rather than from plan.Interfaces (which
+// have empty UUIDs during updates). The bootable interface should be selected
+// even when it is NOT the first interface in the list.
+func TestBuildDeviceAPIEntity_ProvisioningInterfaceFromBuiltArray(t *testing.T) {
+	// Known UUIDs from existing state (simulating what BCM returned on create)
+	eth0ExistingUUID := "aaaaaaaa-1111-2222-3333-444444444444"
+	eth1ExistingUUID := "bbbbbbbb-5555-6666-7777-888888888888"
+
+	// Plan interfaces: 2 interfaces where the SECOND (eth1) is bootable.
+	// UUIDs are empty strings to simulate an update where plan doesn't have UUIDs yet.
+	planInterfaces := []DeviceInterfaceModel{
+		{
+			Name:     types.StringValue("eth0"),
+			Type:     types.StringValue("physical"),
+			Network:  types.StringValue("net-uuid-1"),
+			MAC:      types.StringValue("00:11:22:33:44:55"),
+			Bootable: types.BoolValue(false),
+			DHCP:     types.BoolValue(true),
+			UUID:     types.StringValue(""), // empty - simulates update plan
+		},
+		{
+			Name:     types.StringValue("eth1"),
+			Type:     types.StringValue("physical"),
+			Network:  types.StringValue("net-uuid-2"),
+			MAC:      types.StringValue("00:11:22:33:44:66"),
+			Bootable: types.BoolValue(true), // THIS is the bootable interface
+			DHCP:     types.BoolValue(true),
+			UUID:     types.StringValue(""), // empty - simulates update plan
+		},
+	}
+
+	// Existing interfaces from state with known UUIDs (as if read from BCM)
+	existingInterfaces := []DeviceInterfaceModel{
+		{
+			Name: types.StringValue("eth0"),
+			UUID: types.StringValue(eth0ExistingUUID),
+		},
+		{
+			Name: types.StringValue("eth1"),
+			UUID: types.StringValue(eth1ExistingUUID),
+		},
+	}
+
+	plan := CMDeviceDeviceResourceModel{
+		Hostname:   types.StringValue("test-node"),
+		Category:   types.StringValue("cat-uuid"),
+		Interfaces: planInterfaces,
+	}
+
+	r := &CMDeviceDeviceResource{}
+	entity := r.buildDeviceAPIEntityWithExisting(plan, "device-uuid", "partition-uuid", existingInterfaces)
+
+	// The provisioningInterface must be the BOOTABLE interface's UUID (eth1),
+	// NOT the first interface's UUID (eth0).
+	provisioningUUID, ok := entity["provisioningInterface"].(string)
+	require.True(t, ok, "provisioningInterface should be a string")
+	assert.Equal(t, eth1ExistingUUID, provisioningUUID,
+		"provisioningInterface should match the bootable interface (eth1) UUID from existing state, not eth0")
+
+	// Also verify the built interfaces array has correct UUIDs from existing state
+	builtInterfaces, ok := entity["interfaces"].([]interface{})
+	require.True(t, ok, "interfaces should be a slice")
+	require.Len(t, builtInterfaces, 2, "should have 2 interfaces")
+
+	iface0, ok := builtInterfaces[0].(map[string]interface{})
+	require.True(t, ok, "interface 0 should be a map")
+	iface1, ok := builtInterfaces[1].(map[string]interface{})
+	require.True(t, ok, "interface 1 should be a map")
+	assert.Equal(t, eth0ExistingUUID, iface0["uuid"], "eth0 should preserve UUID from existing state")
+	assert.Equal(t, eth1ExistingUUID, iface1["uuid"], "eth1 should preserve UUID from existing state")
+}
+
+// TestBuildDeviceAPIEntity_ProvisioningInterfaceFallbackToFirst verifies that
+// when NO interface is marked bootable, provisioningInterface falls back to
+// the first interface's UUID from the built array.
+func TestBuildDeviceAPIEntity_ProvisioningInterfaceFallbackToFirst(t *testing.T) {
+	// Known UUIDs from existing state
+	eth0ExistingUUID := "cccccccc-1111-2222-3333-444444444444"
+	eth1ExistingUUID := "dddddddd-5555-6666-7777-888888888888"
+
+	// Plan interfaces: 2 interfaces, NEITHER is bootable
+	planInterfaces := []DeviceInterfaceModel{
+		{
+			Name:     types.StringValue("eth0"),
+			Type:     types.StringValue("physical"),
+			Network:  types.StringValue("net-uuid-1"),
+			MAC:      types.StringValue("00:11:22:33:44:55"),
+			Bootable: types.BoolValue(false),
+			DHCP:     types.BoolValue(true),
+			UUID:     types.StringValue(""),
+		},
+		{
+			Name:     types.StringValue("eth1"),
+			Type:     types.StringValue("physical"),
+			Network:  types.StringValue("net-uuid-2"),
+			MAC:      types.StringValue("00:11:22:33:44:66"),
+			Bootable: types.BoolValue(false), // NOT bootable
+			DHCP:     types.BoolValue(true),
+			UUID:     types.StringValue(""),
+		},
+	}
+
+	// Existing interfaces from state with known UUIDs
+	existingInterfaces := []DeviceInterfaceModel{
+		{
+			Name: types.StringValue("eth0"),
+			UUID: types.StringValue(eth0ExistingUUID),
+		},
+		{
+			Name: types.StringValue("eth1"),
+			UUID: types.StringValue(eth1ExistingUUID),
+		},
+	}
+
+	plan := CMDeviceDeviceResourceModel{
+		Hostname:   types.StringValue("test-node"),
+		Category:   types.StringValue("cat-uuid"),
+		Interfaces: planInterfaces,
+	}
+
+	r := &CMDeviceDeviceResource{}
+	entity := r.buildDeviceAPIEntityWithExisting(plan, "device-uuid", "partition-uuid", existingInterfaces)
+
+	// With no bootable interface, provisioningInterface should fall back to
+	// the FIRST interface's UUID from the built array (eth0).
+	provisioningUUID, ok := entity["provisioningInterface"].(string)
+	require.True(t, ok, "provisioningInterface should be a string")
+	assert.Equal(t, eth0ExistingUUID, provisioningUUID,
+		"provisioningInterface should fall back to first interface (eth0) UUID when no interface is bootable")
 }

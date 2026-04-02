@@ -184,7 +184,7 @@ UPDATE STATE (all attributes refreshed)
 **Process**:
 1. Extract all attributes from plan (including unchanged ones)
 2. Build BCM API entity with **UUID included** (update requirement)
-3. **Exclude original_image** from update entity (create-only field)
+3. **Include original_image** in entity — uses plan value if set, otherwise zero UUID as BCM requires valid UUID format
 4. Call `CMPart.updateSoftwareImage(entity)`
 5. Call Read operation to refresh state
 6. Read operation handles original_image preservation
@@ -195,7 +195,7 @@ UPDATE STATE (all attributes refreshed)
 ```
 PLAN (with changes)
   ↓
-BUILD ENTITY (include UUID, exclude original_image)
+BUILD ENTITY (include UUID, include original_image with plan value or zero UUID)
   ↓
 API CALL (updateSoftwareImage)
   ↓
@@ -296,10 +296,10 @@ IMPORT COMPLETE (state populated from BCM API)
 }
 ```
 
-**Additional Field for Update**:
+**UUID Field (always present)**:
 ```json
 {
-  "uuid": "<resource-uuid>"  // Required for updates, not for creates
+  "uuid": "<resource-uuid>"  // Required for all operations: generateUUID() for creates, existing UUID for updates
 }
 ```
 
@@ -465,12 +465,12 @@ This pattern is **not a Terraform bug** - it's a workaround for BCM API's valida
 ### buildAPIEntity()
 **Purpose**: Construct BCM API entity from Terraform state
 **Location**: `resource_cmpart_softwareimage.go` lines 738-828
-**Signature**: `buildAPIEntity(ctx, model, diagnostics, isUpdate) map[string]interface{}`
+**Signature**: `buildAPIEntity(model *CMPartSoftwareImageResourceModel, uuid string) map[string]interface{}`
 
 **Logic**:
 - Always include: baseType, childType, modified, to_be_removed, revision
-- Include UUID only if isUpdate=true
-- Include original_image only if isUpdate=false AND value is set
+- Always include UUID — generated via `generateUUID()` when uuid param is empty (create), or existing UUID when provided (update). BCM requires UUID for all operations.
+- Always include original_image — uses plan value if set, otherwise zero UUID (`00000000-0000-0000-0000-000000000000`) as BCM requires valid UUID format
 - Convert modules list to BCM array format
 - Set module parameters to "" if null (BCM requirement)
 - Handle all null/Unknown checks for optional fields

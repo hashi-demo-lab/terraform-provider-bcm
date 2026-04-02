@@ -205,9 +205,9 @@ As a Terraform provider developer, I need to ensure that Unknown values during p
 
 - **FR-019**: buildAPIEntity helper MUST construct BCM entities with required fields: baseType="SoftwareImage", childType="", modified=true, to_be_removed=false, revision=""
 
-- **FR-020**: buildAPIEntity MUST include UUID field only for update operations, not for create operations
+- **FR-020**: buildAPIEntity MUST always include a UUID field — generated via `generateUUID()` for create operations, or the existing UUID for update operations. BCM requires UUID for all software image API calls.
 
-- **FR-021**: buildAPIEntity MUST include original_image field only during create operations when set, not during update operations
+- **FR-021**: buildAPIEntity MUST always include original_image field — uses plan value if set, otherwise zero UUID (`00000000-0000-0000-0000-000000000000`) as BCM requires valid UUID format for all operations
 
 - **FR-022**: buildAPIEntity MUST construct modules as array of objects with baseType="KernelModule", childType="", modified=true, and module-specific fields
 
@@ -255,7 +255,7 @@ As a Terraform provider developer, I need to ensure that Unknown values during p
 
 - **Kernel Module**: Nested object within Software Image representing a kernel module to load at boot. Attributes include name (module name like "nvidia-drm") and parameters (module options like "modeset=1").
 
-- **BCM API Entity**: The JSON object structure expected by BCM's addSoftwareImage/updateSoftwareImage APIs. Required fields: baseType="SoftwareImage", childType="", modified=true, to_be_removed=false, revision="". Optional fields include all resource attributes plus UUID for updates.
+- **BCM API Entity**: The JSON object structure expected by BCM's addSoftwareImage/updateSoftwareImage APIs. Required fields: baseType="SoftwareImage", childType="", modified=true, to_be_removed=false, revision="". Required fields also include UUID (generated for creates, existing for updates). Optional fields include all resource attributes.
 
 ## Success Criteria *(mandatory)*
 
