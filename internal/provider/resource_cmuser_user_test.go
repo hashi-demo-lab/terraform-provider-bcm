@@ -967,6 +967,205 @@ func TestAccCMUserUser_UpdateMultipleFields(t *testing.T) {
 	})
 }
 
+// testAccCMUserUserConfigAllOptionalFields generates configuration with ALL optional fields set.
+func testAccCMUserUserConfigAllOptionalFields(username, password, shell, fullName, notes, homeDir, sshKeys string) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+resource "bcm_cmuser_user" "test" {
+  username            = %[4]q
+  password            = %[5]q
+  shell               = %[6]q
+  full_name           = %[7]q
+  notes               = %[8]q
+  home_directory      = %[9]q
+  authorized_ssh_keys = %[10]q
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		username,
+		password,
+		shell,
+		fullName,
+		notes,
+		homeDir,
+		sshKeys,
+	)
+}
+
+// TestAccCMUserUser_BasicWithAllFields tests creating a user with ALL optional fields set,
+// verifies each field via ConfigStateChecks, then re-applies for idempotency.
+func TestAccCMUserUser_BasicWithAllFields(t *testing.T) {
+	username := generateUniqueUnixUsername()
+	password := "AllFieldsPass123!"
+	shell := "/bin/zsh"
+	fullName := "All Fields User"
+	notes := "User created with all optional fields"
+	homeDir := fmt.Sprintf("/home/%s", username)
+	sshKeys := "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7allfields test@host"
+
+	// ID consistency tracking
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMUserUserDestroy,
+		Steps: []resource.TestStep{
+			// Step 1: Create with all optional fields and verify each
+			{
+				Config: testAccCMUserUserConfigAllOptionalFields(username, password, shell, fullName, notes, homeDir, sshKeys),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmuser_user.test",
+						tfjsonpath.New("username"),
+						knownvalue.StringExact(username),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmuser_user.test",
+						tfjsonpath.New("id"),
+						knownvalue.NotNull(),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmuser_user.test",
+						tfjsonpath.New("uuid"),
+						knownvalue.NotNull(),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmuser_user.test",
+						tfjsonpath.New("shell"),
+						knownvalue.StringExact(shell),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmuser_user.test",
+						tfjsonpath.New("full_name"),
+						knownvalue.StringExact(fullName),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmuser_user.test",
+						tfjsonpath.New("notes"),
+						knownvalue.StringExact(notes),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmuser_user.test",
+						tfjsonpath.New("home_directory"),
+						knownvalue.StringExact(homeDir),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmuser_user.test",
+						tfjsonpath.New("authorized_ssh_keys"),
+						knownvalue.StringExact(sshKeys),
+					),
+					compareID.AddStateValue(
+						"bcm_cmuser_user.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+			// Step 2: Re-apply same config — verify idempotency (empty plan)
+			{
+				Config: testAccCMUserUserConfigAllOptionalFields(username, password, shell, fullName, notes, homeDir, sshKeys),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmuser_user.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+		},
+	})
+}
+
+// TestAccCMUserUser_UpdateShellAndVerifyIdempotency tests updating the shell attribute
+// from /bin/bash to /bin/zsh, verifies the update, then confirms idempotency.
+func TestAccCMUserUser_UpdateShellAndVerifyIdempotency(t *testing.T) {
+	username := generateUniqueUnixUsername()
+	password := "ShellUpdatePass123!"
+
+	// ID consistency tracking across all 3 steps
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMUserUserDestroy,
+		Steps: []resource.TestStep{
+			// Step 1: Create with /bin/bash
+			{
+				Config: testAccCMUserUserConfigWithShell(username, password, "/bin/bash"),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmuser_user.test",
+						tfjsonpath.New("username"),
+						knownvalue.StringExact(username),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmuser_user.test",
+						tfjsonpath.New("shell"),
+						knownvalue.StringExact("/bin/bash"),
+					),
+					compareID.AddStateValue(
+						"bcm_cmuser_user.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+			// Step 2: Update shell to /bin/zsh and verify
+			{
+				Config: testAccCMUserUserConfigWithShell(username, password, "/bin/zsh"),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmuser_user.test",
+						tfjsonpath.New("username"),
+						knownvalue.StringExact(username),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmuser_user.test",
+						tfjsonpath.New("shell"),
+						knownvalue.StringExact("/bin/zsh"),
+					),
+					compareID.AddStateValue(
+						"bcm_cmuser_user.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+			// Step 3: Re-apply same config — verify idempotency (empty plan)
+			{
+				Config: testAccCMUserUserConfigWithShell(username, password, "/bin/zsh"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmuser_user.test",
+						tfjsonpath.New("shell"),
+						knownvalue.StringExact("/bin/zsh"),
+					),
+					compareID.AddStateValue(
+						"bcm_cmuser_user.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+		},
+	})
+}
+
 // testAccCMUserUserConfigWithHomeDir generates configuration with a specific home_directory.
 func testAccCMUserUserConfigWithHomeDir(username, password, homeDir string) string {
 	return fmt.Sprintf(`

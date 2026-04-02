@@ -516,6 +516,77 @@ resource "bcm_cmnet_network" "test" {
 }
 
 // =============================================================================
+// Acceptance Tests - Update Notes and Verify (CRUD Depth)
+// =============================================================================
+
+// TestAccCMNetNetwork_UpdateNotesAndVerify creates a network with notes "Initial",
+// updates notes to "Updated", verifies the value, then confirms idempotency
+// with an empty plan.
+func TestAccCMNetNetwork_UpdateNotesAndVerify(t *testing.T) {
+	networkName := generateUniqueTestName("tftest-net-notes")
+
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMNetNetworkDestroy,
+		Steps: []resource.TestStep{
+			// Step 1: Create with notes "Initial"
+			{
+				Config: testAccCMNetNetworkConfigWithNotes(networkName, "Initial"),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmnet_network.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(networkName),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmnet_network.test",
+						tfjsonpath.New("notes"),
+						knownvalue.StringExact("Initial"),
+					),
+					compareID.AddStateValue(
+						"bcm_cmnet_network.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+			// Step 2: Update notes to "Updated"
+			{
+				Config: testAccCMNetNetworkConfigWithNotes(networkName, "Updated"),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmnet_network.test",
+						tfjsonpath.New("notes"),
+						knownvalue.StringExact("Updated"),
+					),
+					compareID.AddStateValue(
+						"bcm_cmnet_network.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+			// Step 3: Idempotency check
+			{
+				Config: testAccCMNetNetworkConfigWithNotes(networkName, "Updated"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmnet_network.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+		},
+	})
+}
+
+// =============================================================================
 // Disappears Test
 // =============================================================================
 
