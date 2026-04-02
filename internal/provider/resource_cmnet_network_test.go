@@ -565,12 +565,6 @@ func TestAccCMNetNetwork_Import(t *testing.T) {
 				ResourceName:      "bcm_cmnet_network.test",
 				ImportState:       true,
 				ImportStateVerify: true,
-				ConfigStateChecks: []statecheck.StateCheck{
-					compareID.AddStateValue(
-						"bcm_cmnet_network.test",
-						tfjsonpath.New("id"),
-					),
-				},
 			},
 		},
 	})

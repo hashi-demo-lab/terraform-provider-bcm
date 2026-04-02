@@ -19,6 +19,10 @@ var testAccProtoV6ProviderFactories = map[string]func() (tfprotov6.ProviderServe
 }
 
 func testAccPreCheck(t *testing.T) {
+	if os.Getenv("TF_ACC") == "" {
+		t.Skip("Acceptance tests skipped unless env 'TF_ACC' set")
+	}
+
 	// Verify required environment variables for BCM acceptance tests
 	// These are used to authenticate against a real BCM instance
 	// Note: Unit tests do not require these variables

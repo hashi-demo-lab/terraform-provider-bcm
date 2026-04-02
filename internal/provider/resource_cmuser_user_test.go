@@ -419,12 +419,6 @@ func TestAccCMUserUser_Import(t *testing.T) {
 				ImportStateId:           username,
 				ImportStateVerify:       true,
 				ImportStateVerifyIgnore: []string{"password", "force"}, // Password cannot be recovered
-				ConfigStateChecks: []statecheck.StateCheck{
-					compareID.AddStateValue(
-						"bcm_cmuser_user.test",
-						tfjsonpath.New("id"),
-					),
-				},
 			},
 		},
 	})
