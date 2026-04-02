@@ -6,6 +6,7 @@ package provider
 import (
 	"context"
 	"encoding/json"
+	"sort"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -364,6 +365,13 @@ func (d *CMPartSoftwareImagesDataSource) Read(ctx context.Context, req datasourc
 			state.Images = append(state.Images, image)
 		}
 	}
+
+	sort.Slice(state.Images, func(i, j int) bool {
+		if state.Images[i].Name.ValueString() != state.Images[j].Name.ValueString() {
+			return state.Images[i].Name.ValueString() < state.Images[j].Name.ValueString()
+		}
+		return state.Images[i].UUID.ValueString() < state.Images[j].UUID.ValueString()
+	})
 
 	tflog.Info(ctx, "Software images data source read complete", map[string]interface{}{
 		"total_images":    len(apiResponse),

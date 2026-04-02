@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"sort"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -234,6 +235,16 @@ func (d *CMUserUsersDataSource) Read(ctx context.Context, req datasource.ReadReq
 			filteredUsers = append(filteredUsers, user)
 		}
 	}
+
+	sort.Slice(filteredUsers, func(i, j int) bool {
+		if filteredUsers[i].Username.ValueString() != filteredUsers[j].Username.ValueString() {
+			return filteredUsers[i].Username.ValueString() < filteredUsers[j].Username.ValueString()
+		}
+		if filteredUsers[i].UserID.ValueString() != filteredUsers[j].UserID.ValueString() {
+			return filteredUsers[i].UserID.ValueString() < filteredUsers[j].UserID.ValueString()
+		}
+		return filteredUsers[i].UUID.ValueString() < filteredUsers[j].UUID.ValueString()
+	})
 
 	tflog.Debug(ctx, fmt.Sprintf("Filtered to %d users matching criteria", len(filteredUsers)))
 
