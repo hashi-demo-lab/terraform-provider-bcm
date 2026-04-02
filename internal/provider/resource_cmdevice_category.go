@@ -16,6 +16,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
@@ -1437,6 +1438,41 @@ func (r *CMDeviceCategoryResource) Read(ctx context.Context, req resource.ReadRe
 		return
 	}
 
+	// On import, only ID is set — resolve UUID to name so readCategory can do a direct lookup
+	if state.Name.IsNull() || state.Name.ValueString() == "" {
+		importUUID := state.ID.ValueString()
+		tflog.Debug(ctx, "Import detected - resolving category UUID to name", map[string]interface{}{
+			"uuid": importUUID,
+		})
+
+		body, err := r.Client.CallJSONRPC(ctx, "cmdevice", "getCategories")
+		if err != nil {
+			resp.Diagnostics.AddError("Import Failed", fmt.Sprintf("Failed to list categories: %s", err.Error()))
+			return
+		}
+
+		var categories []map[string]interface{}
+		if err := json.Unmarshal(body, &categories); err != nil {
+			resp.Diagnostics.AddError("Import Failed", fmt.Sprintf("Failed to parse category list: %s", err.Error()))
+			return
+		}
+
+		for _, cat := range categories {
+			if uuid, ok := cat["uuid"].(string); ok && uuid == importUUID {
+				if name, ok := cat["name"].(string); ok {
+					state.Name = types.StringValue(name)
+					state.UUID = types.StringValue(importUUID)
+					break
+				}
+			}
+		}
+
+		if state.Name.IsNull() || state.Name.ValueString() == "" {
+			resp.Diagnostics.AddError("Category Not Found", fmt.Sprintf("No category found with UUID: %s", importUUID))
+			return
+		}
+	}
+
 	// Preserve original values from state for fields BCM API doesn't persist/return correctly
 	// These will be restored after readCategory to avoid false drift detection
 	originalManagementNetwork := state.ManagementNetwork
@@ -1565,20 +1601,24 @@ func (r *CMDeviceCategoryResource) Read(ctx context.Context, req resource.ReadRe
 		state.Force = types.BoolNull()
 	}
 
-	// CRITICAL FIX: Preserve optional list fields from state
-	// BCM API doesn't persist these fields for categories - preserve user's configured values
-	state.StaticRoutes = originalStaticRoutes
-	state.FSExports = originalFSExports
-	// Issue #84 FIX: Merge fsmounts instead of unconditional overwrite
-	// This preserves user config (device, mountpoint, filesystem, etc.) while populating
-	// computed values (uuid) from BCM API response
-	state.FSMounts = mergeFSMountsWithAPIResponse(ctx, originalFSMounts, state.FSMounts)
-	// Issue #83 FIX: Merge roles instead of unconditional overwrite
-	// This preserves user config (name, child_type, add_services) while populating
-	// computed values (uuid) from BCM API response
-	state.Roles = mergeRolesWithAPIResponse(ctx, originalRoles, state.Roles)
-	state.GPUSettings = originalGPUSettings
-	state.Services = originalServices
+	// Detect import: on import, prior state is empty so all originals are null.
+	// Skip restoring null originals over BCM values — keep what BCM returned.
+	isImport := originalManagementNetwork.IsNull() && originalForce.IsNull()
+
+	if !isImport {
+		// Normal Read: Preserve optional list fields from state
+		// BCM API doesn't persist these fields for categories - preserve user's configured values
+		state.StaticRoutes = originalStaticRoutes
+		state.FSExports = originalFSExports
+		// Issue #84 FIX: Merge fsmounts instead of unconditional overwrite
+		state.FSMounts = mergeFSMountsWithAPIResponse(ctx, originalFSMounts, state.FSMounts)
+		// Issue #83 FIX: Merge roles instead of unconditional overwrite
+		state.Roles = mergeRolesWithAPIResponse(ctx, originalRoles, state.Roles)
+		state.GPUSettings = originalGPUSettings
+		state.Services = originalServices
+	} else {
+		tflog.Debug(ctx, "Import detected - keeping BCM values for non-persisted fields")
+	}
 
 	// CRITICAL FIX: Preserve parent_software_image from state while keeping computed fields
 	// BCM API may return different parent_software_image UUID on subsequent reads,
@@ -2042,81 +2082,13 @@ func (r *CMDeviceCategoryResource) Delete(ctx context.Context, req resource.Dele
 }
 
 // ImportState implements resource.ResourceWithImportState.
+// Uses passthrough so Read() receives empty state and can detect import via isImport heuristic.
+// Read() handles the full two-phase lookup (getCategories → getCategory) via readCategory.
 func (r *CMDeviceCategoryResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	// T034-T035: Two-phase import implementation
-	// Phase 1: Call getCategories to list all categories and find the one with matching UUID
-	// Phase 2: Extract the name, then call getCategory(name) to fetch full data
+	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 
-	importedUUID := req.ID
-	tflog.Debug(ctx, "Starting two-phase import for category", map[string]interface{}{
-		"uuid": importedUUID,
-	})
-
-	// Phase 1: List all categories to find the name for this UUID
-	body, err := r.Client.CallJSONRPC(ctx, "cmdevice", "getCategories")
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Import Failed",
-			fmt.Sprintf("Failed to list categories for import: %s", err.Error()),
-		)
-		return
-	}
-
-	var categories []map[string]interface{}
-	if err := json.Unmarshal(body, &categories); err != nil {
-		resp.Diagnostics.AddError(
-			"Import Failed",
-			fmt.Sprintf("Failed to parse category list: %s", err.Error()),
-		)
-		return
-	}
-
-	// Find the category with matching UUID
-	var categoryName string
-	for _, cat := range categories {
-		if uuid, ok := cat["uuid"].(string); ok && uuid == importedUUID {
-			if name, ok := cat["name"].(string); ok {
-				categoryName = name
-				break
-			}
-		}
-	}
-
-	if categoryName == "" {
-		resp.Diagnostics.AddError(
-			"Category Not Found",
-			fmt.Sprintf("No category found with UUID: %s", importedUUID),
-		)
-		return
-	}
-
-	tflog.Debug(ctx, "Found category name for UUID", map[string]interface{}{
-		"uuid": importedUUID,
-		"name": categoryName,
-	})
-
-	// Phase 2: Use readCategory helper to fetch full category data
-	// Set name in model so readCategory can use it for lookup
-	var model CMDeviceCategoryResourceModel
-	model.ID = types.StringValue(importedUUID)
-	model.UUID = types.StringValue(importedUUID)
-	model.Name = types.StringValue(categoryName)
-
-	// T036: Populate all fields from API response
-	r.readCategory(ctx, &model, &resp.Diagnostics)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	// Force parameter is not persisted in BCM, set to null
-	model.Force = types.BoolNull()
-
-	// Set the populated model in state
-	resp.Diagnostics.Append(resp.State.Set(ctx, &model)...)
-
-	tflog.Trace(ctx, "successfully imported cmdevice category resource", map[string]interface{}{
-		"uuid": importedUUID,
-		"name": categoryName,
+	tflog.Debug(ctx, "Importing BCM category", map[string]interface{}{
+		"id": req.ID,
 	})
 }
 
