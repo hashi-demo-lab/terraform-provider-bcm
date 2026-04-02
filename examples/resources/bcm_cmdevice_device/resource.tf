@@ -89,11 +89,14 @@ resource "bcm_cmdevice_device" "compute_ipmi" {
   notes = "IPMI-enabled compute node with power management"
 }
 
-# Example 4: GPU compute node with multiple network interfaces
+# Example 4: GPU compute node with multiple interfaces
+# Management NIC for provisioning, high-speed data NIC for GPU traffic,
+# and a BMC interface for out-of-band management.
 resource "bcm_cmdevice_device" "gpu_node" {
   hostname = "citest-gpu-node-01"
   category = bcm_cmdevice_category.compute.id
 
+  # Management interface - used for PXE boot and provisioning
   interfaces {
     name     = "eth0"
     type     = "physical"
@@ -103,12 +106,28 @@ resource "bcm_cmdevice_device" "gpu_node" {
     dhcp     = true
   }
 
-  # Power control
+  # High-speed data interface - for GPU-to-GPU and storage traffic
+  interfaces {
+    name = "eth1"
+    type = "physical"
+    mac  = "00:11:22:33:44:68"
+    dhcp = true
+  }
+
+  # BMC interface - out-of-band IPMI management
+  interfaces {
+    name = "ipmi"
+    type = "bmc"
+    ip   = "192.168.100.11"
+    dhcp = false
+  }
+
+  # Power control via IPMI (uses BMC interface)
   power_control = "ipmi"
 
   # Network configuration for high-performance networking
   default_gateway        = "192.168.1.1"
-  default_gateway_metric = 50 # Lower metric for preferred route
+  default_gateway_metric = 50
 
   # Boot configuration with GPU-specific parameters
   boot_loader       = "pxelinux"
@@ -118,14 +137,16 @@ resource "bcm_cmdevice_device" "gpu_node" {
   serial_number = "SN-GPU-001"
   part_number   = "PN-GPU-NODE-001"
 
-  notes = "GPU compute node with NVIDIA drivers and RDMA networking"
+  notes = "GPU compute node with management, data, and BMC interfaces"
 }
 
-# Example 5: Storage node with custom partition configuration
+# Example 5: Storage node with bonded interfaces
+# Uses a bond for redundancy on the storage network.
 resource "bcm_cmdevice_device" "storage_node" {
   hostname = "citest-storage-node-01"
   category = bcm_cmdevice_category.compute.id
 
+  # Management interface for provisioning
   interfaces {
     name     = "eth0"
     type     = "physical"
@@ -133,6 +154,28 @@ resource "bcm_cmdevice_device" "storage_node" {
     network  = data.bcm_cmnet_networks.all.networks[0].id
     bootable = true
     dhcp     = true
+  }
+
+  # Member interfaces for bond (no network assignment - managed by bond)
+  interfaces {
+    name = "eth1"
+    type = "physical"
+    mac  = "00:11:22:33:44:69"
+  }
+
+  interfaces {
+    name = "eth2"
+    type = "physical"
+    mac  = "00:11:22:33:44:79"
+  }
+
+  # Bonded interface for storage traffic (uses eth1 + eth2)
+  interfaces {
+    name      = "bond0"
+    type      = "bond"
+    dhcp      = true
+    members   = ["eth1", "eth2"]
+    bond_mode = "802.3ad"
   }
 
   # Power control
@@ -150,7 +193,7 @@ resource "bcm_cmdevice_device" "storage_node" {
   serial_number = "SN-STORAGE-001"
   part_number   = "PN-STORAGE-NODE-001"
 
-  notes = "Storage node for Ceph cluster"
+  notes = "Storage node with bonded interfaces for Ceph cluster"
 }
 
 # =============================================================================
