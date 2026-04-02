@@ -1133,8 +1133,10 @@ func TestBuildDeviceAPIEntity_ProvisioningInterfaceFromBuiltArray(t *testing.T) 
 	require.True(t, ok, "interfaces should be a slice")
 	require.Len(t, builtInterfaces, 2, "should have 2 interfaces")
 
-	iface0 := builtInterfaces[0].(map[string]interface{})
-	iface1 := builtInterfaces[1].(map[string]interface{})
+	iface0, ok := builtInterfaces[0].(map[string]interface{})
+	require.True(t, ok, "interface 0 should be a map")
+	iface1, ok := builtInterfaces[1].(map[string]interface{})
+	require.True(t, ok, "interface 1 should be a map")
 	assert.Equal(t, eth0ExistingUUID, iface0["uuid"], "eth0 should preserve UUID from existing state")
 	assert.Equal(t, eth1ExistingUUID, iface1["uuid"], "eth1 should preserve UUID from existing state")
 }

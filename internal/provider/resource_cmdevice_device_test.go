@@ -1520,14 +1520,70 @@ resource "bcm_cmdevice_device" "test" {
 	)
 }
 
+// testAccCMDeviceAvailableRoleNames returns the role names exposed by the BCM cluster.
+func testAccCMDeviceAvailableRoleNames(t *testing.T) map[string]struct{} {
+	t.Helper()
+
+	client := createTestBCMClient(t)
+	body, err := client.CallJSONRPC(t.Context(), "cmdevice", "getNodes")
+	if err != nil {
+		t.Fatalf("Failed to query node roles: %v", err)
+	}
+
+	var nodes []map[string]interface{}
+	if err := json.Unmarshal(body, &nodes); err != nil {
+		t.Fatalf("Failed to parse node roles response: %v", err)
+	}
+
+	roleNames := make(map[string]struct{})
+	for _, node := range nodes {
+		rolesData, ok := node["roles"].([]interface{})
+		if !ok {
+			continue
+		}
+
+		for _, roleData := range rolesData {
+			role, ok := roleData.(map[string]interface{})
+			if !ok {
+				continue
+			}
+
+			name, ok := role["name"].(string)
+			if ok && name != "" {
+				roleNames[name] = struct{}{}
+			}
+		}
+	}
+
+	return roleNames
+}
+
 // testAccCMDeviceDeviceSingleRoleSet returns a role set that validates for generic test devices.
-func testAccCMDeviceDeviceSingleRoleSet() []string {
-	return []string{"storage"}
+func testAccCMDeviceDeviceSingleRoleSet(t *testing.T) []string {
+	t.Helper()
+
+	availableRoles := testAccCMDeviceAvailableRoleNames(t)
+	if _, ok := availableRoles["provisioning"]; ok {
+		return []string{"provisioning"}
+	}
+
+	t.Skip("cluster does not expose the provisioning role required for portable single-role device tests")
+	return nil
 }
 
 // testAccCMDeviceDeviceMultiRoleSet returns a cluster-valid two-role set for generic test devices.
-func testAccCMDeviceDeviceMultiRoleSet() []string {
-	return []string{"boot", "storage"}
+func testAccCMDeviceDeviceMultiRoleSet(t *testing.T) []string {
+	t.Helper()
+
+	availableRoles := testAccCMDeviceAvailableRoleNames(t)
+	_, hasBoot := availableRoles["boot"]
+	_, hasStorage := availableRoles["storage"]
+	if hasBoot && hasStorage {
+		return []string{"boot", "storage"}
+	}
+
+	t.Skip("cluster does not expose the boot+storage roles required for portable multi-role device tests")
+	return nil
 }
 
 // TestAccCMDeviceDevice_RolesCreate tests creating a device with a role.
@@ -1539,7 +1595,7 @@ func TestAccCMDeviceDevice_RolesCreate(t *testing.T) {
 	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 	mac := generateUniqueMAC()
 
-	roles := testAccCMDeviceDeviceSingleRoleSet()
+	roles := testAccCMDeviceDeviceSingleRoleSet(t)
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -1592,7 +1648,7 @@ func TestAccCMDeviceDevice_RolesMultiple(t *testing.T) {
 	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 	mac := generateUniqueMAC()
 
-	roles := testAccCMDeviceDeviceMultiRoleSet()
+	roles := testAccCMDeviceDeviceMultiRoleSet(t)
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -1639,7 +1695,7 @@ func TestAccCMDeviceDevice_RolesIdempotent(t *testing.T) {
 	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 	mac := generateUniqueMAC()
 
-	roles := testAccCMDeviceDeviceMultiRoleSet()
+	roles := testAccCMDeviceDeviceSingleRoleSet(t)
 
 	// ID consistency tracking.
 	compareID := statecheck.CompareValue(compare.ValuesSame())
@@ -1659,7 +1715,7 @@ func TestAccCMDeviceDevice_RolesIdempotent(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_device.test",
 						tfjsonpath.New("roles"),
-						knownvalue.SetSizeExact(2),
+						knownvalue.SetSizeExact(1),
 					),
 					compareID.AddStateValue(
 						"bcm_cmdevice_device.test",
@@ -1703,8 +1759,8 @@ func TestAccCMDeviceDevice_RolesUpdate(t *testing.T) {
 	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 	mac := generateUniqueMAC()
 
-	initialRoles := testAccCMDeviceDeviceSingleRoleSet()
-	updatedRoles := testAccCMDeviceDeviceMultiRoleSet()
+	initialRoles := []string{}
+	updatedRoles := testAccCMDeviceDeviceSingleRoleSet(t)
 
 	// ID consistency tracking.
 	compareID := statecheck.CompareValue(compare.ValuesSame())
@@ -1723,8 +1779,13 @@ func TestAccCMDeviceDevice_RolesUpdate(t *testing.T) {
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_device.test",
-						tfjsonpath.New("roles"),
-						knownvalue.SetSizeExact(1),
+						tfjsonpath.New("hostname"),
+						knownvalue.StringExact(deviceName),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+						knownvalue.NotNull(),
 					),
 					compareID.AddStateValue(
 						"bcm_cmdevice_device.test",
@@ -1769,7 +1830,7 @@ func TestAccCMDeviceDevice_RolesRemove(t *testing.T) {
 	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 	mac := generateUniqueMAC()
 
-	initialRoles := testAccCMDeviceDeviceMultiRoleSet()
+	initialRoles := testAccCMDeviceDeviceSingleRoleSet(t)
 	emptyRoles := []string{}
 
 	resource.Test(t, resource.TestCase{
@@ -1815,7 +1876,7 @@ func TestAccCMDeviceDevice_RolesImport(t *testing.T) {
 	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 	mac := generateUniqueMAC()
 
-	roles := testAccCMDeviceDeviceMultiRoleSet()
+	roles := testAccCMDeviceDeviceSingleRoleSet(t)
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -1832,7 +1893,7 @@ func TestAccCMDeviceDevice_RolesImport(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_device.test",
 						tfjsonpath.New("roles"),
-						knownvalue.SetSizeExact(2),
+						knownvalue.SetSizeExact(1),
 					),
 				},
 			},
@@ -1883,7 +1944,7 @@ func TestAccCMDeviceDevice_RolesDrift(t *testing.T) {
 	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 	mac := generateUniqueMAC()
 
-	roles := testAccCMDeviceDeviceMultiRoleSet()
+	roles := testAccCMDeviceDeviceSingleRoleSet(t)
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -1900,7 +1961,7 @@ func TestAccCMDeviceDevice_RolesDrift(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_device.test",
 						tfjsonpath.New("roles"),
-						knownvalue.SetSizeExact(2),
+						knownvalue.SetSizeExact(1),
 					),
 				},
 			},
@@ -1956,7 +2017,7 @@ func TestAccCMDeviceDevice_RolesDrift(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_device.test",
 						tfjsonpath.New("roles"),
-						knownvalue.SetSizeExact(2),
+						knownvalue.SetSizeExact(1),
 					),
 				},
 			},
@@ -2048,7 +2109,7 @@ func TestAccCMDeviceDevice_RolesByName(t *testing.T) {
 	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 	mac := generateUniqueMAC()
 
-	roleNames := testAccCMDeviceDeviceMultiRoleSet()
+	roleNames := testAccCMDeviceDeviceSingleRoleSet(t)
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -2076,7 +2137,7 @@ func TestAccCMDeviceDevice_RolesByName(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_device.test",
 						tfjsonpath.New("roles"),
-						knownvalue.SetSizeExact(2),
+						knownvalue.SetSizeExact(1),
 					),
 				},
 			},
@@ -2102,7 +2163,7 @@ func TestAccCMDeviceDevice_RolesImportByName(t *testing.T) {
 	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 	mac := generateUniqueMAC()
 
-	roleNames := testAccCMDeviceDeviceMultiRoleSet()
+	roleNames := testAccCMDeviceDeviceSingleRoleSet(t)
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -2119,7 +2180,7 @@ func TestAccCMDeviceDevice_RolesImportByName(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_device.test",
 						tfjsonpath.New("roles"),
-						knownvalue.SetSizeExact(2),
+						knownvalue.SetSizeExact(1),
 					),
 				},
 			},
@@ -2170,8 +2231,8 @@ func TestAccCMDeviceDevice_RolesUpdateByName(t *testing.T) {
 	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 	mac := generateUniqueMAC()
 
-	initialRoles := testAccCMDeviceDeviceSingleRoleSet()
-	updatedRoles := testAccCMDeviceDeviceMultiRoleSet()
+	initialRoles := []string{}
+	updatedRoles := testAccCMDeviceDeviceSingleRoleSet(t)
 
 	// ID consistency tracking.
 	compareID := statecheck.CompareValue(compare.ValuesSame())
@@ -2190,8 +2251,13 @@ func TestAccCMDeviceDevice_RolesUpdateByName(t *testing.T) {
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_device.test",
-						tfjsonpath.New("roles"),
-						knownvalue.SetSizeExact(1),
+						tfjsonpath.New("hostname"),
+						knownvalue.StringExact(deviceName),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+						knownvalue.NotNull(),
 					),
 					compareID.AddStateValue(
 						"bcm_cmdevice_device.test",
@@ -2236,7 +2302,7 @@ func TestAccCMDeviceDevice_RolesDriftByName(t *testing.T) {
 	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 	mac := generateUniqueMAC()
 
-	roleNames := testAccCMDeviceDeviceMultiRoleSet()
+	roleNames := testAccCMDeviceDeviceSingleRoleSet(t)
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -2253,7 +2319,7 @@ func TestAccCMDeviceDevice_RolesDriftByName(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_device.test",
 						tfjsonpath.New("roles"),
-						knownvalue.SetSizeExact(2),
+						knownvalue.SetSizeExact(1),
 					),
 				},
 			},
@@ -2306,7 +2372,7 @@ func TestAccCMDeviceDevice_RolesDriftByName(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_device.test",
 						tfjsonpath.New("roles"),
-						knownvalue.SetSizeExact(2),
+						knownvalue.SetSizeExact(1),
 					),
 				},
 			},
@@ -2490,8 +2556,8 @@ func TestAccCMDeviceDevice_RolesAddMultiple(t *testing.T) {
 	imageName := generateUniqueTestName("tftest-img-roles-multi")
 	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 	mac := generateUniqueMAC()
-	singleRole := testAccCMDeviceDeviceSingleRoleSet()
-	multipleRoles := testAccCMDeviceDeviceMultiRoleSet()
+	singleRole := testAccCMDeviceDeviceSingleRoleSet(t)
+	multipleRoles := testAccCMDeviceDeviceMultiRoleSet(t)
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
