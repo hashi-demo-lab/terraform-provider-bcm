@@ -607,6 +607,7 @@ func TestAccCMDeviceDevice_ValidationInvalidHostname(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceDeviceDestroy,
 		Steps: []resource.TestStep{
 			{
 				Config:      testAccCMDeviceDeviceResourceConfig_Basic("UPPERCASE", categoryName, imageName, imagePath, mac),
@@ -796,6 +797,7 @@ func TestAccCMDeviceDevice_PartitionCommitTimeout(t *testing.T) {
 			testAccPreCheck(t)
 		},
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceDeviceDestroy,
 		Steps: []resource.TestStep{
 			{
 				// Attempt to create device with partition that never commits.
@@ -962,6 +964,7 @@ func TestAccCMDeviceDevice_ValidationInvalidMAC(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceDeviceDestroy,
 		Steps: []resource.TestStep{
 			{
 				Config:      testAccCMDeviceDeviceResourceConfig_InvalidMAC(deviceName, "00-11-22-33-44-55"),
@@ -1119,7 +1122,7 @@ func TestAccCMDeviceDevice_Drift(t *testing.T) {
 // - Cluster has no partitions configured
 // - Cluster partitions exist but none have the required "base" name.
 func TestAccCMDeviceDevice_PartitionErrorHandling(t *testing.T) {
-	t.Skip("Skipping partition error handling tests - requires specific BCM cluster configurations or mock server")
+	t.Skip("Documentation test - requires specific BCM cluster configurations or mock server")
 
 	// These tests document the error paths but cannot be executed against a live BCM.
 	// cluster without engineering specific failure conditions. They serve as:
@@ -2400,6 +2403,7 @@ func TestAccCMDeviceDevice_InvalidRoleName(t *testing.T) {
 			testAccPreCheck(t)
 		},
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceDeviceDestroy,
 		Steps: []resource.TestStep{
 			{
 				Config:      testAccCMDeviceDeviceConfigWithRoleNames(deviceName, categoryName, imageName, imagePath, mac, invalidRoles),
@@ -2429,6 +2433,7 @@ func TestAccCMDeviceDevice_InvalidRoleUUID(t *testing.T) {
 			testAccPreCheck(t)
 		},
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceDeviceDestroy,
 		Steps: []resource.TestStep{
 			{
 				Config:      testAccCMDeviceDeviceConfigWithRoleNames(deviceName, categoryName, imageName, imagePath, mac, invalidRoles),
@@ -2509,6 +2514,7 @@ resource "bcm_cmdevice_device" "test" {
 			testAccPreCheck(t)
 		},
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceDeviceDestroy,
 		Steps: []resource.TestStep{
 			{
 				Config:      config,
@@ -2534,6 +2540,7 @@ func TestAccCMDeviceDevice_MultipleInvalidRoles(t *testing.T) {
 			testAccPreCheck(t)
 		},
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceDeviceDestroy,
 		Steps: []resource.TestStep{
 			{
 				Config: testAccCMDeviceDeviceConfigWithRoleNames(deviceName, categoryName, imageName, imagePath, mac, invalidRoles),
@@ -4023,6 +4030,265 @@ resource "bcm_cmdevice_device" "test" {
 		hostname,
 		mac,
 	)
+}
+
+// =============================================================================
+// Additional Validation Tests — Schema Field Coverage
+// =============================================================================
+
+// TestAccCMDeviceDevice_ValidationInvalidCategoryUUID tests that a non-UUID category
+// value is rejected by the schema validator.
+func TestAccCMDeviceDevice_ValidationInvalidCategoryUUID(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceDeviceDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmnet_networks" "management" {
+  filter { name_pattern = "managementnet" }
+}
+
+resource "bcm_cmdevice_device" "test" {
+  hostname = "val-test-cat"
+  category = "not-a-uuid"
+  interfaces {
+    name    = "eth0"
+    type    = "physical"
+    mac     = "02:00:00:00:00:01"
+    network = data.bcm_cmnet_networks.management.networks[0].id
+  }
+}
+`,
+					os.Getenv("BCM_ENDPOINT"),
+					os.Getenv("BCM_USERNAME"),
+					os.Getenv("BCM_PASSWORD"),
+				),
+				ExpectError: regexp.MustCompile(`must be valid UUID`),
+			},
+		},
+	})
+}
+
+// TestAccCMDeviceDevice_ValidationInvalidManagementNetworkUUID tests that a non-UUID
+// management_network value is rejected by the schema validator.
+func TestAccCMDeviceDevice_ValidationInvalidManagementNetworkUUID(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceDeviceDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmnet_networks" "management" {
+  filter { name_pattern = "managementnet" }
+}
+
+data "bcm_cmdevice_categories" "all" {}
+
+resource "bcm_cmdevice_device" "test" {
+  hostname           = "val-test-mgmt"
+  category           = data.bcm_cmdevice_categories.all.categories[0].id
+  management_network = "not-a-uuid"
+  interfaces {
+    name    = "eth0"
+    type    = "physical"
+    mac     = "02:00:00:00:00:02"
+    network = data.bcm_cmnet_networks.management.networks[0].id
+  }
+}
+`,
+					os.Getenv("BCM_ENDPOINT"),
+					os.Getenv("BCM_USERNAME"),
+					os.Getenv("BCM_PASSWORD"),
+				),
+				ExpectError: regexp.MustCompile(`must be valid UUID`),
+			},
+		},
+	})
+}
+
+// TestAccCMDeviceDevice_ValidationInvalidGateway tests that an invalid IP address
+// for default_gateway is rejected by the schema validator.
+func TestAccCMDeviceDevice_ValidationInvalidGateway(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceDeviceDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmnet_networks" "management" {
+  filter { name_pattern = "managementnet" }
+}
+
+data "bcm_cmdevice_categories" "all" {}
+
+resource "bcm_cmdevice_device" "test" {
+  hostname        = "val-test-gw"
+  category        = data.bcm_cmdevice_categories.all.categories[0].id
+  default_gateway = "999.999.999.999"
+  interfaces {
+    name    = "eth0"
+    type    = "physical"
+    mac     = "02:00:00:00:00:03"
+    network = data.bcm_cmnet_networks.management.networks[0].id
+  }
+}
+`,
+					os.Getenv("BCM_ENDPOINT"),
+					os.Getenv("BCM_USERNAME"),
+					os.Getenv("BCM_PASSWORD"),
+				),
+				ExpectError: regexp.MustCompile(`must be a valid IPv4 address`),
+			},
+		},
+	})
+}
+
+// TestAccCMDeviceDevice_ValidationInvalidInterfaceType tests that an invalid
+// interface type is rejected by the schema validator.
+func TestAccCMDeviceDevice_ValidationInvalidInterfaceType(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceDeviceDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmnet_networks" "management" {
+  filter { name_pattern = "managementnet" }
+}
+
+data "bcm_cmdevice_categories" "all" {}
+
+resource "bcm_cmdevice_device" "test" {
+  hostname = "val-test-iface"
+  category = data.bcm_cmdevice_categories.all.categories[0].id
+  interfaces {
+    name    = "eth0"
+    type    = "wireless"
+    mac     = "02:00:00:00:00:04"
+    network = data.bcm_cmnet_networks.management.networks[0].id
+  }
+}
+`,
+					os.Getenv("BCM_ENDPOINT"),
+					os.Getenv("BCM_USERNAME"),
+					os.Getenv("BCM_PASSWORD"),
+				),
+				ExpectError: regexp.MustCompile(`value must be one of`),
+			},
+		},
+	})
+}
+
+// TestAccCMDeviceDevice_ValidationInvalidInterfaceStartIf tests that an invalid
+// start_if value is rejected by the schema validator.
+func TestAccCMDeviceDevice_ValidationInvalidInterfaceStartIf(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceDeviceDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmnet_networks" "management" {
+  filter { name_pattern = "managementnet" }
+}
+
+data "bcm_cmdevice_categories" "all" {}
+
+resource "bcm_cmdevice_device" "test" {
+  hostname = "val-test-startif"
+  category = data.bcm_cmdevice_categories.all.categories[0].id
+  interfaces {
+    name     = "eth0"
+    type     = "physical"
+    mac      = "02:00:00:00:00:05"
+    network  = data.bcm_cmnet_networks.management.networks[0].id
+    start_if = "SOMETIMES"
+  }
+}
+`,
+					os.Getenv("BCM_ENDPOINT"),
+					os.Getenv("BCM_USERNAME"),
+					os.Getenv("BCM_PASSWORD"),
+				),
+				ExpectError: regexp.MustCompile(`value must be one of`),
+			},
+		},
+	})
+}
+
+// TestAccCMDeviceDevice_ValidationNoInterfaces tests that a device with no
+// interfaces block is rejected by the schema validator (min size 1).
+func TestAccCMDeviceDevice_ValidationNoInterfaces(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceDeviceDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmdevice_categories" "all" {}
+
+resource "bcm_cmdevice_device" "test" {
+  hostname = "val-test-noiface"
+  category = data.bcm_cmdevice_categories.all.categories[0].id
+}
+`,
+					os.Getenv("BCM_ENDPOINT"),
+					os.Getenv("BCM_USERNAME"),
+					os.Getenv("BCM_PASSWORD"),
+				),
+				ExpectError: regexp.MustCompile(`(?i)at least 1`),
+			},
+		},
+	})
 }
 
 // deviceDisappearsCheck is a custom StateCheck that deletes a device resource

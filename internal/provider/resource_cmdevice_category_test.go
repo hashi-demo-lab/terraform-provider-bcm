@@ -1701,6 +1701,7 @@ func TestAccCMDeviceCategory_ValidationInvalidName(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceCategoryDestroy,
 		Steps: []resource.TestStep{
 			// Test empty name (below minimum length)
 			{
@@ -1718,6 +1719,7 @@ func TestAccCMDeviceCategory_ValidationInvalidManagementNetwork(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceCategoryDestroy,
 		Steps: []resource.TestStep{
 			// Test invalid UUID format
 			{
@@ -1740,6 +1742,7 @@ func TestAccCMDeviceCategory_ValidationInvalidBootLoader(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceCategoryDestroy,
 		Steps: []resource.TestStep{
 			// Test invalid boot_loader value
 			{
@@ -1757,6 +1760,7 @@ func TestAccCMDeviceCategory_ValidationInvalidFIPS(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceCategoryDestroy,
 		Steps: []resource.TestStep{
 			// Test invalid fips value (not "YES" or "NO")
 			{
@@ -2613,6 +2617,7 @@ func TestAccCMDeviceCategory_StaticRoutesValidation(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceCategoryDestroy,
 		Steps: []resource.TestStep{
 			// Invalid IP format (missing octet)
 			{

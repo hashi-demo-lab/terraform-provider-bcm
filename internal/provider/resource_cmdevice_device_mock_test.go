@@ -737,6 +737,7 @@ func TestAccCMDeviceDeviceResource_MockErrorCategoryNotFound(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceDeviceDestroy,
 		Steps: []resource.TestStep{
 			{
 				Config:      testAccDeviceResourceConfigWithMockServer(mockServer.URL, deviceName),
@@ -768,6 +769,7 @@ func TestAccCMDeviceDeviceResource_MockErrorCategoryInvalidJSON(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceDeviceDestroy,
 		Steps: []resource.TestStep{
 			{
 				Config:      testAccDeviceResourceConfigWithMockServer(mockServer.URL, deviceName),
@@ -798,6 +800,7 @@ func TestAccCMDeviceDeviceResource_MockErrorCategoryNoPartition(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceDeviceDestroy,
 		Steps: []resource.TestStep{
 			{
 				Config:      testAccDeviceResourceConfigWithMockServer(mockServer.URL, deviceName),
@@ -828,6 +831,7 @@ func TestAccCMDeviceDeviceResource_MockErrorCategoryProxyMissingParent(t *testin
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceDeviceDestroy,
 		Steps: []resource.TestStep{
 			{
 				Config:      testAccDeviceResourceConfigWithMockServer(mockServer.URL, deviceName),
@@ -862,6 +866,7 @@ func TestAccCMDeviceDeviceResource_MockErrorPartitionsQueryFailed(t *testing.T) 
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceDeviceDestroy,
 		Steps: []resource.TestStep{
 			{
 				Config:      testAccDeviceResourceConfigWithMockServer(mockServer.URL, deviceName),
@@ -892,6 +897,7 @@ func TestAccCMDeviceDeviceResource_MockErrorPartitionsInvalidJSON(t *testing.T) 
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceDeviceDestroy,
 		Steps: []resource.TestStep{
 			{
 				Config:      testAccDeviceResourceConfigWithMockServer(mockServer.URL, deviceName),
@@ -922,6 +928,7 @@ func TestAccCMDeviceDeviceResource_MockErrorPartitionsNoBase(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceDeviceDestroy,
 		Steps: []resource.TestStep{
 			{
 				Config:      testAccDeviceResourceConfigWithMockServer(mockServer.URL, deviceName),
@@ -952,6 +959,7 @@ func TestAccCMDeviceDeviceResource_MockErrorPartitionNotCommitted(t *testing.T) 
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceDeviceDestroy,
 		Steps: []resource.TestStep{
 			{
 				Config:      testAccDeviceResourceConfigWithMockServer(mockServer.URL, deviceName),
@@ -986,6 +994,7 @@ func TestAccCMDeviceDeviceResource_MockErrorDeviceCreateFailed(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceDeviceDestroy,
 		Steps: []resource.TestStep{
 			{
 				Config:      testAccDeviceResourceConfigWithMockServer(mockServer.URL, deviceName),
@@ -1017,6 +1026,7 @@ func TestAccCMDeviceDeviceResource_MockErrorDeviceCreateInvalidJSON(t *testing.T
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceDeviceDestroy,
 		Steps: []resource.TestStep{
 			{
 				Config:      testAccDeviceResourceConfigWithMockServer(mockServer.URL, deviceName),
@@ -1047,6 +1057,7 @@ func TestAccCMDeviceDeviceResource_MockErrorDeviceValidationFailed(t *testing.T)
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceDeviceDestroy,
 		Steps: []resource.TestStep{
 			{
 				Config:      testAccDeviceResourceConfigWithMockServer(mockServer.URL, deviceName),
@@ -1078,6 +1089,7 @@ func TestAccCMDeviceDeviceResource_MockErrorDeviceReadAfterCreateFailed(t *testi
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceDeviceDestroy,
 		Steps: []resource.TestStep{
 			{
 				Config:      testAccDeviceResourceConfigWithMockServer(mockServer.URL, deviceName),
@@ -1109,6 +1121,7 @@ func TestAccCMDeviceDeviceResource_MockErrorDeviceReadInvalidJSON(t *testing.T) 
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceDeviceDestroy,
 		Steps: []resource.TestStep{
 			{
 				Config:      testAccDeviceResourceConfigWithMockServer(mockServer.URL, deviceName),
