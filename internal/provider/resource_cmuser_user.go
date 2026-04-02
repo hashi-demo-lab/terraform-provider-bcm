@@ -504,9 +504,9 @@ func (r *CMUserUserResource) Update(ctx context.Context, req resource.UpdateRequ
 	// Build updated entity from plan (include UUID for update)
 	entity := r.buildAPIEntity(ctx, &plan, state.UUID.ValueString())
 
-	// Handle password update - only include if changed
-	// Compare plan password with state password
-	if !plan.Password.Equal(state.Password) {
+	// Handle password update - only include if explicitly set and changed
+	// Skip if password is null/empty to avoid resetting it (e.g. after import)
+	if !plan.Password.IsNull() && !plan.Password.IsUnknown() && plan.Password.ValueString() != "" && !plan.Password.Equal(state.Password) {
 		entity["password"] = plan.Password.ValueString()
 		tflog.Debug(ctx, "Password change detected, including in update", map[string]interface{}{
 			"username": plan.Username.ValueString(),
