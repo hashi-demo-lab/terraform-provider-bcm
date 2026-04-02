@@ -571,8 +571,8 @@ func (r *CMEtcdClusterResource) Delete(ctx context.Context, req resource.DeleteR
 	// Delete via BCM API
 	_, err := r.client.RemoveEtcdCluster(ctx, uuid)
 	if err != nil {
-		// Ignore "not found" errors during delete (idempotent)
-		if !containsAny(err.Error(), []string{"not found", "does not exist", "404"}) {
+		// BCM can report missing entities as a failed task payload instead of a transport error.
+		if !containsAny(err.Error(), []string{"not found", "does not exist", "404", "No such", "no such"}) {
 			resp.Diagnostics.AddError("Delete Failed", fmt.Sprintf("Failed to delete EtcdCluster: %s", err))
 			return
 		}

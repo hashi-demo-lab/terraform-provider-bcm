@@ -315,7 +315,15 @@ func (r *CMNetNetworkResource) Create(ctx context.Context, req resource.CreateRe
 		return
 	}
 
+	plannedMTU := plan.MTU
+	plannedDomainName := plan.DomainName
 	mapNetworkAPIResponseToState(ctx, createdNetwork, &plan)
+	if !plannedMTU.IsNull() && !plannedMTU.IsUnknown() && plannedMTU.ValueInt64() == 1500 && plan.MTU.IsNull() {
+		plan.MTU = plannedMTU
+	}
+	if plannedDomainName.IsNull() && !plan.DomainName.IsNull() && plan.DomainName.ValueString() == "cluster.local" {
+		plan.DomainName = types.StringNull()
+	}
 
 	tflog.Trace(ctx, "Created network resource", map[string]interface{}{
 		"uuid": plan.UUID.ValueString(),
@@ -379,7 +387,15 @@ func (r *CMNetNetworkResource) Read(ctx context.Context, req resource.ReadReques
 	}
 
 	// Map response to state
+	priorMTU := state.MTU
+	priorDomainName := state.DomainName
 	mapNetworkAPIResponseToState(ctx, network, &state)
+	if !priorMTU.IsNull() && !priorMTU.IsUnknown() && priorMTU.ValueInt64() == 1500 && state.MTU.IsNull() {
+		state.MTU = priorMTU
+	}
+	if priorDomainName.IsNull() && !state.DomainName.IsNull() && state.DomainName.ValueString() == "cluster.local" {
+		state.DomainName = types.StringNull()
+	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
@@ -469,7 +485,15 @@ func (r *CMNetNetworkResource) Update(ctx context.Context, req resource.UpdateRe
 	}
 
 	// Map response to state
+	plannedMTU := plan.MTU
+	plannedDomainName := plan.DomainName
 	mapNetworkAPIResponseToState(ctx, updatedNetwork, &plan)
+	if !plannedMTU.IsNull() && !plannedMTU.IsUnknown() && plannedMTU.ValueInt64() == 1500 && plan.MTU.IsNull() {
+		plan.MTU = plannedMTU
+	}
+	if plannedDomainName.IsNull() && !plan.DomainName.IsNull() && plan.DomainName.ValueString() == "cluster.local" {
+		plan.DomainName = types.StringNull()
+	}
 
 	tflog.Trace(ctx, "Updated network resource", map[string]interface{}{
 		"uuid": plan.UUID.ValueString(),
