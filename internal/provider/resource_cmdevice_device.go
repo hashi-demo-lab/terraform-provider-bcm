@@ -977,7 +977,10 @@ func (r *CMDeviceDeviceResource) Read(ctx context.Context, req resource.ReadRequ
 	// During import (state is empty), we should NOT preserve null values - instead use what BCM returns
 	// During normal Read (state has values), preserve null if user didn't explicitly set the field
 
-	isImport := state.ManagementNetwork.IsNull() && state.BootLoader.IsNull() && state.BootLoaderProtocol.IsNull()
+	// Detect import: during import via ImportStatePassthroughID, only "id" is set.
+	// Required fields like Hostname and Category will be null. In normal Read after
+	// Create/Update, these are always populated.
+	isImport := state.Hostname.IsNull() || state.Category.IsNull()
 
 	if !isImport {
 		// Normal Read path: Preserve null values from state to avoid drift

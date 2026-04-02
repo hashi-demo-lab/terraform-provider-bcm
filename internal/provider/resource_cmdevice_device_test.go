@@ -3767,3 +3767,81 @@ resource "bcm_cmdevice_device" "test" {
 		mac,
 	)
 }
+
+// deviceDisappearsCheck is a custom StateCheck that deletes a device resource
+// via the BCM API during the check phase, simulating external deletion.
+// This allows the test to verify that Terraform detects the missing resource
+// and produces a non-empty plan to recreate it.
+type deviceDisappearsCheck struct {
+	resourceAddress string
+}
+
+func (c deviceDisappearsCheck) CheckState(ctx context.Context, req statecheck.CheckStateRequest, resp *statecheck.CheckStateResponse) {
+	// Find the resource in state.
+	var deviceUUID string
+	for _, r := range req.State.Values.RootModule.Resources {
+		if r.Address == c.resourceAddress {
+			uuid, ok := r.AttributeValues["uuid"]
+			if !ok {
+				resp.Error = fmt.Errorf("resource %s has no uuid attribute", c.resourceAddress)
+				return
+			}
+			deviceUUID, ok = uuid.(string)
+			if !ok {
+				resp.Error = fmt.Errorf("resource %s uuid attribute is not a string", c.resourceAddress)
+				return
+			}
+			break
+		}
+	}
+
+	if deviceUUID == "" {
+		resp.Error = fmt.Errorf("resource %s not found in state", c.resourceAddress)
+		return
+	}
+
+	// Delete the device externally via BCM API.
+	client := createTestBCMClient(&testing.T{})
+	_, err := client.CallJSONRPC(ctx, "cmdevice", "removeDevice", deviceUUID, true) // force=true
+	if err != nil {
+		resp.Error = fmt.Errorf("failed to delete device %s externally: %w", deviceUUID, err)
+		return
+	}
+
+	// Wait for eventual consistency.
+	time.Sleep(2 * time.Second)
+}
+
+// TestAccCMDeviceDevice_Disappears tests that when a device is deleted externally
+// (outside of Terraform), the next plan detects it and wants to recreate it.
+func TestAccCMDeviceDevice_Disappears(t *testing.T) {
+	deviceName := generateUniqueTestName("tftest-device-disap")
+	categoryName := generateUniqueTestName("tftest-cat-disap")
+	imageName := generateUniqueTestName("tftest-img-disap")
+	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
+	mac := generateUniqueMAC()
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+			testAccCMDeviceDevicePreCheck(t, deviceName)
+		},
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceDeviceDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccCMDeviceDeviceResourceConfig_Basic(deviceName, categoryName, imageName, imagePath, mac),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("hostname"),
+						knownvalue.StringExact(deviceName),
+					),
+					// Delete externally during state checks.
+					deviceDisappearsCheck{resourceAddress: "bcm_cmdevice_device.test"},
+				},
+				ExpectNonEmptyPlan: true,
+			},
+		},
+	})
+}

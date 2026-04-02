@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -459,5 +460,136 @@ resource "bcm_cmnet_network" "test" {
 		os.Getenv("BCM_PASSWORD"),
 		name,
 		notes,
+	)
+}
+
+// =============================================================================
+// Disappears Test
+// =============================================================================
+
+// networkDisappearsCheck implements statecheck.StateCheck to simulate external
+// deletion of a network resource via the BCM API during a test step.
+type networkDisappearsCheck struct {
+	resourceAddress string
+}
+
+func (c networkDisappearsCheck) CheckState(ctx context.Context, req statecheck.CheckStateRequest, resp *statecheck.CheckStateResponse) {
+	// Find the resource in state by address
+	var uuid string
+	for _, r := range req.State.Values.RootModule.Resources {
+		if r.Address == c.resourceAddress {
+			var ok bool
+			uuid, ok = r.AttributeValues["uuid"].(string)
+			if !ok || uuid == "" {
+				resp.Error = fmt.Errorf("resource %s has no uuid attribute in state", c.resourceAddress)
+				return
+			}
+			break
+		}
+	}
+
+	if uuid == "" {
+		resp.Error = fmt.Errorf("resource %s not found in state", c.resourceAddress)
+		return
+	}
+
+	// Delete the network externally via BCM API
+	client := createTestBCMClient(&testing.T{})
+	_, err := client.CallJSONRPC(ctx, "cmnet", "removeNetwork", uuid)
+	if err != nil {
+		resp.Error = fmt.Errorf("failed to delete network %s via BCM API: %w", uuid, err)
+		return
+	}
+
+	// Wait for eventual consistency
+	time.Sleep(TestEventualConsistencyDelay)
+}
+
+// TestAccCMNetNetwork_Disappears verifies that when a network is deleted
+// externally (outside Terraform), the next plan detects the disappearance.
+func TestAccCMNetNetwork_Disappears(t *testing.T) {
+	networkName := generateUniqueTestName("tftest-net-disap")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMNetNetworkDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccCMNetNetworkConfigBasic(networkName),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmnet_network.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(networkName),
+					),
+					networkDisappearsCheck{resourceAddress: "bcm_cmnet_network.test"},
+				},
+				ExpectNonEmptyPlan: true,
+			},
+		},
+	})
+}
+
+// =============================================================================
+// Validation Tests
+// =============================================================================
+
+// TestAccCMNetNetwork_ValidationInvalidSubnetCIDR verifies that the subnet
+// field rejects values that are not valid CIDR notation.
+func TestAccCMNetNetwork_ValidationInvalidSubnetCIDR(t *testing.T) {
+	networkName := generateUniqueTestName("tftest-net-val")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config:      testAccCMNetNetworkConfigWithSubnet(networkName, "not-a-cidr"),
+				ExpectError: regexp.MustCompile(`must be valid CIDR notation`),
+			},
+		},
+	})
+}
+
+// TestAccCMNetNetwork_ValidationInvalidSubnetFormat verifies that the subnet
+// field rejects malformed CIDR values that don't match the expected pattern.
+func TestAccCMNetNetwork_ValidationInvalidSubnetFormat(t *testing.T) {
+	networkName := generateUniqueTestName("tftest-net-val")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config:      testAccCMNetNetworkConfigWithSubnet(networkName, "192.168.1.0"),
+				ExpectError: regexp.MustCompile(`must be valid CIDR notation`),
+			},
+		},
+	})
+}
+
+// testAccCMNetNetworkConfigWithSubnet returns a config with a specific subnet value
+// for validation testing.
+func testAccCMNetNetworkConfigWithSubnet(name, subnet string) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+resource "bcm_cmnet_network" "test" {
+  name        = %[4]q
+  domain_name = "cluster.local"
+  subnet      = %[5]q
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		name,
+		subnet,
 	)
 }

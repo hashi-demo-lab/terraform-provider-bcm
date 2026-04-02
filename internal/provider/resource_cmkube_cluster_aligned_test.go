@@ -6,11 +6,13 @@
 package provider
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"regexp"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-testing/compare"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -669,6 +671,124 @@ func TestAccCMKubeCluster_aligned_validationInvalidName(t *testing.T) {
 					podNetworkUUID,
 				),
 				ExpectError: regexp.MustCompile(`must contain only`),
+			},
+		},
+	})
+}
+
+// =============================================================================
+// Acceptance Tests - Import (Dedicated)
+// =============================================================================
+
+// TestAccCMKubeCluster_aligned_import tests import state passthrough for aligned schema.
+func TestAccCMKubeCluster_aligned_import(t *testing.T) {
+	clusterName := generateShortTestName("imp")
+	etcdClusterName := generateShortTestName("etcd")
+
+	etcdClusterUUID := getOrCreateTestEtcdClusterUUID(t, etcdClusterName)
+	defer cleanupTestEtcdCluster(t, etcdClusterUUID)
+
+	internalNetworkUUID := getTestNetworkUUIDByIndex(t, 0)
+	serviceNetworkUUID := getTestNetworkUUIDByIndex(t, 1)
+	podNetworkUUID := getTestNetworkUUIDByIndex(t, 2)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheckCMKubeCluster(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMKubeClusterDestroy,
+		Steps: []resource.TestStep{
+			// Create the resource
+			{
+				Config: testAccCMKubeClusterAlignedConfig(clusterName, etcdClusterUUID, internalNetworkUUID, serviceNetworkUUID, podNetworkUUID),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmkube_cluster.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(clusterName),
+					),
+				},
+			},
+			// Import and verify all attributes match
+			{
+				ResourceName:      "bcm_cmkube_cluster.test",
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+		},
+	})
+}
+
+// =============================================================================
+// Acceptance Tests - Disappears
+// =============================================================================
+
+// kubeClusterDisappearsCheck is a custom StateCheck that deletes a kube cluster
+// via the BCM API to simulate external deletion (disappearance).
+type kubeClusterDisappearsCheck struct {
+	resourceAddress string
+}
+
+func (c kubeClusterDisappearsCheck) CheckState(ctx context.Context, req statecheck.CheckStateRequest, resp *statecheck.CheckStateResponse) {
+	// Find the resource in state by address
+	var uuid string
+	for _, r := range req.State.Values.RootModule.Resources {
+		if r.Address == c.resourceAddress {
+			var ok bool
+			uuid, ok = r.AttributeValues["uuid"].(string)
+			if !ok || uuid == "" {
+				resp.Error = fmt.Errorf("resource %s has no uuid attribute in state", c.resourceAddress)
+				return
+			}
+			break
+		}
+	}
+
+	if uuid == "" {
+		resp.Error = fmt.Errorf("resource %s not found in state", c.resourceAddress)
+		return
+	}
+
+	// Delete the kube cluster externally via BCM API
+	client := createTestBCMClient(&testing.T{})
+	_, err := client.CallJSONRPC(ctx, "cmkube", "removeKubeCluster", uuid, false)
+	if err != nil {
+		resp.Error = fmt.Errorf("failed to delete kube cluster %s via BCM API: %w", uuid, err)
+		return
+	}
+
+	// Wait for eventual consistency
+	time.Sleep(2 * time.Second)
+}
+
+// TestAccCMKubeCluster_aligned_disappears verifies that when a kube cluster is deleted
+// externally (outside Terraform), the next plan detects the disappearance.
+func TestAccCMKubeCluster_aligned_disappears(t *testing.T) {
+	clusterName := generateShortTestName("dis")
+	etcdClusterName := generateShortTestName("etcd")
+
+	etcdClusterUUID := getOrCreateTestEtcdClusterUUID(t, etcdClusterName)
+	defer cleanupTestEtcdCluster(t, etcdClusterUUID)
+
+	internalNetworkUUID := getTestNetworkUUIDByIndex(t, 0)
+	serviceNetworkUUID := getTestNetworkUUIDByIndex(t, 1)
+	podNetworkUUID := getTestNetworkUUIDByIndex(t, 2)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheckCMKubeCluster(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMKubeClusterDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccCMKubeClusterAlignedConfig(clusterName, etcdClusterUUID, internalNetworkUUID, serviceNetworkUUID, podNetworkUUID),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmkube_cluster.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(clusterName),
+					),
+					kubeClusterDisappearsCheck{resourceAddress: "bcm_cmkube_cluster.test"},
+				},
+				ExpectNonEmptyPlan: true,
 			},
 		},
 	})
