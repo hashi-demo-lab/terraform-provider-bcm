@@ -25,6 +25,31 @@ repos:
       - id: detect-private-key
         name: Detect private keys
 
+  # Pre-push hooks: catch build, lint, and doc generation issues before pushing
+  - repo: local
+    hooks:
+      - id: go-build
+        name: Go build
+        entry: go build ./...
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+      - id: go-vet
+        name: Go vet
+        entry: go vet ./...
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+      - id: go-generate-check
+        name: Check generated docs are up to date
+        entry: bash -c 'make generate && git diff --exit-code -- docs/ || (echo "docs/ out of date — run make generate and commit"; exit 1)'
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
   # # Vault Radar security scanning
   # - repo: local
   #   hooks:
