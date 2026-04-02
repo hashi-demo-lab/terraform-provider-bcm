@@ -1379,13 +1379,19 @@ func (r *CMDeviceDeviceResource) buildDeviceAPIEntityWithExisting(plan CMDeviceD
 		deviceMAC = plan.MAC.ValueString()
 	}
 
+	// Use plan's management_network if explicitly set, otherwise default to nil UUID
+	managementNetworkUUID := "00000000-0000-0000-0000-000000000000"
+	if !plan.ManagementNetwork.IsNull() && !plan.ManagementNetwork.IsUnknown() {
+		managementNetworkUUID = plan.ManagementNetwork.ValueString()
+	}
+
 	entity := map[string]interface{}{
 		"baseType":              "Device",
 		"childType":             "PhysicalNode",
 		"hostname":              plan.Hostname.ValueString(),
 		"mac":                   deviceMAC,
 		"category":              plan.Category.ValueString(),
-		"managementNetwork":     "00000000-0000-0000-0000-000000000000",
+		"managementNetwork":     managementNetworkUUID,
 		"modified":              true,
 		"to_be_removed":         false,
 		"revision":              "",

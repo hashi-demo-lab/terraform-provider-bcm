@@ -3184,3 +3184,222 @@ resource "bcm_cmdevice_device" "test" {
 		mac,
 	)
 }
+
+// ========================================
+// Management Network Pass-Through Tests
+// ========================================
+
+// TestAccCMDeviceDevice_ManagementNetworkPassThrough tests that management_network
+// set on the device resource is actually sent to the BCM API, not just preserved in state.
+// This catches the bug where the value was hardcoded to the zero UUID in the API entity.
+func TestAccCMDeviceDevice_ManagementNetworkPassThrough(t *testing.T) {
+	deviceName := generateUniqueTestName("tftest-device-mgmtnet")
+	categoryName := generateUniqueTestName("tftest-category-mgmtnet")
+	imageName := generateUniqueTestName("tftest-image-mgmtnet")
+	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
+	mac := generateUniqueMAC()
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+			testAccCMDeviceDevicePreCheck(t, deviceName)
+		},
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceDeviceDestroy,
+		Steps: []resource.TestStep{
+			// Step 1: Create device with explicit management_network.
+			{
+				Config: testAccCMDeviceDeviceResourceConfig_WithManagementNetwork(deviceName, categoryName, imageName, imagePath, mac),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("hostname"),
+						knownvalue.StringExact(deviceName),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("management_network"),
+						knownvalue.NotNull(),
+					),
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					// Verify the value in state matches the management network data source.
+					resource.TestCheckResourceAttrPair(
+						"bcm_cmdevice_device.test", "management_network",
+						"data.bcm_cmnet_networks.management", "networks.0.id",
+					),
+					// Verify BCM API actually received the management_network value.
+					testAccCheckDeviceManagementNetworkInBCM(deviceName),
+				),
+			},
+			// Step 2: Idempotency — re-apply should produce empty plan.
+			{
+				Config: testAccCMDeviceDeviceResourceConfig_WithManagementNetwork(deviceName, categoryName, imageName, imagePath, mac),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+		},
+	})
+}
+
+// TestAccCMDeviceDevice_ManagementNetworkOmitted tests that omitting management_network
+// results in the zero UUID being sent (default behavior) and null in state.
+func TestAccCMDeviceDevice_ManagementNetworkOmitted(t *testing.T) {
+	deviceName := generateUniqueTestName("tftest-device-nomgmt")
+	categoryName := generateUniqueTestName("tftest-category-nomgmt")
+	imageName := generateUniqueTestName("tftest-image-nomgmt")
+	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
+	mac := generateUniqueMAC()
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+			testAccCMDeviceDevicePreCheck(t, deviceName)
+		},
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceDeviceDestroy,
+		Steps: []resource.TestStep{
+			// Create device without management_network — should default gracefully.
+			{
+				Config: testAccCMDeviceDeviceResourceConfig_Basic(deviceName, categoryName, imageName, imagePath, mac),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("hostname"),
+						knownvalue.StringExact(deviceName),
+					),
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					// management_network should be empty/null in state (zero UUID mapped to null).
+					resource.TestCheckNoResourceAttr("bcm_cmdevice_device.test", "management_network"),
+				),
+			},
+			// Idempotency.
+			{
+				Config: testAccCMDeviceDeviceResourceConfig_Basic(deviceName, categoryName, imageName, imagePath, mac),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+		},
+	})
+}
+
+// testAccCheckDeviceManagementNetworkInBCM verifies via direct BCM API call that
+// the device's managementNetwork field is NOT the zero UUID (i.e., the plan value was sent).
+func testAccCheckDeviceManagementNetworkInBCM(deviceName string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		client := createTestBCMClient(&testing.T{})
+		ctx := context.Background()
+
+		body, err := client.CallJSONRPC(ctx, "cmdevice", "getDevice", deviceName)
+		if err != nil {
+			return fmt.Errorf("failed to get device %s from BCM API: %w", deviceName, err)
+		}
+
+		var deviceData map[string]interface{}
+		if err := json.Unmarshal(body, &deviceData); err != nil {
+			return fmt.Errorf("failed to parse device data: %w", err)
+		}
+
+		managementNetwork, ok := deviceData["managementNetwork"].(string)
+		if !ok {
+			return fmt.Errorf("managementNetwork field not found in BCM API response for device %s", deviceName)
+		}
+
+		if managementNetwork == "00000000-0000-0000-0000-000000000000" {
+			return fmt.Errorf(
+				"management_network was NOT sent to BCM API for device %s: "+
+					"BCM still has zero UUID (00000000-0000-0000-0000-000000000000). "+
+					"This indicates the plan value was not passed through to the API entity",
+				deviceName,
+			)
+		}
+
+		if managementNetwork == "" {
+			return fmt.Errorf("managementNetwork is empty string in BCM API for device %s", deviceName)
+		}
+
+		// Verify it matches what's in state.
+		rs, ok := s.RootModule().Resources["bcm_cmdevice_device.test"]
+		if !ok {
+			return fmt.Errorf("resource bcm_cmdevice_device.test not found in state")
+		}
+
+		stateValue := rs.Primary.Attributes["management_network"]
+		if stateValue != managementNetwork {
+			return fmt.Errorf(
+				"management_network mismatch: state has %q but BCM API has %q",
+				stateValue, managementNetwork,
+			)
+		}
+
+		return nil
+	}
+}
+
+// testAccCMDeviceDeviceResourceConfig_WithManagementNetwork returns device config
+// with explicit management_network set on the device resource.
+func testAccCMDeviceDeviceResourceConfig_WithManagementNetwork(hostname, categoryName, imageName, imagePath, mac string) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmnet_networks" "management" {
+  filter {
+    name_pattern = "managementnet"
+  }
+}
+
+resource "bcm_cmpart_softwareimage" "test" {
+  name = %[4]q
+  path = %[5]q
+}
+
+resource "bcm_cmdevice_category" "test" {
+  name               = %[6]q
+  management_network = data.bcm_cmnet_networks.management.networks[0].id
+
+  software_image_proxy = {
+    parent_software_image = bcm_cmpart_softwareimage.test.id
+  }
+
+  depends_on = [bcm_cmpart_softwareimage.test]
+}
+
+resource "bcm_cmdevice_device" "test" {
+  hostname           = %[7]q
+  category           = bcm_cmdevice_category.test.id
+  management_network = data.bcm_cmnet_networks.management.networks[0].id
+
+  interfaces {
+    name     = "eth0"
+    type     = "physical"
+    mac      = %[8]q
+    network  = data.bcm_cmnet_networks.management.networks[0].id
+    bootable = true
+    dhcp     = true
+  }
+
+  depends_on = [bcm_cmdevice_category.test]
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		imageName,
+		imagePath,
+		categoryName,
+		hostname,
+		mac,
+	)
+}
