@@ -713,6 +713,9 @@ func (r *CMUserUserResource) readUser(ctx context.Context, model *CMUserUserReso
 
 	// Use getUser(username) for direct lookup
 	body, err := r.Client.CallJSONRPC(ctx, "cmuser", "getUser", lookupName)
+	if string(body) == "null" {
+		return false
+	}
 	if err != nil {
 		lowerErr := strings.ToLower(err.Error())
 		if strings.Contains(lowerErr, "not found") || strings.Contains(lowerErr, "no such") {

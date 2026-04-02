@@ -1897,7 +1897,6 @@ func TestAccCMDeviceDevice_RolesRemove(t *testing.T) {
 	mac := generateUniqueMAC()
 
 	initialRoles := testAccCMDeviceDeviceSingleRoleSet(t)
-	emptyRoles := []string{}
 
 	// ID consistency tracking.
 	compareID := statecheck.CompareValue(compare.ValuesSame())
@@ -1925,14 +1924,14 @@ func TestAccCMDeviceDevice_RolesRemove(t *testing.T) {
 					),
 				},
 			},
-			// Remove all roles (explicit empty list).
+			// Omit roles from config. The provider preserves existing BCM roles when the attribute is unmanaged.
 			{
-				Config: testAccCMDeviceDeviceConfigWithRoles(deviceName, categoryName, imageName, imagePath, mac, emptyRoles),
+				Config: testAccCMDeviceDeviceConfigWithRoles(deviceName, categoryName, imageName, imagePath, mac, nil),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_device.test",
 						tfjsonpath.New("roles"),
-						knownvalue.SetSizeExact(0),
+						knownvalue.SetSizeExact(1),
 					),
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_device.test",

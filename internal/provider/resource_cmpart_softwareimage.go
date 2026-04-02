@@ -754,6 +754,9 @@ func (r *CMPartSoftwareImageResource) readSoftwareImage(ctx context.Context, mod
 
 	// Use efficient getSoftwareImage(name) API for direct lookup
 	body, err := r.Client.CallJSONRPC(ctx, "CMPart", "getSoftwareImage", lookupName)
+	if string(body) == "null" {
+		return false
+	}
 	if err != nil {
 		diags.AddError(
 			"Software Image Read Failed",

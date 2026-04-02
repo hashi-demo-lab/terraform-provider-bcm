@@ -571,6 +571,12 @@ func parseErrorResponse(statusCode int, body []byte) error {
 		return nil // Success
 	}
 
+	// BCM sometimes returns literal JSON null for absent entities.
+	// Treat that as a valid response so callers can decide whether it means "not found".
+	if jsonData == nil {
+		return nil
+	}
+
 	// Unknown JSON type
 	return fmt.Errorf("unexpected JSON type in response: %s", limitString(string(body), 500))
 }

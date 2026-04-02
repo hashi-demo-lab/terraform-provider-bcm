@@ -1560,8 +1560,18 @@ func (r *CMDeviceDeviceResource) buildKubernetesRolesForEntity(ctx context.Conte
 		}
 	}
 
+	// If the plan explicitly clears all legacy and Kubernetes roles, preserve that empty assignment.
+	legacyRolesExplicitlyCleared := false
+	if !plan.Roles.IsNull() && !plan.Roles.IsUnknown() {
+		var plannedRoles []string
+		if diags := plan.Roles.ElementsAs(ctx, &plannedRoles, false); !diags.HasError() && len(plannedRoles) == 0 && len(kubeletRoles) == 0 && len(etcdHostRoles) == 0 {
+			legacyRolesExplicitlyCleared = true
+			entity["roles"] = []interface{}{}
+		}
+	}
+
 	// If no Kubernetes roles defined and no existing roles, nothing to do
-	if len(kubeletRoles) == 0 && len(etcdHostRoles) == 0 && len(existingRoles) == 0 {
+	if !legacyRolesExplicitlyCleared && len(kubeletRoles) == 0 && len(etcdHostRoles) == 0 && len(existingRoles) == 0 {
 		return nil
 	}
 
@@ -1577,11 +1587,17 @@ func (r *CMDeviceDeviceResource) buildKubernetesRolesForEntity(ctx context.Conte
 
 	// Merge: existing legacy roles + new Kubernetes roles
 	// mergeDeviceRoles preserves non-Kubernetes roles and replaces Kubernetes roles
-	mergedRoles := mergeDeviceRoles(
-		append(existingRoles, currentRoles...),
-		kubeletRoles,
-		etcdHostRoles,
-	)
+	mergedRoles := []map[string]any{}
+	if !legacyRolesExplicitlyCleared {
+		mergedRoles = mergeDeviceRoles(
+			append(existingRoles, currentRoles...),
+			kubeletRoles,
+			etcdHostRoles,
+		)
+	} else {
+		mergedRoles = append(mergedRoles, kubeletRoles...)
+		mergedRoles = append(mergedRoles, etcdHostRoles...)
+	}
 
 	// Convert to interface{} slice for JSON marshaling
 	rolesInterface := make([]interface{}, len(mergedRoles))
