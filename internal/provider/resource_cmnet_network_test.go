@@ -532,6 +532,51 @@ func TestAccCMNetNetwork_Disappears(t *testing.T) {
 }
 
 // =============================================================================
+// Import Test (Dedicated)
+// =============================================================================
+
+// TestAccCMNetNetwork_Import verifies that importing an existing network by UUID
+// produces state that matches a freshly applied configuration.
+func TestAccCMNetNetwork_Import(t *testing.T) {
+	networkName := generateUniqueTestName("tftest-net-imp")
+
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMNetNetworkDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccCMNetNetworkConfigBasic(networkName),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmnet_network.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(networkName),
+					),
+					compareID.AddStateValue(
+						"bcm_cmnet_network.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+			{
+				ResourceName:      "bcm_cmnet_network.test",
+				ImportState:       true,
+				ImportStateVerify: true,
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmnet_network.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+		},
+	})
+}
+
+// =============================================================================
 // Validation Tests
 // =============================================================================
 

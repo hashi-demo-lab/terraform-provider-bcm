@@ -4654,3 +4654,69 @@ resource "bcm_cmdevice_category" "test" {
 		name,
 	)
 }
+
+// =============================================================================
+// Disappears Test
+// =============================================================================
+
+// categoryDisappearsCheck implements statecheck.StateCheck to simulate external
+// deletion of a category resource via the BCM API during a test step.
+type categoryDisappearsCheck struct {
+	resourceAddress string
+}
+
+func (c categoryDisappearsCheck) CheckState(ctx context.Context, req statecheck.CheckStateRequest, resp *statecheck.CheckStateResponse) {
+	var uuid string
+	for _, r := range req.State.Values.RootModule.Resources {
+		if r.Address == c.resourceAddress {
+			var ok bool
+			uuid, ok = r.AttributeValues["uuid"].(string)
+			if !ok || uuid == "" {
+				resp.Error = fmt.Errorf("resource %s has no uuid attribute in state", c.resourceAddress)
+				return
+			}
+			break
+		}
+	}
+
+	if uuid == "" {
+		resp.Error = fmt.Errorf("resource %s not found in state", c.resourceAddress)
+		return
+	}
+
+	client := createTestBCMClient(&testing.T{})
+	_, err := client.CallJSONRPC(ctx, "cmdevice", "removeCategory", uuid, true)
+	if err != nil {
+		resp.Error = fmt.Errorf("failed to delete category %s via BCM API: %w", uuid, err)
+		return
+	}
+
+	time.Sleep(TestEventualConsistencyDelay)
+}
+
+// TestAccCMDeviceCategory_Disappears verifies that when a category is deleted
+// externally (outside Terraform), the next plan detects the disappearance.
+func TestAccCMDeviceCategory_Disappears(t *testing.T) {
+	categoryName := generateUniqueTestName("tftest-cat-disap")
+	testAccCMDeviceCategoryPreCheck(t, categoryName)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceCategoryDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccCMDeviceCategoryResourceConfig(categoryName),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(categoryName),
+					),
+					categoryDisappearsCheck{resourceAddress: "bcm_cmdevice_category.test"},
+				},
+				ExpectNonEmptyPlan: true,
+			},
+		},
+	})
+}

@@ -1864,3 +1864,71 @@ resource "bcm_cmpart_softwareimage" "test" {
 		path,
 	)
 }
+
+// =============================================================================
+// Disappears Test
+// =============================================================================
+
+// softwareImageDisappearsCheck implements statecheck.StateCheck to simulate
+// external deletion of a software image via the BCM API during a test step.
+type softwareImageDisappearsCheck struct {
+	resourceAddress string
+}
+
+func (c softwareImageDisappearsCheck) CheckState(ctx context.Context, req statecheck.CheckStateRequest, resp *statecheck.CheckStateResponse) {
+	var imageUUID string
+	for _, r := range req.State.Values.RootModule.Resources {
+		if r.Address == c.resourceAddress {
+			var ok bool
+			imageUUID, ok = r.AttributeValues["uuid"].(string)
+			if !ok || imageUUID == "" {
+				resp.Error = fmt.Errorf("resource %s has no uuid attribute in state", c.resourceAddress)
+				return
+			}
+			break
+		}
+	}
+
+	if imageUUID == "" {
+		resp.Error = fmt.Errorf("resource %s not found in state", c.resourceAddress)
+		return
+	}
+
+	client := createTestBCMClient(&testing.T{})
+	_, err := client.CallJSONRPC(ctx, "CMPart", "removeSoftwareImage", imageUUID, false, false, false)
+	if err != nil {
+		resp.Error = fmt.Errorf("failed to delete software image %s via BCM API: %w", imageUUID, err)
+		return
+	}
+
+	time.Sleep(TestEventualConsistencyDelay)
+}
+
+// TestAccCMPartSoftwareImage_Disappears verifies that when a software image is
+// deleted externally (outside Terraform), the next plan detects the disappearance.
+func TestAccCMPartSoftwareImage_Disappears(t *testing.T) {
+	imageName := generateUniqueTestName("tftest-img-disap")
+	imagePath := fmt.Sprintf("/cm/images/%s", imageName)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccCMPartSoftwareImagePreCheck(t, imageName)
+		},
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMPartSoftwareImageDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccCMPartSoftwareImageResourceConfig_Basic(imageName, imagePath),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(imageName),
+					),
+					softwareImageDisappearsCheck{resourceAddress: "bcm_cmpart_softwareimage.test"},
+				},
+				ExpectNonEmptyPlan: true,
+			},
+		},
+	})
+}
