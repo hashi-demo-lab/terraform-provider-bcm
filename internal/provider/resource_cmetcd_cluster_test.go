@@ -444,6 +444,7 @@ func TestAccCMEtcdCluster_validationInvalidName(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheckCMEtcdCluster(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMEtcdClusterDestroy,
 		Steps: []resource.TestStep{
 			{
 				Config:      testAccCMEtcdClusterResourceConfig("Invalid Name!"),
@@ -460,6 +461,7 @@ func TestAccCMEtcdCluster_validationHeartbeatRange(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheckCMEtcdCluster(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMEtcdClusterDestroy,
 		Steps: []resource.TestStep{
 			{
 				// Heartbeat too low (min 50ms)
@@ -477,6 +479,7 @@ func TestAccCMEtcdCluster_validationElectionTimeoutRange(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheckCMEtcdCluster(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMEtcdClusterDestroy,
 		Steps: []resource.TestStep{
 			{
 				// Election timeout too low (min 500ms)

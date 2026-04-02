@@ -795,6 +795,7 @@ func TestAccCMUserUser_ValidationEmptyUsername(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMUserUserDestroy,
 		Steps: []resource.TestStep{
 			{
 				Config:      testAccCMUserUserConfig("", "TestPass123!"),
@@ -810,6 +811,7 @@ func TestAccCMUserUser_ValidationInvalidUsernameStartsWithDigit(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMUserUserDestroy,
 		Steps: []resource.TestStep{
 			{
 				Config:      testAccCMUserUserConfig("1baduser", "TestPass123!"),
@@ -825,6 +827,7 @@ func TestAccCMUserUser_ValidationInvalidShellPath(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMUserUserDestroy,
 		Steps: []resource.TestStep{
 			{
 				Config:      testAccCMUserUserConfigWithShell(generateUniqueUnixUsername(), "TestPass123!", "relative/path"),
@@ -840,6 +843,7 @@ func TestAccCMUserUser_ValidationInvalidHomeDirectory(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMUserUserDestroy,
 		Steps: []resource.TestStep{
 			{
 				Config:      testAccCMUserUserConfigWithHomeDir(generateUniqueUnixUsername(), "TestPass123!", "noslash/home"),

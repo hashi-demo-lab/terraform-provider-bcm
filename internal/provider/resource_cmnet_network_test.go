@@ -543,6 +543,7 @@ func TestAccCMNetNetwork_ValidationInvalidSubnetCIDR(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMNetNetworkDestroy,
 		Steps: []resource.TestStep{
 			{
 				Config:      testAccCMNetNetworkConfigWithSubnet(networkName, "not-a-cidr"),
@@ -560,6 +561,7 @@ func TestAccCMNetNetwork_ValidationInvalidSubnetFormat(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMNetNetworkDestroy,
 		Steps: []resource.TestStep{
 			{
 				Config:      testAccCMNetNetworkConfigWithSubnet(networkName, "192.168.1.0"),

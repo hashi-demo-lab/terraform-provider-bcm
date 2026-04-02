@@ -661,6 +661,7 @@ func TestAccCMKubeCluster_aligned_validationInvalidName(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheckCMKubeCluster(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMKubeClusterDestroy,
 		Steps: []resource.TestStep{
 			{
 				Config: testAccCMKubeClusterAlignedConfig(
