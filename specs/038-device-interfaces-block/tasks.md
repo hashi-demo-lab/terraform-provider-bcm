@@ -229,6 +229,8 @@
 
 ---
 
+> **Post-Implementation Note:** Phase 9 (Backward Compatibility) was not implemented. The `interfaces` block is mandatory -- there is no legacy `mac`-only mode. Tasks T059-T063 are N/A.
+
 ## Phase 9: Backward Compatibility
 
 **Purpose**: Ensure existing configurations without interfaces block continue to work

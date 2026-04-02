@@ -1,5 +1,13 @@
 # Phase 0 Research: Device Interfaces Block
 
+> **Post-Implementation Note (2026-04):** The code described below reflects the state at time of research. Key changes since implementation:
+> - `buildDeviceAPIEntity` -> replaced by `buildDeviceAPIEntityWithExisting` (accepts plan interfaces, existing state)
+> - Hardcoded single interface with UUID `00000000-0000-0000-0000-000000000001` -> removed; interfaces built from plan's `interfaces` block via `buildInterfacesAPIArray`
+> - Interface UUIDs are client-generated via `uuid.New().String()`, not hardcoded
+> - `management_network` defaults to zero UUID but is overridden by plan value when explicitly set
+> - `getProvisioningInterfaceUUID` helper was implemented then removed; provisioning interface is now derived inline from the built interfaces array (first bootable, fallback to first)
+> - Legacy mode (`mac` without `interfaces` block) was not implemented; `interfaces` is mandatory with `SizeAtLeast(1)`
+
 **Feature**: 038-device-interfaces-block
 **Date**: 2025-11-25
 **Status**: COMPLETE

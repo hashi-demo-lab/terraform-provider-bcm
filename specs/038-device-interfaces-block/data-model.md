@@ -102,7 +102,7 @@ type CMDeviceDeviceResourceModel struct {
     ID       types.String `tfsdk:"id"`       // Computed, same as UUID
     UUID     types.String `tfsdk:"uuid"`     // Computed, BCM-assigned
     Hostname types.String `tfsdk:"hostname"` // Required, RFC 1123 validation
-    MAC      types.String `tfsdk:"mac"`      // Required (or interfaces block), MAC address validation
+    MAC      types.String `tfsdk:"mac"`      // Optional+Computed, derived from first interface
 
     // References (required)
     Category          types.String `tfsdk:"category"`           // Required, UUID reference
@@ -506,6 +506,8 @@ The order of interfaces in the `interfaces` block is significant:
 ## Backward Compatibility
 
 ### Legacy Mode Detection
+
+> **Post-Implementation Note:** Legacy mode was not implemented. The `interfaces` block is mandatory (`SizeAtLeast(1)` validator). The `isLegacyMode` function described below does not exist in the codebase. The `mac` field is `Optional+Computed`, derived from the first interface.
 
 ```go
 // isLegacyMode returns true if device uses mac/management_network instead of interfaces block.
