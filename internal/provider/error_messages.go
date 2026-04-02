@@ -30,11 +30,11 @@ func BuildDependencyError(resourceType, resourceName, dependentType string, iden
 	shown := minInt(count, maxShow)
 
 	for i := 0; i < shown; i++ {
-		dependentList.WriteString(fmt.Sprintf("  - %s (uuid: %s)\n", identifiers[i].Name, identifiers[i].UUID))
+		fmt.Fprintf(&dependentList, "  - %s (uuid: %s)\n", identifiers[i].Name, identifiers[i].UUID)
 	}
 
 	if count > maxShow {
-		dependentList.WriteString(fmt.Sprintf("  ... (showing first %d of %d)\n", maxShow, count))
+		fmt.Fprintf(&dependentList, "  ... (showing first %d of %d)\n", maxShow, count)
 	}
 
 	// Build resolution options based on resource type
