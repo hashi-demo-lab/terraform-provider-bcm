@@ -239,6 +239,11 @@ func TestAccCMNetNetwork_Update(t *testing.T) {
 						tfjsonpath.New("notes"),
 						knownvalue.StringExact("Updated notes"),
 					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmnet_network.test",
+						tfjsonpath.New("domain_name"),
+						knownvalue.StringExact("cluster.local"),
+					),
 					compareID.AddStateValue(
 						"bcm_cmnet_network.test",
 						tfjsonpath.New("id"),
@@ -284,6 +289,16 @@ func TestAccCMNetNetwork_DriftDetection(t *testing.T) {
 						"bcm_cmnet_network.test",
 						tfjsonpath.New("notes"),
 						knownvalue.StringExact("Initial notes"),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmnet_network.test",
+						tfjsonpath.New("id"),
+						knownvalue.NotNull(),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmnet_network.test",
+						tfjsonpath.New("uuid"),
+						knownvalue.NotNull(),
 					),
 					compareID.AddStateValue(
 						"bcm_cmnet_network.test",

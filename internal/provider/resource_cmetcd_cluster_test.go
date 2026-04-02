@@ -218,6 +218,11 @@ func TestAccCMEtcdCluster_basic(t *testing.T) {
 					),
 					statecheck.ExpectKnownValue(
 						"bcm_cmetcd_cluster.test",
+						tfjsonpath.New("id"),
+						knownvalue.NotNull(),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmetcd_cluster.test",
 						tfjsonpath.New("uuid"),
 						knownvalue.NotNull(),
 					),
@@ -275,6 +280,16 @@ func TestAccCMEtcdCluster_update(t *testing.T) {
 						"bcm_cmetcd_cluster.test",
 						tfjsonpath.New("name"),
 						knownvalue.StringExact(clusterName),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmetcd_cluster.test",
+						tfjsonpath.New("id"),
+						knownvalue.NotNull(),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmetcd_cluster.test",
+						tfjsonpath.New("uuid"),
+						knownvalue.NotNull(),
 					),
 					statecheck.ExpectKnownValue(
 						"bcm_cmetcd_cluster.test",
@@ -562,6 +577,11 @@ func TestAccCMEtcdCluster_withOptions(t *testing.T) {
 						"bcm_cmetcd_cluster.test",
 						tfjsonpath.New("name"),
 						knownvalue.StringExact(clusterName),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmetcd_cluster.test",
+						tfjsonpath.New("options"),
+						knownvalue.NotNull(),
 					),
 					statecheck.ExpectKnownValue(
 						"bcm_cmetcd_cluster.test",
