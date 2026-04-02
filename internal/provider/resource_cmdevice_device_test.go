@@ -396,6 +396,11 @@ func TestAccCMDeviceDeviceResource_Basic(t *testing.T) {
 			// Verify ID consistency after Import.
 			{
 				Config: testAccCMDeviceDeviceResourceConfig_Basic(deviceName, categoryName, imageName, imagePath, mac),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
 				ConfigStateChecks: []statecheck.StateCheck{
 					compareID.AddStateValue(
 						"bcm_cmdevice_device.test",
@@ -585,6 +590,11 @@ func TestAccCMDeviceDevice_DriftNotes(t *testing.T) {
 			// Terraform restores desired state.
 			{
 				Config: testAccCMDeviceDeviceResourceConfig_Drift(deviceName, categoryName, imageName, imagePath, mac),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_device.test",
@@ -1088,6 +1098,11 @@ func TestAccCMDeviceDevice_Drift(t *testing.T) {
 			// Step 3: Restore desired state (Terraform applies config to fix drift).
 			{
 				Config: testAccCMDeviceDeviceResourceConfig_Drift(initialHostname, categoryName, imageName, imagePath, mac),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
 				ConfigStateChecks: []statecheck.StateCheck{
 					// Verify drift was corrected and state matches config.
 					statecheck.ExpectKnownValue(
@@ -2016,6 +2031,11 @@ func TestAccCMDeviceDevice_RolesDrift(t *testing.T) {
 			// Terraform restores desired state.
 			{
 				Config: testAccCMDeviceDeviceConfigWithRoles(deviceName, categoryName, imageName, imagePath, mac, roles),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_device.test",
@@ -2371,6 +2391,11 @@ func TestAccCMDeviceDevice_RolesDriftByName(t *testing.T) {
 			// Terraform restores desired state.
 			{
 				Config: testAccCMDeviceDeviceConfigWithRoleNames(deviceName, categoryName, imageName, imagePath, mac, roleNames),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_device.test",
@@ -3534,6 +3559,11 @@ func TestAccCMDeviceDevice_ManagementNetworkDrift(t *testing.T) {
 			// Step 3: Verify Terraform restored the configured value.
 			{
 				Config: testAccCMDeviceDeviceResourceConfig_WithManagementNetwork(deviceName, categoryName, imageName, imagePath, mac),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_device.test",
