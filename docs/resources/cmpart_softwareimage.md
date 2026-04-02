@@ -30,11 +30,8 @@ data "bcm_cmpart_softwareimages" "available" {}
 # Production pattern: Use data source lookup instead of hardcoded UUIDs
 # This makes configurations portable across environments
 locals {
-  base_image_name = "default-image"
-  base_image_id = [
-    for img in data.bcm_cmpart_softwareimages.available.images :
-    img.id if img.name == local.base_image_name
-  ][0]
+  base_image_id   = data.bcm_cmpart_softwareimages.available.images[0].id
+  base_image_name = data.bcm_cmpart_softwareimages.available.images[0].name
 }
 
 # Basic example: Clone and customize an image
@@ -93,11 +90,7 @@ data "bcm_cmpart_softwareimages" "all" {}
 
 # Production pattern: Dynamic base image lookup for portability
 locals {
-  base_image_name = "default-image"
-  base_image_uuid = [
-    for img in data.bcm_cmpart_softwareimages.all.images :
-    img.id if img.name == local.base_image_name
-  ][0]
+  base_image_uuid = data.bcm_cmpart_softwareimages.all.images[0].id
 
   # Environment-specific configuration
   environment  = "production"
@@ -153,7 +146,7 @@ resource "bcm_cmpart_softwareimage" "gpu_compute" {
     - NVIDIA GPU drivers with DRM/UVM support
     - Mellanox ConnectX networking with RoCE
     - InfiniBand support
-    - Cloned from: ${local.base_image_name}
+    - Cloned from: base image
     - Environment: ${local.environment}
   EOT
 
@@ -210,7 +203,7 @@ output "gpu_image_details" {
     id             = bcm_cmpart_softwareimage.gpu_compute.id
     name           = bcm_cmpart_softwareimage.gpu_compute.name
     path           = bcm_cmpart_softwareimage.gpu_compute.path
-    cloned_from    = local.base_image_name
+    cloned_from    = data.bcm_cmpart_softwareimages.all.images[0].name
     kernel_version = bcm_cmpart_softwareimage.gpu_compute.kernel_version
     module_count   = length(bcm_cmpart_softwareimage.gpu_compute.modules)
     modules        = [for mod in bcm_cmpart_softwareimage.gpu_compute.modules : mod.name]
@@ -261,10 +254,7 @@ output "image_assignment_map" {
 data "bcm_cmpart_softwareimages" "base" {}
 
 locals {
-  base_image_id = [
-    for img in data.bcm_cmpart_softwareimages.base.images :
-    img.id if img.name == "default-image"
-  ][0]
+  base_image_id = data.bcm_cmpart_softwareimages.base.images[0].id
 }
 
 # Correct: Modules with empty parameters field
@@ -410,10 +400,7 @@ output "module_parameter_rules" {
 data "bcm_cmpart_softwareimages" "base" {}
 
 locals {
-  base_image_id = [
-    for img in data.bcm_cmpart_softwareimages.base.images :
-    img.id if img.name == "default-image"
-  ][0]
+  base_image_id = data.bcm_cmpart_softwareimages.base.images[0].id
 
   # Version management locals
   image_version = "123" # Could be from variable or data source
@@ -601,10 +588,7 @@ output "revision_syntax_rules" {
 data "bcm_cmpart_softwareimages" "base" {}
 
 locals {
-  base_image_id = [
-    for img in data.bcm_cmpart_softwareimages.base.images :
-    img.id if img.name == "default-image"
-  ][0]
+  base_image_id = data.bcm_cmpart_softwareimages.base.images[0].id
 }
 
 # Step 1: Create image WITHOUT kernel_version

@@ -66,7 +66,7 @@ resource "bcm_cmdevice_device" "compute_custom" {
   }
 
   # Boot configuration
-  boot_loader       = "pxelinux"
+  boot_loader       = "PXELINUX"
   kernel_parameters = "console=ttyS0,115200 net.ifnames=0 biosdevname=0"
 
   notes = "Compute node with custom kernel parameters"
@@ -94,7 +94,7 @@ resource "bcm_cmdevice_device" "compute_ipmi" {
   default_gateway_metric = 100
 
   # Boot configuration
-  boot_loader       = "pxelinux"
+  boot_loader       = "PXELINUX"
   kernel_parameters = "console=ttyS0,115200 ipmi_si.type=kcs"
 
   # Hardware identifiers (typically auto-discovered from BMC)
@@ -145,7 +145,7 @@ resource "bcm_cmdevice_device" "gpu_node" {
   default_gateway_metric = 50
 
   # Boot configuration with GPU-specific parameters
-  boot_loader       = "pxelinux"
+  boot_loader       = "PXELINUX"
   kernel_parameters = "console=ttyS0,115200 nouveau.modeset=0 nvidia-drm.modeset=1"
 
   # Hardware identifiers
@@ -201,7 +201,7 @@ resource "bcm_cmdevice_device" "storage_node" {
   default_gateway_metric = 100
 
   # Boot and partition configuration
-  boot_loader       = "pxelinux"
+  boot_loader       = "PXELINUX"
   kernel_parameters = "console=ttyS0,115200"
 
   # Hardware identifiers
@@ -639,7 +639,7 @@ resource "bcm_cmdevice_device" "ipmi" {
   default_gateway_metric = 100
 
   # Boot configuration
-  boot_loader       = "pxelinux"
+  boot_loader       = "PXELINUX"
   kernel_parameters = "console=ttyS0,115200 ipmi_si.type=kcs"
 
   # Hardware identifiers (typically auto-discovered from BMC)

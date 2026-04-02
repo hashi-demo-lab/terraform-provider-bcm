@@ -13,11 +13,8 @@ data "bcm_cmpart_softwareimages" "available" {}
 # Production pattern: Use data source lookup instead of hardcoded UUIDs
 # This makes configurations portable across environments
 locals {
-  base_image_name = "default-image"
-  base_image_id = [
-    for img in data.bcm_cmpart_softwareimages.available.images :
-    img.id if img.name == local.base_image_name
-  ][0]
+  base_image_id   = data.bcm_cmpart_softwareimages.available.images[0].id
+  base_image_name = data.bcm_cmpart_softwareimages.available.images[0].name
 }
 
 # Basic example: Clone and customize an image

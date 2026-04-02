@@ -463,6 +463,18 @@ discover_examples() {
     local resources_dir="$examples_dir/resources"
     if [ -d "$resources_dir" ]; then
         while IFS= read -r -d '' tf_file; do
+            local tf_basename
+            tf_basename=$(basename "$tf_file")
+            local tf_dirname
+            tf_dirname=$(basename "$(dirname "$tf_file")")
+
+            # Exclude bcm_cmkube_cluster advanced examples that require actual
+            # cluster nodes which won't exist in a CI test environment
+            if [ "$tf_dirname" = "bcm_cmkube_cluster" ] && { [ "$tf_basename" = "advanced.tf" ] || [ "$tf_basename" = "p3-features.tf" ]; }; then
+                log_debug "Excluding $tf_dirname/$tf_basename (requires cluster nodes)"
+                continue
+            fi
+
             resource_examples+=("$tf_file")
         done < <(find "$resources_dir" -mindepth 2 -maxdepth 2 -name "*.tf" -print0)
     fi
@@ -537,6 +549,15 @@ EOF
     local error_output=""
     local failed_phase=""
 
+    # Detect import-only examples - these can only be validated, not planned/applied,
+    # because they reference resources that must be imported first.
+    # import_and_recategorize.tf is excluded — it's self-contained and fully testable.
+    local is_import_example=false
+    if [[ "$file_name" == import.tf ]]; then
+        is_import_example=true
+        log_debug "  Import-only example detected - validate-only mode"
+    fi
+
     # Run terraform init (skip if using dev_overrides)
     if [ "$USE_DEV_OVERRIDES" = true ]; then
         log_debug "  ├─ terraform init (skipped - using dev_overrides)"
@@ -555,6 +576,40 @@ EOF
             failed_phase="terraform validate"
             test_passed=false
         fi
+    fi
+
+    # Import examples: skip plan/apply/destroy (validate-only)
+    if [ "$is_import_example" = true ]; then
+        cd "$REPO_ROOT"
+        rm -rf "$temp_dir"
+
+        local test_end
+        test_end=$(date +%s)
+        local test_time=$((test_end - test_start))
+
+        if [ "$test_passed" = true ]; then
+            log_pass "[PASS] ✓ $example_name - validate-only (import example) (${test_time}s)"
+            PASSED_COUNT=$((PASSED_COUNT + 1))
+        else
+            log_fail "[FAIL] ✗ $example_name - validate-only (import example) (${test_time}s)"
+            log_error "       Failed at: $failed_phase"
+            log_error "       Example: $example_file"
+            if [ "$VERBOSE" = true ]; then
+                log_error "       Full output:"
+                echo "$error_output" | while IFS= read -r line; do
+                    log_error "         $line"
+                done
+            else
+                log_error "       Error:"
+                echo "$error_output" | head -10 | while IFS= read -r line; do
+                    log_error "         $line"
+                done
+                log_error "       Run with --verbose for full output"
+            fi
+            FAILED_COUNT=$((FAILED_COUNT + 1))
+            FAILED_EXAMPLES+=("$example_name")
+        fi
+        return $( [ "$test_passed" = true ] && echo 0 || echo 1 )
     fi
 
     # Run terraform plan
@@ -672,6 +727,13 @@ EOF
     local test_passed=true
     local error_output=""
 
+    # Detect import-only examples - validate-only mode
+    # import_and_recategorize.tf is excluded — it's self-contained and fully testable.
+    local is_import_example=false
+    if [[ "$file_name" == import.tf ]]; then
+        is_import_example=true
+    fi
+
     # Run terraform init (skip if using dev_overrides)
     if [ "$USE_DEV_OVERRIDES" != true ]; then
         if ! error_output=$(terraform init -backend=false 2>&1); then
@@ -686,6 +748,16 @@ EOF
             echo "FAIL|$example_name|terraform validate failed: $error_output" > "$result_file"
             test_passed=false
         fi
+    fi
+
+    # Import examples: skip plan (validate-only)
+    if [ "$is_import_example" = true ]; then
+        cd "$REPO_ROOT"
+        rm -rf "$temp_dir"
+        if [ "$test_passed" = true ]; then
+            echo "PASS|$example_name|validate-only (import example)" > "$result_file"
+        fi
+        return
     fi
 
     # Run terraform plan
