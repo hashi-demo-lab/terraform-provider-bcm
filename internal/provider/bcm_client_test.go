@@ -71,6 +71,7 @@ func TestNewBCMClient_Success(t *testing.T) {
 	}
 	if client == nil {
 		t.Fatal("Expected non-nil client")
+		return
 	}
 	if client.HTTPClient == nil {
 		t.Fatal("Expected non-nil HTTP client")

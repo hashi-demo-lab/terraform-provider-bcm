@@ -204,9 +204,6 @@ func TestAccCMUserUsersDataSource_FilterManagedUser(t *testing.T) {
 				Config: testAccCMUserUsersDataSourceConfigManagedUser(
 					username,
 					unixID,
-					1000,
-					homeDirectory,
-					shell,
 					fmt.Sprintf("%s*", username),
 					"",
 					"",
@@ -258,9 +255,6 @@ func TestAccCMUserUsersDataSource_FilterManagedUser(t *testing.T) {
 				Config: testAccCMUserUsersDataSourceConfigManagedUser(
 					username,
 					unixID,
-					1000,
-					homeDirectory,
-					shell,
 					fmt.Sprintf("%s*", username),
 					groupIDString,
 					"",
@@ -287,9 +281,6 @@ func TestAccCMUserUsersDataSource_FilterManagedUser(t *testing.T) {
 				Config: testAccCMUserUsersDataSourceConfigManagedUser(
 					username,
 					unixID,
-					1000,
-					homeDirectory,
-					shell,
 					fmt.Sprintf("%s*", username),
 					unixIDString,
 					"",
@@ -306,9 +297,6 @@ func TestAccCMUserUsersDataSource_FilterManagedUser(t *testing.T) {
 				Config: testAccCMUserUsersDataSourceConfigManagedUser(
 					username,
 					unixID,
-					1000,
-					homeDirectory,
-					shell,
 					"",
 					"",
 					unixIDString,
@@ -466,8 +454,11 @@ data "bcm_cmuser_users" "test" {
 	)
 }
 
-func testAccCMUserUsersDataSourceConfigManagedUser(username string, unixID, groupID int64, homeDirectory, shell, usernamePattern, groupIDFilter, userID string) string {
+func testAccCMUserUsersDataSourceConfigManagedUser(username string, unixID int64, usernamePattern, groupIDFilter, userID string) string {
 	password := "TestPass123!"
+	groupID := int64(1000)
+	homeDirectory := fmt.Sprintf("/home/%s-ds", username)
+	shell := "/bin/zsh"
 	filterConfig := ""
 	if usernamePattern != "" {
 		filterConfig += fmt.Sprintf("  username_pattern = %q\n", usernamePattern)
