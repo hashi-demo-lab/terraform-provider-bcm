@@ -596,8 +596,8 @@ func (r *CMDeviceDeviceResource) Create(ctx context.Context, req resource.Create
 	if err := r.lookupAndBuildRolesForEntity(ctx, plan, deviceEntity); err != nil {
 		resp.Diagnostics.AddError(
 			"Error Looking Up Roles",
-			fmt.Sprintf("Could not resolve role UUIDs for device '%s': %s\n\n"+
-				"Ensure the role UUIDs exist in the cluster. You can find available roles using "+
+			fmt.Sprintf("Could not resolve roles for device '%s': %s\n\n"+
+				"Ensure the role names exist in the cluster. You can find available roles using "+
 				"the bcm_cmdevice_roles data source.", plan.Hostname.ValueString(), err.Error()),
 		)
 		return
@@ -1127,8 +1127,8 @@ func (r *CMDeviceDeviceResource) Update(ctx context.Context, req resource.Update
 	if err := r.lookupAndBuildRolesForEntity(ctx, plan, deviceEntity); err != nil {
 		resp.Diagnostics.AddError(
 			"Error Looking Up Roles",
-			fmt.Sprintf("Could not resolve role UUIDs for device '%s': %s\n\n"+
-				"Ensure the role UUIDs exist in the cluster. You can find available roles using "+
+			fmt.Sprintf("Could not resolve roles for device '%s': %s\n\n"+
+				"Ensure the role names exist in the cluster. You can find available roles using "+
 				"the bcm_cmdevice_roles data source.", plan.Hostname.ValueString(), err.Error()),
 		)
 		return

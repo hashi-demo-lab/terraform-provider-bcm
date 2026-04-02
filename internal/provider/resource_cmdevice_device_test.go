@@ -1520,8 +1520,18 @@ resource "bcm_cmdevice_device" "test" {
 	)
 }
 
+// testAccCMDeviceDeviceSingleRoleSet returns a role set that validates for generic test devices.
+func testAccCMDeviceDeviceSingleRoleSet() []string {
+	return []string{"storage"}
+}
+
+// testAccCMDeviceDeviceMultiRoleSet returns a cluster-valid two-role set for generic test devices.
+func testAccCMDeviceDeviceMultiRoleSet() []string {
+	return []string{"boot", "storage"}
+}
+
 // TestAccCMDeviceDevice_RolesCreate tests creating a device with a role.
-// Uses the "boot" role which is commonly available in BCM clusters.
+// Uses a role set that validates for generic test devices in BCM.
 func TestAccCMDeviceDevice_RolesCreate(t *testing.T) {
 	deviceName := generateUniqueTestName("tftest-device-roles")
 	categoryName := generateUniqueTestName("tftest-category-roles")
@@ -1529,8 +1539,7 @@ func TestAccCMDeviceDevice_RolesCreate(t *testing.T) {
 	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 	mac := generateUniqueMAC()
 
-	// Use boot role which is available on BCM clusters
-	roles := []string{"boot"}
+	roles := testAccCMDeviceDeviceSingleRoleSet()
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -1583,8 +1592,7 @@ func TestAccCMDeviceDevice_RolesMultiple(t *testing.T) {
 	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 	mac := generateUniqueMAC()
 
-	// Multiple roles from the BCM cluster
-	roles := []string{"boot", "headnode"}
+	roles := testAccCMDeviceDeviceMultiRoleSet()
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -1631,8 +1639,7 @@ func TestAccCMDeviceDevice_RolesIdempotent(t *testing.T) {
 	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 	mac := generateUniqueMAC()
 
-	// Use roles available in the BCM cluster
-	roles := []string{"boot", "headnode"}
+	roles := testAccCMDeviceDeviceMultiRoleSet()
 
 	// ID consistency tracking.
 	compareID := statecheck.CompareValue(compare.ValuesSame())
@@ -1696,10 +1703,8 @@ func TestAccCMDeviceDevice_RolesUpdate(t *testing.T) {
 	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 	mac := generateUniqueMAC()
 
-	// Start with one role, then update to two
-	// Note: "boot" role requires "storage" role, so we avoid using it
-	initialRoles := []string{"boot"}
-	updatedRoles := []string{"boot", "headnode"}
+	initialRoles := testAccCMDeviceDeviceSingleRoleSet()
+	updatedRoles := testAccCMDeviceDeviceMultiRoleSet()
 
 	// ID consistency tracking.
 	compareID := statecheck.CompareValue(compare.ValuesSame())
@@ -1764,8 +1769,7 @@ func TestAccCMDeviceDevice_RolesRemove(t *testing.T) {
 	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 	mac := generateUniqueMAC()
 
-	// Start with roles, then remove them
-	initialRoles := []string{"boot", "headnode"}
+	initialRoles := testAccCMDeviceDeviceMultiRoleSet()
 	emptyRoles := []string{}
 
 	resource.Test(t, resource.TestCase{
@@ -1811,8 +1815,7 @@ func TestAccCMDeviceDevice_RolesImport(t *testing.T) {
 	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 	mac := generateUniqueMAC()
 
-	// Use roles available in the BCM cluster
-	roles := []string{"boot", "headnode"}
+	roles := testAccCMDeviceDeviceMultiRoleSet()
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -1880,8 +1883,7 @@ func TestAccCMDeviceDevice_RolesDrift(t *testing.T) {
 	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 	mac := generateUniqueMAC()
 
-	// Use roles available in the BCM cluster
-	roles := []string{"boot", "headnode"}
+	roles := testAccCMDeviceDeviceMultiRoleSet()
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -2046,8 +2048,7 @@ func TestAccCMDeviceDevice_RolesByName(t *testing.T) {
 	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 	mac := generateUniqueMAC()
 
-	// Use role names directly (not UUIDs)
-	roleNames := []string{"boot", "headnode"}
+	roleNames := testAccCMDeviceDeviceMultiRoleSet()
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -2101,7 +2102,7 @@ func TestAccCMDeviceDevice_RolesImportByName(t *testing.T) {
 	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 	mac := generateUniqueMAC()
 
-	roleNames := []string{"boot", "headnode"}
+	roleNames := testAccCMDeviceDeviceMultiRoleSet()
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -2169,8 +2170,8 @@ func TestAccCMDeviceDevice_RolesUpdateByName(t *testing.T) {
 	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 	mac := generateUniqueMAC()
 
-	initialRoles := []string{"boot"}
-	updatedRoles := []string{"boot", "headnode"}
+	initialRoles := testAccCMDeviceDeviceSingleRoleSet()
+	updatedRoles := testAccCMDeviceDeviceMultiRoleSet()
 
 	// ID consistency tracking.
 	compareID := statecheck.CompareValue(compare.ValuesSame())
@@ -2235,7 +2236,7 @@ func TestAccCMDeviceDevice_RolesDriftByName(t *testing.T) {
 	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 	mac := generateUniqueMAC()
 
-	roleNames := []string{"boot", "headnode"}
+	roleNames := testAccCMDeviceDeviceMultiRoleSet()
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -2489,6 +2490,8 @@ func TestAccCMDeviceDevice_RolesAddMultiple(t *testing.T) {
 	imageName := generateUniqueTestName("tftest-img-roles-multi")
 	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 	mac := generateUniqueMAC()
+	singleRole := testAccCMDeviceDeviceSingleRoleSet()
+	multipleRoles := testAccCMDeviceDeviceMultiRoleSet()
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -2500,7 +2503,7 @@ func TestAccCMDeviceDevice_RolesAddMultiple(t *testing.T) {
 		Steps: []resource.TestStep{
 			// Create with role names.
 			{
-				Config: testAccCMDeviceDeviceConfigWithRoleNames(deviceName, categoryName, imageName, imagePath, mac, []string{"boot"}),
+				Config: testAccCMDeviceDeviceConfigWithRoleNames(deviceName, categoryName, imageName, imagePath, mac, singleRole),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_device.test",
@@ -2511,7 +2514,7 @@ func TestAccCMDeviceDevice_RolesAddMultiple(t *testing.T) {
 			},
 			// Update to add more roles.
 			{
-				Config: testAccCMDeviceDeviceConfigWithRoleNames(deviceName, categoryName, imageName, imagePath, mac, []string{"boot", "headnode"}),
+				Config: testAccCMDeviceDeviceConfigWithRoleNames(deviceName, categoryName, imageName, imagePath, mac, multipleRoles),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_device.test",
@@ -2522,7 +2525,7 @@ func TestAccCMDeviceDevice_RolesAddMultiple(t *testing.T) {
 			},
 			// Idempotency check.
 			{
-				Config: testAccCMDeviceDeviceConfigWithRoleNames(deviceName, categoryName, imageName, imagePath, mac, []string{"boot", "headnode"}),
+				Config: testAccCMDeviceDeviceConfigWithRoleNames(deviceName, categoryName, imageName, imagePath, mac, multipleRoles),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
