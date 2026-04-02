@@ -30,10 +30,17 @@ data "bcm_cmnet_networks" "mgmt" {
 
 # Create a new device and automatically power it on
 resource "bcm_cmdevice_device" "new_worker" {
-  hostname           = "citest-lifecycle-node"
-  mac                = "00:11:22:33:44:55"
-  category           = data.bcm_cmdevice_categories.compute.categories[0].uuid
-  management_network = data.bcm_cmnet_networks.mgmt.networks[0].uuid
+  hostname = "citest-lifecycle-node"
+  category = data.bcm_cmdevice_categories.compute.categories[0].uuid
+
+  interfaces {
+    name     = "eth0"
+    type     = "physical"
+    mac      = "00:11:22:33:44:55"
+    network  = data.bcm_cmnet_networks.mgmt.networks[0].uuid
+    bootable = true
+    dhcp     = true
+  }
 
   # Lifecycle trigger to power on after device creation
   # NOTE: This syntax is subject to change in Terraform 1.14+

@@ -491,10 +491,17 @@ resource "bcm_cmdevice_category" "test" {
 }
 
 resource "bcm_cmdevice_device" "test" {
-  hostname           = %[6]q
-  mac                = %[8]q
-  category           = bcm_cmdevice_category.test.id
-  management_network = data.bcm_cmnet_networks.management.networks[0].id
+  hostname = %[6]q
+  category = bcm_cmdevice_category.test.id
+
+  interfaces {
+    name     = "eth0"
+    type     = "physical"
+    mac      = %[8]q
+    network  = data.bcm_cmnet_networks.management.networks[0].id
+    bootable = true
+    dhcp     = true
+  }
 
   depends_on = [bcm_cmdevice_category.test]
 }
@@ -542,12 +549,19 @@ resource "bcm_cmdevice_category" "test" {
 }
 
 resource "bcm_cmdevice_device" "test" {
-  hostname           = %[6]q
-  mac                = %[8]q
-  category           = bcm_cmdevice_category.test.id
-  management_network = data.bcm_cmnet_networks.management.networks[0].id
-  notes              = "Idempotency test device"
-  kernel_parameters  = "console=ttyS0"
+  hostname          = %[6]q
+  category          = bcm_cmdevice_category.test.id
+  notes             = "Idempotency test device"
+  kernel_parameters = "console=ttyS0"
+
+  interfaces {
+    name     = "eth0"
+    type     = "physical"
+    mac      = %[8]q
+    network  = data.bcm_cmnet_networks.management.networks[0].id
+    bootable = true
+    dhcp     = true
+  }
 
   depends_on = [bcm_cmdevice_category.test]
 }
@@ -595,11 +609,18 @@ resource "bcm_cmdevice_category" "test" {
 }
 
 resource "bcm_cmdevice_device" "test" {
-  hostname           = %[6]q
-  mac                = %[9]q
-  category           = bcm_cmdevice_category.test.id
-  management_network = data.bcm_cmnet_networks.management.networks[0].id
-  notes              = %[7]q
+  hostname = %[6]q
+  category = bcm_cmdevice_category.test.id
+  notes    = %[7]q
+
+  interfaces {
+    name     = "eth0"
+    type     = "physical"
+    mac      = %[9]q
+    network  = data.bcm_cmnet_networks.management.networks[0].id
+    bootable = true
+    dhcp     = true
+  }
 
   depends_on = [bcm_cmdevice_category.test]
 }

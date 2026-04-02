@@ -1203,10 +1203,17 @@ provider "bcm" {
 }
 
 resource "bcm_cmdevice_device" "test" {
-  hostname           = %[2]q
-  mac                = "00:11:22:33:44:55"
-  category           = "12345678-1234-1234-1234-123456789012"
-  management_network = "12345678-1234-1234-1234-123456789012"
+  hostname = %[2]q
+  category = "12345678-1234-1234-1234-123456789012"
+
+  interfaces {
+    name     = "eth0"
+    type     = "physical"
+    mac      = "00:11:22:33:44:55"
+    network  = "12345678-1234-1234-1234-123456789012"
+    bootable = true
+    dhcp     = true
+  }
 }
 `,
 		mockEndpoint,

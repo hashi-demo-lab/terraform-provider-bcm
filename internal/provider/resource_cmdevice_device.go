@@ -13,11 +13,14 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -25,8 +28,9 @@ import (
 
 // Ensure provider defined types fully satisfy framework interfaces.
 var (
-	_ resource.Resource                = &CMDeviceDeviceResource{}
-	_ resource.ResourceWithImportState = &CMDeviceDeviceResource{}
+	_ resource.Resource                     = &CMDeviceDeviceResource{}
+	_ resource.ResourceWithImportState      = &CMDeviceDeviceResource{}
+	_ resource.ResourceWithValidateConfig   = &CMDeviceDeviceResource{}
 )
 
 // CMDeviceDeviceResource defines the resource implementation.
@@ -40,11 +44,11 @@ type CMDeviceDeviceResourceModel struct {
 	ID       types.String `tfsdk:"id"`       // Computed, same as UUID
 	UUID     types.String `tfsdk:"uuid"`     // Computed, BCM-assigned
 	Hostname types.String `tfsdk:"hostname"` // Required, RFC 1123 validation
-	MAC      types.String `tfsdk:"mac"`      // Required, MAC address validation
+	MAC      types.String `tfsdk:"mac"`      // Optional+Computed, derived from first interface
 
 	// References (required)
 	Category          types.String `tfsdk:"category"`           // Required, UUID reference
-	ManagementNetwork types.String `tfsdk:"management_network"` // Required, UUID reference
+	ManagementNetwork types.String `tfsdk:"management_network"` // Optional+Computed, UUID reference
 	Partition         types.String `tfsdk:"partition"`          // Optional, UUID reference (uses default if not set)
 
 	// Optional configuration
@@ -70,8 +74,7 @@ type CMDeviceDeviceResourceModel struct {
 	BaseType     types.String `tfsdk:"base_type"`     // Computed, always "Device"
 	ChildType    types.String `tfsdk:"child_type"`    // Computed, BCM-determined
 
-	// Interfaces block - NEW for multi-interface support
-	// When specified, takes precedence over legacy mac/management_network
+	// Interfaces block - at least one interface is required
 	Interfaces []DeviceInterfaceModel `tfsdk:"interfaces"`
 
 	// Roles - set of role UUIDs assigned to this device
@@ -99,7 +102,7 @@ func (r *CMDeviceDeviceResource) Schema(ctx context.Context, req resource.Schema
 	resp.Schema = schema.Schema{
 		MarkdownDescription: "Manages a BCM device (compute node) in the cluster.\n\n" +
 			"Devices represent physical or virtual nodes that can be provisioned and managed by BCM. " +
-			"Each device requires a unique hostname, MAC address, category assignment, and management network configuration.",
+			"Each device requires a unique hostname, category assignment, and at least one network interface.",
 
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
@@ -121,8 +124,12 @@ func (r *CMDeviceDeviceResource) Schema(ctx context.Context, req resource.Schema
 				},
 			},
 			"mac": schema.StringAttribute{
-				Required:            true,
-				MarkdownDescription: "Primary MAC address (format: 00:11:22:33:44:55)",
+				Optional:            true,
+				Computed:            true,
+				MarkdownDescription: "Device MAC address, computed from the first interface. Can be set explicitly to override.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 				Validators: []validator.String{
 					stringvalidator.RegexMatches(
 						regexp.MustCompile(`^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$`),
@@ -247,8 +254,11 @@ func (r *CMDeviceDeviceResource) Schema(ctx context.Context, req resource.Schema
 		Blocks: map[string]schema.Block{
 			"interfaces": schema.ListNestedBlock{
 				MarkdownDescription: "Network interface configurations for the device. " +
-					"When specified, provides full control over interface setup. " +
+					"At least one interface is required. " +
 					"Each interface can be physical, bond, or BMC type.",
+				Validators: []validator.List{
+					listvalidator.SizeAtLeast(1),
+				},
 				NestedObject: schema.NestedBlockObject{
 					Attributes: map[string]schema.Attribute{
 						"name": schema.StringAttribute{
@@ -481,6 +491,26 @@ func (r *CMDeviceDeviceResource) Configure(ctx context.Context, req resource.Con
 	r.ConfigureResource(req, resp)
 }
 
+// ValidateConfig ensures at least one interface is defined.
+// Block-level validators on ListNestedBlock may not fire when the block is absent,
+// so we enforce the requirement here.
+func (r *CMDeviceDeviceResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	var config CMDeviceDeviceResourceModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if len(config.Interfaces) == 0 {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("interfaces"),
+			"At least one interface is required",
+			"The interfaces block must contain at least one network interface configuration. "+
+				"Each device needs at least one interface for network connectivity.",
+		)
+	}
+}
+
 // Create creates the device resource.
 func (r *CMDeviceDeviceResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	if r.Client == nil {
@@ -556,7 +586,8 @@ func (r *CMDeviceDeviceResource) Create(ctx context.Context, req resource.Create
 
 	// Build device entity for BCM API (with generated UUID and resolved partition)
 	// Partition field is always included as BCM requires it
-	deviceEntity := r.buildDeviceAPIEntity(plan, newUUID, partitionUUID)
+	// nil for existingInterfaces since this is a new device
+	deviceEntity := r.buildDeviceAPIEntityWithExisting(plan, newUUID, partitionUUID, nil)
 
 	// Lookup and add roles to the entity (requires BCM API access to get full role objects)
 	if err := r.lookupAndBuildRolesForEntity(ctx, plan, deviceEntity); err != nil {
@@ -682,7 +713,15 @@ func (r *CMDeviceDeviceResource) Create(ctx context.Context, req resource.Create
 		state.Partition = types.StringValue(partitionUUID)
 	}
 
+	// Compute mac from first interface if not explicitly set or BCM returned empty
+	if (state.MAC.IsNull() || state.MAC.ValueString() == "") && len(state.Interfaces) > 0 {
+		if !state.Interfaces[0].MAC.IsNull() {
+			state.MAC = state.Interfaces[0].MAC
+		}
+	}
+
 	// BCM returns nil UUID for management_network - preserve the configured value
+	// Still needed when user explicitly sets management_network as an optional field
 	if !plan.ManagementNetwork.IsNull() && !plan.ManagementNetwork.IsUnknown() {
 		if state.ManagementNetwork.IsNull() || state.ManagementNetwork.ValueString() == "00000000-0000-0000-0000-000000000000" {
 			state.ManagementNetwork = plan.ManagementNetwork
@@ -716,15 +755,8 @@ func (r *CMDeviceDeviceResource) Create(ctx context.Context, req resource.Create
 		state.Roles = types.SetNull(types.StringType)
 	}
 
-	// Handle interfaces in state based on mode
-	if len(plan.Interfaces) > 0 {
-		// Interfaces mode: Normalize interface order to match plan order (prevents spurious diffs)
-		state.Interfaces = normalizeInterfaceOrder(state.Interfaces, plan.Interfaces)
-	} else {
-		// Legacy mode: Don't populate interfaces in state (user didn't define interfaces block)
-		// BCM creates interfaces automatically, but we don't expose them in legacy mode
-		state.Interfaces = nil
-	}
+	// Normalize interface order to match plan order (prevents spurious diffs)
+	state.Interfaces = normalizeInterfaceOrder(state.Interfaces, plan.Interfaces)
 
 	// Handle Kubernetes roles - preserve state with computed defaults merged
 	// Only include roles if user defined them in plan
@@ -935,6 +967,13 @@ func (r *CMDeviceDeviceResource) Read(ctx context.Context, req resource.ReadRequ
 	// Preserve write-only fields that BCM doesn't return
 	newState.Force = state.Force
 
+	// Compute mac from first interface if BCM returned empty
+	if (newState.MAC.IsNull() || newState.MAC.ValueString() == "") && len(newState.Interfaces) > 0 {
+		if !newState.Interfaces[0].MAC.IsNull() {
+			newState.MAC = newState.Interfaces[0].MAC
+		}
+	}
+
 	// CRITICAL FIX FOR IMPORT: Handle optional+computed fields differently for import vs normal Read
 	// During import (state is empty), we should NOT preserve null values - instead use what BCM returns
 	// During normal Read (state has values), preserve null if user didn't explicitly set the field
@@ -945,7 +984,7 @@ func (r *CMDeviceDeviceResource) Read(ctx context.Context, req resource.ReadRequ
 		// Normal Read path: Preserve null values from state to avoid drift
 
 		// BCM returns nil UUID for management_network - preserve the configured value
-		// when BCM returns "00000000-0000-0000-0000-000000000000"
+		// Still needed when user explicitly sets management_network as an optional field
 		if !state.ManagementNetwork.IsNull() && !state.ManagementNetwork.IsUnknown() {
 			if newState.ManagementNetwork.IsNull() || newState.ManagementNetwork.ValueString() == "00000000-0000-0000-0000-000000000000" {
 				newState.ManagementNetwork = state.ManagementNetwork
@@ -999,24 +1038,10 @@ func (r *CMDeviceDeviceResource) Read(ctx context.Context, req resource.ReadRequ
 		})
 	}
 
-	// Handle interfaces based on mode
-	// During import (isImport=true), always populate interfaces from BCM
-	// During normal read, use state to determine if user used interfaces block
-	if isImport {
-		// Import: Keep interfaces from BCM API response (already parsed in newState)
-		tflog.Debug(ctx, "Import path - keeping interfaces from BCM API", map[string]interface{}{
-			"interface_count": len(newState.Interfaces),
-		})
-	} else if len(state.Interfaces) > 0 {
-		// Interfaces mode: normalize order and merge bond-specific fields from state
-		// BCM doesn't return members/bond_mode fields, so we need to preserve them from state
-		if len(newState.Interfaces) > 0 {
-			newState.Interfaces = normalizeInterfaceOrder(newState.Interfaces, state.Interfaces)
-		}
-	} else {
-		// Legacy mode: Don't populate interfaces in state (user didn't define interfaces block)
-		// This maintains backward compatibility with existing configs
-		newState.Interfaces = nil
+	// Normalize interface order to match state (prevents spurious diffs)
+	// During import, keep interfaces from BCM as-is; during normal read, merge with state
+	if !isImport && len(state.Interfaces) > 0 && len(newState.Interfaces) > 0 {
+		newState.Interfaces = normalizeInterfaceOrder(newState.Interfaces, state.Interfaces)
 	}
 
 	// Handle roles - preserve null from state if user didn't specify roles (non-import path)
@@ -1196,7 +1221,15 @@ func (r *CMDeviceDeviceResource) Update(ctx context.Context, req resource.Update
 	// Preserve plan values for fields not persisted by BCM or modified during updates
 	newState.Force = plan.Force
 
+	// Compute mac from first interface if not explicitly set or BCM returned empty
+	if (newState.MAC.IsNull() || newState.MAC.ValueString() == "") && len(newState.Interfaces) > 0 {
+		if !newState.Interfaces[0].MAC.IsNull() {
+			newState.MAC = newState.Interfaces[0].MAC
+		}
+	}
+
 	// BCM sets management_network to nil UUID - preserve plan value if set, otherwise use state or null
+	// Still needed when user explicitly sets management_network as an optional field
 	if !plan.ManagementNetwork.IsNull() && !plan.ManagementNetwork.IsUnknown() {
 		newState.ManagementNetwork = plan.ManagementNetwork
 	} else if !state.ManagementNetwork.IsNull() && !state.ManagementNetwork.IsUnknown() {
@@ -1249,15 +1282,8 @@ func (r *CMDeviceDeviceResource) Update(ctx context.Context, req resource.Update
 		newState.Roles = types.SetNull(types.StringType)
 	}
 
-	// Handle interfaces in state based on mode
-	if len(plan.Interfaces) > 0 {
-		// Interfaces mode: Normalize interface order to match plan order (prevents spurious diffs)
-		newState.Interfaces = normalizeInterfaceOrder(newState.Interfaces, plan.Interfaces)
-	} else {
-		// Legacy mode: Don't populate interfaces in state (user didn't define interfaces block)
-		// BCM creates/maintains interfaces, but we don't expose them in legacy mode
-		newState.Interfaces = nil
-	}
+	// Normalize interface order to match plan order (prevents spurious diffs)
+	newState.Interfaces = normalizeInterfaceOrder(newState.Interfaces, plan.Interfaces)
 
 	// Handle Kubernetes roles - preserve state with computed defaults merged
 	// Only include roles if user defined them in plan
@@ -1329,68 +1355,27 @@ func (r *CMDeviceDeviceResource) ImportState(ctx context.Context, req resource.I
 	})
 }
 
-// buildDeviceAPIEntity constructs BCM API entity from Terraform model.
-func (r *CMDeviceDeviceResource) buildDeviceAPIEntity(plan CMDeviceDeviceResourceModel, uuid string, partitionUUID string) map[string]interface{} {
-	return r.buildDeviceAPIEntityWithExisting(plan, uuid, partitionUUID, nil)
-}
-
 // buildDeviceAPIEntityWithExisting constructs BCM API entity, preserving interface UUIDs from existing state.
 func (r *CMDeviceDeviceResource) buildDeviceAPIEntityWithExisting(plan CMDeviceDeviceResourceModel, deviceUUID string, partitionUUID string, existingInterfaces []DeviceInterfaceModel) map[string]interface{} {
-	var interfaces []interface{}
-	var provisioningInterfaceUUID string
+	// Build interfaces from the interfaces block
+	interfaces := buildInterfacesAPIArray(plan.Interfaces, existingInterfaces)
+	provisioningInterfaceUUID := getProvisioningInterfaceUUID(plan.Interfaces)
 
-	// Check if using interfaces block or legacy mode
-	if len(plan.Interfaces) > 0 {
-		// NEW: Build interfaces from the interfaces block
-		interfaces = buildInterfacesAPIArray(plan.Interfaces, existingInterfaces)
-		provisioningInterfaceUUID = getProvisioningInterfaceUUID(plan.Interfaces)
-
-		// If no provisioning interface found from plan, get from built interfaces
-		if provisioningInterfaceUUID == "" && len(interfaces) > 0 {
-			if firstIface, ok := interfaces[0].(map[string]interface{}); ok {
-				if ifaceUUID, ok := firstIface["uuid"].(string); ok {
-					provisioningInterfaceUUID = ifaceUUID
-				}
+	// If no provisioning interface found from plan, get from built interfaces
+	if provisioningInterfaceUUID == "" && len(interfaces) > 0 {
+		if firstIface, ok := interfaces[0].(map[string]interface{}); ok {
+			if ifaceUUID, ok := firstIface["uuid"].(string); ok {
+				provisioningInterfaceUUID = ifaceUUID
 			}
 		}
-	} else {
-		// LEGACY: Create a basic network interface from mac/management_network
-		interfaceUUID := uuid.New().String()
-
-		// Use management_network from plan if specified, otherwise nil UUID
-		networkUUID := "00000000-0000-0000-0000-000000000000"
-		if !plan.ManagementNetwork.IsNull() && !plan.ManagementNetwork.IsUnknown() {
-			networkUUID = plan.ManagementNetwork.ValueString()
-		}
-
-		networkInterface := map[string]interface{}{
-			"baseType":             "NetworkInterface",
-			"childType":            "NetworkPhysicalInterface",
-			"mac":                  plan.MAC.ValueString(),
-			"network":              networkUUID,
-			"name":                 "eth0",
-			"dhcp":                 true,
-			"bootable":             true,
-			"startIf":              "ALWAYS",
-			"modified":             true,
-			"to_be_removed":        false,
-			"revision":             "",
-			"uuid":                 interfaceUUID,
-			"ipv6Ip":               "::0",
-			"ipv6Dhcp":             false,
-			"bringupduringinstall": "NO",
-			"cardtype":             "Ethernet",
-		}
-
-		interfaces = []interface{}{networkInterface}
-		provisioningInterfaceUUID = interfaceUUID
 	}
 
-	// Get MAC for device entity - use first interface MAC if interfaces block, else legacy mac field
+	// Device MAC: explicit top-level mac if set, otherwise first interface MAC
 	deviceMAC := ""
 	if len(plan.Interfaces) > 0 && !plan.Interfaces[0].MAC.IsNull() {
 		deviceMAC = plan.Interfaces[0].MAC.ValueString()
-	} else if !plan.MAC.IsNull() && !plan.MAC.IsUnknown() {
+	}
+	if !plan.MAC.IsNull() && !plan.MAC.IsUnknown() {
 		deviceMAC = plan.MAC.ValueString()
 	}
 

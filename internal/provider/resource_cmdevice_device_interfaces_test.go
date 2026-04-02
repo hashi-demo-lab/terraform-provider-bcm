@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"regexp"
 	"testing"
 	"time"
 
@@ -30,7 +31,6 @@ provider "bcm" {
 
 resource "bcm_cmdevice_device" "test" {
   hostname = %[4]q
-  mac      = %[5]q
   category = %[6]q
 
   interfaces {
@@ -65,7 +65,6 @@ provider "bcm" {
 
 resource "bcm_cmdevice_device" "test" {
   hostname = %[4]q
-  mac      = %[5]q
   category = %[7]q
 
   interfaces {
@@ -111,7 +110,6 @@ provider "bcm" {
 
 resource "bcm_cmdevice_device" "test" {
   hostname = %[4]q
-  mac      = %[5]q
   category = %[6]q
 
   interfaces {
@@ -148,7 +146,6 @@ provider "bcm" {
 
 resource "bcm_cmdevice_device" "test" {
   hostname = %[4]q
-  mac      = %[5]q
   category = %[6]q
 
   interfaces {
@@ -751,7 +748,6 @@ provider "bcm" {
 
 resource "bcm_cmdevice_device" "test" {
   hostname = %[4]q
-  mac      = %[5]q
   category = %[6]q
 
   interfaces {
@@ -775,9 +771,35 @@ resource "bcm_cmdevice_device" "test" {
 	)
 }
 
-// TestAccCMDeviceDevice_LegacyMACOnly tests backward compatibility with existing configurations.
-// This test ensures that configurations without the interfaces block still work.
-func TestAccCMDeviceDevice_LegacyMACOnly(t *testing.T) {
+// TestAccCMDeviceDevice_InterfacesRequired tests that omitting the interfaces block
+// produces a validation error. ValidateConfig rejects configs with zero interfaces.
+func TestAccCMDeviceDevice_InterfacesRequired(t *testing.T) {
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = "https://localhost:8081"
+  username             = "test"
+  password             = "test"
+  insecure_skip_verify = true
+}
+
+resource "bcm_cmdevice_device" "test" {
+  hostname = "test-no-interfaces"
+  category = "12345678-1234-1234-1234-123456789012"
+}
+`),
+				ExpectError: regexp.MustCompile(`At least one interface is required`),
+			},
+		},
+	})
+}
+
+// TestAccCMDeviceDevice_SingleInterface tests creating a device with a single interface block.
+// This test ensures that the interfaces block is properly handled.
+func TestAccCMDeviceDevice_SingleInterface(t *testing.T) {
 	hostname := generateShortTestName("tftest-dev")
 	mac := generateUniqueMAC()
 
@@ -797,9 +819,9 @@ func TestAccCMDeviceDevice_LegacyMACOnly(t *testing.T) {
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckCMDeviceDeviceDestroy,
 		Steps: []resource.TestStep{
-			// Step 1: Create with legacy mac-only configuration (no interfaces block)
+			// Step 1: Create with single interface configuration
 			{
-				Config: testAccCMDeviceDeviceConfigLegacy(hostname, mac, categoryUUID, networkUUID),
+				Config: testAccCMDeviceDeviceConfigSingleInterface(hostname, mac, categoryUUID, networkUUID),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_device.test",
@@ -829,7 +851,7 @@ func TestAccCMDeviceDevice_LegacyMACOnly(t *testing.T) {
 			},
 			// Step 2: Idempotency check
 			{
-				Config: testAccCMDeviceDeviceConfigLegacy(hostname, mac, categoryUUID, networkUUID),
+				Config: testAccCMDeviceDeviceConfigSingleInterface(hostname, mac, categoryUUID, networkUUID),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
@@ -846,8 +868,8 @@ func TestAccCMDeviceDevice_LegacyMACOnly(t *testing.T) {
 	})
 }
 
-// testAccCMDeviceDeviceConfigLegacy generates a config without interfaces block (legacy mode).
-func testAccCMDeviceDeviceConfigLegacy(hostname, mac, categoryUUID, networkUUID string) string {
+// testAccCMDeviceDeviceConfigSingleInterface generates a config with a single interface (converted from legacy mode).
+func testAccCMDeviceDeviceConfigSingleInterface(hostname, mac, categoryUUID, networkUUID string) string {
 	return fmt.Sprintf(`
 provider "bcm" {
   endpoint             = %[1]q
@@ -857,10 +879,17 @@ provider "bcm" {
 }
 
 resource "bcm_cmdevice_device" "test" {
-  hostname           = %[4]q
-  mac                = %[5]q
-  category           = %[6]q
-  management_network = %[7]q
+  hostname = %[4]q
+  category = %[6]q
+
+  interfaces {
+    name     = "eth0"
+    type     = "physical"
+    mac      = %[5]q
+    network  = %[7]q
+    bootable = true
+    dhcp     = true
+  }
 }
 `,
 		os.Getenv("BCM_ENDPOINT"),

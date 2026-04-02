@@ -21,20 +21,34 @@ resource "bcm_cmpart_softwareimage" "ubuntu_compute" {
 
 # Example 1: Basic compute device with minimal configuration
 resource "bcm_cmdevice_device" "compute_basic" {
-  hostname           = "citest-compute-node-01"
-  mac                = "00:11:22:33:44:55"
-  category           = bcm_cmdevice_category.compute.id
-  management_network = data.bcm_cmnet_networks.all.networks[0].id
+  hostname = "citest-compute-node-01"
+  category = bcm_cmdevice_category.compute.id
+
+  interfaces {
+    name     = "eth0"
+    type     = "physical"
+    mac      = "00:11:22:33:44:55"
+    network  = data.bcm_cmnet_networks.all.networks[0].id
+    bootable = true
+    dhcp     = true
+  }
 
   notes = "Basic compute node managed by Terraform"
 }
 
 # Example 2: Compute device with custom kernel parameters and boot configuration
 resource "bcm_cmdevice_device" "compute_custom" {
-  hostname           = "citest-compute-node-02"
-  mac                = "00:11:22:33:44:56"
-  category           = bcm_cmdevice_category.compute.id
-  management_network = data.bcm_cmnet_networks.all.networks[0].id
+  hostname = "citest-compute-node-02"
+  category = bcm_cmdevice_category.compute.id
+
+  interfaces {
+    name     = "eth0"
+    type     = "physical"
+    mac      = "00:11:22:33:44:56"
+    network  = data.bcm_cmnet_networks.all.networks[0].id
+    bootable = true
+    dhcp     = true
+  }
 
   # Boot configuration
   boot_loader       = "pxelinux"
@@ -45,10 +59,17 @@ resource "bcm_cmdevice_device" "compute_custom" {
 
 # Example 3: IPMI-enabled device with power control and network configuration
 resource "bcm_cmdevice_device" "compute_ipmi" {
-  hostname           = "citest-compute-node-03"
-  mac                = "00:11:22:33:44:57"
-  category           = bcm_cmdevice_category.compute.id
-  management_network = data.bcm_cmnet_networks.all.networks[0].id
+  hostname = "citest-compute-node-03"
+  category = bcm_cmdevice_category.compute.id
+
+  interfaces {
+    name     = "eth0"
+    type     = "physical"
+    mac      = "00:11:22:33:44:57"
+    network  = data.bcm_cmnet_networks.all.networks[0].id
+    bootable = true
+    dhcp     = true
+  }
 
   # Power control via IPMI
   power_control = "ipmi"
@@ -70,10 +91,17 @@ resource "bcm_cmdevice_device" "compute_ipmi" {
 
 # Example 4: GPU compute node with multiple network interfaces
 resource "bcm_cmdevice_device" "gpu_node" {
-  hostname           = "citest-gpu-node-01"
-  mac                = "00:11:22:33:44:58"
-  category           = bcm_cmdevice_category.compute.id
-  management_network = data.bcm_cmnet_networks.all.networks[0].id
+  hostname = "citest-gpu-node-01"
+  category = bcm_cmdevice_category.compute.id
+
+  interfaces {
+    name     = "eth0"
+    type     = "physical"
+    mac      = "00:11:22:33:44:58"
+    network  = data.bcm_cmnet_networks.all.networks[0].id
+    bootable = true
+    dhcp     = true
+  }
 
   # Power control
   power_control = "ipmi"
@@ -95,10 +123,17 @@ resource "bcm_cmdevice_device" "gpu_node" {
 
 # Example 5: Storage node with custom partition configuration
 resource "bcm_cmdevice_device" "storage_node" {
-  hostname           = "citest-storage-node-01"
-  mac                = "00:11:22:33:44:59"
-  category           = bcm_cmdevice_category.compute.id
-  management_network = data.bcm_cmnet_networks.all.networks[0].id
+  hostname = "citest-storage-node-01"
+  category = bcm_cmdevice_category.compute.id
+
+  interfaces {
+    name     = "eth0"
+    type     = "physical"
+    mac      = "00:11:22:33:44:59"
+    network  = data.bcm_cmnet_networks.all.networks[0].id
+    bootable = true
+    dhcp     = true
+  }
 
   # Power control
   power_control = "ipmi"
@@ -149,10 +184,17 @@ resource "bcm_cmkube_cluster" "production" {
 # Example 6: Kubernetes control plane node with kubelet_role
 # This device runs the Kubernetes control plane components (API server, etc.)
 resource "bcm_cmdevice_device" "k8s_control_plane" {
-  hostname           = "citest-k8s-cp-01"
-  mac                = "00:11:22:33:44:60"
-  category           = bcm_cmdevice_category.compute.id
-  management_network = data.bcm_cmnet_networks.all.networks[0].id
+  hostname = "citest-k8s-cp-01"
+  category = bcm_cmdevice_category.compute.id
+
+  interfaces {
+    name     = "eth0"
+    type     = "physical"
+    mac      = "00:11:22:33:44:60"
+    network  = data.bcm_cmnet_networks.all.networks[0].id
+    bootable = true
+    dhcp     = true
+  }
 
   # Power control
   power_control = "ipmi"
@@ -174,10 +216,17 @@ resource "bcm_cmdevice_device" "k8s_control_plane" {
 # Example 7: Kubernetes worker node with kubelet_role
 # This device runs application workloads scheduled by Kubernetes
 resource "bcm_cmdevice_device" "k8s_worker" {
-  hostname           = "citest-k8s-worker-01"
-  mac                = "00:11:22:33:44:61"
-  category           = bcm_cmdevice_category.compute.id
-  management_network = data.bcm_cmnet_networks.all.networks[0].id
+  hostname = "citest-k8s-worker-01"
+  category = bcm_cmdevice_category.compute.id
+
+  interfaces {
+    name     = "eth0"
+    type     = "physical"
+    mac      = "00:11:22:33:44:61"
+    network  = data.bcm_cmnet_networks.all.networks[0].id
+    bootable = true
+    dhcp     = true
+  }
 
   # Power control
   power_control = "ipmi"
@@ -199,10 +248,17 @@ resource "bcm_cmdevice_device" "k8s_worker" {
 # Example 8: Etcd host node with etcd_host_role
 # This device hosts an etcd cluster member for distributed key-value storage
 resource "bcm_cmdevice_device" "etcd_host" {
-  hostname           = "citest-etcd-host-01"
-  mac                = "00:11:22:33:44:62"
-  category           = bcm_cmdevice_category.compute.id
-  management_network = data.bcm_cmnet_networks.all.networks[0].id
+  hostname = "citest-etcd-host-01"
+  category = bcm_cmdevice_category.compute.id
+
+  interfaces {
+    name     = "eth0"
+    type     = "physical"
+    mac      = "00:11:22:33:44:62"
+    network  = data.bcm_cmnet_networks.all.networks[0].id
+    bootable = true
+    dhcp     = true
+  }
 
   # Power control
   power_control = "ipmi"
@@ -222,10 +278,17 @@ resource "bcm_cmdevice_device" "etcd_host" {
 # Example 9: Combined control plane node with both roles
 # This device runs both etcd and Kubernetes control plane (common in small clusters)
 resource "bcm_cmdevice_device" "k8s_combined_cp" {
-  hostname           = "citest-k8s-combined-01"
-  mac                = "00:11:22:33:44:63"
-  category           = bcm_cmdevice_category.compute.id
-  management_network = data.bcm_cmnet_networks.all.networks[0].id
+  hostname = "citest-k8s-combined-01"
+  category = bcm_cmdevice_category.compute.id
+
+  interfaces {
+    name     = "eth0"
+    type     = "physical"
+    mac      = "00:11:22:33:44:63"
+    network  = data.bcm_cmnet_networks.all.networks[0].id
+    bootable = true
+    dhcp     = true
+  }
 
   # Power control
   power_control = "ipmi"
@@ -268,10 +331,17 @@ resource "bcm_cmdevice_device" "k8s_combined_cp" {
 # Import first: terraform import bcm_cmdevice_device.existing_cp <uuid>
 resource "bcm_cmdevice_device" "existing_cp" {
   # These values must match the existing device after import
-  hostname           = "existing-server-01"
-  category           = bcm_cmdevice_category.compute.id
-  management_network = data.bcm_cmnet_networks.all.networks[0].id
-  mac                = "00:11:22:33:44:70"
+  hostname = "existing-server-01"
+  category = bcm_cmdevice_category.compute.id
+
+  interfaces {
+    name     = "eth0"
+    type     = "physical"
+    mac      = "00:11:22:33:44:70"
+    network  = data.bcm_cmnet_networks.all.networks[0].id
+    bootable = true
+    dhcp     = true
+  }
 
   # Existing device settings are preserved
   power_control = "ipmi"
@@ -294,10 +364,17 @@ resource "bcm_cmdevice_device" "existing_cp" {
 # Example 11: Existing device converted to Kubernetes worker
 # Import first: terraform import bcm_cmdevice_device.existing_worker <uuid>
 resource "bcm_cmdevice_device" "existing_worker" {
-  hostname           = "existing-server-02"
-  category           = bcm_cmdevice_category.compute.id
-  management_network = data.bcm_cmnet_networks.all.networks[0].id
-  mac                = "00:11:22:33:44:71"
+  hostname = "existing-server-02"
+  category = bcm_cmdevice_category.compute.id
+
+  interfaces {
+    name     = "eth0"
+    type     = "physical"
+    mac      = "00:11:22:33:44:71"
+    network  = data.bcm_cmnet_networks.all.networks[0].id
+    bootable = true
+    dhcp     = true
+  }
 
   power_control = "ipmi"
 

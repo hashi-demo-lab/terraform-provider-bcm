@@ -15,10 +15,17 @@ data "bcm_cmnet_networks" "management" {
 
 # Example: IPMI-enabled device with power control and network configuration
 resource "bcm_cmdevice_device" "ipmi" {
-  hostname           = "citest-compute-ipmi"
-  mac                = "00:11:22:33:44:BB"
-  category           = try(data.bcm_cmdevice_categories.default.categories[0].id, null)
-  management_network = try(data.bcm_cmnet_networks.management.networks[0].id, null)
+  hostname = "citest-compute-ipmi"
+  category = try(data.bcm_cmdevice_categories.default.categories[0].id, null)
+
+  interfaces {
+    name     = "eth0"
+    type     = "physical"
+    mac      = "00:11:22:33:44:BB"
+    network  = try(data.bcm_cmnet_networks.management.networks[0].id, null)
+    bootable = true
+    dhcp     = true
+  }
 
   # Power control via IPMI
   power_control = "ipmi"
