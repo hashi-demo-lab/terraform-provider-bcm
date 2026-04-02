@@ -3698,6 +3698,9 @@ func TestAccCMDeviceDevice_ManagementNetworkDrift(t *testing.T) {
 	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 	mac := generateUniqueMAC()
 
+	// ID consistency tracking.
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccPreCheck(t)
@@ -3719,6 +3722,10 @@ func TestAccCMDeviceDevice_ManagementNetworkDrift(t *testing.T) {
 						resourceAddress: "bcm_cmdevice_device.test",
 						deviceName:      deviceName,
 					},
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Step 2: Externally reset managementNetwork to zero UUID via BCM API.
@@ -3788,6 +3795,10 @@ func TestAccCMDeviceDevice_ManagementNetworkDrift(t *testing.T) {
 						resourceAddress: "bcm_cmdevice_device.test",
 						deviceName:      deviceName,
 					},
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 		},
@@ -4134,6 +4145,9 @@ func TestAccCMDeviceDevice_ManagementNetworkRemove(t *testing.T) {
 	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 	mac := generateUniqueMAC()
 
+	// ID consistency tracking.
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccPreCheck(t)
@@ -4155,6 +4169,10 @@ func TestAccCMDeviceDevice_ManagementNetworkRemove(t *testing.T) {
 						resourceAddress: "bcm_cmdevice_device.test",
 						deviceName:      deviceName,
 					},
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Step 2: Remove management_network from config (use basic config without it).
@@ -4171,6 +4189,10 @@ func TestAccCMDeviceDevice_ManagementNetworkRemove(t *testing.T) {
 						tfjsonpath.New("management_network"),
 						knownvalue.Null(),
 					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Step 3: Idempotency after removal.
@@ -4180,6 +4202,12 @@ func TestAccCMDeviceDevice_ManagementNetworkRemove(t *testing.T) {
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
 					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 		},
