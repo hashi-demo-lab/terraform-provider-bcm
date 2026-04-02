@@ -521,6 +521,25 @@ func TestAccCMEtcdCluster_validationElectionTimeoutRange(t *testing.T) {
 	})
 }
 
+// TestAccCMEtcdCluster_validationHeartbeatAboveMax tests that heartbeat_interval
+// above the maximum (500) is rejected by the schema validator (Between 50-500).
+func TestAccCMEtcdCluster_validationHeartbeatAboveMax(t *testing.T) {
+	clusterName := generateShortTestName("hbmax")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheckCMEtcdCluster(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMEtcdClusterDestroy,
+		Steps: []resource.TestStep{
+			{
+				// Heartbeat too high (max 500ms)
+				Config:      testAccCMEtcdClusterResourceConfigWithTimings(clusterName, 600, 5000),
+				ExpectError: regexp.MustCompile(`heartbeat_interval.*must be between 50 and 500|Attribute heartbeat_interval`),
+			},
+		},
+	})
+}
+
 // =============================================================================
 // Acceptance Tests - Options JSON
 // =============================================================================

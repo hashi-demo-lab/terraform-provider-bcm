@@ -792,6 +792,49 @@ func TestAccCMNetNetwork_ValidationInvalidSubnetFormat(t *testing.T) {
 	})
 }
 
+// TestAccCMNetNetwork_ValidationInvalidGatewayIP verifies that an invalid gateway
+// IP address is rejected by BCM server-side validation (validateNetwork).
+func TestAccCMNetNetwork_ValidationInvalidGatewayIP(t *testing.T) {
+	networkName := generateUniqueTestName("tftest-net-gw")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMNetNetworkDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config:      testAccCMNetNetworkConfigWithGateway(networkName, "not-an-ip"),
+				ExpectError: regexp.MustCompile(`(?i)gateway|invalid|validation`),
+			},
+		},
+	})
+}
+
+// testAccCMNetNetworkConfigWithGateway returns a config with a specific gateway value
+// for validation testing.
+func testAccCMNetNetworkConfigWithGateway(name, gateway string) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+resource "bcm_cmnet_network" "test" {
+  name        = %[4]q
+  domain_name = "cluster.local"
+  gateway     = %[5]q
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		name,
+		gateway,
+	)
+}
+
 // testAccCMNetNetworkConfigWithSubnet returns a config with a specific subnet value
 // for validation testing.
 func testAccCMNetNetworkConfigWithSubnet(name, subnet string) string {

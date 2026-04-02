@@ -1166,6 +1166,47 @@ func TestAccCMUserUser_UpdateShellAndVerifyIdempotency(t *testing.T) {
 	})
 }
 
+// TestAccCMUserUser_ValidationInvalidUID tests that a UID above 65535 is rejected
+// by the schema validator (Between 0-65535).
+func TestAccCMUserUser_ValidationInvalidUID(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMUserUserDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config:      testAccCMUserUserConfigWithUID(generateUniqueUnixUsername(), "TestPass123!", 70000),
+				ExpectError: regexp.MustCompile(`(?i)must be between 0 and 65535|Attribute uid`),
+			},
+		},
+	})
+}
+
+// testAccCMUserUserConfigWithUID generates configuration with a specific UID.
+func testAccCMUserUserConfigWithUID(username, password string, uid int64) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+resource "bcm_cmuser_user" "test" {
+  username = %[4]q
+  password = %[5]q
+  uid      = %[6]d
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		username,
+		password,
+		uid,
+	)
+}
+
 // testAccCMUserUserConfigWithHomeDir generates configuration with a specific home_directory.
 func testAccCMUserUserConfigWithHomeDir(username, password, homeDir string) string {
 	return fmt.Sprintf(`
