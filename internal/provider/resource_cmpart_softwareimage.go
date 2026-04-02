@@ -471,8 +471,12 @@ func (r *CMPartSoftwareImageResource) Read(ctx context.Context, req resource.Rea
 	stateOriginalImage := state.OriginalImage
 
 	// Fetch current state from BCM API
-	r.readSoftwareImage(ctx, &state, &resp.Diagnostics)
+	found := r.readSoftwareImage(ctx, &state, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
+		return
+	}
+	if !found {
+		resp.State.RemoveResource(ctx)
 		return
 	}
 
@@ -693,7 +697,8 @@ func (r *CMPartSoftwareImageResource) ImportState(ctx context.Context, req resou
 // Helper Methods
 
 // readSoftwareImage fetches software image from API and populates model.
-func (r *CMPartSoftwareImageResource) readSoftwareImage(ctx context.Context, model *CMPartSoftwareImageResourceModel, diags *diag.Diagnostics) {
+// Returns false when the software image does not exist.
+func (r *CMPartSoftwareImageResource) readSoftwareImage(ctx context.Context, model *CMPartSoftwareImageResourceModel, diags *diag.Diagnostics) bool {
 	// Determine which identifier to use for lookup
 	// During import, name may be empty but ID is set (to UUID)
 	// During normal operations, name is populated
@@ -709,7 +714,7 @@ func (r *CMPartSoftwareImageResource) readSoftwareImage(ctx context.Context, mod
 				"Software Image Read Failed",
 				fmt.Sprintf("Failed to list software images during import: %s", err.Error()),
 			)
-			return
+			return false
 		}
 
 		var imagesList []map[string]interface{}
@@ -718,7 +723,7 @@ func (r *CMPartSoftwareImageResource) readSoftwareImage(ctx context.Context, mod
 				"Response Parse Error",
 				fmt.Sprintf("Failed to parse software images list: %s", err.Error()),
 			)
-			return
+			return false
 		}
 
 		// Find image with matching UUID
@@ -733,18 +738,14 @@ func (r *CMPartSoftwareImageResource) readSoftwareImage(ctx context.Context, mod
 		}
 
 		if lookupName == "" {
-			diags.AddError(
-				"Software Image Not Found",
-				fmt.Sprintf("Software image with ID '%s' not found in BCM", targetUUID),
-			)
-			return
+			return false
 		}
 	} else {
 		diags.AddError(
 			"Invalid State",
 			"Cannot read software image: both name and ID are empty",
 		)
-		return
+		return false
 	}
 
 	tflog.Debug(ctx, "Reading software image via BCM API", map[string]interface{}{
@@ -758,7 +759,7 @@ func (r *CMPartSoftwareImageResource) readSoftwareImage(ctx context.Context, mod
 			"Software Image Read Failed",
 			fmt.Sprintf("Failed to read software image '%s': %s", lookupName, err.Error()),
 		)
-		return
+		return false
 	}
 
 	// Parse response as single software image entity
@@ -768,16 +769,12 @@ func (r *CMPartSoftwareImageResource) readSoftwareImage(ctx context.Context, mod
 			"Response Parse Error",
 			fmt.Sprintf("Failed to parse software image response: %s", err.Error()),
 		)
-		return
+		return false
 	}
 
 	// Check if image not found (null or empty response)
 	if len(imageData) == 0 {
-		diags.AddError(
-			"Software Image Not Found",
-			fmt.Sprintf("Software image '%s' not found in BCM", model.Name.ValueString()),
-		)
-		return
+		return false
 	}
 
 	// Map API fields to model
@@ -875,6 +872,8 @@ func (r *CMPartSoftwareImageResource) readSoftwareImage(ctx context.Context, mod
 		"name": model.Name.ValueString(),
 		"uuid": model.UUID.ValueString(),
 	})
+
+	return true
 }
 
 // buildAPIEntity constructs BCM API entity from Terraform model

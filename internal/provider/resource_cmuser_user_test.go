@@ -620,6 +620,103 @@ func TestAccCMUserUser_DriftNotes(t *testing.T) {
 	})
 }
 
+// TestAccCMUserUser_DriftHomeDirectory tests drift detection for home_directory attribute.
+func TestAccCMUserUser_DriftHomeDirectory(t *testing.T) {
+	username := generateUniqueUnixUsername()
+	password := "DriftHomeDirPass123!"
+
+	// ID consistency tracking
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMUserUserDestroy,
+		Steps: []resource.TestStep{
+			// Step 1: Create with initial home_directory
+			{
+				Config: testAccCMUserUserConfigWithHomeDir(username, password, "/home/testuser"),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmuser_user.test",
+						tfjsonpath.New("home_directory"),
+						knownvalue.StringExact("/home/testuser"),
+					),
+					compareID.AddStateValue(
+						"bcm_cmuser_user.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+			// Step 2: Modify home_directory externally via BCM API (drift)
+			{
+				PreConfig: func() {
+					client := createTestBCMClient(t)
+					ctx := t.Context()
+
+					// Get user data
+					body, err := client.CallJSONRPC(ctx, "cmuser", "getUser", username)
+					if err != nil {
+						t.Fatalf("Failed to get user for drift test: %v", err)
+					}
+
+					var userData map[string]interface{}
+					if err := json.Unmarshal(body, &userData); err != nil {
+						t.Fatalf("Failed to parse user data: %v", err)
+					}
+
+					// Modify homeDirectory externally (snake_case -> camelCase: home_directory -> homeDirectory)
+					userData["homeDirectory"] = "/tmp/drifted"
+					userData["modified"] = true
+
+					// Update via BCM API
+					_, err = client.CallJSONRPC(ctx, "cmuser", "updateUser", userData, false)
+					if err != nil {
+						t.Fatalf("Failed to modify user externally: %v", err)
+					}
+
+					// Wait for eventual consistency
+					time.Sleep(TestEventualConsistencyDelay)
+
+					t.Logf("[DEBUG] Modified homeDirectory externally to /tmp/drifted")
+				},
+				Config: testAccCMUserUserConfigWithHomeDir(username, password, "/home/testuser"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectNonEmptyPlan(), // Drift detected!
+					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmuser_user.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+			// Step 3: Terraform restores desired state
+			{
+				Config: testAccCMUserUserConfigWithHomeDir(username, password, "/home/testuser"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmuser_user.test",
+						tfjsonpath.New("home_directory"),
+						knownvalue.StringExact("/home/testuser"),
+					),
+					compareID.AddStateValue(
+						"bcm_cmuser_user.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+		},
+	})
+}
+
 // TestAccCMUserUser_PasswordSensitive tests that password is not logged.
 func TestAccCMUserUser_PasswordSensitive(t *testing.T) {
 	username := generateUniqueUnixUsername()

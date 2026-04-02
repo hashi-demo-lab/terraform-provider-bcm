@@ -347,6 +347,12 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 					"parent_software_image": schema.StringAttribute{
 						Required:            true,
 						MarkdownDescription: "Parent software image UUID reference",
+						Validators: []validator.String{
+							stringvalidator.RegexMatches(
+								regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`),
+								"must be a valid UUID (e.g., '12345678-1234-1234-1234-123456789abc')",
+							),
+						},
 					},
 					"revision_id": schema.Int64Attribute{
 						Computed:            true,
@@ -477,6 +483,9 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 				Optional:            true,
 				Computed:            true,
 				MarkdownDescription: "Authentication service (AUTO, LDAP, SSSD, LOCAL). If not specified, BCM assigns AUTO.",
+				Validators: []validator.String{
+					stringvalidator.OneOf("AUTO", "LDAP", "SSSD", "LOCAL"),
+				},
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
@@ -485,6 +494,12 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 				Optional:            true,
 				Computed:            true,
 				MarkdownDescription: "Default gateway IP address. If not specified, BCM may assign a default.",
+				Validators: []validator.String{
+					stringvalidator.RegexMatches(
+						regexp.MustCompile(`^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$`),
+						"must be a valid IPv4 address",
+					),
+				},
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
@@ -757,7 +772,9 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 						"run_if": schema.StringAttribute{
 							Optional:            true,
 							MarkdownDescription: "Condition for running the service. Common values: ALWAYS, NEVER. BCM validates additional states.",
-							// Removed overly restrictive validator - BCM performs server-side validation
+							Validators: []validator.String{
+								stringvalidator.OneOf("ALWAYS", "NEVER", "CUSTOM"),
+							},
 						},
 						"sickness_check_script": schema.StringAttribute{
 							Optional:            true,
@@ -804,6 +821,9 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 					"privilege": schema.StringAttribute{
 						Optional:            true,
 						MarkdownDescription: "BMC privilege level (USER, OPERATOR, ADMINISTRATOR)",
+						Validators: []validator.String{
+							stringvalidator.OneOf("USER", "OPERATOR", "ADMINISTRATOR"),
+						},
 					},
 					"user_id": schema.Int64Attribute{
 						Optional:            true,
@@ -812,6 +832,9 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 					"firmware_manage_mode": schema.StringAttribute{
 						Optional:            true,
 						MarkdownDescription: "Firmware management mode (AUTO, MANUAL, DISABLED)",
+						Validators: []validator.String{
+							stringvalidator.OneOf("AUTO", "MANUAL", "DISABLED"),
+						},
 					},
 					"leak_policy": schema.StringAttribute{
 						Optional:            true,
@@ -1052,6 +1075,9 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 				Optional:            true,
 				Computed:            true,
 				MarkdownDescription: "Interactive user. If not specified, BCM assigns ALWAYS.",
+				Validators: []validator.String{
+					stringvalidator.OneOf("ALWAYS", "NEVER"),
+				},
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
@@ -2002,13 +2028,12 @@ func (r *CMDeviceCategoryResource) Delete(ctx context.Context, req resource.Dele
 
 		result, err := CheckDevicesInCategory(ctx, r.Client, state.UUID.ValueString())
 		if err != nil {
-			// Dependency check failed - log warning but allow user to proceed with force
-			resp.Diagnostics.AddWarning(
+			resp.Diagnostics.AddError(
 				"Dependency Check Failed",
 				fmt.Sprintf(
 					"Unable to verify dependencies for category '%s': %s\n\n"+
-						"You can proceed with deletion by setting 'force = true', "+
-						"but this may create orphaned references if dependencies exist.",
+						"Deletion was not attempted because Terraform cannot safely remove the resource without validating dependencies. "+
+						"Set 'force = true' to bypass this check if that is intentional.",
 					state.Name.ValueString(),
 					err.Error(),
 				),

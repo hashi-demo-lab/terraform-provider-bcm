@@ -90,6 +90,9 @@ func (r *CMNetNetworkResource) Schema(ctx context.Context, req resource.SchemaRe
 			"name": schema.StringAttribute{
 				Required:            true,
 				MarkdownDescription: "Unique network name within the BCM cluster.",
+				Validators: []validator.String{
+					stringvalidator.LengthBetween(1, 255),
+				},
 			},
 			"subnet": schema.StringAttribute{
 				Optional:            true,
@@ -112,6 +115,12 @@ func (r *CMNetNetworkResource) Schema(ctx context.Context, req resource.SchemaRe
 			"gateway": schema.StringAttribute{
 				Optional:            true,
 				MarkdownDescription: "Gateway IP address for the network.",
+				Validators: []validator.String{
+					stringvalidator.RegexMatches(
+						regexp.MustCompile(`^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$`),
+						"must be a valid IPv4 address",
+					),
+				},
 			},
 			"network_type": schema.StringAttribute{
 				Computed:            true,
@@ -132,10 +141,22 @@ func (r *CMNetNetworkResource) Schema(ctx context.Context, req resource.SchemaRe
 			"dhcp_range_start": schema.StringAttribute{
 				Optional:            true,
 				MarkdownDescription: "DHCP pool start IP address. Setting both dhcp_range_start and dhcp_range_end enables DHCP.",
+				Validators: []validator.String{
+					stringvalidator.RegexMatches(
+						regexp.MustCompile(`^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$`),
+						"must be a valid IPv4 address",
+					),
+				},
 			},
 			"dhcp_range_end": schema.StringAttribute{
 				Optional:            true,
 				MarkdownDescription: "DHCP pool end IP address. Setting both dhcp_range_start and dhcp_range_end enables DHCP.",
+				Validators: []validator.String{
+					stringvalidator.RegexMatches(
+						regexp.MustCompile(`^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$`),
+						"must be a valid IPv4 address",
+					),
+				},
 			},
 			"management": schema.BoolAttribute{
 				Computed:            true,

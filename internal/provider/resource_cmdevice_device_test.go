@@ -1929,7 +1929,11 @@ func TestAccCMDeviceDevice_RolesRemove(t *testing.T) {
 			{
 				Config: testAccCMDeviceDeviceConfigWithRoles(deviceName, categoryName, imageName, imagePath, mac, emptyRoles),
 				ConfigStateChecks: []statecheck.StateCheck{
-					// Empty roles should result in null or empty list.
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("roles"),
+						knownvalue.SetSizeExact(0),
+					),
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_device.test",
 						tfjsonpath.New("hostname"),
@@ -1954,6 +1958,7 @@ func TestAccCMDeviceDevice_RolesImport(t *testing.T) {
 	mac := generateUniqueMAC()
 
 	roles := testAccCMDeviceDeviceSingleRoleSet(t)
+	compareID := statecheck.CompareValue(compare.ValuesSame())
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -1971,6 +1976,10 @@ func TestAccCMDeviceDevice_RolesImport(t *testing.T) {
 						"bcm_cmdevice_device.test",
 						tfjsonpath.New("roles"),
 						knownvalue.SetSizeExact(1),
+					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
 					),
 				},
 			},
@@ -2022,8 +2031,6 @@ func TestAccCMDeviceDevice_RolesDrift(t *testing.T) {
 	mac := generateUniqueMAC()
 
 	roles := testAccCMDeviceDeviceSingleRoleSet(t)
-
-	// ID consistency tracking.
 	compareID := statecheck.CompareValue(compare.ValuesSame())
 
 	resource.Test(t, resource.TestCase{
@@ -2203,8 +2210,6 @@ func TestAccCMDeviceDevice_RolesByName(t *testing.T) {
 	mac := generateUniqueMAC()
 
 	roleNames := testAccCMDeviceDeviceSingleRoleSet(t)
-
-	// ID consistency tracking.
 	compareID := statecheck.CompareValue(compare.ValuesSame())
 
 	resource.Test(t, resource.TestCase{
@@ -2339,8 +2344,6 @@ func TestAccCMDeviceDevice_RolesUpdateByName(t *testing.T) {
 
 	initialRoles := []string{}
 	updatedRoles := testAccCMDeviceDeviceSingleRoleSet(t)
-
-	// ID consistency tracking.
 	compareID := statecheck.CompareValue(compare.ValuesSame())
 
 	resource.Test(t, resource.TestCase{
@@ -4675,6 +4678,244 @@ func TestAccCMDeviceDevice_Disappears(t *testing.T) {
 					deviceDisappearsCheck{resourceAddress: "bcm_cmdevice_device.test"},
 				},
 				ExpectNonEmptyPlan: true,
+			},
+		},
+	})
+}
+
+// TestAccCMDeviceDevice_DriftKernelParameters tests drift detection for kernel_parameters field.
+// This test verifies the provider correctly detects when a device's kernelParameters is modified
+// externally via BCM API and restores the desired state on re-apply.
+func TestAccCMDeviceDevice_DriftKernelParameters(t *testing.T) {
+	deviceName := generateUniqueTestName("tftest-device-driftkp")
+	categoryName := generateUniqueTestName("tftest-cat-driftkp")
+	imageName := generateUniqueTestName("tftest-img-driftkp")
+	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
+	mac := generateUniqueMAC()
+
+	// ID consistency tracking.
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+			testAccCMDeviceDevicePreCheck(t, deviceName)
+		},
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceDeviceDestroy,
+		Steps: []resource.TestStep{
+			// Step 1: Create device with kernel_parameters = "quiet splash".
+			{
+				Config: testAccCMDeviceDeviceResourceConfig_Updated(deviceName, categoryName, imageName, imagePath, mac),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("kernel_parameters"),
+						knownvalue.StringExact("quiet splash"),
+					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+			// Step 2: Modify kernelParameters externally via BCM API.
+			{
+				PreConfig: func() {
+					client := createTestBCMClient(t)
+					ctx := t.Context()
+
+					// Get device UUID by hostname.
+					deviceUUID := getResourceUUIDByName(t, "cmdevice", "getDevice", deviceName)
+
+					// Fetch full device data from BCM API.
+					body, err := client.CallJSONRPC(ctx, "cmdevice", "getDevice", deviceUUID)
+					if err != nil {
+						t.Fatalf("Failed to fetch device for drift modification: %v", err)
+					}
+
+					// Parse the device data.
+					var deviceData map[string]interface{}
+					if err := json.Unmarshal(body, &deviceData); err != nil {
+						t.Fatalf("Failed to parse device data: %v", err)
+					}
+
+					// Modify kernelParameters field externally.
+					deviceData["kernelParameters"] = "modified externally"
+
+					// Build BCM entity structure.
+					entity := map[string]interface{}{
+						"baseType":      "Device",
+						"childType":     deviceData["childType"],
+						"modified":      true,
+						"to_be_removed": false,
+						"uuid":          deviceUUID,
+					}
+					for k, v := range deviceData {
+						if k != "uuid" {
+							entity[k] = v
+						}
+					}
+
+					// Update via BCM API.
+					_, err = client.CallJSONRPC(ctx, "cmdevice", "updateDevice", entity, false)
+					if err != nil {
+						t.Fatalf("Failed to update device externally: %v", err)
+					}
+
+					// Wait for eventual consistency.
+					time.Sleep(TestEventualConsistencyDelay)
+
+					t.Logf("[DEBUG] Modified kernelParameters externally to: modified externally")
+				},
+				Config:             testAccCMDeviceDeviceResourceConfig_Updated(deviceName, categoryName, imageName, imagePath, mac),
+				ExpectNonEmptyPlan: true,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectNonEmptyPlan(),
+					},
+				},
+			},
+			// Step 3: Terraform restores desired state.
+			{
+				Config: testAccCMDeviceDeviceResourceConfig_Updated(deviceName, categoryName, imageName, imagePath, mac),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("kernel_parameters"),
+						knownvalue.StringExact("quiet splash"),
+					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+		},
+	})
+}
+
+// TestAccCMDeviceDevice_DriftCategory tests drift detection for category field.
+// This test verifies the provider correctly detects when a device's category is modified
+// externally via BCM API and restores the desired state on re-apply.
+func TestAccCMDeviceDevice_DriftCategory(t *testing.T) {
+	deviceName := generateUniqueTestName("tftest-device-driftcat")
+	catNameA := generateUniqueTestName("tftest-cat-a-drift")
+	catNameB := generateUniqueTestName("tftest-cat-b-drift")
+	imageName := generateUniqueTestName("tftest-img-driftcat")
+	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
+	mac := generateUniqueMAC()
+
+	// ID consistency tracking.
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+			testAccCMDeviceDevicePreCheck(t, deviceName)
+		},
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceDeviceDestroy,
+		Steps: []resource.TestStep{
+			// Step 1: Create device in category A.
+			{
+				Config: testAccCMDeviceDeviceResourceConfig_WithCategory(deviceName, catNameA, catNameB, "cat_a", imageName, imagePath, mac),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("hostname"),
+						knownvalue.StringExact(deviceName),
+					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+			// Step 2: Modify category externally to category B via BCM API.
+			{
+				PreConfig: func() {
+					client := createTestBCMClient(t)
+					ctx := t.Context()
+
+					// Get device UUID by hostname.
+					deviceUUID := getResourceUUIDByName(t, "cmdevice", "getDevice", deviceName)
+
+					// Get category B UUID by name.
+					catBUUID := getResourceUUIDByName(t, "cmdevice", "getCategory", catNameB)
+
+					// Fetch full device data from BCM API.
+					body, err := client.CallJSONRPC(ctx, "cmdevice", "getDevice", deviceUUID)
+					if err != nil {
+						t.Fatalf("Failed to fetch device for drift modification: %v", err)
+					}
+
+					// Parse the device data.
+					var deviceData map[string]interface{}
+					if err := json.Unmarshal(body, &deviceData); err != nil {
+						t.Fatalf("Failed to parse device data: %v", err)
+					}
+
+					// Modify category field to category B's UUID.
+					deviceData["category"] = catBUUID
+
+					// Build BCM entity structure.
+					entity := map[string]interface{}{
+						"baseType":      "Device",
+						"childType":     deviceData["childType"],
+						"modified":      true,
+						"to_be_removed": false,
+						"uuid":          deviceUUID,
+					}
+					for k, v := range deviceData {
+						if k != "uuid" {
+							entity[k] = v
+						}
+					}
+
+					// Update via BCM API.
+					_, err = client.CallJSONRPC(ctx, "cmdevice", "updateDevice", entity, false)
+					if err != nil {
+						t.Fatalf("Failed to update device externally: %v", err)
+					}
+
+					// Wait for eventual consistency.
+					time.Sleep(TestEventualConsistencyDelay)
+
+					t.Logf("[DEBUG] Modified category externally to category B UUID: %s", catBUUID)
+				},
+				Config:             testAccCMDeviceDeviceResourceConfig_WithCategory(deviceName, catNameA, catNameB, "cat_a", imageName, imagePath, mac),
+				ExpectNonEmptyPlan: true,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectNonEmptyPlan(),
+					},
+				},
+			},
+			// Step 3: Terraform restores desired state (category A).
+			{
+				Config: testAccCMDeviceDeviceResourceConfig_WithCategory(deviceName, catNameA, catNameB, "cat_a", imageName, imagePath, mac),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("hostname"),
+						knownvalue.StringExact(deviceName),
+					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+					),
+				},
 			},
 		},
 	})

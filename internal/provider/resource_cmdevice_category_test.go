@@ -635,6 +635,129 @@ func TestAccCMDeviceCategory_DriftNotes(t *testing.T) {
 	})
 }
 
+// TestAccCMDeviceCategory_DriftKernelParameters tests drift detection for kernel_parameters attribute.
+func TestAccCMDeviceCategory_DriftKernelParameters(t *testing.T) {
+	categoryName := generateUniqueTestName("tftest-drift-kparams")
+
+	// ID consistency tracking across all CRUD operations
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccCMDeviceCategoryPreCheck(t, categoryName)
+		},
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceCategoryDestroy,
+		Steps: []resource.TestStep{
+			// Step 1: Create resource with initial kernel_parameters
+			{
+				Config: testAccCMDeviceCategoryResourceConfig_DriftKernelParameters(categoryName, "quiet splash"),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(categoryName),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("kernel_parameters"),
+						knownvalue.StringExact("quiet splash"),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("uuid"),
+						knownvalue.NotNull(),
+					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+			// Step 2: Modify kernel_parameters externally via BCM API, verify drift detected
+			{
+				PreConfig: func() {
+					client := createTestBCMClient(t)
+					ctx := t.Context()
+
+					// Get UUID by category name using helper
+					uuid := getResourceUUIDByName(t, "cmdevice", "getCategory", categoryName)
+
+					// Fetch full category data from BCM API
+					body, err := client.CallJSONRPC(ctx, "cmdevice", "getCategory", categoryName)
+					if err != nil {
+						t.Fatalf("Failed to fetch category for drift modification: %v", err)
+					}
+
+					// Parse the category data
+					var categoryData map[string]interface{}
+					if err := json.Unmarshal(body, &categoryData); err != nil {
+						t.Fatalf("Failed to parse category data: %v", err)
+					}
+
+					// Modify kernelParameters field
+					categoryData["kernelParameters"] = "modified externally"
+
+					// Wrap in BCM API entity structure required for updates
+					entity := map[string]interface{}{
+						"baseType":      "Category",
+						"childType":     "",
+						"modified":      true,
+						"to_be_removed": false,
+						"revision":      "",
+						"uuid":          uuid,
+					}
+					// Copy all category data fields except uuid (already set above)
+					for k, v := range categoryData {
+						if k != "uuid" {
+							entity[k] = v
+						}
+					}
+
+					// Update via BCM API
+					_, err = client.CallJSONRPC(ctx, "cmdevice", "updateCategory", entity)
+					if err != nil {
+						t.Fatalf("Failed to update category via BCM API: %v", err)
+					}
+
+					// Wait for eventual consistency
+					time.Sleep(TestEventualConsistencyDelay)
+
+					t.Logf("[DEBUG] Modified kernelParameters externally to: %v", entity["kernelParameters"])
+				},
+				Config:             testAccCMDeviceCategoryResourceConfig_DriftKernelParameters(categoryName, "quiet splash"),
+				ExpectNonEmptyPlan: true,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectNonEmptyPlan(),
+					},
+				},
+			},
+			// Step 3: Restore desired state (Terraform applies config to fix drift)
+			{
+				Config: testAccCMDeviceCategoryResourceConfig_DriftKernelParameters(categoryName, "quiet splash"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					// Verify drift was corrected and state matches config
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("kernel_parameters"),
+						knownvalue.StringExact("quiet splash"),
+					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+		},
+	})
+}
+
 // ========================================
 // Phase 4: Destroy Edge Case Tests (User Story 2)
 // ========================================
@@ -791,6 +914,49 @@ resource "bcm_cmdevice_category" "test" {
 		os.Getenv("BCM_PASSWORD"),
 		name,
 		notes,
+	)
+}
+
+// Helper function for kernel_parameters drift detection test configuration.
+func testAccCMDeviceCategoryResourceConfig_DriftKernelParameters(name, kernelParameters string) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+# Lookup existing categories to get a management network UUID
+data "bcm_cmdevice_categories" "all" {}
+
+# Lookup required parent software image
+data "bcm_cmpart_softwareimages" "all" {}
+
+locals {
+  # Get management network from first existing category
+  management_network_uuid = length(data.bcm_cmdevice_categories.all.categories) > 0 ? data.bcm_cmdevice_categories.all.categories[0].management_network_id : "00000000-0000-0000-0000-000000000000"
+
+  # Get software image UUID from first available image
+  software_image_uuid = length(data.bcm_cmpart_softwareimages.all.images) > 0 ? data.bcm_cmpart_softwareimages.all.images[0].uuid : "00000000-0000-0000-0000-000000000000"
+}
+
+resource "bcm_cmdevice_category" "test" {
+  name               = %[4]q
+  management_network = local.management_network_uuid
+  kernel_parameters  = %[5]q
+
+  # BCM requires parent software image
+  software_image_proxy = {
+    parent_software_image = local.software_image_uuid
+  }
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		name,
+		kernelParameters,
 	)
 }
 

@@ -373,6 +373,111 @@ func TestAccCMNetNetwork_DriftDetection(t *testing.T) {
 	})
 }
 
+// TestAccCMNetNetwork_DriftDomainName verifies Terraform detects external modifications to domain_name.
+func TestAccCMNetNetwork_DriftDomainName(t *testing.T) {
+	networkName := generateUniqueTestName("tftest-network-drift-dn")
+
+	// Initialize ID tracker for consistency verification across operations
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMNetNetworkDestroy,
+		Steps: []resource.TestStep{
+			// Step 1: Create network with domain_name "test.local"
+			{
+				Config: testAccCMNetNetworkConfigComplete(networkName),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmnet_network.test",
+						tfjsonpath.New("domain_name"),
+						knownvalue.StringExact("test.local"),
+					),
+					compareID.AddStateValue(
+						"bcm_cmnet_network.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+			// Step 2: Modify domain_name externally via BCM API (drift simulation)
+			{
+				PreConfig: func() {
+					client := createTestBCMClient(t)
+					ctx := t.Context()
+
+					// Get network UUID by name
+					uuid := getResourceUUIDByName(t, "cmnet", "getNetwork", networkName)
+
+					// Fetch full network data
+					body, err := client.CallJSONRPC(ctx, "cmnet", "getNetwork", uuid)
+					if err != nil {
+						t.Fatalf("Failed to fetch network: %v", err)
+					}
+
+					var networkData map[string]interface{}
+					if err := json.Unmarshal(body, &networkData); err != nil {
+						t.Fatalf("Failed to unmarshal network data: %v", err)
+					}
+
+					// Modify domainName field externally (this is the drift we're introducing)
+					networkData["domainName"] = "drifted.local"
+
+					// Build BCM entity structure (required for updateNetwork)
+					entity := map[string]interface{}{
+						"baseType":      "Network",
+						"childType":     "",
+						"modified":      true,
+						"to_be_removed": false,
+						"revision":      networkData["revision"],
+						"uuid":          uuid,
+					}
+
+					// Copy all network fields
+					for k, v := range networkData {
+						if k != "uuid" {
+							entity[k] = v
+						}
+					}
+
+					// Update via BCM API
+					_, err = client.CallJSONRPC(ctx, "cmnet", "updateNetwork", entity, false)
+					if err != nil {
+						t.Fatalf("Failed to update network externally: %v", err)
+					}
+
+					// Wait for eventual consistency
+					time.Sleep(TestEventualConsistencyDelay)
+
+					t.Logf("[DEBUG] Modified domainName externally to: %v", entity["domainName"])
+				},
+				Config:             testAccCMNetNetworkConfigComplete(networkName),
+				ExpectNonEmptyPlan: true,
+			},
+			// Step 3: Terraform restores desired state
+			{
+				Config: testAccCMNetNetworkConfigComplete(networkName),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmnet_network.test",
+						tfjsonpath.New("domain_name"),
+						knownvalue.StringExact("test.local"),
+					),
+					compareID.AddStateValue(
+						"bcm_cmnet_network.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+		},
+	})
+}
+
 func testAccCheckCMNetNetworkDestroy(s *terraform.State) error {
 	// Create BCM client using shared helper
 	client := createTestBCMClient(&testing.T{})

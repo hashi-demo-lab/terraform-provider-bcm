@@ -986,6 +986,131 @@ func TestAccCMPartSoftwareImage_Drift(t *testing.T) {
 	})
 }
 
+// TestAccCMPartSoftwareImage_DriftSOLSpeed tests drift detection for sol_speed attribute
+// Verifies that Terraform detects and corrects external modifications to sol_speed
+func TestAccCMPartSoftwareImage_DriftSOLSpeed(t *testing.T) {
+	imageName := generateUniqueTestName("tftest-drift-sol")
+	imagePath := fmt.Sprintf("/cm/images/%s", imageName)
+
+	// ID consistency tracking across test steps
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccCMPartSoftwareImagePreCheck(t, imageName)
+		},
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMPartSoftwareImageDestroy,
+		Steps: []resource.TestStep{
+			// Step 1: Create resource with default sol_speed ("115200")
+			{
+				Config: testAccCMPartSoftwareImageResourceConfig_Basic(imageName, imagePath),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(imageName),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("sol_speed"),
+						knownvalue.StringExact("115200"),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("uuid"),
+						knownvalue.NotNull(),
+					),
+					compareID.AddStateValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+			// Step 2: Modify sol_speed externally via BCM API, verify drift detected
+			{
+				PreConfig: func() {
+					client := createTestBCMClient(t)
+					ctx := context.Background()
+
+					// Get UUID by image name using helper
+					uuid := getResourceUUIDByName(t, "CMPart", "getSoftwareImage", imageName)
+
+					// Fetch full software image data from BCM API
+					body, err := client.CallJSONRPC(ctx, "CMPart", "getSoftwareImage", imageName)
+					if err != nil {
+						t.Fatalf("Failed to fetch software image for drift modification: %v", err)
+					}
+
+					// Parse the image data
+					var imageData map[string]interface{}
+					if err := json.Unmarshal(body, &imageData); err != nil {
+						t.Fatalf("Failed to parse image data: %v", err)
+					}
+
+					// Modify solSpeed (note: BCM uses camelCase, Terraform uses snake_case)
+					imageData["solSpeed"] = "9600"
+
+					// Wrap in BCM API entity structure required for updates
+					entity := map[string]interface{}{
+						"baseType":      "SoftwareImage",
+						"childType":     "",
+						"modified":      true,
+						"to_be_removed": false,
+						"revision":      "",
+						"uuid":          uuid,
+					}
+					// Copy all image data fields except uuid (already set above)
+					for k, v := range imageData {
+						if k != "uuid" {
+							entity[k] = v
+						}
+					}
+
+					// Update via BCM API (second parameter: clone = false)
+					_, err = client.CallJSONRPC(ctx, "CMPart", "updateSoftwareImage", entity, false)
+					if err != nil {
+						t.Fatalf("Failed to update software image via BCM API: %v", err)
+					}
+
+					// Wait for eventual consistency
+					time.Sleep(TestEventualConsistencyDelay)
+
+					t.Logf("[DEBUG] Modified sol_speed externally to: %v", entity["solSpeed"])
+				},
+				Config:             testAccCMPartSoftwareImageResourceConfig_Basic(imageName, imagePath),
+				ExpectNonEmptyPlan: true,
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+			// Step 3: Restore desired state (Terraform applies config to fix drift)
+			{
+				Config: testAccCMPartSoftwareImageResourceConfig_Basic(imageName, imagePath),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("sol_speed"),
+						knownvalue.StringExact("115200"),
+					),
+					compareID.AddStateValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+		},
+	})
+}
+
 // ========================================
 // Phase 4: Destroy Edge Case Tests (User Story 2)
 // ========================================
