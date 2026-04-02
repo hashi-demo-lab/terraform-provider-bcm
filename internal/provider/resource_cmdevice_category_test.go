@@ -5065,9 +5065,10 @@ func TestAccCMDeviceCategory_RolesUUIDPreservedOnRefresh(t *testing.T) {
 					),
 				},
 			},
-			// Refresh (re-read) and verify UUID unchanged
+			// Re-apply identical config and verify the refreshed state keeps the same UUID.
+			// This test framework version does not allow RefreshState with ConfigStateChecks.
 			{
-				RefreshState: true,
+				Config: testAccCMDeviceCategoryResourceConfig_WithRole(categoryName),
 				ConfigStateChecks: []statecheck.StateCheck{
 					// Verify UUID remains the same after refresh
 					compareRoleUUID.AddStateValue(
@@ -5152,13 +5153,13 @@ resource "bcm_cmdevice_category" "test" {
     parent_software_image = local.software_image_uuid
   }
 
-  bmc_settings = {
-    user_name = "admin"
-    password  = %[5]q
-    privilege = "admin"
-    user_id   = 2
-  }
-}
+	  bmc_settings = {
+	    user_name = "admin"
+	    password  = %[5]q
+	    privilege = "ADMINISTRATOR"
+	    user_id   = 2
+	  }
+	}
 `,
 		os.Getenv("BCM_ENDPOINT"),
 		os.Getenv("BCM_USERNAME"),
