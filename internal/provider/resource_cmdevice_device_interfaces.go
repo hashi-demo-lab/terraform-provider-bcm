@@ -270,21 +270,6 @@ func findInterfaceByName(interfaces []DeviceInterfaceModel, name string) (*Devic
 	return nil, -1
 }
 
-// getProvisioningInterfaceUUID returns the UUID of the first bootable interface.
-// If no bootable interface is found, returns empty string.
-func getProvisioningInterfaceUUID(interfaces []DeviceInterfaceModel) string {
-	for _, iface := range interfaces {
-		if !iface.Bootable.IsNull() && iface.Bootable.ValueBool() {
-			return iface.UUID.ValueString()
-		}
-	}
-	// If no bootable interface specified, return first interface's UUID if available
-	if len(interfaces) > 0 && !interfaces[0].UUID.IsNull() {
-		return interfaces[0].UUID.ValueString()
-	}
-	return ""
-}
-
 // buildInterfacesAPIArray constructs BCM API interfaces array from Terraform model.
 // existingInterfaces is used to preserve UUIDs during updates.
 func buildInterfacesAPIArray(interfaces []DeviceInterfaceModel, existingInterfaces []DeviceInterfaceModel) []interface{} {

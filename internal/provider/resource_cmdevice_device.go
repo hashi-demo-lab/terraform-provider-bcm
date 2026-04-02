@@ -720,12 +720,11 @@ func (r *CMDeviceDeviceResource) Create(ctx context.Context, req resource.Create
 		}
 	}
 
-	// BCM returns nil UUID for management_network - preserve the configured value
-	// Still needed when user explicitly sets management_network as an optional field
-	if !plan.ManagementNetwork.IsNull() && !plan.ManagementNetwork.IsUnknown() {
-		if state.ManagementNetwork.IsNull() || state.ManagementNetwork.ValueString() == "00000000-0000-0000-0000-000000000000" {
-			state.ManagementNetwork = plan.ManagementNetwork
-		}
+	// management_network: if plan didn't set it (null) but BCM returns a value,
+	// preserve null to match plan (BCM may return a default network UUID).
+	// If plan set it and BCM returns it, parseDeviceFromAPI handles it correctly.
+	if plan.ManagementNetwork.IsNull() && !state.ManagementNetwork.IsNull() {
+		state.ManagementNetwork = types.StringNull()
 	}
 
 	// BCM returns default values for Optional+Computed fields when not explicitly set
@@ -983,12 +982,13 @@ func (r *CMDeviceDeviceResource) Read(ctx context.Context, req resource.ReadRequ
 	if !isImport {
 		// Normal Read path: Preserve null values from state to avoid drift
 
-		// BCM returns nil UUID for management_network - preserve the configured value
-		// Still needed when user explicitly sets management_network as an optional field
-		if !state.ManagementNetwork.IsNull() && !state.ManagementNetwork.IsUnknown() {
-			if newState.ManagementNetwork.IsNull() || newState.ManagementNetwork.ValueString() == "00000000-0000-0000-0000-000000000000" {
-				newState.ManagementNetwork = state.ManagementNetwork
-			}
+		// management_network: BCM does not clear this field when zero UUID is sent,
+		// so if state is null (user removed it from config) and BCM returns a value,
+		// preserve null to avoid false drift. However, if state has a real UUID and
+		// BCM returns zero UUID (mapped to null by parseDeviceFromAPI), that IS drift
+		// and newState will already be null, which differs from state — detected automatically.
+		if state.ManagementNetwork.IsNull() && !newState.ManagementNetwork.IsNull() {
+			newState.ManagementNetwork = types.StringNull()
 		}
 
 		// BCM returns "CATEGORY" for boot_loader/boot_loader_protocol when inheriting from category
@@ -1228,12 +1228,9 @@ func (r *CMDeviceDeviceResource) Update(ctx context.Context, req resource.Update
 		}
 	}
 
-	// BCM sets management_network to nil UUID - preserve plan value if set, otherwise use state or null
-	// Still needed when user explicitly sets management_network as an optional field
+	// management_network: use plan value if set, otherwise null (user removed it from config)
 	if !plan.ManagementNetwork.IsNull() && !plan.ManagementNetwork.IsUnknown() {
 		newState.ManagementNetwork = plan.ManagementNetwork
-	} else if !state.ManagementNetwork.IsNull() && !state.ManagementNetwork.IsUnknown() {
-		newState.ManagementNetwork = state.ManagementNetwork
 	} else {
 		newState.ManagementNetwork = types.StringNull()
 	}
@@ -1359,9 +1356,20 @@ func (r *CMDeviceDeviceResource) ImportState(ctx context.Context, req resource.I
 func (r *CMDeviceDeviceResource) buildDeviceAPIEntityWithExisting(plan CMDeviceDeviceResourceModel, deviceUUID string, partitionUUID string, existingInterfaces []DeviceInterfaceModel) map[string]interface{} {
 	// Build interfaces from the interfaces block
 	interfaces := buildInterfacesAPIArray(plan.Interfaces, existingInterfaces)
-	provisioningInterfaceUUID := getProvisioningInterfaceUUID(plan.Interfaces)
 
-	// If no provisioning interface found from plan, get from built interfaces
+	// Derive provisioningInterface from built interfaces (which have correct UUIDs).
+	// Find the first bootable interface; fall back to interfaces[0] if none is bootable.
+	provisioningInterfaceUUID := ""
+	for _, iface := range interfaces {
+		if ifaceMap, ok := iface.(map[string]interface{}); ok {
+			if bootable, ok := ifaceMap["bootable"].(bool); ok && bootable {
+				if ifaceUUID, ok := ifaceMap["uuid"].(string); ok {
+					provisioningInterfaceUUID = ifaceUUID
+					break
+				}
+			}
+		}
+	}
 	if provisioningInterfaceUUID == "" && len(interfaces) > 0 {
 		if firstIface, ok := interfaces[0].(map[string]interface{}); ok {
 			if ifaceUUID, ok := firstIface["uuid"].(string); ok {
