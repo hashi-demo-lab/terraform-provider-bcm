@@ -1328,3 +1328,44 @@ resource "bcm_cmuser_user" "test" {
 		homeDir,
 	)
 }
+
+// TestAccCMUserUser_ValidationInvalidEmail tests that an invalid email address
+// is rejected by the schema validator (RegexMatches).
+func TestAccCMUserUser_ValidationInvalidEmail(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMUserUserDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config:      testAccCMUserUserConfigWithEmail(generateUniqueUnixUsername(), "TestPass123!", "not-an-email"),
+				ExpectError: regexp.MustCompile(`must be a valid email`),
+			},
+		},
+	})
+}
+
+// testAccCMUserUserConfigWithEmail generates configuration with a specific email.
+func testAccCMUserUserConfigWithEmail(username, password, email string) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+resource "bcm_cmuser_user" "test" {
+  username = %[4]q
+  password = %[5]q
+  email    = %[6]q
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		username,
+		password,
+		email,
+	)
+}

@@ -4605,6 +4605,150 @@ resource "bcm_cmdevice_device" "test" {
 	})
 }
 
+// TestAccCMDeviceDevice_ValidationInvalidBootLoader tests that an invalid
+// boot_loader value is rejected by the schema validator (OneOf).
+func TestAccCMDeviceDevice_ValidationInvalidBootLoader(t *testing.T) {
+	deviceName := generateUniqueTestName("tftest-dev-val-bl")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceDeviceDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmnet_networks" "management" {
+  filter { name_pattern = "managementnet" }
+}
+
+data "bcm_cmdevice_categories" "all" {}
+
+resource "bcm_cmdevice_device" "test" {
+  hostname    = %[4]q
+  category    = data.bcm_cmdevice_categories.all.categories[0].id
+  boot_loader = "INVALID"
+  interfaces {
+    name    = "eth0"
+    type    = "physical"
+    mac     = "02:00:00:00:00:06"
+    network = data.bcm_cmnet_networks.management.networks[0].id
+  }
+}
+`,
+					os.Getenv("BCM_ENDPOINT"),
+					os.Getenv("BCM_USERNAME"),
+					os.Getenv("BCM_PASSWORD"),
+					deviceName,
+				),
+				ExpectError: regexp.MustCompile(`value must be one of`),
+			},
+		},
+	})
+}
+
+// TestAccCMDeviceDevice_ValidationInvalidBootLoaderProtocol tests that an invalid
+// boot_loader_protocol value is rejected by the schema validator (OneOf).
+func TestAccCMDeviceDevice_ValidationInvalidBootLoaderProtocol(t *testing.T) {
+	deviceName := generateUniqueTestName("tftest-dev-val-blp")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceDeviceDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmnet_networks" "management" {
+  filter { name_pattern = "managementnet" }
+}
+
+data "bcm_cmdevice_categories" "all" {}
+
+resource "bcm_cmdevice_device" "test" {
+  hostname             = %[4]q
+  category             = data.bcm_cmdevice_categories.all.categories[0].id
+  boot_loader_protocol = "FTP"
+  interfaces {
+    name    = "eth0"
+    type    = "physical"
+    mac     = "02:00:00:00:00:07"
+    network = data.bcm_cmnet_networks.management.networks[0].id
+  }
+}
+`,
+					os.Getenv("BCM_ENDPOINT"),
+					os.Getenv("BCM_USERNAME"),
+					os.Getenv("BCM_PASSWORD"),
+					deviceName,
+				),
+				ExpectError: regexp.MustCompile(`value must be one of`),
+			},
+		},
+	})
+}
+
+// TestAccCMDeviceDevice_ValidationInvalidPowerControl tests that an invalid
+// power_control value is rejected by the schema validator (OneOf).
+func TestAccCMDeviceDevice_ValidationInvalidPowerControl(t *testing.T) {
+	deviceName := generateUniqueTestName("tftest-dev-val-pc")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceDeviceDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmnet_networks" "management" {
+  filter { name_pattern = "managementnet" }
+}
+
+data "bcm_cmdevice_categories" "all" {}
+
+resource "bcm_cmdevice_device" "test" {
+  hostname      = %[4]q
+  category      = data.bcm_cmdevice_categories.all.categories[0].id
+  power_control = "magic"
+  interfaces {
+    name    = "eth0"
+    type    = "physical"
+    mac     = "02:00:00:00:00:08"
+    network = data.bcm_cmnet_networks.management.networks[0].id
+  }
+}
+`,
+					os.Getenv("BCM_ENDPOINT"),
+					os.Getenv("BCM_USERNAME"),
+					os.Getenv("BCM_PASSWORD"),
+					deviceName,
+				),
+				ExpectError: regexp.MustCompile(`value must be one of`),
+			},
+		},
+	})
+}
+
 // deviceDisappearsCheck is a custom StateCheck that deletes a device resource
 // via the BCM API during the check phase, simulating external deletion.
 // This allows the test to verify that Terraform detects the missing resource

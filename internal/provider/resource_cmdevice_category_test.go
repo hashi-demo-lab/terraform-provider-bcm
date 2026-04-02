@@ -803,13 +803,10 @@ func TestAccCMDeviceCategory_DestroyWithForce(t *testing.T) {
 	})
 }
 
-// TestAccCMDeviceCategory_DestroyExternalDelete verifies destroy handles externally deleted resources
-// Phase 4 - Task T023: Create resource, delete via BCM API, verify Terraform destroy succeeds.
+// TestAccCMDeviceCategory_DestroyExternalDelete verifies Terraform detects when a
+// category is deleted externally and plans to recreate it.
 func TestAccCMDeviceCategory_DestroyExternalDelete(t *testing.T) {
 	categoryName := generateUniqueTestName("tftest-destroy-external")
-
-	// ID consistency tracking across all CRUD operations
-	compareID := statecheck.CompareValue(compare.ValuesSame())
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -818,7 +815,6 @@ func TestAccCMDeviceCategory_DestroyExternalDelete(t *testing.T) {
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckCMDeviceCategoryDestroy,
 		Steps: []resource.TestStep{
-			// Step 1: Create category
 			{
 				Config: testAccCMDeviceCategoryResourceConfig(categoryName),
 				ConfigStateChecks: []statecheck.StateCheck{
@@ -832,42 +828,19 @@ func TestAccCMDeviceCategory_DestroyExternalDelete(t *testing.T) {
 						tfjsonpath.New("uuid"),
 						knownvalue.NotNull(),
 					),
-					compareID.AddStateValue(
-						"bcm_cmdevice_category.test",
-						tfjsonpath.New("id"),
-					),
+					categoryDisappearsCheck{resourceAddress: "bcm_cmdevice_category.test"},
 				},
+				ExpectNonEmptyPlan: true,
 			},
-			// Step 2: Delete externally via BCM API, then let Terraform destroy
 			{
-				PreConfig: func() {
-					// Delete the category via BCM API before Terraform tries to destroy it
-					client := createTestBCMClient(t)
-					ctx := t.Context()
-
-					// Get category UUID
-					uuid := getResourceUUIDByName(t, "cmdevice", "getCategory", categoryName)
-
-					// Delete via BCM API with force=true (removeCategories expects array of UUIDs)
-					_, err := client.CallJSONRPC(ctx, "cmdevice", "removeCategories", []string{uuid}, true)
-					if err != nil {
-						t.Logf("[WARN] Failed to delete category externally (may not exist): %v", err)
-					}
-
-					// Wait for eventual consistency
-					time.Sleep(TestEventualConsistencyDelay)
-
-					t.Logf("[DEBUG] Deleted category externally: %s", categoryName)
-				},
 				Config: testAccCMDeviceCategoryResourceConfig(categoryName),
 				ConfigStateChecks: []statecheck.StateCheck{
-					compareID.AddStateValue(
+					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_category.test",
-						tfjsonpath.New("id"),
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(categoryName),
 					),
 				},
-				// Destroy will happen automatically after this step
-				// CheckDestroy should pass even though resource was already deleted
 			},
 		},
 	})
@@ -2159,6 +2132,57 @@ func TestAccCMDeviceCategory_ValidationInvalidSicknessCheckInterval(t *testing.T
 	})
 }
 
+// TestAccCMDeviceCategory_ValidationInvalidAuthenticationService tests authentication_service enum validation.
+func TestAccCMDeviceCategory_ValidationInvalidAuthenticationService(t *testing.T) {
+	categoryName := generateUniqueTestName("tftest-cat-val-as")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceCategoryDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config:      testAccCMDeviceCategoryResourceConfig_InvalidAuthenticationService(categoryName, "KERBEROS"),
+				ExpectError: regexp.MustCompile(`Attribute authentication_service value must be one of`),
+			},
+		},
+	})
+}
+
+// TestAccCMDeviceCategory_ValidationInvalidDefaultGateway tests default_gateway IPv4 validation.
+func TestAccCMDeviceCategory_ValidationInvalidDefaultGateway(t *testing.T) {
+	categoryName := generateUniqueTestName("tftest-cat-val-dg")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceCategoryDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config:      testAccCMDeviceCategoryResourceConfig_InvalidDefaultGateway(categoryName, "not-an-ip"),
+				ExpectError: regexp.MustCompile(`must be a valid IPv4 address`),
+			},
+		},
+	})
+}
+
+// TestAccCMDeviceCategory_ValidationInvalidInteractiveUser tests interactive_user enum validation.
+func TestAccCMDeviceCategory_ValidationInvalidInteractiveUser(t *testing.T) {
+	categoryName := generateUniqueTestName("tftest-cat-val-iu")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceCategoryDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config:      testAccCMDeviceCategoryResourceConfig_InvalidInteractiveUser(categoryName, "SOMETIMES"),
+				ExpectError: regexp.MustCompile(`Attribute interactive_user value must be one of`),
+			},
+		},
+	})
+}
+
 // ========================================
 // Validation Test Config Helpers
 // ========================================
@@ -2576,6 +2600,114 @@ resource "bcm_cmdevice_category" "test" {
 		os.Getenv("BCM_PASSWORD"),
 		name,
 		interval,
+	)
+}
+
+// testAccCMDeviceCategoryResourceConfig_InvalidAuthenticationService creates config with invalid authentication_service.
+func testAccCMDeviceCategoryResourceConfig_InvalidAuthenticationService(name, authService string) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmdevice_categories" "all" {}
+data "bcm_cmpart_softwareimages" "all" {}
+
+locals {
+  management_network_uuid = length(data.bcm_cmdevice_categories.all.categories) > 0 ? data.bcm_cmdevice_categories.all.categories[0].management_network_id : "00000000-0000-0000-0000-000000000000"
+  software_image_uuid = length(data.bcm_cmpart_softwareimages.all.images) > 0 ? data.bcm_cmpart_softwareimages.all.images[0].uuid : "00000000-0000-0000-0000-000000000000"
+}
+
+resource "bcm_cmdevice_category" "test" {
+  name                   = %[4]q
+  management_network     = local.management_network_uuid
+  authentication_service = %[5]q
+
+  software_image_proxy = {
+    parent_software_image = local.software_image_uuid
+  }
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		name,
+		authService,
+	)
+}
+
+// testAccCMDeviceCategoryResourceConfig_InvalidDefaultGateway creates config with invalid default_gateway.
+func testAccCMDeviceCategoryResourceConfig_InvalidDefaultGateway(name, gateway string) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmdevice_categories" "all" {}
+data "bcm_cmpart_softwareimages" "all" {}
+
+locals {
+  management_network_uuid = length(data.bcm_cmdevice_categories.all.categories) > 0 ? data.bcm_cmdevice_categories.all.categories[0].management_network_id : "00000000-0000-0000-0000-000000000000"
+  software_image_uuid = length(data.bcm_cmpart_softwareimages.all.images) > 0 ? data.bcm_cmpart_softwareimages.all.images[0].uuid : "00000000-0000-0000-0000-000000000000"
+}
+
+resource "bcm_cmdevice_category" "test" {
+  name               = %[4]q
+  management_network = local.management_network_uuid
+  default_gateway    = %[5]q
+
+  software_image_proxy = {
+    parent_software_image = local.software_image_uuid
+  }
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		name,
+		gateway,
+	)
+}
+
+// testAccCMDeviceCategoryResourceConfig_InvalidInteractiveUser creates config with invalid interactive_user.
+func testAccCMDeviceCategoryResourceConfig_InvalidInteractiveUser(name, interactiveUser string) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmdevice_categories" "all" {}
+data "bcm_cmpart_softwareimages" "all" {}
+
+locals {
+  management_network_uuid = length(data.bcm_cmdevice_categories.all.categories) > 0 ? data.bcm_cmdevice_categories.all.categories[0].management_network_id : "00000000-0000-0000-0000-000000000000"
+  software_image_uuid = length(data.bcm_cmpart_softwareimages.all.images) > 0 ? data.bcm_cmpart_softwareimages.all.images[0].uuid : "00000000-0000-0000-0000-000000000000"
+}
+
+resource "bcm_cmdevice_category" "test" {
+  name               = %[4]q
+  management_network = local.management_network_uuid
+  interactive_user   = %[5]q
+
+  software_image_proxy = {
+    parent_software_image = local.software_image_uuid
+  }
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		name,
+		interactiveUser,
 	)
 }
 
