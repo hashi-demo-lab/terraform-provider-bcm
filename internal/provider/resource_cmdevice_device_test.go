@@ -2365,7 +2365,7 @@ func TestAccCMDeviceDevice_InvalidRoleUUID(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config:      testAccCMDeviceDeviceConfigWithRoleNames(deviceName, categoryName, imageName, imagePath, mac, invalidRoles),
-				ExpectError: regexp.MustCompile(`Roles not found`),
+				ExpectError: regexp.MustCompile(`roles not found`),
 			},
 		},
 	})

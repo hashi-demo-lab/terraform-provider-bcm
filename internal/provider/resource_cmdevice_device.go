@@ -150,7 +150,7 @@ func (r *CMDeviceDeviceResource) Schema(ctx context.Context, req resource.Schema
 			"management_network": schema.StringAttribute{
 				Optional:            true,
 				Computed:            true,
-				MarkdownDescription: "Management network UUID reference (may be reset by BCM, required for device creation)",
+				MarkdownDescription: "Management network UUID reference. BCM stores exactly what is sent; omitting defaults to unset (zero UUID).",
 				PlanModifiers: []planmodifier.String{
 					nullIfRemovedFromConfig(),
 				},
@@ -723,9 +723,9 @@ func (r *CMDeviceDeviceResource) Create(ctx context.Context, req resource.Create
 		}
 	}
 
-	// management_network: if plan didn't set it (null) but BCM returns a value,
-	// preserve null to match plan (BCM may return a default network UUID).
-	// If plan set it and BCM returns it, parseDeviceFromAPI handles it correctly.
+	// management_network: parseDeviceFromAPI maps zero UUID to null.
+	// If user didn't set it (plan is null) but BCM returns a non-zero value,
+	// preserve null to match the plan.
 	if plan.ManagementNetwork.IsNull() && !state.ManagementNetwork.IsNull() {
 		state.ManagementNetwork = types.StringNull()
 	}
@@ -988,11 +988,10 @@ func (r *CMDeviceDeviceResource) Read(ctx context.Context, req resource.ReadRequ
 	if !isImport {
 		// Normal Read path: Preserve null values from state to avoid drift
 
-		// management_network: BCM does not clear this field when zero UUID is sent,
-		// so if state is null (user removed it from config) and BCM returns a value,
-		// preserve null to avoid false drift. However, if state has a real UUID and
-		// BCM returns zero UUID (mapped to null by parseDeviceFromAPI), that IS drift
-		// and newState will already be null, which differs from state — detected automatically.
+		// management_network: BCM stores exactly what was sent. If state is null
+		// (user didn't set it) but BCM returns a non-zero value, preserve null
+		// to avoid false drift. If state has a real UUID and BCM returns zero UUID
+		// (mapped to null by parseDeviceFromAPI), that IS drift — detected automatically.
 		if state.ManagementNetwork.IsNull() && !newState.ManagementNetwork.IsNull() {
 			newState.ManagementNetwork = types.StringNull()
 		}
@@ -1234,10 +1233,10 @@ func (r *CMDeviceDeviceResource) Update(ctx context.Context, req resource.Update
 		}
 	}
 
-	// management_network: use plan value if set, otherwise null (user removed it from config)
-	if !plan.ManagementNetwork.IsNull() && !plan.ManagementNetwork.IsUnknown() {
-		newState.ManagementNetwork = plan.ManagementNetwork
-	} else {
+	// management_network: parseDeviceFromAPI already maps zero UUID to null.
+	// If user removed it from config (plan is null) but BCM still returns a value,
+	// preserve null to match the plan — the next read will reconcile.
+	if plan.ManagementNetwork.IsNull() && !newState.ManagementNetwork.IsNull() {
 		newState.ManagementNetwork = types.StringNull()
 	}
 
@@ -1393,25 +1392,24 @@ func (r *CMDeviceDeviceResource) buildDeviceAPIEntityWithExisting(plan CMDeviceD
 		deviceMAC = plan.MAC.ValueString()
 	}
 
-	// Use plan's management_network if explicitly set, otherwise default to nil UUID
-	managementNetworkUUID := "00000000-0000-0000-0000-000000000000"
-	if !plan.ManagementNetwork.IsNull() && !plan.ManagementNetwork.IsUnknown() {
-		managementNetworkUUID = plan.ManagementNetwork.ValueString()
-	}
-
 	entity := map[string]interface{}{
 		"baseType":              "Device",
 		"childType":             "PhysicalNode",
 		"hostname":              plan.Hostname.ValueString(),
 		"mac":                   deviceMAC,
 		"category":              plan.Category.ValueString(),
-		"managementNetwork":     managementNetworkUUID,
 		"modified":              true,
 		"to_be_removed":         false,
 		"revision":              "",
 		"uuid":                  deviceUUID,
 		"provisioningInterface": provisioningInterfaceUUID,
 		"interfaces":            interfaces,
+	}
+
+	// Only include managementNetwork when explicitly set by the user.
+	// BCM treats omitted and zero UUID identically (both default to zero UUID on read).
+	if !plan.ManagementNetwork.IsNull() && !plan.ManagementNetwork.IsUnknown() {
+		entity["managementNetwork"] = plan.ManagementNetwork.ValueString()
 	}
 
 	// Always include partition field as BCM requires it
@@ -1664,7 +1662,8 @@ func (r *CMDeviceDeviceResource) parseDeviceFromAPI(data map[string]interface{})
 		model.Category = types.StringValue(category)
 	}
 
-	// BCM often returns nil UUID for managementNetwork - handle gracefully
+	// BCM returns exactly what was sent for managementNetwork.
+	// Zero UUID means "not set" — map it to null in Terraform state.
 	if managementNetwork, ok := data["managementNetwork"].(string); ok && managementNetwork != "" && managementNetwork != "00000000-0000-0000-0000-000000000000" {
 		model.ManagementNetwork = types.StringValue(managementNetwork)
 	} else {
