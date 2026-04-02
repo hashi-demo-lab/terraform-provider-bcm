@@ -462,6 +462,9 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 			"io_scheduler": schema.StringAttribute{
 				Optional:            true,
 				MarkdownDescription: "I/O scheduler",
+				Validators: []validator.String{
+					stringvalidator.OneOf("none", "noop", "cfq", "deadline", "mq-deadline", "bfq", "kyber"),
+				},
 			},
 			"node_installer_disk": schema.BoolAttribute{
 				Optional:            true,
@@ -626,6 +629,9 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 						"filesystem": schema.StringAttribute{
 							Required:            true,
 							MarkdownDescription: "Filesystem type",
+							Validators: []validator.String{
+								stringvalidator.OneOf("nfs", "ext4", "xfs", "btrfs", "tmpfs", "cifs"),
+							},
 						},
 						"mountoptions": schema.StringAttribute{
 							Optional:            true,
@@ -634,6 +640,9 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 						"fsck": schema.StringAttribute{
 							Optional:            true,
 							MarkdownDescription: "Filesystem check mode",
+							Validators: []validator.String{
+								stringvalidator.OneOf("NONE", "CHECK", "REPAIR"),
+							},
 						},
 						"dump": schema.BoolAttribute{
 							Optional:            true,
@@ -732,7 +741,10 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 						},
 						"child_type": schema.StringAttribute{
 							Required:            true,
-							MarkdownDescription: "Role type (e.g., HeadNodeRole, StorageRole, BackupRole)",
+							MarkdownDescription: "Role type (e.g., HeadNode, ComputeNode, PhysicalNode)",
+							Validators: []validator.String{
+								stringvalidator.OneOf("HeadNode", "ComputeNode", "PhysicalNode", "GpuNode", "DpuNode"),
+							},
 						},
 						"uuid": schema.StringAttribute{
 							Computed:            true,
@@ -839,6 +851,9 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 					"leak_policy": schema.StringAttribute{
 						Optional:            true,
 						MarkdownDescription: "Leak policy",
+						Validators: []validator.String{
+							stringvalidator.OneOf("NONE", "FAN", "SHUTDOWN", "WARNING"),
+						},
 					},
 					"leak_reaction_delay": schema.Float64Attribute{
 						Optional:            true,
@@ -898,10 +913,16 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 						"compute_mode": schema.StringAttribute{
 							Optional:            true,
 							MarkdownDescription: "Compute mode (Nvidia only).",
+							Validators: []validator.String{
+								stringvalidator.OneOf("DEFAULT", "EXCLUSIVE_PROCESS", "EXCLUSIVE_THREAD", "PROHIBITED"),
+							},
 						},
 						"clock_sync_boost_mode": schema.StringAttribute{
 							Optional:            true,
 							MarkdownDescription: "Clock sync boost mode among GPUs in group (Nvidia only).",
+							Validators: []validator.String{
+								stringvalidator.OneOf("NONE", "SYNC", "AUTO"),
+							},
 						},
 						"multiprocessor_clock_speed": schema.Int64Attribute{
 							Optional:            true,
@@ -942,6 +963,9 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 						"power_play": schema.StringAttribute{
 							Optional:            true,
 							MarkdownDescription: "Power play mode (AMD only).",
+							Validators: []validator.String{
+								stringvalidator.OneOf("DEFAULT", "AUTO", "LOW", "MEDIUM", "HIGH"),
+							},
 						},
 						"gpu_overdrive": schema.Float64Attribute{
 							Optional:            true,

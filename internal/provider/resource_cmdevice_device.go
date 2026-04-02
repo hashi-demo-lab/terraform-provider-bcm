@@ -415,6 +415,9 @@ func (r *CMDeviceDeviceResource) Schema(ctx context.Context, req resource.Schema
 							Optional:            true,
 							Computed:            true,
 							MarkdownDescription: "Container runtime service name (e.g., 'docker.service', 'containerd.service'). Default: 'docker.service'.",
+							Validators: []validator.String{
+								stringvalidator.OneOf("docker.service", "containerd.service", "crio.service"),
+							},
 						},
 						"max_pods": schema.Int64Attribute{
 							Optional:            true,

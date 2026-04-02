@@ -155,6 +155,9 @@ func (r *CMPartSoftwareImageResource) Schema(ctx context.Context, req resource.S
 				Computed:            true,
 				Default:             stringdefault.StaticString("ttyS1"),
 				MarkdownDescription: "SOL serial port device. Defaults to `ttyS1`.",
+				Validators: []validator.String{
+					stringvalidator.OneOf("ttyS0", "ttyS1", "ttyS2", "ttyS3"),
+				},
 			},
 			"sol_speed": schema.StringAttribute{
 				Optional:            true,
