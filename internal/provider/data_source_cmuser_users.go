@@ -225,7 +225,7 @@ func (d *CMUserUsersDataSource) Read(ctx context.Context, req datasource.ReadReq
 	}
 
 	// Map and filter users
-	var filteredUsers []UserModel
+	filteredUsers := make([]UserModel, 0)
 	for _, userData := range usersData {
 		user := mapUserAPIResponseToModel(userData)
 
