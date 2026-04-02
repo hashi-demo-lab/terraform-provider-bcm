@@ -69,8 +69,8 @@ func TestAccCMDeviceRolesDataSource_FilterByChildType(t *testing.T) {
 					),
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmdevice_roles.test",
-						tfjsonpath.New("roles"),
-						knownvalue.ListSizeExact(0),
+						tfjsonpath.New("roles").AtSliceIndex(0).AtMapKey("child_type"),
+						knownvalue.StringExact("HeadNodeRole"),
 					),
 				},
 			},
@@ -123,8 +123,8 @@ func TestAccCMDeviceRolesDataSource_CombinedFilters(t *testing.T) {
 					),
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmdevice_roles.test",
-						tfjsonpath.New("roles"),
-						knownvalue.ListSizeExact(0),
+						tfjsonpath.New("roles").AtSliceIndex(0).AtMapKey("child_type"),
+						knownvalue.StringExact("HeadNodeRole"),
 					),
 				},
 			},
