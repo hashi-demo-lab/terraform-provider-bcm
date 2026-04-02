@@ -28,9 +28,9 @@ import (
 
 // Ensure provider defined types fully satisfy framework interfaces.
 var (
-	_ resource.Resource                     = &CMDeviceDeviceResource{}
-	_ resource.ResourceWithImportState      = &CMDeviceDeviceResource{}
-	_ resource.ResourceWithValidateConfig   = &CMDeviceDeviceResource{}
+	_ resource.Resource                   = &CMDeviceDeviceResource{}
+	_ resource.ResourceWithImportState    = &CMDeviceDeviceResource{}
+	_ resource.ResourceWithValidateConfig = &CMDeviceDeviceResource{}
 )
 
 // CMDeviceDeviceResource defines the resource implementation.

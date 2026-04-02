@@ -778,7 +778,7 @@ func TestAccCMDeviceDevice_InterfacesRequired(t *testing.T) {
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: fmt.Sprintf(`
+				Config: `
 provider "bcm" {
   endpoint             = "https://localhost:8081"
   username             = "test"
@@ -790,7 +790,7 @@ resource "bcm_cmdevice_device" "test" {
   hostname = "test-no-interfaces"
   category = "12345678-1234-1234-1234-123456789012"
 }
-`),
+`,
 				ExpectError: regexp.MustCompile(`At least one interface is required`),
 			},
 		},
