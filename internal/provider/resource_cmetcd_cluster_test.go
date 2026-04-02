@@ -260,6 +260,8 @@ func TestAccCMEtcdCluster_update(t *testing.T) {
 	clusterName := generateShortTestName("upd")
 	clusterNameUpdated := generateShortTestName("upd2")
 
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheckCMEtcdCluster(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -284,6 +286,10 @@ func TestAccCMEtcdCluster_update(t *testing.T) {
 						tfjsonpath.New("election_timeout"),
 						knownvalue.Int64Exact(1500),
 					),
+					compareID.AddStateValue(
+						"bcm_cmetcd_cluster.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Update name and timings
@@ -305,6 +311,10 @@ func TestAccCMEtcdCluster_update(t *testing.T) {
 						tfjsonpath.New("election_timeout"),
 						knownvalue.Int64Exact(2000),
 					),
+					compareID.AddStateValue(
+						"bcm_cmetcd_cluster.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Idempotency check after Update
@@ -314,6 +324,12 @@ func TestAccCMEtcdCluster_update(t *testing.T) {
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
 					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmetcd_cluster.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 		},
@@ -362,6 +378,8 @@ func TestAccCMEtcdCluster_import(t *testing.T) {
 func TestAccCMEtcdCluster_driftDetection(t *testing.T) {
 	clusterName := generateShortTestName("drf")
 
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheckCMEtcdCluster(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -375,6 +393,10 @@ func TestAccCMEtcdCluster_driftDetection(t *testing.T) {
 						"bcm_cmetcd_cluster.test",
 						tfjsonpath.New("heartbeat_interval"),
 						knownvalue.Int64Exact(100),
+					),
+					compareID.AddStateValue(
+						"bcm_cmetcd_cluster.test",
+						tfjsonpath.New("id"),
 					),
 				},
 			},
@@ -433,6 +455,10 @@ func TestAccCMEtcdCluster_driftDetection(t *testing.T) {
 						"bcm_cmetcd_cluster.test",
 						tfjsonpath.New("heartbeat_interval"),
 						knownvalue.Int64Exact(100),
+					),
+					compareID.AddStateValue(
+						"bcm_cmetcd_cluster.test",
+						tfjsonpath.New("id"),
 					),
 				},
 			},
@@ -503,6 +529,8 @@ func TestAccCMEtcdCluster_validationElectionTimeoutRange(t *testing.T) {
 func TestAccCMEtcdCluster_withOptions(t *testing.T) {
 	clusterName := generateShortTestName("opt")
 
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheckCMEtcdCluster(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -521,6 +549,10 @@ func TestAccCMEtcdCluster_withOptions(t *testing.T) {
 						tfjsonpath.New("options"),
 						knownvalue.NotNull(),
 					),
+					compareID.AddStateValue(
+						"bcm_cmetcd_cluster.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Update options
@@ -532,6 +564,10 @@ func TestAccCMEtcdCluster_withOptions(t *testing.T) {
 						tfjsonpath.New("options"),
 						knownvalue.NotNull(),
 					),
+					compareID.AddStateValue(
+						"bcm_cmetcd_cluster.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Idempotency check
@@ -541,6 +577,12 @@ func TestAccCMEtcdCluster_withOptions(t *testing.T) {
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
 					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmetcd_cluster.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 		},

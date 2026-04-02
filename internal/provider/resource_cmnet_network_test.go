@@ -92,6 +92,9 @@ func TestAccCMNetNetwork_Basic(t *testing.T) {
 func TestAccCMNetNetwork_Complete(t *testing.T) {
 	networkName := generateUniqueTestName("tftest-network")
 
+	// Initialize ID tracker for consistency verification across operations
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -151,6 +154,10 @@ func TestAccCMNetNetwork_Complete(t *testing.T) {
 						tfjsonpath.New("uuid"),
 						knownvalue.NotNull(),
 					),
+					compareID.AddStateValue(
+						"bcm_cmnet_network.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Idempotency check after Create
@@ -161,6 +168,12 @@ func TestAccCMNetNetwork_Complete(t *testing.T) {
 						plancheck.ExpectEmptyPlan(),
 					},
 				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmnet_network.test",
+						tfjsonpath.New("id"),
+					),
+				},
 			},
 		},
 	})
@@ -168,6 +181,9 @@ func TestAccCMNetNetwork_Complete(t *testing.T) {
 
 func TestAccCMNetNetwork_Update(t *testing.T) {
 	networkName := generateUniqueTestName("tftest-network")
+
+	// Initialize ID tracker for consistency verification across operations
+	compareID := statecheck.CompareValue(compare.ValuesSame())
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -183,6 +199,10 @@ func TestAccCMNetNetwork_Update(t *testing.T) {
 						tfjsonpath.New("name"),
 						knownvalue.StringExact(networkName),
 					),
+					compareID.AddStateValue(
+						"bcm_cmnet_network.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Idempotency check after Create
@@ -192,6 +212,12 @@ func TestAccCMNetNetwork_Update(t *testing.T) {
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
 					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmnet_network.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Update MTU and notes
@@ -213,6 +239,10 @@ func TestAccCMNetNetwork_Update(t *testing.T) {
 						tfjsonpath.New("notes"),
 						knownvalue.StringExact("Updated notes"),
 					),
+					compareID.AddStateValue(
+						"bcm_cmnet_network.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Idempotency check after Update
@@ -223,6 +253,12 @@ func TestAccCMNetNetwork_Update(t *testing.T) {
 						plancheck.ExpectEmptyPlan(),
 					},
 				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmnet_network.test",
+						tfjsonpath.New("id"),
+					),
+				},
 			},
 		},
 	})
@@ -231,6 +267,9 @@ func TestAccCMNetNetwork_Update(t *testing.T) {
 // TestAccCMNetNetwork_DriftDetection verifies Terraform detects external modifications.
 func TestAccCMNetNetwork_DriftDetection(t *testing.T) {
 	networkName := generateUniqueTestName("tftest-network-drift")
+
+	// Initialize ID tracker for consistency verification across operations
+	compareID := statecheck.CompareValue(compare.ValuesSame())
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -245,6 +284,10 @@ func TestAccCMNetNetwork_DriftDetection(t *testing.T) {
 						"bcm_cmnet_network.test",
 						tfjsonpath.New("notes"),
 						knownvalue.StringExact("Initial notes"),
+					),
+					compareID.AddStateValue(
+						"bcm_cmnet_network.test",
+						tfjsonpath.New("id"),
 					),
 				},
 			},
@@ -319,6 +362,10 @@ func TestAccCMNetNetwork_DriftDetection(t *testing.T) {
 						"bcm_cmnet_network.test",
 						tfjsonpath.New("notes"),
 						knownvalue.StringExact("Initial notes"),
+					),
+					compareID.AddStateValue(
+						"bcm_cmnet_network.test",
+						tfjsonpath.New("id"),
 					),
 				},
 			},
