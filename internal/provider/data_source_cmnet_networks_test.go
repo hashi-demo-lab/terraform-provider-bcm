@@ -6,7 +6,6 @@ package provider
 import (
 	"fmt"
 	"os"
-	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -28,9 +27,14 @@ func TestAccCMNetNetworksDataSource_Basic(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmnet_networks.test",
 						tfjsonpath.New("id"),
-						knownvalue.NotNull(),
+						knownvalue.StringExact("cmnet-networks"),
 					),
 					// Verify first network has required attributes
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmnet_networks.test",
+						tfjsonpath.New("networks"),
+						knownvalue.NotNull(),
+					),
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmnet_networks.test",
 						tfjsonpath.New("networks").AtSliceIndex(0).AtMapKey("id"),
@@ -44,17 +48,32 @@ func TestAccCMNetNetworksDataSource_Basic(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmnet_networks.test",
 						tfjsonpath.New("networks").AtSliceIndex(0).AtMapKey("name"),
-						knownvalue.NotNull(),
+						knownvalue.StringExact("globalnet"),
 					),
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmnet_networks.test",
 						tfjsonpath.New("networks").AtSliceIndex(0).AtMapKey("base_address"),
-						knownvalue.NotNull(),
+						knownvalue.StringExact("0.0.0.0"),
 					),
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmnet_networks.test",
 						tfjsonpath.New("networks").AtSliceIndex(0).AtMapKey("base_type"),
-						knownvalue.NotNull(),
+						knownvalue.StringExact("Network"),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmnet_networks.test",
+						tfjsonpath.New("networks").AtSliceIndex(0).AtMapKey("network_type"),
+						knownvalue.StringExact("GLOBAL"),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmnet_networks.test",
+						tfjsonpath.New("networks").AtSliceIndex(0).AtMapKey("management"),
+						knownvalue.Bool(false),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmnet_networks.test",
+						tfjsonpath.New("networks").AtSliceIndex(0).AtMapKey("domain_name"),
+						knownvalue.StringExact("cm.cluster"),
 					),
 				},
 			},
@@ -67,7 +86,6 @@ func TestAccCMNetNetworksDataSource_NameFilter(t *testing.T) {
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
-			// Filter by name pattern "management" (should match networks containing "management")
 			{
 				Config: testAccCMNetNetworksDataSourceConfig_NameFilter("management"),
 				ConfigStateChecks: []statecheck.StateCheck{
@@ -75,13 +93,22 @@ func TestAccCMNetNetworksDataSource_NameFilter(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmnet_networks.filtered",
 						tfjsonpath.New("id"),
-						knownvalue.NotNull(),
+						knownvalue.StringExact("cmnet-networks"),
 					),
-					// Verify filtered networks match the name pattern
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmnet_networks.filtered",
+						tfjsonpath.New("networks"),
+						knownvalue.ListSizeExact(1),
+					),
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmnet_networks.filtered",
 						tfjsonpath.New("networks").AtSliceIndex(0).AtMapKey("name"),
-						knownvalue.StringRegexp(regexp.MustCompile("management")),
+						knownvalue.StringExact("managementnet"),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmnet_networks.filtered",
+						tfjsonpath.New("networks").AtSliceIndex(0).AtMapKey("management"),
+						knownvalue.Bool(true),
 					),
 				},
 			},
@@ -94,7 +121,6 @@ func TestAccCMNetNetworksDataSource_DHCPFilter(t *testing.T) {
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
-			// Filter by DHCP enabled (should match networks with DHCP ranges)
 			{
 				Config: testAccCMNetNetworksDataSourceConfig_DHCPFilter(true),
 				ConfigStateChecks: []statecheck.StateCheck{
@@ -102,13 +128,32 @@ func TestAccCMNetNetworksDataSource_DHCPFilter(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmnet_networks.dhcp",
 						tfjsonpath.New("id"),
+						knownvalue.StringExact("cmnet-networks"),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmnet_networks.dhcp",
+						tfjsonpath.New("networks"),
 						knownvalue.NotNull(),
 					),
-					// Verify filtered networks have DHCP enabled matching filter value
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmnet_networks.dhcp",
 						tfjsonpath.New("networks").AtSliceIndex(0).AtMapKey("dhcp_enabled"),
 						knownvalue.Bool(true),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmnet_networks.dhcp",
+						tfjsonpath.New("networks").AtSliceIndex(0).AtMapKey("name"),
+						knownvalue.StringExact("internalnet"),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmnet_networks.dhcp",
+						tfjsonpath.New("networks").AtSliceIndex(0).AtMapKey("dynamic_range_start"),
+						knownvalue.StringExact("10.141.160.0"),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmnet_networks.dhcp",
+						tfjsonpath.New("networks").AtSliceIndex(0).AtMapKey("dynamic_range_end"),
+						knownvalue.StringExact("10.141.167.255"),
 					),
 				},
 			},
@@ -129,7 +174,7 @@ func TestAccCMNetNetworksDataSource_NoMatch(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmnet_networks.filtered",
 						tfjsonpath.New("id"),
-						knownvalue.NotNull(),
+						knownvalue.StringExact("cmnet-networks"),
 					),
 					// Verify empty result list
 					statecheck.ExpectKnownValue(

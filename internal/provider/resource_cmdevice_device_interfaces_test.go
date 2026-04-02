@@ -779,6 +779,7 @@ resource "bcm_cmdevice_device" "test" {
 func TestAccCMDeviceDevice_InterfacesRequired(t *testing.T) {
 	resource.UnitTest(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceDeviceDestroy,
 		Steps: []resource.TestStep{
 			{
 				Config: `

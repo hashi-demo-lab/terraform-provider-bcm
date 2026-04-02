@@ -1,0 +1,38 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.ProviderName}}"
+subcategory: ""
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{.Name}} ({{.Type}})
+
+{{ .Description | trimspace }}
+
+## Example Usage
+
+{{ tffile (printf "examples/resources/%s/resource.tf" .Name)}}
+
+### Basic Device
+
+{{ tffile (printf "examples/resources/%s/basic.tf" .Name)}}
+
+### IPMI-Enabled Device
+
+{{ tffile (printf "examples/resources/%s/ipmi.tf" .Name)}}
+
+### Device with Roles
+
+{{ tffile (printf "examples/resources/%s/with_roles.tf" .Name)}}
+
+### Import and Recategorize
+
+{{ tffile (printf "examples/resources/%s/import_and_recategorize.tf" .Name)}}
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Import
+
+Import is supported using the following syntax:
+
+{{ tffile (printf "examples/resources/%s/import.tf" .Name)}}

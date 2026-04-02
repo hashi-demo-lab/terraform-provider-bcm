@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -321,7 +322,7 @@ func (d *CMDeviceNodesDataSource) Read(ctx context.Context, req datasource.ReadR
 
 	// Build state model
 	state := CMDeviceNodesDataSourceModel{
-		ID:     types.StringValue("placeholder"),
+		ID:     types.StringValue("cmdevice-nodes"),
 		Filter: config.Filter,
 		Nodes:  make([]NodeModel, 0, len(apiResponse)),
 	}
@@ -333,6 +334,16 @@ func (d *CMDeviceNodesDataSource) Read(ctx context.Context, req datasource.ReadR
 			state.Nodes = append(state.Nodes, node)
 		}
 	}
+
+	sort.Slice(state.Nodes, func(i, j int) bool {
+		if state.Nodes[i].Hostname.ValueString() != state.Nodes[j].Hostname.ValueString() {
+			return state.Nodes[i].Hostname.ValueString() < state.Nodes[j].Hostname.ValueString()
+		}
+		if state.Nodes[i].ChildType.ValueString() != state.Nodes[j].ChildType.ValueString() {
+			return state.Nodes[i].ChildType.ValueString() < state.Nodes[j].ChildType.ValueString()
+		}
+		return state.Nodes[i].UUID.ValueString() < state.Nodes[j].UUID.ValueString()
+	})
 
 	tflog.Debug(ctx, "Successfully retrieved and filtered nodes", map[string]interface{}{
 		"total_nodes":    len(apiResponse),

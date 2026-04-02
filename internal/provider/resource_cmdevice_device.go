@@ -184,11 +184,17 @@ func (r *CMDeviceDeviceResource) Schema(ctx context.Context, req resource.Schema
 				Optional:            true,
 				Computed:            true,
 				MarkdownDescription: "Boot loader type (e.g., SYSLINUX, GRUB) - defaults to category value",
+				Validators: []validator.String{
+					stringvalidator.OneOf("SYSLINUX", "GRUB", "GRUB2", "PXELINUX"),
+				},
 			},
 			"boot_loader_protocol": schema.StringAttribute{
 				Optional:            true,
 				Computed:            true,
 				MarkdownDescription: "Boot loader protocol (e.g., HTTP, TFTP) - defaults to category value",
+				Validators: []validator.String{
+					stringvalidator.OneOf("HTTP", "TFTP", "NFS"),
+				},
 			},
 			"force": schema.BoolAttribute{
 				Optional:            true,
@@ -197,6 +203,9 @@ func (r *CMDeviceDeviceResource) Schema(ctx context.Context, req resource.Schema
 			"power_control": schema.StringAttribute{
 				Optional:            true,
 				MarkdownDescription: "Power control method (e.g., 'none', 'ipmi', 'ipdu', 'redfish')",
+				Validators: []validator.String{
+					stringvalidator.OneOf("none", "ipmi", "ipdu", "redfish"),
+				},
 			},
 			"default_gateway": schema.StringAttribute{
 				Optional:            true,
@@ -868,10 +877,15 @@ func (r *CMDeviceDeviceResource) resolvePartitionFromCategory(ctx context.Contex
 		return result, nil
 	}
 
+	categoryLookupName := categoryName
+	if matchedCategoryName, err := r.lookupCategoryNameByUUID(ctx, categoryName); err == nil && matchedCategoryName != "" {
+		categoryLookupName = matchedCategoryName
+	}
+
 	// Query category to get its default partition
-	categoryBody, err := r.Client.CallJSONRPC(ctx, "cmdevice", "getCategory", categoryName)
+	categoryBody, err := r.Client.CallJSONRPC(ctx, "cmdevice", "getCategory", categoryLookupName)
 	if err != nil {
-		return result, fmt.Errorf("could not query category '%s' to get default partition: %w", categoryName, err)
+		return result, fmt.Errorf("could not query category '%s' to get default partition: %w", categoryLookupName, err)
 	}
 
 	var categoryData map[string]interface{}
@@ -929,6 +943,30 @@ func (r *CMDeviceDeviceResource) resolvePartitionFromCategory(ctx context.Contex
 	}
 
 	return result, fmt.Errorf("category uses softwareImageProxy but no 'base' partition found in cluster")
+}
+
+func (r *CMDeviceDeviceResource) lookupCategoryNameByUUID(ctx context.Context, categoryUUID string) (string, error) {
+	body, err := r.Client.CallJSONRPC(ctx, "cmdevice", "getCategories")
+	if err != nil {
+		return "", err
+	}
+
+	var categories []map[string]interface{}
+	if err := json.Unmarshal(body, &categories); err != nil {
+		return "", err
+	}
+
+	for _, category := range categories {
+		uuid, ok := category["uuid"].(string)
+		if !ok || uuid != categoryUUID {
+			continue
+		}
+
+		name, _ := category["name"].(string)
+		return name, nil
+	}
+
+	return "", nil
 }
 
 // Read reads the device resource.
@@ -1522,8 +1560,18 @@ func (r *CMDeviceDeviceResource) buildKubernetesRolesForEntity(ctx context.Conte
 		}
 	}
 
+	// If the plan explicitly clears all legacy and Kubernetes roles, preserve that empty assignment.
+	legacyRolesExplicitlyCleared := false
+	if !plan.Roles.IsNull() && !plan.Roles.IsUnknown() {
+		var plannedRoles []string
+		if diags := plan.Roles.ElementsAs(ctx, &plannedRoles, false); !diags.HasError() && len(plannedRoles) == 0 && len(kubeletRoles) == 0 && len(etcdHostRoles) == 0 {
+			legacyRolesExplicitlyCleared = true
+			entity["roles"] = []interface{}{}
+		}
+	}
+
 	// If no Kubernetes roles defined and no existing roles, nothing to do
-	if len(kubeletRoles) == 0 && len(etcdHostRoles) == 0 && len(existingRoles) == 0 {
+	if !legacyRolesExplicitlyCleared && len(kubeletRoles) == 0 && len(etcdHostRoles) == 0 && len(existingRoles) == 0 {
 		return nil
 	}
 
@@ -1539,11 +1587,17 @@ func (r *CMDeviceDeviceResource) buildKubernetesRolesForEntity(ctx context.Conte
 
 	// Merge: existing legacy roles + new Kubernetes roles
 	// mergeDeviceRoles preserves non-Kubernetes roles and replaces Kubernetes roles
-	mergedRoles := mergeDeviceRoles(
-		append(existingRoles, currentRoles...),
-		kubeletRoles,
-		etcdHostRoles,
-	)
+	mergedRoles := []map[string]any{}
+	if !legacyRolesExplicitlyCleared {
+		mergedRoles = mergeDeviceRoles(
+			append(existingRoles, currentRoles...),
+			kubeletRoles,
+			etcdHostRoles,
+		)
+	} else {
+		mergedRoles = append(mergedRoles, kubeletRoles...)
+		mergedRoles = append(mergedRoles, etcdHostRoles...)
+	}
 
 	// Convert to interface{} slice for JSON marshaling
 	rolesInterface := make([]interface{}, len(mergedRoles))

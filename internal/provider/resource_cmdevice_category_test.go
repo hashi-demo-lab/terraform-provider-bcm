@@ -374,6 +374,9 @@ func TestAccCMDeviceCategoryResource_ForceParameter(t *testing.T) {
 	// Cleanup any leftover test categories
 	testAccCMDeviceCategoryPreCheck(t, categoryName)
 
+	// ID consistency tracking across all CRUD operations
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -398,6 +401,10 @@ func TestAccCMDeviceCategoryResource_ForceParameter(t *testing.T) {
 						tfjsonpath.New("id"),
 						knownvalue.NotNull(),
 					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Idempotency check after Create
@@ -407,6 +414,12 @@ func TestAccCMDeviceCategoryResource_ForceParameter(t *testing.T) {
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
 					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Update with force=true
@@ -423,6 +436,10 @@ func TestAccCMDeviceCategoryResource_ForceParameter(t *testing.T) {
 						tfjsonpath.New("force"),
 						knownvalue.Bool(true),
 					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Idempotency check after Update
@@ -432,6 +449,12 @@ func TestAccCMDeviceCategoryResource_ForceParameter(t *testing.T) {
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
 					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Note: Testing actual "category in use" scenario requires manual node assignment
@@ -492,6 +515,9 @@ resource "bcm_cmdevice_category" "test" {
 func TestAccCMDeviceCategory_DriftNotes(t *testing.T) {
 	categoryName := generateUniqueTestName("tftest-drift-notes")
 
+	// ID consistency tracking across all CRUD operations
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccCMDeviceCategoryPreCheck(t, categoryName)
@@ -517,6 +543,10 @@ func TestAccCMDeviceCategory_DriftNotes(t *testing.T) {
 						"bcm_cmdevice_category.test",
 						tfjsonpath.New("uuid"),
 						knownvalue.NotNull(),
+					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
 					),
 				},
 			},
@@ -583,12 +613,147 @@ func TestAccCMDeviceCategory_DriftNotes(t *testing.T) {
 			// Step 3: Restore desired state (Terraform applies config to fix drift)
 			{
 				Config: testAccCMDeviceCategoryResourceConfig_DriftNotes(categoryName, "Production"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
 				ConfigStateChecks: []statecheck.StateCheck{
 					// Verify drift was corrected and state matches config
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_category.test",
 						tfjsonpath.New("notes"),
 						knownvalue.StringExact("Production"),
+					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+		},
+	})
+}
+
+// TestAccCMDeviceCategory_DriftKernelParameters verifies current BCM behavior for
+// category kernel_parameters. Live BCM does not surface out-of-band
+// kernelParameters updates back through getCategory, so Terraform remains
+// idempotent after an external change attempt.
+func TestAccCMDeviceCategory_DriftKernelParameters(t *testing.T) {
+	categoryName := generateUniqueTestName("tftest-drift-kparams")
+
+	// ID consistency tracking across all CRUD operations
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccCMDeviceCategoryPreCheck(t, categoryName)
+		},
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceCategoryDestroy,
+		Steps: []resource.TestStep{
+			// Step 1: Create resource with initial kernel_parameters
+			{
+				Config: testAccCMDeviceCategoryResourceConfig_DriftKernelParameters(categoryName, "quiet splash"),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(categoryName),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("kernel_parameters"),
+						knownvalue.StringExact("quiet splash"),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("uuid"),
+						knownvalue.NotNull(),
+					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+			// Step 2: Modify kernel_parameters externally via BCM API, verify BCM does
+			// not report drift for categories.
+			{
+				PreConfig: func() {
+					client := createTestBCMClient(t)
+					ctx := t.Context()
+
+					// Get UUID by category name using helper
+					uuid := getResourceUUIDByName(t, "cmdevice", "getCategory", categoryName)
+
+					// Fetch full category data from BCM API
+					body, err := client.CallJSONRPC(ctx, "cmdevice", "getCategory", categoryName)
+					if err != nil {
+						t.Fatalf("Failed to fetch category for drift modification: %v", err)
+					}
+
+					// Parse the category data
+					var categoryData map[string]interface{}
+					if err := json.Unmarshal(body, &categoryData); err != nil {
+						t.Fatalf("Failed to parse category data: %v", err)
+					}
+
+					// Modify kernelParameters field
+					categoryData["kernelParameters"] = "modified externally"
+
+					// Wrap in BCM API entity structure required for updates
+					entity := map[string]interface{}{
+						"baseType":      "Category",
+						"childType":     "",
+						"modified":      true,
+						"to_be_removed": false,
+						"revision":      "",
+						"uuid":          uuid,
+					}
+					// Copy all category data fields except uuid (already set above)
+					for k, v := range categoryData {
+						if k != "uuid" {
+							entity[k] = v
+						}
+					}
+
+					// Update via BCM API
+					_, err = client.CallJSONRPC(ctx, "cmdevice", "updateCategory", entity)
+					if err != nil {
+						t.Fatalf("Failed to update category via BCM API: %v", err)
+					}
+
+					// Wait for eventual consistency
+					time.Sleep(TestEventualConsistencyDelay)
+
+					t.Logf("[DEBUG] Modified kernelParameters externally to: %v", entity["kernelParameters"])
+				},
+				Config: testAccCMDeviceCategoryResourceConfig_DriftKernelParameters(categoryName, "quiet splash"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectNonEmptyPlan(),
+					},
+				},
+			},
+			// Step 3: Confirm reported state remains unchanged after the external update.
+			{
+				Config: testAccCMDeviceCategoryResourceConfig_DriftKernelParameters(categoryName, "quiet splash"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					// BCM still reports the original configured value.
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("kernel_parameters"),
+						knownvalue.StringExact("quiet splash"),
+					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
 					),
 				},
 			},
@@ -641,8 +806,8 @@ func TestAccCMDeviceCategory_DestroyWithForce(t *testing.T) {
 	})
 }
 
-// TestAccCMDeviceCategory_DestroyExternalDelete verifies destroy handles externally deleted resources
-// Phase 4 - Task T023: Create resource, delete via BCM API, verify Terraform destroy succeeds.
+// TestAccCMDeviceCategory_DestroyExternalDelete verifies Terraform detects when a
+// category is deleted externally and plans to recreate it.
 func TestAccCMDeviceCategory_DestroyExternalDelete(t *testing.T) {
 	categoryName := generateUniqueTestName("tftest-destroy-external")
 
@@ -653,7 +818,6 @@ func TestAccCMDeviceCategory_DestroyExternalDelete(t *testing.T) {
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckCMDeviceCategoryDestroy,
 		Steps: []resource.TestStep{
-			// Step 1: Create category
 			{
 				Config: testAccCMDeviceCategoryResourceConfig(categoryName),
 				ConfigStateChecks: []statecheck.StateCheck{
@@ -667,32 +831,19 @@ func TestAccCMDeviceCategory_DestroyExternalDelete(t *testing.T) {
 						tfjsonpath.New("uuid"),
 						knownvalue.NotNull(),
 					),
+					categoryDisappearsCheck{resourceAddress: "bcm_cmdevice_category.test"},
 				},
+				ExpectNonEmptyPlan: true,
 			},
-			// Step 2: Delete externally via BCM API, then let Terraform destroy
 			{
-				PreConfig: func() {
-					// Delete the category via BCM API before Terraform tries to destroy it
-					client := createTestBCMClient(t)
-					ctx := t.Context()
-
-					// Get category UUID
-					uuid := getResourceUUIDByName(t, "cmdevice", "getCategory", categoryName)
-
-					// Delete via BCM API with force=true (removeCategories expects array of UUIDs)
-					_, err := client.CallJSONRPC(ctx, "cmdevice", "removeCategories", []string{uuid}, true)
-					if err != nil {
-						t.Logf("[WARN] Failed to delete category externally (may not exist): %v", err)
-					}
-
-					// Wait for eventual consistency
-					time.Sleep(TestEventualConsistencyDelay)
-
-					t.Logf("[DEBUG] Deleted category externally: %s", categoryName)
-				},
 				Config: testAccCMDeviceCategoryResourceConfig(categoryName),
-				// Destroy will happen automatically after this step
-				// CheckDestroy should pass even though resource was already deleted
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(categoryName),
+					),
+				},
 			},
 		},
 	})
@@ -742,6 +893,49 @@ resource "bcm_cmdevice_category" "test" {
 	)
 }
 
+// Helper function for kernel_parameters drift detection test configuration.
+func testAccCMDeviceCategoryResourceConfig_DriftKernelParameters(name, kernelParameters string) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+# Lookup existing categories to get a management network UUID
+data "bcm_cmdevice_categories" "all" {}
+
+# Lookup required parent software image
+data "bcm_cmpart_softwareimages" "all" {}
+
+locals {
+  # Get management network from first existing category
+  management_network_uuid = length(data.bcm_cmdevice_categories.all.categories) > 0 ? data.bcm_cmdevice_categories.all.categories[0].management_network_id : "00000000-0000-0000-0000-000000000000"
+
+  # Get software image UUID from first available image
+  software_image_uuid = length(data.bcm_cmpart_softwareimages.all.images) > 0 ? data.bcm_cmpart_softwareimages.all.images[0].uuid : "00000000-0000-0000-0000-000000000000"
+}
+
+resource "bcm_cmdevice_category" "test" {
+  name               = %[4]q
+  management_network = local.management_network_uuid
+  kernel_parameters  = %[5]q
+
+  # BCM requires parent software image
+  software_image_proxy = {
+    parent_software_image = local.software_image_uuid
+  }
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		name,
+		kernelParameters,
+	)
+}
+
 // ========================================
 // Network and Partition Configuration Tests (Priority Group 3)
 // ========================================
@@ -749,6 +943,9 @@ resource "bcm_cmdevice_category" "test" {
 // TestAccCMDeviceCategory_NetworkConfiguration tests network-related optional fields.
 func TestAccCMDeviceCategory_NetworkConfiguration(t *testing.T) {
 	categoryName := generateUniqueTestName("tftest-network-config")
+
+	// ID consistency tracking across all CRUD operations
+	compareID := statecheck.CompareValue(compare.ValuesSame())
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -786,6 +983,10 @@ func TestAccCMDeviceCategory_NetworkConfiguration(t *testing.T) {
 						tfjsonpath.New("uuid"),
 						knownvalue.NotNull(),
 					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Step 2: Idempotency check
@@ -795,6 +996,12 @@ func TestAccCMDeviceCategory_NetworkConfiguration(t *testing.T) {
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
 					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Step 3: Update network configuration
@@ -821,6 +1028,10 @@ func TestAccCMDeviceCategory_NetworkConfiguration(t *testing.T) {
 						tfjsonpath.New("allow_networking_restart"),
 						knownvalue.Bool(false),
 					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Step 4: Idempotency check after update
@@ -830,6 +1041,12 @@ func TestAccCMDeviceCategory_NetworkConfiguration(t *testing.T) {
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
 					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 		},
@@ -842,6 +1059,9 @@ func TestAccCMDeviceCategory_NetworkConfiguration(t *testing.T) {
 // See: https://github.com/hashi-demo-lab/terraform-provider-bcm/issues/48
 func TestAccCMDeviceCategory_PartitionConfiguration(t *testing.T) {
 	categoryName := generateUniqueTestName("tftest-partition-config")
+
+	// ID consistency tracking across all CRUD operations
+	compareID := statecheck.CompareValue(compare.ValuesSame())
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -869,6 +1089,10 @@ func TestAccCMDeviceCategory_PartitionConfiguration(t *testing.T) {
 						tfjsonpath.New("uuid"),
 						knownvalue.NotNull(),
 					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Step 2: Idempotency check
@@ -878,6 +1102,12 @@ func TestAccCMDeviceCategory_PartitionConfiguration(t *testing.T) {
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
 					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Step 3: Update partition configuration
@@ -894,6 +1124,10 @@ func TestAccCMDeviceCategory_PartitionConfiguration(t *testing.T) {
 						tfjsonpath.New("disksetup"),
 						knownvalue.NotNull(),
 					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Step 4: Idempotency check after update
@@ -903,6 +1137,12 @@ func TestAccCMDeviceCategory_PartitionConfiguration(t *testing.T) {
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
 					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 		},
@@ -1701,6 +1941,7 @@ func TestAccCMDeviceCategory_ValidationInvalidName(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceCategoryDestroy,
 		Steps: []resource.TestStep{
 			// Test empty name (below minimum length)
 			{
@@ -1718,6 +1959,7 @@ func TestAccCMDeviceCategory_ValidationInvalidManagementNetwork(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceCategoryDestroy,
 		Steps: []resource.TestStep{
 			// Test invalid UUID format
 			{
@@ -1740,6 +1982,7 @@ func TestAccCMDeviceCategory_ValidationInvalidBootLoader(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceCategoryDestroy,
 		Steps: []resource.TestStep{
 			// Test invalid boot_loader value
 			{
@@ -1757,6 +2000,7 @@ func TestAccCMDeviceCategory_ValidationInvalidFIPS(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceCategoryDestroy,
 		Steps: []resource.TestStep{
 			// Test invalid fips value (not "YES" or "NO")
 			{
@@ -1767,6 +2011,176 @@ func TestAccCMDeviceCategory_ValidationInvalidFIPS(t *testing.T) {
 			{
 				Config:      testAccCMDeviceCategoryResourceConfig_InvalidFIPS(categoryName, "yes"),
 				ExpectError: regexp.MustCompile(`Attribute fips value must be one of.*YES.*NO`),
+			},
+		},
+	})
+}
+
+// TestAccCMDeviceCategory_ValidationInvalidBootLoaderProtocol tests boot_loader_protocol enum validation.
+func TestAccCMDeviceCategory_ValidationInvalidBootLoaderProtocol(t *testing.T) {
+	categoryName := generateUniqueTestName("tftest-cat-val-blp")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceCategoryDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config:      testAccCMDeviceCategoryResourceConfig_InvalidBootLoaderProtocol(categoryName, "FTP"),
+				ExpectError: regexp.MustCompile(`Attribute boot_loader_protocol value must be one of`),
+			},
+		},
+	})
+}
+
+// TestAccCMDeviceCategory_ValidationInvalidInstallMode tests install_mode enum validation.
+func TestAccCMDeviceCategory_ValidationInvalidInstallMode(t *testing.T) {
+	categoryName := generateUniqueTestName("tftest-cat-val-im")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceCategoryDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config:      testAccCMDeviceCategoryResourceConfig_InvalidInstallMode(categoryName, "INVALID"),
+				ExpectError: regexp.MustCompile(`Attribute install_mode value must be one of`),
+			},
+		},
+	})
+}
+
+// TestAccCMDeviceCategory_ValidationInvalidNewNodeInstallMode tests new_node_install_mode enum validation.
+func TestAccCMDeviceCategory_ValidationInvalidNewNodeInstallMode(t *testing.T) {
+	categoryName := generateUniqueTestName("tftest-cat-val-nnim")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceCategoryDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config:      testAccCMDeviceCategoryResourceConfig_InvalidNewNodeInstallMode(categoryName, "INVALID"),
+				ExpectError: regexp.MustCompile(`Attribute new_node_install_mode value must be one of`),
+			},
+		},
+	})
+}
+
+// TestAccCMDeviceCategory_ValidationInvalidGPUChildType tests gpu_settings.child_type enum validation.
+func TestAccCMDeviceCategory_ValidationInvalidGPUChildType(t *testing.T) {
+	categoryName := generateUniqueTestName("tftest-cat-val-gct")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceCategoryDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config:      testAccCMDeviceCategoryResourceConfig_InvalidGPUChildType(categoryName, "intel"),
+				ExpectError: regexp.MustCompile(`Attribute gpu_settings\[0\]\.child_type value must be one of`),
+			},
+		},
+	})
+}
+
+// TestAccCMDeviceCategory_ValidationInvalidGPUEccMode tests gpu_settings.ecc_mode enum validation.
+func TestAccCMDeviceCategory_ValidationInvalidGPUEccMode(t *testing.T) {
+	categoryName := generateUniqueTestName("tftest-cat-val-gem")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceCategoryDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config:      testAccCMDeviceCategoryResourceConfig_InvalidGPUEccMode(categoryName, "MAYBE"),
+				ExpectError: regexp.MustCompile(`Attribute gpu_settings\[0\]\.ecc_mode value must be one of`),
+			},
+		},
+	})
+}
+
+// TestAccCMDeviceCategory_ValidationInvalidSicknessCheckScriptTimeout tests services.sickness_check_script_timeout AtLeast(1) validation.
+func TestAccCMDeviceCategory_ValidationInvalidSicknessCheckScriptTimeout(t *testing.T) {
+	categoryName := generateUniqueTestName("tftest-cat-val-scst")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceCategoryDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config:      testAccCMDeviceCategoryResourceConfig_InvalidSicknessCheckScriptTimeout(categoryName, 0),
+				ExpectError: regexp.MustCompile(`Attribute services\[0\]\.sickness_check_script_timeout value must be at least 1`),
+			},
+		},
+	})
+}
+
+// TestAccCMDeviceCategory_ValidationInvalidSicknessCheckInterval tests services.sickness_check_interval AtLeast(1) validation.
+func TestAccCMDeviceCategory_ValidationInvalidSicknessCheckInterval(t *testing.T) {
+	categoryName := generateUniqueTestName("tftest-cat-val-sci")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceCategoryDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config:      testAccCMDeviceCategoryResourceConfig_InvalidSicknessCheckInterval(categoryName, 0),
+				ExpectError: regexp.MustCompile(`Attribute services\[0\]\.sickness_check_interval value must be at least 1`),
+			},
+		},
+	})
+}
+
+// TestAccCMDeviceCategory_ValidationInvalidAuthenticationService tests authentication_service enum validation.
+func TestAccCMDeviceCategory_ValidationInvalidAuthenticationService(t *testing.T) {
+	categoryName := generateUniqueTestName("tftest-cat-val-as")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceCategoryDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config:      testAccCMDeviceCategoryResourceConfig_InvalidAuthenticationService(categoryName, "KERBEROS"),
+				ExpectError: regexp.MustCompile(`Attribute authentication_service value must be one of`),
+			},
+		},
+	})
+}
+
+// TestAccCMDeviceCategory_ValidationInvalidDefaultGateway tests default_gateway IPv4 validation.
+func TestAccCMDeviceCategory_ValidationInvalidDefaultGateway(t *testing.T) {
+	categoryName := generateUniqueTestName("tftest-cat-val-dg")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceCategoryDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config:      testAccCMDeviceCategoryResourceConfig_InvalidDefaultGateway(categoryName, "not-an-ip"),
+				ExpectError: regexp.MustCompile(`must be a valid IPv4 address`),
+			},
+		},
+	})
+}
+
+// TestAccCMDeviceCategory_ValidationInvalidInteractiveUser tests interactive_user enum validation.
+func TestAccCMDeviceCategory_ValidationInvalidInteractiveUser(t *testing.T) {
+	categoryName := generateUniqueTestName("tftest-cat-val-iu")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceCategoryDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config:      testAccCMDeviceCategoryResourceConfig_InvalidInteractiveUser(categoryName, "SOMETIMES"),
+				ExpectError: regexp.MustCompile(`Attribute interactive_user value must be one of`),
 			},
 		},
 	})
@@ -1912,6 +2326,391 @@ resource "bcm_cmdevice_category" "test" {
 		os.Getenv("BCM_PASSWORD"),
 		name,
 		fips,
+	)
+}
+
+// testAccCMDeviceCategoryResourceConfig_InvalidBootLoaderProtocol creates config with invalid boot_loader_protocol.
+func testAccCMDeviceCategoryResourceConfig_InvalidBootLoaderProtocol(name, protocol string) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmdevice_categories" "all" {}
+data "bcm_cmpart_softwareimages" "all" {}
+
+locals {
+  management_network_uuid = length(data.bcm_cmdevice_categories.all.categories) > 0 ? data.bcm_cmdevice_categories.all.categories[0].management_network_id : "00000000-0000-0000-0000-000000000000"
+  software_image_uuid = length(data.bcm_cmpart_softwareimages.all.images) > 0 ? data.bcm_cmpart_softwareimages.all.images[0].uuid : "00000000-0000-0000-0000-000000000000"
+}
+
+resource "bcm_cmdevice_category" "test" {
+  name                 = %[4]q
+  management_network   = local.management_network_uuid
+  boot_loader_protocol = %[5]q
+
+  software_image_proxy = {
+    parent_software_image = local.software_image_uuid
+  }
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		name,
+		protocol,
+	)
+}
+
+// testAccCMDeviceCategoryResourceConfig_InvalidInstallMode creates config with invalid install_mode.
+func testAccCMDeviceCategoryResourceConfig_InvalidInstallMode(name, installMode string) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmdevice_categories" "all" {}
+data "bcm_cmpart_softwareimages" "all" {}
+
+locals {
+  management_network_uuid = length(data.bcm_cmdevice_categories.all.categories) > 0 ? data.bcm_cmdevice_categories.all.categories[0].management_network_id : "00000000-0000-0000-0000-000000000000"
+  software_image_uuid = length(data.bcm_cmpart_softwareimages.all.images) > 0 ? data.bcm_cmpart_softwareimages.all.images[0].uuid : "00000000-0000-0000-0000-000000000000"
+}
+
+resource "bcm_cmdevice_category" "test" {
+  name               = %[4]q
+  management_network = local.management_network_uuid
+  install_mode       = %[5]q
+
+  software_image_proxy = {
+    parent_software_image = local.software_image_uuid
+  }
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		name,
+		installMode,
+	)
+}
+
+// testAccCMDeviceCategoryResourceConfig_InvalidNewNodeInstallMode creates config with invalid new_node_install_mode.
+func testAccCMDeviceCategoryResourceConfig_InvalidNewNodeInstallMode(name, mode string) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmdevice_categories" "all" {}
+data "bcm_cmpart_softwareimages" "all" {}
+
+locals {
+  management_network_uuid = length(data.bcm_cmdevice_categories.all.categories) > 0 ? data.bcm_cmdevice_categories.all.categories[0].management_network_id : "00000000-0000-0000-0000-000000000000"
+  software_image_uuid = length(data.bcm_cmpart_softwareimages.all.images) > 0 ? data.bcm_cmpart_softwareimages.all.images[0].uuid : "00000000-0000-0000-0000-000000000000"
+}
+
+resource "bcm_cmdevice_category" "test" {
+  name                   = %[4]q
+  management_network     = local.management_network_uuid
+  new_node_install_mode  = %[5]q
+
+  software_image_proxy = {
+    parent_software_image = local.software_image_uuid
+  }
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		name,
+		mode,
+	)
+}
+
+// testAccCMDeviceCategoryResourceConfig_InvalidGPUChildType creates config with invalid gpu_settings child_type.
+func testAccCMDeviceCategoryResourceConfig_InvalidGPUChildType(name, childType string) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmdevice_categories" "all" {}
+data "bcm_cmpart_softwareimages" "all" {}
+
+locals {
+  management_network_uuid = length(data.bcm_cmdevice_categories.all.categories) > 0 ? data.bcm_cmdevice_categories.all.categories[0].management_network_id : "00000000-0000-0000-0000-000000000000"
+  software_image_uuid = length(data.bcm_cmpart_softwareimages.all.images) > 0 ? data.bcm_cmpart_softwareimages.all.images[0].uuid : "00000000-0000-0000-0000-000000000000"
+}
+
+resource "bcm_cmdevice_category" "test" {
+  name               = %[4]q
+  management_network = local.management_network_uuid
+
+  software_image_proxy = {
+    parent_software_image = local.software_image_uuid
+  }
+
+  gpu_settings = [
+    {
+      name       = "0"
+      child_type = %[5]q
+    }
+  ]
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		name,
+		childType,
+	)
+}
+
+// testAccCMDeviceCategoryResourceConfig_InvalidGPUEccMode creates config with invalid gpu_settings ecc_mode.
+func testAccCMDeviceCategoryResourceConfig_InvalidGPUEccMode(name, eccMode string) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmdevice_categories" "all" {}
+data "bcm_cmpart_softwareimages" "all" {}
+
+locals {
+  management_network_uuid = length(data.bcm_cmdevice_categories.all.categories) > 0 ? data.bcm_cmdevice_categories.all.categories[0].management_network_id : "00000000-0000-0000-0000-000000000000"
+  software_image_uuid = length(data.bcm_cmpart_softwareimages.all.images) > 0 ? data.bcm_cmpart_softwareimages.all.images[0].uuid : "00000000-0000-0000-0000-000000000000"
+}
+
+resource "bcm_cmdevice_category" "test" {
+  name               = %[4]q
+  management_network = local.management_network_uuid
+
+  software_image_proxy = {
+    parent_software_image = local.software_image_uuid
+  }
+
+  gpu_settings = [
+    {
+      name       = "0"
+      child_type = "nvidia"
+      ecc_mode   = %[5]q
+    }
+  ]
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		name,
+		eccMode,
+	)
+}
+
+// testAccCMDeviceCategoryResourceConfig_InvalidSicknessCheckScriptTimeout creates config with invalid sickness_check_script_timeout.
+func testAccCMDeviceCategoryResourceConfig_InvalidSicknessCheckScriptTimeout(name string, timeout int) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmdevice_categories" "all" {}
+data "bcm_cmpart_softwareimages" "all" {}
+
+locals {
+  management_network_uuid = length(data.bcm_cmdevice_categories.all.categories) > 0 ? data.bcm_cmdevice_categories.all.categories[0].management_network_id : "00000000-0000-0000-0000-000000000000"
+  software_image_uuid = length(data.bcm_cmpart_softwareimages.all.images) > 0 ? data.bcm_cmpart_softwareimages.all.images[0].uuid : "00000000-0000-0000-0000-000000000000"
+}
+
+resource "bcm_cmdevice_category" "test" {
+  name               = %[4]q
+  management_network = local.management_network_uuid
+
+  software_image_proxy = {
+    parent_software_image = local.software_image_uuid
+  }
+
+  services = [
+    {
+      name                           = "test-service"
+      sickness_check_script_timeout  = %[5]d
+    }
+  ]
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		name,
+		timeout,
+	)
+}
+
+// testAccCMDeviceCategoryResourceConfig_InvalidSicknessCheckInterval creates config with invalid sickness_check_interval.
+func testAccCMDeviceCategoryResourceConfig_InvalidSicknessCheckInterval(name string, interval int) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmdevice_categories" "all" {}
+data "bcm_cmpart_softwareimages" "all" {}
+
+locals {
+  management_network_uuid = length(data.bcm_cmdevice_categories.all.categories) > 0 ? data.bcm_cmdevice_categories.all.categories[0].management_network_id : "00000000-0000-0000-0000-000000000000"
+  software_image_uuid = length(data.bcm_cmpart_softwareimages.all.images) > 0 ? data.bcm_cmpart_softwareimages.all.images[0].uuid : "00000000-0000-0000-0000-000000000000"
+}
+
+resource "bcm_cmdevice_category" "test" {
+  name               = %[4]q
+  management_network = local.management_network_uuid
+
+  software_image_proxy = {
+    parent_software_image = local.software_image_uuid
+  }
+
+  services = [
+    {
+      name                      = "test-service"
+      sickness_check_interval   = %[5]d
+    }
+  ]
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		name,
+		interval,
+	)
+}
+
+// testAccCMDeviceCategoryResourceConfig_InvalidAuthenticationService creates config with invalid authentication_service.
+func testAccCMDeviceCategoryResourceConfig_InvalidAuthenticationService(name, authService string) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmdevice_categories" "all" {}
+data "bcm_cmpart_softwareimages" "all" {}
+
+locals {
+  management_network_uuid = length(data.bcm_cmdevice_categories.all.categories) > 0 ? data.bcm_cmdevice_categories.all.categories[0].management_network_id : "00000000-0000-0000-0000-000000000000"
+  software_image_uuid = length(data.bcm_cmpart_softwareimages.all.images) > 0 ? data.bcm_cmpart_softwareimages.all.images[0].uuid : "00000000-0000-0000-0000-000000000000"
+}
+
+resource "bcm_cmdevice_category" "test" {
+  name                   = %[4]q
+  management_network     = local.management_network_uuid
+  authentication_service = %[5]q
+
+  software_image_proxy = {
+    parent_software_image = local.software_image_uuid
+  }
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		name,
+		authService,
+	)
+}
+
+// testAccCMDeviceCategoryResourceConfig_InvalidDefaultGateway creates config with invalid default_gateway.
+func testAccCMDeviceCategoryResourceConfig_InvalidDefaultGateway(name, gateway string) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmdevice_categories" "all" {}
+data "bcm_cmpart_softwareimages" "all" {}
+
+locals {
+  management_network_uuid = length(data.bcm_cmdevice_categories.all.categories) > 0 ? data.bcm_cmdevice_categories.all.categories[0].management_network_id : "00000000-0000-0000-0000-000000000000"
+  software_image_uuid = length(data.bcm_cmpart_softwareimages.all.images) > 0 ? data.bcm_cmpart_softwareimages.all.images[0].uuid : "00000000-0000-0000-0000-000000000000"
+}
+
+resource "bcm_cmdevice_category" "test" {
+  name               = %[4]q
+  management_network = local.management_network_uuid
+  default_gateway    = %[5]q
+
+  software_image_proxy = {
+    parent_software_image = local.software_image_uuid
+  }
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		name,
+		gateway,
+	)
+}
+
+// testAccCMDeviceCategoryResourceConfig_InvalidInteractiveUser creates config with invalid interactive_user.
+func testAccCMDeviceCategoryResourceConfig_InvalidInteractiveUser(name, interactiveUser string) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmdevice_categories" "all" {}
+data "bcm_cmpart_softwareimages" "all" {}
+
+locals {
+  management_network_uuid = length(data.bcm_cmdevice_categories.all.categories) > 0 ? data.bcm_cmdevice_categories.all.categories[0].management_network_id : "00000000-0000-0000-0000-000000000000"
+  software_image_uuid = length(data.bcm_cmpart_softwareimages.all.images) > 0 ? data.bcm_cmpart_softwareimages.all.images[0].uuid : "00000000-0000-0000-0000-000000000000"
+}
+
+resource "bcm_cmdevice_category" "test" {
+  name               = %[4]q
+  management_network = local.management_network_uuid
+  interactive_user   = %[5]q
+
+  software_image_proxy = {
+    parent_software_image = local.software_image_uuid
+  }
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		name,
+		interactiveUser,
 	)
 }
 
@@ -2613,6 +3412,7 @@ func TestAccCMDeviceCategory_StaticRoutesValidation(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceCategoryDestroy,
 		Steps: []resource.TestStep{
 			// Invalid IP format (missing octet)
 			{
@@ -3788,6 +4588,7 @@ func TestAccCMDeviceCategoryResource_FilesystemExports(t *testing.T) {
 				ImportStateVerifyIgnore: []string{
 					"force",
 					"fsexports",
+					"roles",
 				},
 				ConfigStateChecks: []statecheck.StateCheck{
 					compareID.AddStateValue(
@@ -3851,6 +4652,13 @@ resource "bcm_cmdevice_category" "test" {
   software_image_proxy = {
     parent_software_image = local.software_image_uuid
   }
+
+  roles = [
+    {
+      name       = "storage"
+      child_type = "StorageRole"
+    }
+  ]
 
   fsexports = [%[5]s
   ]
@@ -4084,14 +4892,6 @@ func TestAccCMDeviceCategory_RolesUUIDPopulated(t *testing.T) {
 			// Create with role, verify UUID populated
 			{
 				Config: testAccCMDeviceCategoryResourceConfig_WithRole(categoryName),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "name", categoryName),
-					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "roles.0.name", "head"),
-					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "roles.0.child_type", "HeadNode"),
-					// CRITICAL: Verify UUID is populated (not null/unknown)
-					// This check will FAIL before Issue #83 fix
-					resource.TestCheckResourceAttrSet("bcm_cmdevice_category.test", "roles.0.uuid"),
-				),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_category.test",
@@ -4103,7 +4903,18 @@ func TestAccCMDeviceCategory_RolesUUIDPopulated(t *testing.T) {
 						tfjsonpath.New("uuid"),
 						knownvalue.NotNull(),
 					),
-					// Verify role UUID is populated (Issue #83 fix validation)
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("roles").AtSliceIndex(0).AtMapKey("name"),
+						knownvalue.StringExact("head"),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("roles").AtSliceIndex(0).AtMapKey("child_type"),
+						knownvalue.StringExact("HeadNode"),
+					),
+					// CRITICAL: Verify UUID is populated (not null/unknown)
+					// This check will FAIL before Issue #83 fix (Issue #83 fix validation)
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_category.test",
 						tfjsonpath.New("roles").AtSliceIndex(0).AtMapKey("uuid"),
@@ -4122,6 +4933,9 @@ func TestAccCMDeviceCategory_RolesIdempotency(t *testing.T) {
 
 	// Clean up any leftover test categories
 	testAccCMDeviceCategoryPreCheck(t, categoryName)
+
+	// ID consistency tracking across all CRUD operations
+	compareID := statecheck.CompareValue(compare.ValuesSame())
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -4143,6 +4957,10 @@ func TestAccCMDeviceCategory_RolesIdempotency(t *testing.T) {
 						tfjsonpath.New("roles").AtSliceIndex(0).AtMapKey("uuid"),
 						knownvalue.NotNull(),
 					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Verify idempotency - no changes on re-apply
@@ -4152,6 +4970,12 @@ func TestAccCMDeviceCategory_RolesIdempotency(t *testing.T) {
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
 					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 		},
@@ -4173,16 +4997,23 @@ func TestAccCMDeviceCategory_MultipleRolesUUID(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: testAccCMDeviceCategoryResourceConfig_MultipleRoles(categoryName),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "name", categoryName),
-					// Verify both roles have UUIDs populated
-					resource.TestCheckResourceAttrSet("bcm_cmdevice_category.test", "roles.0.uuid"),
-					resource.TestCheckResourceAttrSet("bcm_cmdevice_category.test", "roles.1.uuid"),
-					// Verify role names are preserved
-					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "roles.0.name", "head"),
-					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "roles.1.name", "compute"),
-				),
 				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(categoryName),
+					),
+					// Verify role names are preserved
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("roles").AtSliceIndex(0).AtMapKey("name"),
+						knownvalue.StringExact("head"),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("roles").AtSliceIndex(1).AtMapKey("name"),
+						knownvalue.StringExact("compute"),
+					),
 					// Verify first role UUID is populated
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_category.test",
@@ -4209,7 +5040,8 @@ func TestAccCMDeviceCategory_RolesUUIDPreservedOnRefresh(t *testing.T) {
 	// Clean up any leftover test categories
 	testAccCMDeviceCategoryPreCheck(t, categoryName)
 
-	var originalUUID string
+	// Track role UUID across create and refresh steps
+	compareRoleUUID := statecheck.CompareValue(compare.ValuesSame())
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -4219,33 +5051,31 @@ func TestAccCMDeviceCategory_RolesUUIDPreservedOnRefresh(t *testing.T) {
 			// Create and capture UUID
 			{
 				Config: testAccCMDeviceCategoryResourceConfig_WithRole(categoryName),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttrSet("bcm_cmdevice_category.test", "roles.0.uuid"),
-					resource.TestCheckResourceAttrWith("bcm_cmdevice_category.test", "roles.0.uuid",
-						func(value string) error {
-							if value == "" {
-								return fmt.Errorf("role UUID is empty")
-							}
-							originalUUID = value
-							t.Logf("Captured original role UUID: %s", originalUUID)
-							return nil
-						},
+				ConfigStateChecks: []statecheck.StateCheck{
+					// Verify UUID is populated (not null/empty)
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("roles").AtSliceIndex(0).AtMapKey("uuid"),
+						knownvalue.NotNull(),
 					),
-				),
+					// Capture UUID for cross-step comparison
+					compareRoleUUID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("roles").AtSliceIndex(0).AtMapKey("uuid"),
+					),
+				},
 			},
-			// Refresh (re-read) and verify UUID unchanged
+			// Re-apply identical config and verify the refreshed state keeps the same UUID.
+			// This test framework version does not allow RefreshState with ConfigStateChecks.
 			{
-				RefreshState: true,
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttrWith("bcm_cmdevice_category.test", "roles.0.uuid",
-						func(value string) error {
-							if value != originalUUID {
-								return fmt.Errorf("role UUID changed after refresh: expected %s, got %s", originalUUID, value)
-							}
-							return nil
-						},
+				Config: testAccCMDeviceCategoryResourceConfig_WithRole(categoryName),
+				ConfigStateChecks: []statecheck.StateCheck{
+					// Verify UUID remains the same after refresh
+					compareRoleUUID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("roles").AtSliceIndex(0).AtMapKey("uuid"),
 					),
-				),
+				},
 			},
 		},
 	})
@@ -4323,13 +5153,13 @@ resource "bcm_cmdevice_category" "test" {
     parent_software_image = local.software_image_uuid
   }
 
-  bmc_settings = {
-    user_name = "admin"
-    password  = %[5]q
-    privilege = "admin"
-    user_id   = 2
-  }
-}
+	  bmc_settings = {
+	    user_name = "admin"
+	    password  = %[5]q
+	    privilege = "ADMINISTRATOR"
+	    user_id   = 2
+	  }
+	}
 `,
 		os.Getenv("BCM_ENDPOINT"),
 		os.Getenv("BCM_USERNAME"),
@@ -4347,6 +5177,9 @@ func TestAccCMDeviceCategory_BMCPasswordNoDrift(t *testing.T) {
 
 	// Clean up any leftover test categories
 	testAccCMDeviceCategoryPreCheck(t, categoryName)
+
+	// ID consistency tracking across all CRUD operations
+	compareID := statecheck.CompareValue(compare.ValuesSame())
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -4367,6 +5200,10 @@ func TestAccCMDeviceCategory_BMCPasswordNoDrift(t *testing.T) {
 						tfjsonpath.New("bmc_settings").AtMapKey("user_name"),
 						knownvalue.StringExact("admin"),
 					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Step 2: Idempotency check - THIS IS THE KEY TEST
@@ -4379,6 +5216,12 @@ func TestAccCMDeviceCategory_BMCPasswordNoDrift(t *testing.T) {
 						plancheck.ExpectEmptyPlan(),
 					},
 				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
+				},
 			},
 			// Step 3: Import and verify (password cannot be imported from BCM)
 			{
@@ -4389,6 +5232,12 @@ func TestAccCMDeviceCategory_BMCPasswordNoDrift(t *testing.T) {
 				ImportStateVerifyIgnore: []string{
 					"force",
 					"bmc_settings", // Password cannot be imported from BCM API
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 		},
@@ -4403,6 +5252,9 @@ func TestAccCMDeviceCategory_BMCPasswordUpdate(t *testing.T) {
 
 	// Clean up any leftover test categories
 	testAccCMDeviceCategoryPreCheck(t, categoryName)
+
+	// ID consistency tracking across all CRUD operations
+	compareID := statecheck.CompareValue(compare.ValuesSame())
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -4423,6 +5275,10 @@ func TestAccCMDeviceCategory_BMCPasswordUpdate(t *testing.T) {
 						tfjsonpath.New("bmc_settings").AtMapKey("user_name"),
 						knownvalue.StringExact("admin"),
 					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Step 2: Update password - should detect change and apply
@@ -4434,6 +5290,10 @@ func TestAccCMDeviceCategory_BMCPasswordUpdate(t *testing.T) {
 						tfjsonpath.New("name"),
 						knownvalue.StringExact(categoryName),
 					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Step 3: Idempotency check after update
@@ -4443,6 +5303,12 @@ func TestAccCMDeviceCategory_BMCPasswordUpdate(t *testing.T) {
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
 					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 		},
@@ -4577,6 +5443,9 @@ func TestAccCMDeviceCategoryResource_ServicesWithAllFields(t *testing.T) {
 	// Cleanup any leftover test categories
 	testAccCMDeviceCategoryPreCheck(t, categoryName)
 
+	// ID consistency tracking across all CRUD operations
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -4591,6 +5460,10 @@ func TestAccCMDeviceCategoryResource_ServicesWithAllFields(t *testing.T) {
 						tfjsonpath.New("name"),
 						knownvalue.StringExact(categoryName),
 					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Idempotency check
@@ -4600,6 +5473,12 @@ func TestAccCMDeviceCategoryResource_ServicesWithAllFields(t *testing.T) {
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
 					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 		},

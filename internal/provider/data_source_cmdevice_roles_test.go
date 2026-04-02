@@ -24,14 +24,46 @@ func TestAccCMDeviceRolesDataSource_All(t *testing.T) {
 			{
 				Config: testAccCMDeviceRolesDataSourceConfig(),
 				ConfigStateChecks: []statecheck.StateCheck{
-					// Verify computed id field
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmdevice_roles.test",
 						tfjsonpath.New("id"),
+						knownvalue.StringExact("roles"),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmdevice_roles.test",
+						tfjsonpath.New("roles"),
 						knownvalue.NotNull(),
 					),
-					// Note: Cannot verify roles.0.uuid, roles.0.name without knowing cluster state
-					// Tests remain environment-portable - work on any BCM cluster configuration
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmdevice_roles.test",
+						tfjsonpath.New("roles"),
+						knownvalue.ListSizeExact(4),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmdevice_roles.test",
+						tfjsonpath.New("roles").AtSliceIndex(0).AtMapKey("name"),
+						knownvalue.StringExact("boot"),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmdevice_roles.test",
+						tfjsonpath.New("roles").AtSliceIndex(0).AtMapKey("child_type"),
+						knownvalue.StringExact("BootRole"),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmdevice_roles.test",
+						tfjsonpath.New("roles").AtSliceIndex(1).AtMapKey("name"),
+						knownvalue.StringExact("headnode"),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmdevice_roles.test",
+						tfjsonpath.New("roles").AtSliceIndex(2).AtMapKey("name"),
+						knownvalue.StringExact("provisioning"),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmdevice_roles.test",
+						tfjsonpath.New("roles").AtSliceIndex(3).AtMapKey("name"),
+						knownvalue.StringExact("storage"),
+					),
 				},
 			},
 		},
@@ -50,15 +82,26 @@ func TestAccCMDeviceRolesDataSource_FilterByChildType(t *testing.T) {
 				// Using HeadNodeRole as it's typically present on BCM clusters
 				Config: testAccCMDeviceRolesDataSourceConfigFilterByChildType("HeadNodeRole"),
 				ConfigStateChecks: []statecheck.StateCheck{
-					// Verify computed id field
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmdevice_roles.test",
 						tfjsonpath.New("id"),
-						knownvalue.NotNull(),
+						knownvalue.StringExact("roles"),
 					),
-					// Note: Cannot verify exact role count without knowing cluster state
-					// If HeadNodeRole exists, results should contain it
-					// If not, results should be empty list (not an error)
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmdevice_roles.test",
+						tfjsonpath.New("roles"),
+						knownvalue.ListSizeExact(1),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmdevice_roles.test",
+						tfjsonpath.New("roles").AtSliceIndex(0).AtMapKey("name"),
+						knownvalue.StringExact("headnode"),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmdevice_roles.test",
+						tfjsonpath.New("roles").AtSliceIndex(0).AtMapKey("child_type"),
+						knownvalue.StringExact("HeadNodeRole"),
+					),
 				},
 			},
 		},
@@ -73,14 +116,27 @@ func TestAccCMDeviceRolesDataSource_FilterByNamePattern(t *testing.T) {
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				// Test filtering with wildcard pattern that matches all roles
-				Config: testAccCMDeviceRolesDataSourceConfigFilterByNamePattern("*"),
+				Config: testAccCMDeviceRolesDataSourceConfigFilterByNamePattern("pro*"),
 				ConfigStateChecks: []statecheck.StateCheck{
-					// Verify computed id field
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmdevice_roles.test",
 						tfjsonpath.New("id"),
-						knownvalue.NotNull(),
+						knownvalue.StringExact("roles"),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmdevice_roles.test",
+						tfjsonpath.New("roles"),
+						knownvalue.ListSizeExact(1),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmdevice_roles.test",
+						tfjsonpath.New("roles").AtSliceIndex(0).AtMapKey("name"),
+						knownvalue.StringExact("provisioning"),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmdevice_roles.test",
+						tfjsonpath.New("roles").AtSliceIndex(0).AtMapKey("child_type"),
+						knownvalue.StringExact("ProvisioningRole"),
 					),
 				},
 			},
@@ -97,13 +153,27 @@ func TestAccCMDeviceRolesDataSource_CombinedFilters(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				// Test combined filters - both must match (AND logic)
-				Config: testAccCMDeviceRolesDataSourceConfigCombinedFilters("*", "HeadNodeRole"),
+				Config: testAccCMDeviceRolesDataSourceConfigCombinedFilters("head*", "HeadNodeRole"),
 				ConfigStateChecks: []statecheck.StateCheck{
-					// Verify computed id field
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmdevice_roles.test",
 						tfjsonpath.New("id"),
-						knownvalue.NotNull(),
+						knownvalue.StringExact("roles"),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmdevice_roles.test",
+						tfjsonpath.New("roles"),
+						knownvalue.ListSizeExact(1),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmdevice_roles.test",
+						tfjsonpath.New("roles").AtSliceIndex(0).AtMapKey("name"),
+						knownvalue.StringExact("headnode"),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmdevice_roles.test",
+						tfjsonpath.New("roles").AtSliceIndex(0).AtMapKey("child_type"),
+						knownvalue.StringExact("HeadNodeRole"),
 					),
 				},
 			},
@@ -122,14 +192,16 @@ func TestAccCMDeviceRolesDataSource_EmptyResults(t *testing.T) {
 				// Test filtering with non-existent type
 				Config: testAccCMDeviceRolesDataSourceConfigFilterByChildType("NonExistentRoleType12345"),
 				ConfigStateChecks: []statecheck.StateCheck{
-					// Verify computed id field
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmdevice_roles.test",
 						tfjsonpath.New("id"),
-						knownvalue.NotNull(),
+						knownvalue.StringExact("roles"),
 					),
-					// Empty results should still have valid state
-					// roles list should be empty but not null
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmdevice_roles.test",
+						tfjsonpath.New("roles"),
+						knownvalue.ListSizeExact(0),
+					),
 				},
 			},
 		},

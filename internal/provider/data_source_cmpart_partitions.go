@@ -24,9 +24,9 @@ var (
 
 // Constants for BCM API calls.
 const (
-	bcmPartitionService    = "cmpart"
-	bcmPartitionMethod     = "getPartitions"
-	partitionIDPlaceholder = "placeholder"
+	bcmPartitionService   = "cmpart"
+	bcmPartitionMethod    = "getPartitions"
+	partitionDataSourceID = "cmpart-partitions"
 )
 
 // NewCMPartPartitionsDataSource is a helper function to simplify the provider implementation.
@@ -271,7 +271,7 @@ func (d *CMPartPartitionsDataSource) Read(ctx context.Context, req datasource.Re
 	}
 
 	// Set computed ID
-	data.ID = types.StringValue(partitionIDPlaceholder)
+	data.ID = types.StringValue(partitionDataSourceID)
 
 	tflog.Debug(ctx, "Returning partitions to Terraform state", map[string]interface{}{
 		"partition_count": len(data.Partitions),

@@ -78,11 +78,8 @@ func TestAccCMNetNetwork_Basic(t *testing.T) {
 				ResourceName:      "bcm_cmnet_network.test",
 				ImportState:       true,
 				ImportStateVerify: true,
-				ConfigStateChecks: []statecheck.StateCheck{
-					compareID.AddStateValue(
-						"bcm_cmnet_network.test",
-						tfjsonpath.New("id"),
-					),
+				ImportStateVerifyIgnore: []string{
+					"domain_name", // BCM default is omitted on import when not explicitly configured
 				},
 			},
 		},
@@ -91,6 +88,9 @@ func TestAccCMNetNetwork_Basic(t *testing.T) {
 
 func TestAccCMNetNetwork_Complete(t *testing.T) {
 	networkName := generateUniqueTestName("tftest-network")
+
+	// Initialize ID tracker for consistency verification across operations
+	compareID := statecheck.CompareValue(compare.ValuesSame())
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -151,6 +151,10 @@ func TestAccCMNetNetwork_Complete(t *testing.T) {
 						tfjsonpath.New("uuid"),
 						knownvalue.NotNull(),
 					),
+					compareID.AddStateValue(
+						"bcm_cmnet_network.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Idempotency check after Create
@@ -161,6 +165,12 @@ func TestAccCMNetNetwork_Complete(t *testing.T) {
 						plancheck.ExpectEmptyPlan(),
 					},
 				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmnet_network.test",
+						tfjsonpath.New("id"),
+					),
+				},
 			},
 		},
 	})
@@ -168,6 +178,9 @@ func TestAccCMNetNetwork_Complete(t *testing.T) {
 
 func TestAccCMNetNetwork_Update(t *testing.T) {
 	networkName := generateUniqueTestName("tftest-network")
+
+	// Initialize ID tracker for consistency verification across operations
+	compareID := statecheck.CompareValue(compare.ValuesSame())
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -183,6 +196,10 @@ func TestAccCMNetNetwork_Update(t *testing.T) {
 						tfjsonpath.New("name"),
 						knownvalue.StringExact(networkName),
 					),
+					compareID.AddStateValue(
+						"bcm_cmnet_network.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Idempotency check after Create
@@ -192,6 +209,12 @@ func TestAccCMNetNetwork_Update(t *testing.T) {
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
 					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmnet_network.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Update MTU and notes
@@ -213,11 +236,56 @@ func TestAccCMNetNetwork_Update(t *testing.T) {
 						tfjsonpath.New("notes"),
 						knownvalue.StringExact("Updated notes"),
 					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmnet_network.test",
+						tfjsonpath.New("domain_name"),
+						knownvalue.StringExact("cluster.local"),
+					),
+					compareID.AddStateValue(
+						"bcm_cmnet_network.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Idempotency check after Update
 			{
 				Config: testAccCMNetNetworkConfigUpdate(networkName),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmnet_network.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+		},
+	})
+}
+
+func TestAccCMNetNetwork_ExplicitDefaultMTU(t *testing.T) {
+	networkName := generateUniqueTestName("tftest-network-mtu1500")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMNetNetworkDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccCMNetNetworkConfigExplicitMTU(networkName, 1500),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmnet_network.test",
+						tfjsonpath.New("mtu"),
+						knownvalue.Int64Exact(1500),
+					),
+				},
+			},
+			{
+				Config: testAccCMNetNetworkConfigExplicitMTU(networkName, 1500),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
@@ -232,6 +300,9 @@ func TestAccCMNetNetwork_Update(t *testing.T) {
 func TestAccCMNetNetwork_DriftDetection(t *testing.T) {
 	networkName := generateUniqueTestName("tftest-network-drift")
 
+	// Initialize ID tracker for consistency verification across operations
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -245,6 +316,20 @@ func TestAccCMNetNetwork_DriftDetection(t *testing.T) {
 						"bcm_cmnet_network.test",
 						tfjsonpath.New("notes"),
 						knownvalue.StringExact("Initial notes"),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmnet_network.test",
+						tfjsonpath.New("id"),
+						knownvalue.NotNull(),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmnet_network.test",
+						tfjsonpath.New("uuid"),
+						knownvalue.NotNull(),
+					),
+					compareID.AddStateValue(
+						"bcm_cmnet_network.test",
+						tfjsonpath.New("id"),
 					),
 				},
 			},
@@ -309,11 +394,125 @@ func TestAccCMNetNetwork_DriftDetection(t *testing.T) {
 			// Step 3: Terraform restores desired state
 			{
 				Config: testAccCMNetNetworkConfigWithNotes(networkName, "Initial notes"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmnet_network.test",
 						tfjsonpath.New("notes"),
 						knownvalue.StringExact("Initial notes"),
+					),
+					compareID.AddStateValue(
+						"bcm_cmnet_network.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+		},
+	})
+}
+
+// TestAccCMNetNetwork_DriftDomainName verifies Terraform detects external modifications to domain_name.
+func TestAccCMNetNetwork_DriftDomainName(t *testing.T) {
+	networkName := generateUniqueTestName("tftest-network-drift-dn")
+
+	// Initialize ID tracker for consistency verification across operations
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMNetNetworkDestroy,
+		Steps: []resource.TestStep{
+			// Step 1: Create network with domain_name "test.local"
+			{
+				Config: testAccCMNetNetworkConfigComplete(networkName),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmnet_network.test",
+						tfjsonpath.New("domain_name"),
+						knownvalue.StringExact("test.local"),
+					),
+					compareID.AddStateValue(
+						"bcm_cmnet_network.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+			// Step 2: Modify domain_name externally via BCM API (drift simulation)
+			{
+				PreConfig: func() {
+					client := createTestBCMClient(t)
+					ctx := t.Context()
+
+					// Get network UUID by name
+					uuid := getResourceUUIDByName(t, "cmnet", "getNetwork", networkName)
+
+					// Fetch full network data
+					body, err := client.CallJSONRPC(ctx, "cmnet", "getNetwork", uuid)
+					if err != nil {
+						t.Fatalf("Failed to fetch network: %v", err)
+					}
+
+					var networkData map[string]interface{}
+					if err := json.Unmarshal(body, &networkData); err != nil {
+						t.Fatalf("Failed to unmarshal network data: %v", err)
+					}
+
+					// Modify domainName field externally (this is the drift we're introducing)
+					networkData["domainName"] = "drifted.local"
+
+					// Build BCM entity structure (required for updateNetwork)
+					entity := map[string]interface{}{
+						"baseType":      "Network",
+						"childType":     "",
+						"modified":      true,
+						"to_be_removed": false,
+						"revision":      networkData["revision"],
+						"uuid":          uuid,
+					}
+
+					// Copy all network fields
+					for k, v := range networkData {
+						if k != "uuid" {
+							entity[k] = v
+						}
+					}
+
+					// Update via BCM API
+					_, err = client.CallJSONRPC(ctx, "cmnet", "updateNetwork", entity, false)
+					if err != nil {
+						t.Fatalf("Failed to update network externally: %v", err)
+					}
+
+					// Wait for eventual consistency
+					time.Sleep(TestEventualConsistencyDelay)
+
+					t.Logf("[DEBUG] Modified domainName externally to: %v", entity["domainName"])
+				},
+				Config:             testAccCMNetNetworkConfigComplete(networkName),
+				ExpectNonEmptyPlan: true,
+			},
+			// Step 3: Terraform restores desired state
+			{
+				Config: testAccCMNetNetworkConfigComplete(networkName),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmnet_network.test",
+						tfjsonpath.New("domain_name"),
+						knownvalue.StringExact("test.local"),
+					),
+					compareID.AddStateValue(
+						"bcm_cmnet_network.test",
+						tfjsonpath.New("id"),
 					),
 				},
 			},
@@ -463,6 +662,100 @@ resource "bcm_cmnet_network" "test" {
 	)
 }
 
+func testAccCMNetNetworkConfigExplicitMTU(name string, mtu int) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+resource "bcm_cmnet_network" "test" {
+  name   = %[4]q
+  subnet = "192.168.151.0/24"
+  mtu    = %[5]d
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		name,
+		mtu,
+	)
+}
+
+// =============================================================================
+// Acceptance Tests - Update Notes and Verify (CRUD Depth)
+// =============================================================================
+
+// TestAccCMNetNetwork_UpdateNotesAndVerify creates a network with notes "Initial",
+// updates notes to "Updated", verifies the value, then confirms idempotency
+// with an empty plan.
+func TestAccCMNetNetwork_UpdateNotesAndVerify(t *testing.T) {
+	networkName := generateUniqueTestName("tftest-net-notes")
+
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMNetNetworkDestroy,
+		Steps: []resource.TestStep{
+			// Step 1: Create with notes "Initial"
+			{
+				Config: testAccCMNetNetworkConfigWithNotes(networkName, "Initial"),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmnet_network.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(networkName),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmnet_network.test",
+						tfjsonpath.New("notes"),
+						knownvalue.StringExact("Initial"),
+					),
+					compareID.AddStateValue(
+						"bcm_cmnet_network.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+			// Step 2: Update notes to "Updated"
+			{
+				Config: testAccCMNetNetworkConfigWithNotes(networkName, "Updated"),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmnet_network.test",
+						tfjsonpath.New("notes"),
+						knownvalue.StringExact("Updated"),
+					),
+					compareID.AddStateValue(
+						"bcm_cmnet_network.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+			// Step 3: Idempotency check
+			{
+				Config: testAccCMNetNetworkConfigWithNotes(networkName, "Updated"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmnet_network.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+		},
+	})
+}
+
 // =============================================================================
 // Disappears Test
 // =============================================================================
@@ -532,6 +825,65 @@ func TestAccCMNetNetwork_Disappears(t *testing.T) {
 }
 
 // =============================================================================
+// Idempotency Test
+// =============================================================================
+
+// TestAccCMNetNetwork_Idempotency tests that creating a network with all fields
+// and re-applying produces no changes across multiple cycles.
+func TestAccCMNetNetwork_Idempotency(t *testing.T) {
+	networkName := generateUniqueTestName("tftest-net-idem")
+
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMNetNetworkDestroy,
+		Steps: []resource.TestStep{
+			// Create with all fields.
+			{
+				Config: testAccCMNetNetworkConfigComplete(networkName),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmnet_network.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(networkName),
+					),
+					compareID.AddStateValue(
+						"bcm_cmnet_network.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+			// Idempotency cycle 1.
+			{
+				Config: testAccCMNetNetworkConfigComplete(networkName),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmnet_network.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+			// Idempotency cycle 2.
+			{
+				Config: testAccCMNetNetworkConfigComplete(networkName),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+		},
+	})
+}
+
+// =============================================================================
 // Import Test (Dedicated)
 // =============================================================================
 
@@ -565,11 +917,8 @@ func TestAccCMNetNetwork_Import(t *testing.T) {
 				ResourceName:      "bcm_cmnet_network.test",
 				ImportState:       true,
 				ImportStateVerify: true,
-				ConfigStateChecks: []statecheck.StateCheck{
-					compareID.AddStateValue(
-						"bcm_cmnet_network.test",
-						tfjsonpath.New("id"),
-					),
+				ImportStateVerifyIgnore: []string{
+					"domain_name", // BCM default is omitted on import when not explicitly configured
 				},
 			},
 		},
@@ -614,6 +963,49 @@ func TestAccCMNetNetwork_ValidationInvalidSubnetFormat(t *testing.T) {
 			},
 		},
 	})
+}
+
+// TestAccCMNetNetwork_ValidationInvalidGatewayIP verifies that an invalid gateway
+// IP address is rejected by BCM server-side validation (validateNetwork).
+func TestAccCMNetNetwork_ValidationInvalidGatewayIP(t *testing.T) {
+	networkName := generateUniqueTestName("tftest-net-gw")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMNetNetworkDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config:      testAccCMNetNetworkConfigWithGateway(networkName, "not-an-ip"),
+				ExpectError: regexp.MustCompile(`(?i)gateway|invalid|validation`),
+			},
+		},
+	})
+}
+
+// testAccCMNetNetworkConfigWithGateway returns a config with a specific gateway value
+// for validation testing.
+func testAccCMNetNetworkConfigWithGateway(name, gateway string) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+resource "bcm_cmnet_network" "test" {
+  name        = %[4]q
+  domain_name = "cluster.local"
+  gateway     = %[5]q
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		name,
+		gateway,
+	)
 }
 
 // testAccCMNetNetworkConfigWithSubnet returns a config with a specific subnet value

@@ -19,10 +19,7 @@
 data "bcm_cmpart_softwareimages" "base" {}
 
 locals {
-  base_image_id = [
-    for img in data.bcm_cmpart_softwareimages.base.images :
-    img.id if img.name == "default-image"
-  ][0]
+  base_image_id = data.bcm_cmpart_softwareimages.base.images[0].id
 }
 
 # Correct: Modules with empty parameters field

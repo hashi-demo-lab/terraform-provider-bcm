@@ -35,7 +35,7 @@ resource "bcm_cmdevice_device" "ipmi" {
   default_gateway_metric = 100
 
   # Boot configuration
-  boot_loader       = "pxelinux"
+  boot_loader       = "PXELINUX"
   kernel_parameters = "console=ttyS0,115200 ipmi_si.type=kcs"
 
   # Hardware identifiers (typically auto-discovered from BMC)

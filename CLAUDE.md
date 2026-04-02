@@ -16,6 +16,13 @@ TF_ACC=1 go test -v -timeout 120m ./internal/provider/ -run TestAccName
 make fmt && make lint     # Format and lint
 pre-commit run --all-files
 
+# Example Validation
+scripts/test-examples.sh                    # Validate all examples
+scripts/test-examples.sh --data-sources     # Data sources only
+scripts/test-examples.sh --resources        # Resources only
+scripts/test-examples.sh --cleanup-only     # Clean up leftover test resources
+scripts/test-examples.sh --verbose          # Verbose output
+
 # Documentation
 make generate             # Generate docs (don't edit docs/ manually)
 ```

@@ -7,8 +7,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 
-	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -71,6 +71,44 @@ type CategoryDataModel struct {
 	FSMounts               types.List   `tfsdk:"fsmounts"`
 	Roles                  types.List   `tfsdk:"roles"`
 	Services               types.List   `tfsdk:"services"`
+}
+
+func flattenCategoryObjectList(ctx context.Context, data map[string]interface{}, key string, valueKeys ...string) types.List {
+	if data == nil {
+		return types.ListNull(types.StringType)
+	}
+
+	raw, ok := data[key]
+	if !ok || raw == nil {
+		return types.ListNull(types.StringType)
+	}
+
+	items, ok := raw.([]interface{})
+	if !ok {
+		return types.ListNull(types.StringType)
+	}
+
+	flattened := make([]string, 0, len(items))
+	for _, item := range items {
+		itemMap, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		for _, valueKey := range valueKeys {
+			if value, ok := itemMap[valueKey].(string); ok && value != "" {
+				flattened = append(flattened, value)
+				break
+			}
+		}
+	}
+
+	list, diags := types.ListValueFrom(ctx, types.StringType, flattened)
+	if diags.HasError() {
+		return types.ListNull(types.StringType)
+	}
+
+	return list
 }
 
 func (d *CMDeviceCategoriesDataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -342,18 +380,26 @@ func (d *CMDeviceCategoriesDataSource) Read(ctx context.Context, req datasource.
 			category.SoftwareImageID = types.StringNull()
 		}
 
-		// Handle list attributes - for now, create empty lists
-		// Will implement proper nested object mapping in refactor phase
-		category.NameServers, _ = types.ListValue(types.StringType, []attr.Value{})
-		category.SearchDomains, _ = types.ListValue(types.StringType, []attr.Value{})
-		category.TimeServers, _ = types.ListValue(types.StringType, []attr.Value{})
-		category.Modules, _ = types.ListValue(types.StringType, []attr.Value{})
-		category.FSMounts, _ = types.ListValue(types.StringType, []attr.Value{})
-		category.Roles, _ = types.ListValue(types.StringType, []attr.Value{})
-		category.Services, _ = types.ListValue(types.StringType, []attr.Value{})
+		category.NameServers = parseStringListValue(ctx, catData, "nameServers")
+		category.SearchDomains = parseStringListValue(ctx, catData, "searchDomains")
+		category.TimeServers = parseStringListValue(ctx, catData, "timeServers")
+		category.Modules = flattenCategoryObjectList(ctx, catData, "modules", "name")
+		category.FSMounts = flattenCategoryObjectList(ctx, catData, "fsmounts", "mountpoint", "path")
+		category.Roles = flattenCategoryObjectList(ctx, catData, "roles", "name")
+		category.Services = flattenCategoryObjectList(ctx, catData, "services", "name")
 
 		data.Categories = append(data.Categories, category)
 	}
+
+	sort.Slice(data.Categories, func(i, j int) bool {
+		if data.Categories[i].Name.ValueString() != data.Categories[j].Name.ValueString() {
+			return data.Categories[i].Name.ValueString() < data.Categories[j].Name.ValueString()
+		}
+		if data.Categories[i].ChildType.ValueString() != data.Categories[j].ChildType.ValueString() {
+			return data.Categories[i].ChildType.ValueString() < data.Categories[j].ChildType.ValueString()
+		}
+		return data.Categories[i].UUID.ValueString() < data.Categories[j].UUID.ValueString()
+	})
 
 	tflog.Trace(ctx, "Mapped categories to Terraform state", map[string]interface{}{
 		"count": len(data.Categories),

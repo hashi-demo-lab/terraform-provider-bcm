@@ -6,7 +6,6 @@ package provider
 import (
 	"fmt"
 	"os"
-	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -26,9 +25,13 @@ func TestAccCMDeviceNodesDataSource_Basic(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmdevice_nodes.test",
 						tfjsonpath.New("id"),
+						knownvalue.StringExact("cmdevice-nodes"),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmdevice_nodes.test",
+						tfjsonpath.New("nodes"),
 						knownvalue.NotNull(),
 					),
-					// Verify first node attributes
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmdevice_nodes.test",
 						tfjsonpath.New("nodes").AtSliceIndex(0).AtMapKey("uuid"),
@@ -37,7 +40,12 @@ func TestAccCMDeviceNodesDataSource_Basic(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmdevice_nodes.test",
 						tfjsonpath.New("nodes").AtSliceIndex(0).AtMapKey("hostname"),
-						knownvalue.NotNull(),
+						knownvalue.StringExact("bcm11-headnode"),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmdevice_nodes.test",
+						tfjsonpath.New("nodes").AtSliceIndex(0).AtMapKey("child_type"),
+						knownvalue.StringExact("HeadNode"),
 					),
 				},
 			},
@@ -73,9 +81,18 @@ func TestAccCMDeviceNodesDataSource_FilterByType(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmdevice_nodes.test",
 						tfjsonpath.New("id"),
+						knownvalue.StringExact("cmdevice-nodes"),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmdevice_nodes.test",
+						tfjsonpath.New("nodes"),
 						knownvalue.NotNull(),
 					),
-					// Verify filtered nodes match child_type filter
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmdevice_nodes.test",
+						tfjsonpath.New("nodes").AtSliceIndex(0).AtMapKey("hostname"),
+						knownvalue.NotNull(),
+					),
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmdevice_nodes.test",
 						tfjsonpath.New("nodes").AtSliceIndex(0).AtMapKey("child_type"),
@@ -119,13 +136,22 @@ func TestAccCMDeviceNodesDataSource_FilterByHostname(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmdevice_nodes.test",
 						tfjsonpath.New("id"),
-						knownvalue.NotNull(),
+						knownvalue.StringExact("cmdevice-nodes"),
 					),
-					// Verify filtered nodes match hostname_pattern filter
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmdevice_nodes.test",
+						tfjsonpath.New("nodes"),
+						knownvalue.ListSizeExact(1),
+					),
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmdevice_nodes.test",
 						tfjsonpath.New("nodes").AtSliceIndex(0).AtMapKey("hostname"),
-						knownvalue.StringRegexp(regexp.MustCompile("node")),
+						knownvalue.StringExact("node001"),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmdevice_nodes.test",
+						tfjsonpath.New("nodes").AtSliceIndex(0).AtMapKey("child_type"),
+						knownvalue.StringExact("PhysicalNode"),
 					),
 				},
 			},
@@ -144,7 +170,7 @@ provider "bcm" {
 
 data "bcm_cmdevice_nodes" "test" {
   filter {
-    hostname_pattern = "node"
+    hostname_pattern = "node001"
   }
 }
 `,
@@ -165,9 +191,13 @@ func TestAccCMDeviceNodesDataSource_FilterMultiple(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmdevice_nodes.test",
 						tfjsonpath.New("id"),
-						knownvalue.NotNull(),
+						knownvalue.StringExact("cmdevice-nodes"),
 					),
-					// Verify filtered nodes match both child_type and hostname_pattern filters
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmdevice_nodes.test",
+						tfjsonpath.New("nodes"),
+						knownvalue.ListSizeExact(1),
+					),
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmdevice_nodes.test",
 						tfjsonpath.New("nodes").AtSliceIndex(0).AtMapKey("child_type"),
@@ -176,7 +206,7 @@ func TestAccCMDeviceNodesDataSource_FilterMultiple(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmdevice_nodes.test",
 						tfjsonpath.New("nodes").AtSliceIndex(0).AtMapKey("hostname"),
-						knownvalue.StringRegexp(regexp.MustCompile("node")),
+						knownvalue.StringExact("node001"),
 					),
 				},
 			},
@@ -196,7 +226,7 @@ provider "bcm" {
 data "bcm_cmdevice_nodes" "test" {
   filter {
     child_type        = "PhysicalNode"
-    hostname_pattern = "node"
+    hostname_pattern  = "node001"
   }
 }
 `,

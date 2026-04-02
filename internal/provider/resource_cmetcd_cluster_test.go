@@ -218,6 +218,11 @@ func TestAccCMEtcdCluster_basic(t *testing.T) {
 					),
 					statecheck.ExpectKnownValue(
 						"bcm_cmetcd_cluster.test",
+						tfjsonpath.New("id"),
+						knownvalue.NotNull(),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmetcd_cluster.test",
 						tfjsonpath.New("uuid"),
 						knownvalue.NotNull(),
 					),
@@ -260,6 +265,8 @@ func TestAccCMEtcdCluster_update(t *testing.T) {
 	clusterName := generateShortTestName("upd")
 	clusterNameUpdated := generateShortTestName("upd2")
 
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheckCMEtcdCluster(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -276,6 +283,16 @@ func TestAccCMEtcdCluster_update(t *testing.T) {
 					),
 					statecheck.ExpectKnownValue(
 						"bcm_cmetcd_cluster.test",
+						tfjsonpath.New("id"),
+						knownvalue.NotNull(),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmetcd_cluster.test",
+						tfjsonpath.New("uuid"),
+						knownvalue.NotNull(),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmetcd_cluster.test",
 						tfjsonpath.New("heartbeat_interval"),
 						knownvalue.Int64Exact(150),
 					),
@@ -283,6 +300,10 @@ func TestAccCMEtcdCluster_update(t *testing.T) {
 						"bcm_cmetcd_cluster.test",
 						tfjsonpath.New("election_timeout"),
 						knownvalue.Int64Exact(1500),
+					),
+					compareID.AddStateValue(
+						"bcm_cmetcd_cluster.test",
+						tfjsonpath.New("id"),
 					),
 				},
 			},
@@ -305,6 +326,10 @@ func TestAccCMEtcdCluster_update(t *testing.T) {
 						tfjsonpath.New("election_timeout"),
 						knownvalue.Int64Exact(2000),
 					),
+					compareID.AddStateValue(
+						"bcm_cmetcd_cluster.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Idempotency check after Update
@@ -314,6 +339,12 @@ func TestAccCMEtcdCluster_update(t *testing.T) {
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
 					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmetcd_cluster.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 		},
@@ -362,6 +393,8 @@ func TestAccCMEtcdCluster_import(t *testing.T) {
 func TestAccCMEtcdCluster_driftDetection(t *testing.T) {
 	clusterName := generateShortTestName("drf")
 
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheckCMEtcdCluster(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -375,6 +408,10 @@ func TestAccCMEtcdCluster_driftDetection(t *testing.T) {
 						"bcm_cmetcd_cluster.test",
 						tfjsonpath.New("heartbeat_interval"),
 						knownvalue.Int64Exact(100),
+					),
+					compareID.AddStateValue(
+						"bcm_cmetcd_cluster.test",
+						tfjsonpath.New("id"),
 					),
 				},
 			},
@@ -423,11 +460,20 @@ func TestAccCMEtcdCluster_driftDetection(t *testing.T) {
 			// Terraform restores desired state
 			{
 				Config: testAccCMEtcdClusterResourceConfigWithTimings(clusterName, 100, 1000),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmetcd_cluster.test",
 						tfjsonpath.New("heartbeat_interval"),
 						knownvalue.Int64Exact(100),
+					),
+					compareID.AddStateValue(
+						"bcm_cmetcd_cluster.test",
+						tfjsonpath.New("id"),
 					),
 				},
 			},
@@ -490,6 +536,25 @@ func TestAccCMEtcdCluster_validationElectionTimeoutRange(t *testing.T) {
 	})
 }
 
+// TestAccCMEtcdCluster_validationHeartbeatAboveMax tests that heartbeat_interval
+// above the maximum (500) is rejected by the schema validator (Between 50-500).
+func TestAccCMEtcdCluster_validationHeartbeatAboveMax(t *testing.T) {
+	clusterName := generateShortTestName("hbmax")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheckCMEtcdCluster(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMEtcdClusterDestroy,
+		Steps: []resource.TestStep{
+			{
+				// Heartbeat too high (max 500ms)
+				Config:      testAccCMEtcdClusterResourceConfigWithTimings(clusterName, 600, 5000),
+				ExpectError: regexp.MustCompile(`heartbeat_interval.*must be between 50 and 500|Attribute heartbeat_interval`),
+			},
+		},
+	})
+}
+
 // =============================================================================
 // Acceptance Tests - Options JSON
 // =============================================================================
@@ -497,6 +562,8 @@ func TestAccCMEtcdCluster_validationElectionTimeoutRange(t *testing.T) {
 // TestAccCMEtcdCluster_withOptions tests the options JSON field.
 func TestAccCMEtcdCluster_withOptions(t *testing.T) {
 	clusterName := generateShortTestName("opt")
+
+	compareID := statecheck.CompareValue(compare.ValuesSame())
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheckCMEtcdCluster(t) },
@@ -516,6 +583,15 @@ func TestAccCMEtcdCluster_withOptions(t *testing.T) {
 						tfjsonpath.New("options"),
 						knownvalue.NotNull(),
 					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmetcd_cluster.test",
+						tfjsonpath.New("options"),
+						knownvalue.NotNull(),
+					),
+					compareID.AddStateValue(
+						"bcm_cmetcd_cluster.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Update options
@@ -527,6 +603,10 @@ func TestAccCMEtcdCluster_withOptions(t *testing.T) {
 						tfjsonpath.New("options"),
 						knownvalue.NotNull(),
 					),
+					compareID.AddStateValue(
+						"bcm_cmetcd_cluster.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Idempotency check
@@ -536,6 +616,12 @@ func TestAccCMEtcdCluster_withOptions(t *testing.T) {
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
 					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmetcd_cluster.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 		},
@@ -610,6 +696,146 @@ resource "bcm_cmetcd_cluster" "test" {
 		name,
 		options,
 	)
+}
+
+// =============================================================================
+// Acceptance Tests - Update Timings and Verify (CRUD Depth)
+// =============================================================================
+
+// TestAccCMEtcdCluster_updateTimingsAndVerify creates a cluster with heartbeat=100,
+// election=1000, updates to heartbeat=200, election=2000, verifies both values,
+// then confirms idempotency with an empty plan.
+func TestAccCMEtcdCluster_updateTimingsAndVerify(t *testing.T) {
+	clusterName := generateShortTestName("tmv")
+
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheckCMEtcdCluster(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMEtcdClusterDestroy,
+		Steps: []resource.TestStep{
+			// Step 1: Create with heartbeat=100, election=1000
+			{
+				Config: testAccCMEtcdClusterResourceConfigWithTimings(clusterName, 100, 1000),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmetcd_cluster.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(clusterName),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmetcd_cluster.test",
+						tfjsonpath.New("heartbeat_interval"),
+						knownvalue.Int64Exact(100),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmetcd_cluster.test",
+						tfjsonpath.New("election_timeout"),
+						knownvalue.Int64Exact(1000),
+					),
+					compareID.AddStateValue(
+						"bcm_cmetcd_cluster.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+			// Step 2: Update to heartbeat=200, election=2000
+			{
+				Config: testAccCMEtcdClusterResourceConfigWithTimings(clusterName, 200, 2000),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmetcd_cluster.test",
+						tfjsonpath.New("heartbeat_interval"),
+						knownvalue.Int64Exact(200),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmetcd_cluster.test",
+						tfjsonpath.New("election_timeout"),
+						knownvalue.Int64Exact(2000),
+					),
+					compareID.AddStateValue(
+						"bcm_cmetcd_cluster.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+			// Step 3: Idempotency check
+			{
+				Config: testAccCMEtcdClusterResourceConfigWithTimings(clusterName, 200, 2000),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmetcd_cluster.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+		},
+	})
+}
+
+// =============================================================================
+// Acceptance Tests - Idempotency
+// =============================================================================
+
+// TestAccCMEtcdCluster_idempotency tests that creating an etcd cluster with
+// options and re-applying produces no changes across multiple cycles.
+func TestAccCMEtcdCluster_idempotency(t *testing.T) {
+	clusterName := generateShortTestName("idem")
+
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheckCMEtcdCluster(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMEtcdClusterDestroy,
+		Steps: []resource.TestStep{
+			// Create.
+			{
+				Config: testAccCMEtcdClusterResourceConfigWithTimings(clusterName, 150, 1500),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmetcd_cluster.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(clusterName),
+					),
+					compareID.AddStateValue(
+						"bcm_cmetcd_cluster.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+			// Idempotency cycle 1.
+			{
+				Config: testAccCMEtcdClusterResourceConfigWithTimings(clusterName, 150, 1500),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmetcd_cluster.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+			// Idempotency cycle 2 (catches any state mutation during read).
+			{
+				Config: testAccCMEtcdClusterResourceConfigWithTimings(clusterName, 150, 1500),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+		},
+	})
 }
 
 // =============================================================================

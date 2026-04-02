@@ -69,6 +69,21 @@ func TestAccCMPartEntityInfoDataSource_FilterByType(t *testing.T) {
 						tfjsonpath.New("entities"),
 						knownvalue.NotNull(),
 					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmpart_entity_info.test",
+						tfjsonpath.New("entities").AtSliceIndex(0).AtMapKey("type"),
+						knownvalue.StringExact("SoftwareImage"),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmpart_entity_info.test",
+						tfjsonpath.New("entities").AtSliceIndex(0).AtMapKey("name"),
+						knownvalue.NotNull(),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmpart_entity_info.test",
+						tfjsonpath.New("entities").AtSliceIndex(0).AtMapKey("uuid"),
+						knownvalue.StringRegexp(regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)),
+					),
 				},
 				// Additional check: verify all returned entities have type = "SoftwareImage"
 				Check: resource.ComposeTestCheckFunc(
@@ -206,6 +221,26 @@ func TestAccCMPartEntityInfoDataSource_FilterByExactName(t *testing.T) {
 						tfjsonpath.New("id"),
 						knownvalue.NotNull(),
 					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmpart_entity_info.test",
+						tfjsonpath.New("entities"),
+						knownvalue.ListSizeExact(1),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmpart_entity_info.test",
+						tfjsonpath.New("entities").AtSliceIndex(0).AtMapKey("name"),
+						knownvalue.StringExact("default-image"),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmpart_entity_info.test",
+						tfjsonpath.New("entities").AtSliceIndex(0).AtMapKey("type"),
+						knownvalue.StringExact("SoftwareImage"),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmpart_entity_info.test",
+						tfjsonpath.New("entities").AtSliceIndex(0).AtMapKey("uuid"),
+						knownvalue.StringRegexp(regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)),
+					),
 				},
 			},
 		},
@@ -251,6 +286,21 @@ func TestAccCMPartEntityInfoDataSource_CombinedFilters(t *testing.T) {
 						"data.bcm_cmpart_entity_info.test",
 						tfjsonpath.New("id"),
 						knownvalue.NotNull(),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmpart_entity_info.test",
+						tfjsonpath.New("entities"),
+						knownvalue.ListSizeExact(1),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmpart_entity_info.test",
+						tfjsonpath.New("entities").AtSliceIndex(0).AtMapKey("name"),
+						knownvalue.StringExact("default-image"),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmpart_entity_info.test",
+						tfjsonpath.New("entities").AtSliceIndex(0).AtMapKey("type"),
+						knownvalue.StringExact("SoftwareImage"),
 					),
 				},
 				Check: resource.ComposeTestCheckFunc(

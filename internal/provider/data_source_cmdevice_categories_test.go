@@ -22,14 +22,31 @@ func TestAccCMDeviceCategoriesDataSource_Basic(t *testing.T) {
 			{
 				Config: testAccCMDeviceCategoriesDataSourceConfig(),
 				ConfigStateChecks: []statecheck.StateCheck{
-					// Verify computed id field
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmdevice_categories.test",
 						tfjsonpath.New("id"),
+						knownvalue.StringExact("categories"),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmdevice_categories.test",
+						tfjsonpath.New("categories"),
 						knownvalue.NotNull(),
 					),
-					// Note: Cannot verify categories.0.uuid, categories.0.name without knowing cluster state
-					// Tests remain environment-portable - work on any BCM cluster configuration
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmdevice_categories.test",
+						tfjsonpath.New("categories").AtSliceIndex(0).AtMapKey("uuid"),
+						knownvalue.NotNull(),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmdevice_categories.test",
+						tfjsonpath.New("categories").AtSliceIndex(0).AtMapKey("name"),
+						knownvalue.NotNull(),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmdevice_categories.test",
+						tfjsonpath.New("categories").AtSliceIndex(0).AtMapKey("management_network_id"),
+						knownvalue.NotNull(),
+					),
 				},
 			},
 		},
@@ -63,15 +80,16 @@ func TestAccCMDeviceCategoriesDataSource_FilterByName(t *testing.T) {
 				// Then filter by name to verify filter works
 				Config: testAccCMDeviceCategoriesDataSourceConfigFilterByNameAndResource(categoryName),
 				ConfigStateChecks: []statecheck.StateCheck{
-					// Verify computed id field
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmdevice_categories.test",
 						tfjsonpath.New("id"),
-						knownvalue.NotNull(),
+						knownvalue.StringExact("categories"),
 					),
-					// Note: Filter verification - if BCM returns filtered results,
-					// categories should match name filter. Cannot assume specific count
-					// without knowing BCM cluster state (may have other matching categories)
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmdevice_categories.test",
+						tfjsonpath.New("categories").AtSliceIndex(0).AtMapKey("name"),
+						knownvalue.StringExact(categoryName),
+					),
 				},
 			},
 		},
@@ -86,14 +104,31 @@ func TestAccCMDeviceCategoriesDataSource_NestedAttributes(t *testing.T) {
 			{
 				Config: testAccCMDeviceCategoriesDataSourceConfig(),
 				ConfigStateChecks: []statecheck.StateCheck{
-					// Verify computed id field
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmdevice_categories.test",
 						tfjsonpath.New("id"),
+						knownvalue.StringExact("categories"),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmdevice_categories.test",
+						tfjsonpath.New("categories").AtSliceIndex(0).AtMapKey("modules"),
 						knownvalue.NotNull(),
 					),
-					// Note: Cannot verify nested attributes (modules, fsmounts, etc.)
-					// without knowing BCM cluster state. Tests remain environment-portable.
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmdevice_categories.test",
+						tfjsonpath.New("categories").AtSliceIndex(0).AtMapKey("fsmounts"),
+						knownvalue.NotNull(),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmdevice_categories.test",
+						tfjsonpath.New("categories").AtSliceIndex(0).AtMapKey("roles"),
+						knownvalue.NotNull(),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmdevice_categories.test",
+						tfjsonpath.New("categories").AtSliceIndex(0).AtMapKey("services"),
+						knownvalue.NotNull(),
+					),
 				},
 			},
 		},
@@ -108,14 +143,16 @@ func TestAccCMDeviceCategoriesDataSource_DiskSetup(t *testing.T) {
 			{
 				Config: testAccCMDeviceCategoriesDataSourceConfig(),
 				ConfigStateChecks: []statecheck.StateCheck{
-					// Verify computed id field
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmdevice_categories.test",
 						tfjsonpath.New("id"),
+						knownvalue.StringExact("categories"),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmdevice_categories.test",
+						tfjsonpath.New("categories").AtSliceIndex(0).AtMapKey("disksetup"),
 						knownvalue.NotNull(),
 					),
-					// Note: Cannot verify categories.0.disksetup without knowing cluster state
-					// Tests remain environment-portable
 				},
 			},
 		},

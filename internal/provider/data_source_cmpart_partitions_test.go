@@ -27,10 +27,23 @@ func TestAccCMPartPartitionsDataSource_Basic(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmpart_partitions.test",
 						tfjsonpath.New("id"),
-						knownvalue.NotNull(),
+						knownvalue.StringExact("cmpart-partitions"),
 					),
-					// Environment-portable: Cannot verify specific partition count
-					// or names without hardcoding cluster state
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmpart_partitions.test",
+						tfjsonpath.New("partitions"),
+						knownvalue.ListSizeExact(1),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmpart_partitions.test",
+						tfjsonpath.New("partitions").AtSliceIndex(0).AtMapKey("name"),
+						knownvalue.StringExact("base"),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmpart_partitions.test",
+						tfjsonpath.New("partitions").AtSliceIndex(0).AtMapKey("base_type"),
+						knownvalue.StringExact("Partition"),
+					),
 				},
 			},
 		},
@@ -50,10 +63,18 @@ func TestAccCMPartPartitionsDataSource_FilterByNamePattern(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmpart_partitions.test",
 						tfjsonpath.New("id"),
-						knownvalue.NotNull(),
+						knownvalue.StringExact("cmpart-partitions"),
 					),
-					// Cannot verify filtered results without knowing cluster state
-					// Real validation happens by inspecting state manually or logs
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmpart_partitions.test",
+						tfjsonpath.New("partitions"),
+						knownvalue.ListSizeExact(1),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmpart_partitions.test",
+						tfjsonpath.New("partitions").AtSliceIndex(0).AtMapKey("name"),
+						knownvalue.StringExact("base"),
+					),
 				},
 			},
 		},
@@ -73,7 +94,12 @@ func TestAccCMPartPartitionsDataSource_NoMatches(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmpart_partitions.test",
 						tfjsonpath.New("id"),
-						knownvalue.StringExact("placeholder"),
+						knownvalue.StringExact("cmpart-partitions"),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmpart_partitions.test",
+						tfjsonpath.New("partitions"),
+						knownvalue.ListSizeExact(0),
 					),
 				},
 			},
@@ -95,12 +121,22 @@ func TestAccCMPartPartitionsDataSource_ComputedFields(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmpart_partitions.test",
 						tfjsonpath.New("id"),
-						knownvalue.NotNull(),
+						knownvalue.StringExact("cmpart-partitions"),
 					),
 					// Verify partitions list is not null
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmpart_partitions.test",
 						tfjsonpath.New("partitions"),
+						knownvalue.ListSizeExact(1),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmpart_partitions.test",
+						tfjsonpath.New("partitions").AtSliceIndex(0).AtMapKey("name"),
+						knownvalue.StringExact("base"),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmpart_partitions.test",
+						tfjsonpath.New("partitions").AtSliceIndex(0).AtMapKey("uuid"),
 						knownvalue.NotNull(),
 					),
 				},
@@ -176,6 +212,16 @@ func TestAccCMPartPartitionsDataSource_AttributeTypes(t *testing.T) {
 						tfjsonpath.New("partitions").AtSliceIndex(0).AtMapKey("id"),
 						knownvalue.NotNull(),
 					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmpart_partitions.test",
+						tfjsonpath.New("partitions").AtSliceIndex(0).AtMapKey("slave_name"),
+						knownvalue.StringExact("node"),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmpart_partitions.test",
+						tfjsonpath.New("partitions").AtSliceIndex(0).AtMapKey("slave_digits"),
+						knownvalue.Int64Exact(3),
+					),
 					// Verify Bool attributes exist (may be true or false)
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmpart_partitions.test",
@@ -204,26 +250,30 @@ func TestAccCMPartPartitionsDataSource_ListAttributes(t *testing.T) {
 				Config: testAccCMPartPartitionsDataSourceConfig(),
 				ConfigStateChecks: []statecheck.StateCheck{
 					// Verify all List attributes are valid types (not null type checks)
-					// These may be empty lists or null depending on partition configuration
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmpart_partitions.test",
 						tfjsonpath.New("partitions").AtSliceIndex(0).AtMapKey("admin_email"),
-						knownvalue.NotNull(),
+						knownvalue.ListSizeExact(0),
 					),
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmpart_partitions.test",
 						tfjsonpath.New("partitions").AtSliceIndex(0).AtMapKey("time_servers"),
-						knownvalue.NotNull(),
+						knownvalue.ListSizeExact(3),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmpart_partitions.test",
+						tfjsonpath.New("partitions").AtSliceIndex(0).AtMapKey("time_servers").AtSliceIndex(0),
+						knownvalue.StringExact("0.pool.ntp.org"),
 					),
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmpart_partitions.test",
 						tfjsonpath.New("partitions").AtSliceIndex(0).AtMapKey("search_domains"),
-						knownvalue.NotNull(),
+						knownvalue.ListSizeExact(0),
 					),
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmpart_partitions.test",
 						tfjsonpath.New("partitions").AtSliceIndex(0).AtMapKey("name_servers"),
-						knownvalue.NotNull(),
+						knownvalue.ListSizeExact(0),
 					),
 				},
 			},
@@ -239,56 +289,64 @@ func TestAccCMPartPartitionsDataSource_FilterCaseInsensitive(t *testing.T) {
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				// Use lowercase pattern that should match partitions regardless of case
-				Config: testAccCMPartPartitionsDataSourceConfigFilter("partition"),
+				Config: testAccCMPartPartitionsDataSourceConfigFilter("base"),
 				ConfigStateChecks: []statecheck.StateCheck{
 					// Verify ID computed
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmpart_partitions.test",
 						tfjsonpath.New("id"),
-						knownvalue.NotNull(),
+						knownvalue.StringExact("cmpart-partitions"),
 					),
-					// Verify partitions list exists (may be empty if no matches)
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmpart_partitions.test",
 						tfjsonpath.New("partitions"),
-						knownvalue.NotNull(),
+						knownvalue.ListSizeExact(1),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmpart_partitions.test",
+						tfjsonpath.New("partitions").AtSliceIndex(0).AtMapKey("name"),
+						knownvalue.StringExact("base"),
 					),
 				},
 			},
 			{
-				// Use uppercase pattern - should match same partitions
-				Config: testAccCMPartPartitionsDataSourceConfigFilter("PARTITION"),
+				Config: testAccCMPartPartitionsDataSourceConfigFilter("BASE"),
 				ConfigStateChecks: []statecheck.StateCheck{
 					// Verify ID computed
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmpart_partitions.test",
 						tfjsonpath.New("id"),
-						knownvalue.NotNull(),
+						knownvalue.StringExact("cmpart-partitions"),
 					),
-					// Verify partitions list exists
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmpart_partitions.test",
 						tfjsonpath.New("partitions"),
-						knownvalue.NotNull(),
+						knownvalue.ListSizeExact(1),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmpart_partitions.test",
+						tfjsonpath.New("partitions").AtSliceIndex(0).AtMapKey("name"),
+						knownvalue.StringExact("base"),
 					),
 				},
 			},
 			{
-				// Use mixed case pattern
-				Config: testAccCMPartPartitionsDataSourceConfigFilter("PaRtItIoN"),
+				Config: testAccCMPartPartitionsDataSourceConfigFilter("BaSe"),
 				ConfigStateChecks: []statecheck.StateCheck{
-					// Verify ID computed
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmpart_partitions.test",
 						tfjsonpath.New("id"),
-						knownvalue.NotNull(),
+						knownvalue.StringExact("cmpart-partitions"),
 					),
-					// Verify partitions list exists
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmpart_partitions.test",
 						tfjsonpath.New("partitions"),
-						knownvalue.NotNull(),
+						knownvalue.ListSizeExact(1),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmpart_partitions.test",
+						tfjsonpath.New("partitions").AtSliceIndex(0).AtMapKey("name"),
+						knownvalue.StringExact("base"),
 					),
 				},
 			},
@@ -310,13 +368,18 @@ func TestAccCMPartPartitionsDataSource_FilterEmptyString(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmpart_partitions.test",
 						tfjsonpath.New("id"),
-						knownvalue.StringExact("placeholder"),
+						knownvalue.StringExact("cmpart-partitions"),
 					),
 					// Verify partitions list is not null
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmpart_partitions.test",
 						tfjsonpath.New("partitions"),
-						knownvalue.NotNull(),
+						knownvalue.ListSizeExact(1),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmpart_partitions.test",
+						tfjsonpath.New("partitions").AtSliceIndex(0).AtMapKey("name"),
+						knownvalue.StringExact("base"),
 					),
 				},
 			},

@@ -548,6 +548,83 @@ resource "bcm_cmpart_softwareimage" "test" {
 	})
 }
 
+func TestAccCMPartSoftwareImageResource_ValidationInvalidSOLPort(t *testing.T) {
+	imageName := generateUniqueTestName("tftest-invalid-solport")
+	imagePath := fmt.Sprintf("/cm/images/%s", imageName)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMPartSoftwareImageDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+resource "bcm_cmpart_softwareimage" "test" {
+  name     = %[4]q
+  path     = %[5]q
+  sol_port = "invalid"
+}
+`,
+					os.Getenv("BCM_ENDPOINT"),
+					os.Getenv("BCM_USERNAME"),
+					os.Getenv("BCM_PASSWORD"),
+					imageName,
+					imagePath,
+				),
+				ExpectError: regexp.MustCompile(`Attribute sol_port value must be one of`),
+			},
+		},
+	})
+}
+
+func TestAccCMPartSoftwareImageResource_ValidationEmptyModuleName(t *testing.T) {
+	imageName := generateUniqueTestName("tftest-empty-modname")
+	imagePath := fmt.Sprintf("/cm/images/%s", imageName)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMPartSoftwareImageDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+resource "bcm_cmpart_softwareimage" "test" {
+  name = %[4]q
+  path = %[5]q
+
+  modules = [
+    {
+      name = ""
+    }
+  ]
+}
+`,
+					os.Getenv("BCM_ENDPOINT"),
+					os.Getenv("BCM_USERNAME"),
+					os.Getenv("BCM_PASSWORD"),
+					imageName,
+					imagePath,
+				),
+				ExpectError: regexp.MustCompile(`Attribute modules\[0\]\.name string length must be at least 1`),
+			},
+		},
+	})
+}
+
 func TestAccCMPartSoftwareImageResource_UnknownValue(t *testing.T) {
 	imageName1 := generateUniqueTestName("tftest-base-image")
 	imagePath1 := fmt.Sprintf("/cm/images/%s", imageName1)
@@ -757,6 +834,11 @@ func TestAccCMPartSoftwareImage_DriftKernelParameters(t *testing.T) {
 			// Step 3: Restore desired state (Terraform applies config to fix drift)
 			{
 				Config: testAccCMPartSoftwareImageResourceConfig_DriftKernel(imageName, imagePath, "quiet splash"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmpart_softwareimage.test",
@@ -883,11 +965,145 @@ func TestAccCMPartSoftwareImage_Drift(t *testing.T) {
 			// Step 3: Restore desired state (Terraform applies config to fix drift)
 			{
 				Config: testAccCMPartSoftwareImageResourceConfig_Drift(imageName, imagePath, "Production environment"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmpart_softwareimage.test",
 						tfjsonpath.New("notes"),
 						knownvalue.StringExact("Production environment"),
+					),
+					compareID.AddStateValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+		},
+	})
+}
+
+// TestAccCMPartSoftwareImage_DriftSOLSpeed tests drift detection for SOL speed.
+// BCM surfaces external SOLSpeed changes as drift when SOL is enabled on the image.
+func TestAccCMPartSoftwareImage_DriftSOLSpeed(t *testing.T) {
+	imageName := generateUniqueTestName("tftest-drift-sol")
+	imagePath := fmt.Sprintf("/cm/images/%s", imageName)
+
+	// ID consistency tracking across test steps
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccCMPartSoftwareImagePreCheck(t, imageName)
+		},
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMPartSoftwareImageDestroy,
+		Steps: []resource.TestStep{
+			// Step 1: Create resource with SOL enabled so SOLSpeed drift is meaningful.
+			{
+				Config: testAccCMPartSoftwareImageResourceConfig_SOL(imageName, imagePath, true, "115200"),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(imageName),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("sol_speed"),
+						knownvalue.StringExact("115200"),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("uuid"),
+						knownvalue.NotNull(),
+					),
+					compareID.AddStateValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+			// Step 2: Modify sol_speed externally via BCM API and verify drift is detected.
+			{
+				PreConfig: func() {
+					client := createTestBCMClient(t)
+					ctx := context.Background()
+
+					// Get UUID by image name using helper
+					uuid := getResourceUUIDByName(t, "CMPart", "getSoftwareImage", imageName)
+
+					// Fetch full software image data from BCM API
+					body, err := client.CallJSONRPC(ctx, "CMPart", "getSoftwareImage", imageName)
+					if err != nil {
+						t.Fatalf("Failed to fetch software image for drift modification: %v", err)
+					}
+
+					// Parse the image data
+					var imageData map[string]interface{}
+					if err := json.Unmarshal(body, &imageData); err != nil {
+						t.Fatalf("Failed to parse image data: %v", err)
+					}
+
+					// Modify SOLSpeed (BCM field name) to create detectable drift.
+					imageData["SOLSpeed"] = "9600"
+
+					// Wrap in BCM API entity structure required for updates
+					entity := map[string]interface{}{
+						"baseType":      "SoftwareImage",
+						"childType":     "",
+						"modified":      true,
+						"to_be_removed": false,
+						"revision":      "",
+						"uuid":          uuid,
+					}
+					// Copy all image data fields except uuid (already set above)
+					for k, v := range imageData {
+						if k != "uuid" {
+							entity[k] = v
+						}
+					}
+
+					// Update via BCM API (second parameter: clone = false)
+					_, err = client.CallJSONRPC(ctx, "CMPart", "updateSoftwareImage", entity, false)
+					if err != nil {
+						t.Fatalf("Failed to update software image via BCM API: %v", err)
+					}
+
+					// Wait for eventual consistency
+					time.Sleep(TestEventualConsistencyDelay)
+
+					t.Logf("[DEBUG] Modified sol_speed externally to: %v", entity["SOLSpeed"])
+				},
+				Config: testAccCMPartSoftwareImageResourceConfig_SOL(imageName, imagePath, true, "115200"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectNonEmptyPlan(),
+					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+			// Step 3: Re-apply remains idempotent after Terraform restores desired state.
+			{
+				Config: testAccCMPartSoftwareImageResourceConfig_SOL(imageName, imagePath, true, "115200"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("sol_speed"),
+						knownvalue.StringExact("115200"),
 					),
 					compareID.AddStateValue(
 						"bcm_cmpart_softwareimage.test",
@@ -1863,6 +2079,52 @@ resource "bcm_cmpart_softwareimage" "test" {
 		name,
 		path,
 	)
+}
+
+// =============================================================================
+// Import Test (Standalone)
+// =============================================================================
+
+// TestAccCMPartSoftwareImage_Import verifies that importing a software image by
+// UUID produces state that matches a freshly applied configuration.
+func TestAccCMPartSoftwareImage_Import(t *testing.T) {
+	imageName := generateUniqueTestName("tftest-img-import")
+	imagePath := fmt.Sprintf("/cm/images/%s", imageName)
+
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccCMPartSoftwareImagePreCheck(t, imageName)
+		},
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMPartSoftwareImageDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccCMPartSoftwareImageResourceConfig_Basic(imageName, imagePath),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(imageName),
+					),
+					compareID.AddStateValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+			{
+				ResourceName:      "bcm_cmpart_softwareimage.test",
+				ImportState:       true,
+				ImportStateVerify: true,
+				ImportStateVerifyIgnore: []string{
+					"original_image",
+					"force",
+				},
+			},
+		},
+	})
 }
 
 // =============================================================================

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
@@ -175,6 +176,9 @@ func (r *CMUserUserResource) Schema(ctx context.Context, req resource.SchemaRequ
 				Optional:            true,
 				Computed:            true,
 				MarkdownDescription: "User's full display name (maps to commonName in BCM). Defaults to username if not specified.",
+				Validators: []validator.String{
+					stringvalidator.LengthAtMost(255),
+				},
 			},
 			"surname": schema.StringAttribute{
 				Optional:            true,
@@ -184,6 +188,12 @@ func (r *CMUserUserResource) Schema(ctx context.Context, req resource.SchemaRequ
 			"email": schema.StringAttribute{
 				Optional:            true,
 				MarkdownDescription: "User's email address",
+				Validators: []validator.String{
+					stringvalidator.RegexMatches(
+						regexp.MustCompile(`^[^@]+@[^@]+$`),
+						"must be a valid email address",
+					),
+				},
 			},
 			"notes": schema.StringAttribute{
 				Optional:            true,
@@ -462,8 +472,12 @@ func (r *CMUserUserResource) Read(ctx context.Context, req resource.ReadRequest,
 	stateAuthorizedSSHKeys := state.AuthorizedSSHKeys
 
 	// Fetch current state from BCM API
-	r.readUser(ctx, &state, &resp.Diagnostics)
+	found := r.readUser(ctx, &state, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
+		return
+	}
+	if !found {
+		resp.State.RemoveResource(ctx)
 		return
 	}
 
@@ -645,7 +659,8 @@ func (r *CMUserUserResource) ImportState(ctx context.Context, req resource.Impor
 // Helper Methods
 
 // readUser fetches user from API and populates model.
-func (r *CMUserUserResource) readUser(ctx context.Context, model *CMUserUserResourceModel, diags *diag.Diagnostics) {
+// Returns false when the user does not exist.
+func (r *CMUserUserResource) readUser(ctx context.Context, model *CMUserUserResourceModel, diags *diag.Diagnostics) bool {
 	// Determine lookup identifier
 	var lookupName string
 	if !model.Username.IsNull() && model.Username.ValueString() != "" {
@@ -658,7 +673,7 @@ func (r *CMUserUserResource) readUser(ctx context.Context, model *CMUserUserReso
 				"User Read Failed",
 				fmt.Sprintf("Failed to list users during import: %s", err.Error()),
 			)
-			return
+			return false
 		}
 
 		var usersList []map[string]interface{}
@@ -667,7 +682,7 @@ func (r *CMUserUserResource) readUser(ctx context.Context, model *CMUserUserReso
 				"Response Parse Error",
 				fmt.Sprintf("Failed to parse users list: %s", err.Error()),
 			)
-			return
+			return false
 		}
 
 		// Find user with matching UUID
@@ -682,18 +697,14 @@ func (r *CMUserUserResource) readUser(ctx context.Context, model *CMUserUserReso
 		}
 
 		if lookupName == "" {
-			diags.AddError(
-				"User Not Found",
-				fmt.Sprintf("User with ID '%s' not found in BCM", targetUUID),
-			)
-			return
+			return false
 		}
 	} else {
 		diags.AddError(
 			"Invalid State",
 			"Cannot read user: both username and ID are empty",
 		)
-		return
+		return false
 	}
 
 	tflog.Debug(ctx, "Reading user via BCM API", map[string]interface{}{
@@ -702,12 +713,19 @@ func (r *CMUserUserResource) readUser(ctx context.Context, model *CMUserUserReso
 
 	// Use getUser(username) for direct lookup
 	body, err := r.Client.CallJSONRPC(ctx, "cmuser", "getUser", lookupName)
+	if string(body) == "null" {
+		return false
+	}
 	if err != nil {
+		lowerErr := strings.ToLower(err.Error())
+		if strings.Contains(lowerErr, "not found") || strings.Contains(lowerErr, "no such") {
+			return false
+		}
 		diags.AddError(
 			"User Read Failed",
 			fmt.Sprintf("Failed to read user '%s': %s", lookupName, err.Error()),
 		)
-		return
+		return false
 	}
 
 	// Parse response
@@ -717,16 +735,12 @@ func (r *CMUserUserResource) readUser(ctx context.Context, model *CMUserUserReso
 			"Response Parse Error",
 			fmt.Sprintf("Failed to parse user response: %s", err.Error()),
 		)
-		return
+		return false
 	}
 
 	// Check if user not found
 	if len(userData) == 0 {
-		diags.AddError(
-			"User Not Found",
-			fmt.Sprintf("User '%s' not found in BCM", lookupName),
-		)
-		return
+		return false
 	}
 
 	// Map API fields to model
@@ -783,6 +797,8 @@ func (r *CMUserUserResource) readUser(ctx context.Context, model *CMUserUserReso
 		"username": model.Username.ValueString(),
 		"uuid":     model.UUID.ValueString(),
 	})
+
+	return true
 }
 
 // buildAPIEntity constructs BCM API entity from Terraform model.

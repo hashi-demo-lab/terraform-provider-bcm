@@ -98,6 +98,10 @@ const (
 //	client := createTestBCMClient(t)
 //	_, err := client.CallJSONRPC(ctx, "CMPart", "getSoftwareImage", imageName)
 func createTestBCMClient(t *testing.T) *BCMClient {
+	if os.Getenv("TF_ACC") == "" {
+		t.Skip("Acceptance tests skipped unless env 'TF_ACC' set")
+	}
+
 	endpoint := os.Getenv("BCM_ENDPOINT")
 	username := os.Getenv("BCM_USERNAME")
 	password := os.Getenv("BCM_PASSWORD")

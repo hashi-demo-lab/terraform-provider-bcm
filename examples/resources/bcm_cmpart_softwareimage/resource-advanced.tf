@@ -13,11 +13,7 @@ data "bcm_cmpart_softwareimages" "all" {}
 
 # Production pattern: Dynamic base image lookup for portability
 locals {
-  base_image_name = "default-image"
-  base_image_uuid = [
-    for img in data.bcm_cmpart_softwareimages.all.images :
-    img.id if img.name == local.base_image_name
-  ][0]
+  base_image_uuid = data.bcm_cmpart_softwareimages.all.images[0].id
 
   # Environment-specific configuration
   environment  = "production"
@@ -73,7 +69,7 @@ resource "bcm_cmpart_softwareimage" "gpu_compute" {
     - NVIDIA GPU drivers with DRM/UVM support
     - Mellanox ConnectX networking with RoCE
     - InfiniBand support
-    - Cloned from: ${local.base_image_name}
+    - Cloned from: base image
     - Environment: ${local.environment}
   EOT
 
@@ -130,7 +126,7 @@ output "gpu_image_details" {
     id             = bcm_cmpart_softwareimage.gpu_compute.id
     name           = bcm_cmpart_softwareimage.gpu_compute.name
     path           = bcm_cmpart_softwareimage.gpu_compute.path
-    cloned_from    = local.base_image_name
+    cloned_from    = data.bcm_cmpart_softwareimages.all.images[0].name
     kernel_version = bcm_cmpart_softwareimage.gpu_compute.kernel_version
     module_count   = length(bcm_cmpart_softwareimage.gpu_compute.modules)
     modules        = [for mod in bcm_cmpart_softwareimage.gpu_compute.modules : mod.name]

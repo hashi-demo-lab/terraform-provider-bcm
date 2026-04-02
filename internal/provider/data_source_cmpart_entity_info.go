@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -180,6 +181,16 @@ func (d *CMPartEntityInfoDataSource) Read(ctx context.Context, req datasource.Re
 			state.Entities = append(state.Entities, entity)
 		}
 	}
+
+	sort.Slice(state.Entities, func(i, j int) bool {
+		if state.Entities[i].Name.ValueString() != state.Entities[j].Name.ValueString() {
+			return state.Entities[i].Name.ValueString() < state.Entities[j].Name.ValueString()
+		}
+		if state.Entities[i].Type.ValueString() != state.Entities[j].Type.ValueString() {
+			return state.Entities[i].Type.ValueString() < state.Entities[j].Type.ValueString()
+		}
+		return state.Entities[i].UUID.ValueString() < state.Entities[j].UUID.ValueString()
+	})
 
 	tflog.Info(ctx, "Entity information data source read complete", map[string]interface{}{
 		"total_entities":    len(apiResponse),

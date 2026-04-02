@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -313,7 +314,7 @@ func (d *CMNetNetworksDataSource) Read(ctx context.Context, req datasource.ReadR
 
 	// Map and filter networks
 	state := CMNetNetworksDataSourceModel{
-		ID:       types.StringValue("placeholder"),
+		ID:       types.StringValue("cmnet-networks"),
 		Filter:   config.Filter,
 		Networks: []NetworkModel{},
 	}
@@ -337,6 +338,16 @@ func (d *CMNetNetworksDataSource) Read(ctx context.Context, req datasource.ReadR
 			state.Networks = append(state.Networks, network)
 		}
 	}
+
+	sort.Slice(state.Networks, func(i, j int) bool {
+		if state.Networks[i].Name.ValueString() != state.Networks[j].Name.ValueString() {
+			return state.Networks[i].Name.ValueString() < state.Networks[j].Name.ValueString()
+		}
+		if state.Networks[i].NetworkType.ValueString() != state.Networks[j].NetworkType.ValueString() {
+			return state.Networks[i].NetworkType.ValueString() < state.Networks[j].NetworkType.ValueString()
+		}
+		return state.Networks[i].UUID.ValueString() < state.Networks[j].UUID.ValueString()
+	})
 
 	tflog.Info(ctx, "Network data source read complete", map[string]interface{}{
 		"total_networks":    len(apiResponse),
