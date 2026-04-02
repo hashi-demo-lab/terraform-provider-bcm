@@ -986,8 +986,8 @@ func TestAccCMPartSoftwareImage_Drift(t *testing.T) {
 	})
 }
 
-// TestAccCMPartSoftwareImage_DriftSOLSpeed tests drift detection for sol_speed attribute
-// Verifies that Terraform detects and corrects external modifications to sol_speed
+// TestAccCMPartSoftwareImage_DriftSOLSpeed tests drift detection for SOL speed.
+// BCM surfaces external SOLSpeed changes as drift when SOL is enabled on the image.
 func TestAccCMPartSoftwareImage_DriftSOLSpeed(t *testing.T) {
 	imageName := generateUniqueTestName("tftest-drift-sol")
 	imagePath := fmt.Sprintf("/cm/images/%s", imageName)
@@ -1002,9 +1002,9 @@ func TestAccCMPartSoftwareImage_DriftSOLSpeed(t *testing.T) {
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckCMPartSoftwareImageDestroy,
 		Steps: []resource.TestStep{
-			// Step 1: Create resource with default sol_speed ("115200")
+			// Step 1: Create resource with SOL enabled so SOLSpeed drift is meaningful.
 			{
-				Config: testAccCMPartSoftwareImageResourceConfig_Basic(imageName, imagePath),
+				Config: testAccCMPartSoftwareImageResourceConfig_SOL(imageName, imagePath, true, "115200"),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmpart_softwareimage.test",
@@ -1027,7 +1027,7 @@ func TestAccCMPartSoftwareImage_DriftSOLSpeed(t *testing.T) {
 					),
 				},
 			},
-			// Step 2: Modify sol_speed externally via BCM API, verify drift detected
+			// Step 2: Modify sol_speed externally via BCM API and verify drift is detected.
 			{
 				PreConfig: func() {
 					client := createTestBCMClient(t)
@@ -1048,8 +1048,8 @@ func TestAccCMPartSoftwareImage_DriftSOLSpeed(t *testing.T) {
 						t.Fatalf("Failed to parse image data: %v", err)
 					}
 
-					// Modify solSpeed (note: BCM uses camelCase, Terraform uses snake_case)
-					imageData["solSpeed"] = "9600"
+					// Modify SOLSpeed (BCM field name) to create detectable drift.
+					imageData["SOLSpeed"] = "9600"
 
 					// Wrap in BCM API entity structure required for updates
 					entity := map[string]interface{}{
@@ -1076,10 +1076,14 @@ func TestAccCMPartSoftwareImage_DriftSOLSpeed(t *testing.T) {
 					// Wait for eventual consistency
 					time.Sleep(TestEventualConsistencyDelay)
 
-					t.Logf("[DEBUG] Modified sol_speed externally to: %v", entity["solSpeed"])
+					t.Logf("[DEBUG] Modified sol_speed externally to: %v", entity["SOLSpeed"])
 				},
-				Config:             testAccCMPartSoftwareImageResourceConfig_Basic(imageName, imagePath),
-				ExpectNonEmptyPlan: true,
+				Config: testAccCMPartSoftwareImageResourceConfig_SOL(imageName, imagePath, true, "115200"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectNonEmptyPlan(),
+					},
+				},
 				ConfigStateChecks: []statecheck.StateCheck{
 					compareID.AddStateValue(
 						"bcm_cmpart_softwareimage.test",
@@ -1087,9 +1091,9 @@ func TestAccCMPartSoftwareImage_DriftSOLSpeed(t *testing.T) {
 					),
 				},
 			},
-			// Step 3: Restore desired state (Terraform applies config to fix drift)
+			// Step 3: Re-apply remains idempotent after Terraform restores desired state.
 			{
-				Config: testAccCMPartSoftwareImageResourceConfig_Basic(imageName, imagePath),
+				Config: testAccCMPartSoftwareImageResourceConfig_SOL(imageName, imagePath, true, "115200"),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),

@@ -33,6 +33,7 @@ func main() {
 	}{
 		{service: "cmpart", method: "getPartitions"},
 		{service: "cmpart", method: "getBasicEntityInformation"},
+		{service: "cmnet", method: "getNetworks"},
 		{service: "cmdevice", method: "getNodes"},
 	} {
 		body, err := client.CallJSONRPC(context.Background(), call.service, call.method)
