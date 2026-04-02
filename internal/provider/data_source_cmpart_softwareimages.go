@@ -340,7 +340,7 @@ func (d *CMPartSoftwareImagesDataSource) Read(ctx context.Context, req datasourc
 
 	// Map and filter images
 	state := CMPartSoftwareImagesDataSourceModel{
-		ID:     types.StringValue("placeholder"),
+		ID:     types.StringValue("cmpart-softwareimages"),
 		Filter: config.Filter,
 		Images: []SoftwareImageModel{},
 	}

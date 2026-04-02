@@ -532,6 +532,65 @@ func TestAccCMNetNetwork_Disappears(t *testing.T) {
 }
 
 // =============================================================================
+// Idempotency Test
+// =============================================================================
+
+// TestAccCMNetNetwork_Idempotency tests that creating a network with all fields
+// and re-applying produces no changes across multiple cycles.
+func TestAccCMNetNetwork_Idempotency(t *testing.T) {
+	networkName := generateUniqueTestName("tftest-net-idem")
+
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMNetNetworkDestroy,
+		Steps: []resource.TestStep{
+			// Create with all fields.
+			{
+				Config: testAccCMNetNetworkConfigComplete(networkName),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmnet_network.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(networkName),
+					),
+					compareID.AddStateValue(
+						"bcm_cmnet_network.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+			// Idempotency cycle 1.
+			{
+				Config: testAccCMNetNetworkConfigComplete(networkName),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmnet_network.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+			// Idempotency cycle 2.
+			{
+				Config: testAccCMNetNetworkConfigComplete(networkName),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+		},
+	})
+}
+
+// =============================================================================
 // Import Test (Dedicated)
 // =============================================================================
 

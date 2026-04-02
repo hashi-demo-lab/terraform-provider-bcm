@@ -27,10 +27,23 @@ func TestAccCMPartSoftwareImagesDataSource_Basic(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmpart_softwareimages.test",
 						tfjsonpath.New("id"),
+						knownvalue.StringExact("cmpart-softwareimages"),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmpart_softwareimages.test",
+						tfjsonpath.New("images"),
 						knownvalue.NotNull(),
 					),
-					// Note: Cannot verify specific image attributes without knowing cluster state
-					// Dynamic assertion used to check images list size > 0 or = 0
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmpart_softwareimages.test",
+						tfjsonpath.New("images").AtSliceIndex(0).AtMapKey("uuid"),
+						knownvalue.NotNull(),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmpart_softwareimages.test",
+						tfjsonpath.New("images").AtSliceIndex(0).AtMapKey("name"),
+						knownvalue.NotNull(),
+					),
 				},
 			},
 		},
@@ -45,10 +58,14 @@ func TestAccCMPartSoftwareImagesDataSource_EmptyResponse(t *testing.T) {
 			{
 				Config: testAccCMPartSoftwareImagesDataSourceConfig(),
 				ConfigStateChecks: []statecheck.StateCheck{
-					// Verify empty array returns empty list, not error
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmpart_softwareimages.test",
 						tfjsonpath.New("id"),
+						knownvalue.StringExact("cmpart-softwareimages"),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmpart_softwareimages.test",
+						tfjsonpath.New("images"),
 						knownvalue.NotNull(),
 					),
 				},
@@ -63,12 +80,26 @@ func TestAccCMPartSoftwareImagesDataSource_NestedModules(t *testing.T) {
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccCMPartSoftwareImagesDataSourceConfig(),
+				Config: testAccCMPartSoftwareImagesDataSourceConfigFilterByName("default-image"),
 				ConfigStateChecks: []statecheck.StateCheck{
-					// Check if there are any images returned
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmpart_softwareimages.test",
 						tfjsonpath.New("id"),
+						knownvalue.StringExact("cmpart-softwareimages"),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmpart_softwareimages.test",
+						tfjsonpath.New("images").AtSliceIndex(0).AtMapKey("name"),
+						knownvalue.StringExact("default-image"),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmpart_softwareimages.test",
+						tfjsonpath.New("images").AtSliceIndex(0).AtMapKey("modules"),
+						knownvalue.NotNull(),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmpart_softwareimages.test",
+						tfjsonpath.New("images").AtSliceIndex(0).AtMapKey("modules").AtSliceIndex(0).AtMapKey("name"),
 						knownvalue.NotNull(),
 					),
 				},
@@ -85,14 +116,56 @@ func TestAccCMPartSoftwareImagesDataSource_AllFields(t *testing.T) {
 			{
 				Config: testAccCMPartSoftwareImagesDataSourceConfig(),
 				ConfigStateChecks: []statecheck.StateCheck{
-					// Modern state checks for computed fields
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmpart_softwareimages.test",
 						tfjsonpath.New("id"),
+						knownvalue.StringExact("cmpart-softwareimages"),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmpart_softwareimages.test",
+						tfjsonpath.New("images").AtSliceIndex(0).AtMapKey("path"),
 						knownvalue.NotNull(),
 					),
-					// Note: Cannot verify specific nested attributes (images.0.name, etc.)
-					// without knowing BCM cluster state. Tests remain environment-portable.
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmpart_softwareimages.test",
+						tfjsonpath.New("images").AtSliceIndex(0).AtMapKey("bootfs_part"),
+						knownvalue.NotNull(),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmpart_softwareimages.test",
+						tfjsonpath.New("images").AtSliceIndex(0).AtMapKey("fs_part"),
+						knownvalue.NotNull(),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmpart_softwareimages.test",
+						tfjsonpath.New("images").AtSliceIndex(0).AtMapKey("enable_sol"),
+						knownvalue.NotNull(),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmpart_softwareimages.test",
+						tfjsonpath.New("images").AtSliceIndex(0).AtMapKey("sol_port"),
+						knownvalue.NotNull(),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmpart_softwareimages.test",
+						tfjsonpath.New("images").AtSliceIndex(0).AtMapKey("sol_speed"),
+						knownvalue.NotNull(),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmpart_softwareimages.test",
+						tfjsonpath.New("images").AtSliceIndex(0).AtMapKey("sol_flow_control"),
+						knownvalue.NotNull(),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmpart_softwareimages.test",
+						tfjsonpath.New("images").AtSliceIndex(0).AtMapKey("creation_time"),
+						knownvalue.NotNull(),
+					),
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmpart_softwareimages.test",
+						tfjsonpath.New("images").AtSliceIndex(0).AtMapKey("revision_id"),
+						knownvalue.NotNull(),
+					),
 				},
 			},
 		},
@@ -128,14 +201,16 @@ func TestAccCMPartSoftwareImagesDataSource_FilterByCategory(t *testing.T) {
 			{
 				Config: testAccCMPartSoftwareImagesDataSourceConfigFilterByCategory("Ubuntu"),
 				ConfigStateChecks: []statecheck.StateCheck{
-					// Modern state verification
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmpart_softwareimages.test",
 						tfjsonpath.New("id"),
-						knownvalue.NotNull(),
+						knownvalue.StringExact("cmpart-softwareimages"),
 					),
-					// Note: Cannot verify specific image attributes without knowing cluster state
-					// Filter verification occurs client-side in the provider
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmpart_softwareimages.test",
+						tfjsonpath.New("images"),
+						knownvalue.ListSizeExact(0),
+					),
 				},
 			},
 		},
@@ -150,14 +225,16 @@ func TestAccCMPartSoftwareImagesDataSource_FilterByName(t *testing.T) {
 			{
 				Config: testAccCMPartSoftwareImagesDataSourceConfigFilterByName("image"),
 				ConfigStateChecks: []statecheck.StateCheck{
-					// Modern state verification
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmpart_softwareimages.test",
 						tfjsonpath.New("id"),
-						knownvalue.NotNull(),
+						knownvalue.StringExact("cmpart-softwareimages"),
 					),
-					// Note: Cannot verify name_pattern match on individual images without knowing count
-					// Filter verification occurs client-side in the provider
+					statecheck.ExpectKnownValue(
+						"data.bcm_cmpart_softwareimages.test",
+						tfjsonpath.New("images").AtSliceIndex(0).AtMapKey("name"),
+						knownvalue.StringRegexp(regexp.MustCompile(`(?i)image`)),
+					),
 				},
 			},
 		},

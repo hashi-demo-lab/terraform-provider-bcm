@@ -4089,14 +4089,6 @@ func TestAccCMDeviceCategory_RolesUUIDPopulated(t *testing.T) {
 			// Create with role, verify UUID populated
 			{
 				Config: testAccCMDeviceCategoryResourceConfig_WithRole(categoryName),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "name", categoryName),
-					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "roles.0.name", "head"),
-					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "roles.0.child_type", "HeadNode"),
-					// CRITICAL: Verify UUID is populated (not null/unknown)
-					// This check will FAIL before Issue #83 fix
-					resource.TestCheckResourceAttrSet("bcm_cmdevice_category.test", "roles.0.uuid"),
-				),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_category.test",
@@ -4108,7 +4100,18 @@ func TestAccCMDeviceCategory_RolesUUIDPopulated(t *testing.T) {
 						tfjsonpath.New("uuid"),
 						knownvalue.NotNull(),
 					),
-					// Verify role UUID is populated (Issue #83 fix validation)
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("roles").AtSliceIndex(0).AtMapKey("name"),
+						knownvalue.StringExact("head"),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("roles").AtSliceIndex(0).AtMapKey("child_type"),
+						knownvalue.StringExact("HeadNode"),
+					),
+					// CRITICAL: Verify UUID is populated (not null/unknown)
+					// This check will FAIL before Issue #83 fix (Issue #83 fix validation)
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_category.test",
 						tfjsonpath.New("roles").AtSliceIndex(0).AtMapKey("uuid"),
@@ -4178,16 +4181,23 @@ func TestAccCMDeviceCategory_MultipleRolesUUID(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: testAccCMDeviceCategoryResourceConfig_MultipleRoles(categoryName),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "name", categoryName),
-					// Verify both roles have UUIDs populated
-					resource.TestCheckResourceAttrSet("bcm_cmdevice_category.test", "roles.0.uuid"),
-					resource.TestCheckResourceAttrSet("bcm_cmdevice_category.test", "roles.1.uuid"),
-					// Verify role names are preserved
-					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "roles.0.name", "head"),
-					resource.TestCheckResourceAttr("bcm_cmdevice_category.test", "roles.1.name", "compute"),
-				),
 				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(categoryName),
+					),
+					// Verify role names are preserved
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("roles").AtSliceIndex(0).AtMapKey("name"),
+						knownvalue.StringExact("head"),
+					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("roles").AtSliceIndex(1).AtMapKey("name"),
+						knownvalue.StringExact("compute"),
+					),
 					// Verify first role UUID is populated
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_category.test",
@@ -4214,7 +4224,8 @@ func TestAccCMDeviceCategory_RolesUUIDPreservedOnRefresh(t *testing.T) {
 	// Clean up any leftover test categories
 	testAccCMDeviceCategoryPreCheck(t, categoryName)
 
-	var originalUUID string
+	// Track role UUID across create and refresh steps
+	compareRoleUUID := statecheck.CompareValue(compare.ValuesSame())
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -4224,33 +4235,30 @@ func TestAccCMDeviceCategory_RolesUUIDPreservedOnRefresh(t *testing.T) {
 			// Create and capture UUID
 			{
 				Config: testAccCMDeviceCategoryResourceConfig_WithRole(categoryName),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttrSet("bcm_cmdevice_category.test", "roles.0.uuid"),
-					resource.TestCheckResourceAttrWith("bcm_cmdevice_category.test", "roles.0.uuid",
-						func(value string) error {
-							if value == "" {
-								return fmt.Errorf("role UUID is empty")
-							}
-							originalUUID = value
-							t.Logf("Captured original role UUID: %s", originalUUID)
-							return nil
-						},
+				ConfigStateChecks: []statecheck.StateCheck{
+					// Verify UUID is populated (not null/empty)
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("roles").AtSliceIndex(0).AtMapKey("uuid"),
+						knownvalue.NotNull(),
 					),
-				),
+					// Capture UUID for cross-step comparison
+					compareRoleUUID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("roles").AtSliceIndex(0).AtMapKey("uuid"),
+					),
+				},
 			},
 			// Refresh (re-read) and verify UUID unchanged
 			{
 				RefreshState: true,
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttrWith("bcm_cmdevice_category.test", "roles.0.uuid",
-						func(value string) error {
-							if value != originalUUID {
-								return fmt.Errorf("role UUID changed after refresh: expected %s, got %s", originalUUID, value)
-							}
-							return nil
-						},
+				ConfigStateChecks: []statecheck.StateCheck{
+					// Verify UUID remains the same after refresh
+					compareRoleUUID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("roles").AtSliceIndex(0).AtMapKey("uuid"),
 					),
-				),
+				},
 			},
 		},
 	})

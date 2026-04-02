@@ -3297,16 +3297,11 @@ func TestAccCMDeviceDevice_ManagementNetworkPassThrough(t *testing.T) {
 						tfjsonpath.New("management_network"),
 						knownvalue.NotNull(),
 					),
+					managementNetworkInBCMCheck{
+						resourceAddress: "bcm_cmdevice_device.test",
+						deviceName:      deviceName,
+					},
 				},
-				Check: resource.ComposeAggregateTestCheckFunc(
-					// Verify the value in state matches the management network data source.
-					resource.TestCheckResourceAttrPair(
-						"bcm_cmdevice_device.test", "management_network",
-						"data.bcm_cmnet_networks.management", "networks.0.id",
-					),
-					// Verify BCM API actually received the management_network value.
-					testAccCheckDeviceManagementNetworkInBCM(deviceName),
-				),
 			},
 			// Step 2: Idempotency — re-apply should produce empty plan.
 			{
@@ -3347,11 +3342,12 @@ func TestAccCMDeviceDevice_ManagementNetworkOmitted(t *testing.T) {
 						tfjsonpath.New("hostname"),
 						knownvalue.StringExact(deviceName),
 					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("management_network"),
+						knownvalue.Null(),
+					),
 				},
-				Check: resource.ComposeAggregateTestCheckFunc(
-					// management_network should be empty/null in state (zero UUID mapped to null).
-					resource.TestCheckNoResourceAttr("bcm_cmdevice_device.test", "management_network"),
-				),
 			},
 			// Idempotency.
 			{
@@ -3366,8 +3362,63 @@ func TestAccCMDeviceDevice_ManagementNetworkOmitted(t *testing.T) {
 	})
 }
 
+// managementNetworkInBCMCheck is a StateCheck that verifies via direct BCM API
+// call that the device's managementNetwork field is NOT the zero UUID and matches state.
+type managementNetworkInBCMCheck struct {
+	resourceAddress string
+	deviceName      string
+}
+
+func (c managementNetworkInBCMCheck) CheckState(ctx context.Context, req statecheck.CheckStateRequest, resp *statecheck.CheckStateResponse) {
+	// Get management_network from state.
+	var stateValue string
+	for _, r := range req.State.Values.RootModule.Resources {
+		if r.Address == c.resourceAddress {
+			if v, ok := r.AttributeValues["management_network"].(string); ok {
+				stateValue = v
+			}
+			break
+		}
+	}
+
+	client := createTestBCMClient(&testing.T{})
+	body, err := client.CallJSONRPC(ctx, "cmdevice", "getDevice", c.deviceName)
+	if err != nil {
+		resp.Error = fmt.Errorf("failed to get device %s from BCM API: %w", c.deviceName, err)
+		return
+	}
+
+	var deviceData map[string]interface{}
+	if err := json.Unmarshal(body, &deviceData); err != nil {
+		resp.Error = fmt.Errorf("failed to parse device data: %w", err)
+		return
+	}
+
+	managementNetwork, ok := deviceData["managementNetwork"].(string)
+	if !ok || managementNetwork == "" {
+		resp.Error = fmt.Errorf("managementNetwork field not found or empty in BCM API response for device %s", c.deviceName)
+		return
+	}
+
+	if managementNetwork == "00000000-0000-0000-0000-000000000000" {
+		resp.Error = fmt.Errorf(
+			"management_network was NOT sent to BCM API for device %s: "+
+				"BCM still has zero UUID. Plan value was not passed through",
+			c.deviceName,
+		)
+		return
+	}
+
+	if stateValue != managementNetwork {
+		resp.Error = fmt.Errorf(
+			"management_network mismatch: state has %q but BCM API has %q",
+			stateValue, managementNetwork,
+		)
+	}
+}
+
 // testAccCheckDeviceManagementNetworkInBCM verifies via direct BCM API call that
-// the device's managementNetwork field is NOT the zero UUID (i.e., the plan value was sent).
+// the device's managementNetwork field is set to a non-zero UUID.
 func testAccCheckDeviceManagementNetworkInBCM(deviceName string) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
 		client := createTestBCMClient(&testing.T{})
@@ -3384,34 +3435,14 @@ func testAccCheckDeviceManagementNetworkInBCM(deviceName string) resource.TestCh
 		}
 
 		managementNetwork, ok := deviceData["managementNetwork"].(string)
-		if !ok {
-			return fmt.Errorf("managementNetwork field not found in BCM API response for device %s", deviceName)
+		if !ok || managementNetwork == "" {
+			return fmt.Errorf("managementNetwork field not found or empty in BCM API response for device %s", deviceName)
 		}
 
 		if managementNetwork == "00000000-0000-0000-0000-000000000000" {
 			return fmt.Errorf(
-				"management_network was NOT sent to BCM API for device %s: "+
-					"BCM still has zero UUID (00000000-0000-0000-0000-000000000000). "+
-					"This indicates the plan value was not passed through to the API entity",
+				"management_network was NOT sent to BCM API for device %s: BCM still has zero UUID",
 				deviceName,
-			)
-		}
-
-		if managementNetwork == "" {
-			return fmt.Errorf("managementNetwork is empty string in BCM API for device %s", deviceName)
-		}
-
-		// Verify it matches what's in state.
-		rs, ok := s.RootModule().Resources["bcm_cmdevice_device.test"]
-		if !ok {
-			return fmt.Errorf("resource bcm_cmdevice_device.test not found in state")
-		}
-
-		stateValue := rs.Primary.Attributes["management_network"]
-		if stateValue != managementNetwork {
-			return fmt.Errorf(
-				"management_network mismatch: state has %q but BCM API has %q",
-				stateValue, managementNetwork,
 			)
 		}
 
@@ -3445,10 +3476,11 @@ func TestAccCMDeviceDevice_ManagementNetworkDrift(t *testing.T) {
 						tfjsonpath.New("management_network"),
 						knownvalue.NotNull(),
 					),
+					managementNetworkInBCMCheck{
+						resourceAddress: "bcm_cmdevice_device.test",
+						deviceName:      deviceName,
+					},
 				},
-				Check: resource.ComposeAggregateTestCheckFunc(
-					testAccCheckDeviceManagementNetworkInBCM(deviceName),
-				),
 			},
 			// Step 2: Externally reset managementNetwork to zero UUID via BCM API.
 			{
@@ -3508,10 +3540,11 @@ func TestAccCMDeviceDevice_ManagementNetworkDrift(t *testing.T) {
 						tfjsonpath.New("management_network"),
 						knownvalue.NotNull(),
 					),
+					managementNetworkInBCMCheck{
+						resourceAddress: "bcm_cmdevice_device.test",
+						deviceName:      deviceName,
+					},
 				},
-				Check: resource.ComposeAggregateTestCheckFunc(
-					testAccCheckDeviceManagementNetworkInBCM(deviceName),
-				),
 			},
 		},
 	})
@@ -3550,10 +3583,11 @@ func TestAccCMDeviceDevice_ManagementNetworkUpdate(t *testing.T) {
 						"bcm_cmdevice_device.test",
 						tfjsonpath.New("management_network"),
 					),
+					managementNetworkInBCMCheck{
+						resourceAddress: "bcm_cmdevice_device.test",
+						deviceName:      deviceName,
+					},
 				},
-				Check: resource.ComposeAggregateTestCheckFunc(
-					testAccCheckDeviceManagementNetworkInBCM(deviceName),
-				),
 			},
 			// Step 2: Update to management_network = internalnet.
 			{
@@ -3568,10 +3602,11 @@ func TestAccCMDeviceDevice_ManagementNetworkUpdate(t *testing.T) {
 						"bcm_cmdevice_device.test",
 						tfjsonpath.New("management_network"),
 					),
+					managementNetworkInBCMCheck{
+						resourceAddress: "bcm_cmdevice_device.test",
+						deviceName:      deviceName,
+					},
 				},
-				Check: resource.ComposeAggregateTestCheckFunc(
-					testAccCheckDeviceManagementNetworkInBCM(deviceName),
-				),
 			},
 			// Step 3: Idempotency after update.
 			{
@@ -3800,10 +3835,11 @@ func TestAccCMDeviceDevice_ManagementNetworkImport(t *testing.T) {
 						tfjsonpath.New("management_network"),
 						knownvalue.NotNull(),
 					),
+					managementNetworkInBCMCheck{
+						resourceAddress: "bcm_cmdevice_device.test",
+						deviceName:      deviceName,
+					},
 				},
-				Check: resource.ComposeAggregateTestCheckFunc(
-					testAccCheckDeviceManagementNetworkInBCM(deviceName),
-				),
 			},
 			// Step 2: Import — management_network should be verified (NOT ignored).
 			{
@@ -3871,10 +3907,11 @@ func TestAccCMDeviceDevice_ManagementNetworkRemove(t *testing.T) {
 						tfjsonpath.New("management_network"),
 						knownvalue.NotNull(),
 					),
+					managementNetworkInBCMCheck{
+						resourceAddress: "bcm_cmdevice_device.test",
+						deviceName:      deviceName,
+					},
 				},
-				Check: resource.ComposeAggregateTestCheckFunc(
-					testAccCheckDeviceManagementNetworkInBCM(deviceName),
-				),
 			},
 			// Step 2: Remove management_network from config (use basic config without it).
 			{
@@ -3885,10 +3922,12 @@ func TestAccCMDeviceDevice_ManagementNetworkRemove(t *testing.T) {
 						tfjsonpath.New("hostname"),
 						knownvalue.StringExact(deviceName),
 					),
+					statecheck.ExpectKnownValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("management_network"),
+						knownvalue.Null(),
+					),
 				},
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckNoResourceAttr("bcm_cmdevice_device.test", "management_network"),
-				),
 			},
 			// Step 3: Idempotency after removal.
 			{

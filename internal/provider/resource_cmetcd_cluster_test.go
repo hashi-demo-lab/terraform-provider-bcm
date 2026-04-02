@@ -613,6 +613,65 @@ resource "bcm_cmetcd_cluster" "test" {
 }
 
 // =============================================================================
+// Acceptance Tests - Idempotency
+// =============================================================================
+
+// TestAccCMEtcdCluster_idempotency tests that creating an etcd cluster with
+// options and re-applying produces no changes across multiple cycles.
+func TestAccCMEtcdCluster_idempotency(t *testing.T) {
+	clusterName := generateShortTestName("idem")
+
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheckCMEtcdCluster(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMEtcdClusterDestroy,
+		Steps: []resource.TestStep{
+			// Create.
+			{
+				Config: testAccCMEtcdClusterResourceConfigWithTimings(clusterName, 150, 1500),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmetcd_cluster.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(clusterName),
+					),
+					compareID.AddStateValue(
+						"bcm_cmetcd_cluster.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+			// Idempotency cycle 1.
+			{
+				Config: testAccCMEtcdClusterResourceConfigWithTimings(clusterName, 150, 1500),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmetcd_cluster.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+			// Idempotency cycle 2 (catches any state mutation during read).
+			{
+				Config: testAccCMEtcdClusterResourceConfigWithTimings(clusterName, 150, 1500),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+		},
+	})
+}
+
+// =============================================================================
 // Acceptance Tests - Disappears
 // =============================================================================
 

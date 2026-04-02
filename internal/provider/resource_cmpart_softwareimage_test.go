@@ -1866,6 +1866,52 @@ resource "bcm_cmpart_softwareimage" "test" {
 }
 
 // =============================================================================
+// Import Test (Standalone)
+// =============================================================================
+
+// TestAccCMPartSoftwareImage_Import verifies that importing a software image by
+// UUID produces state that matches a freshly applied configuration.
+func TestAccCMPartSoftwareImage_Import(t *testing.T) {
+	imageName := generateUniqueTestName("tftest-img-import")
+	imagePath := fmt.Sprintf("/cm/images/%s", imageName)
+
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccCMPartSoftwareImagePreCheck(t, imageName)
+		},
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMPartSoftwareImageDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccCMPartSoftwareImageResourceConfig_Basic(imageName, imagePath),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(imageName),
+					),
+					compareID.AddStateValue(
+						"bcm_cmpart_softwareimage.test",
+						tfjsonpath.New("id"),
+					),
+				},
+			},
+			{
+				ResourceName:      "bcm_cmpart_softwareimage.test",
+				ImportState:       true,
+				ImportStateVerify: true,
+				ImportStateVerifyIgnore: []string{
+					"original_image",
+					"force",
+				},
+			},
+		},
+	})
+}
+
+// =============================================================================
 // Disappears Test
 // =============================================================================
 
