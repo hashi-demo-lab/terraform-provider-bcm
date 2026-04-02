@@ -834,6 +834,11 @@ func TestAccCMPartSoftwareImage_DriftKernelParameters(t *testing.T) {
 			// Step 3: Restore desired state (Terraform applies config to fix drift)
 			{
 				Config: testAccCMPartSoftwareImageResourceConfig_DriftKernel(imageName, imagePath, "quiet splash"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmpart_softwareimage.test",
@@ -960,6 +965,11 @@ func TestAccCMPartSoftwareImage_Drift(t *testing.T) {
 			// Step 3: Restore desired state (Terraform applies config to fix drift)
 			{
 				Config: testAccCMPartSoftwareImageResourceConfig_Drift(imageName, imagePath, "Production environment"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmpart_softwareimage.test",

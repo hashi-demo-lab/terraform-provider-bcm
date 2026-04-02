@@ -423,6 +423,11 @@ func TestAccCMEtcdCluster_driftDetection(t *testing.T) {
 			// Terraform restores desired state
 			{
 				Config: testAccCMEtcdClusterResourceConfigWithTimings(clusterName, 100, 1000),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmetcd_cluster.test",

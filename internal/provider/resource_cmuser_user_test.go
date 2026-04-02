@@ -500,6 +500,11 @@ func TestAccCMUserUser_DriftShell(t *testing.T) {
 			// Terraform restores desired state
 			{
 				Config: testAccCMUserUserConfigWithShell(username, password, "/bin/bash"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmuser_user.test",
@@ -594,6 +599,11 @@ func TestAccCMUserUser_DriftNotes(t *testing.T) {
 			// Terraform restores desired state
 			{
 				Config: testAccCMUserUserConfigComplete(username, password, "/bin/bash", "Test User", "test@example.com", initialNotes),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmuser_user.test",

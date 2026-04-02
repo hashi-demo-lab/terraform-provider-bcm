@@ -309,6 +309,11 @@ func TestAccCMNetNetwork_DriftDetection(t *testing.T) {
 			// Step 3: Terraform restores desired state
 			{
 				Config: testAccCMNetNetworkConfigWithNotes(networkName, "Initial notes"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmnet_network.test",

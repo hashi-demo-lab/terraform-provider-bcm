@@ -583,6 +583,11 @@ func TestAccCMDeviceCategory_DriftNotes(t *testing.T) {
 			// Step 3: Restore desired state (Terraform applies config to fix drift)
 			{
 				Config: testAccCMDeviceCategoryResourceConfig_DriftNotes(categoryName, "Production"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
 				ConfigStateChecks: []statecheck.StateCheck{
 					// Verify drift was corrected and state matches config
 					statecheck.ExpectKnownValue(
