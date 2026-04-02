@@ -313,7 +313,7 @@ func (d *CMNetNetworksDataSource) Read(ctx context.Context, req datasource.ReadR
 
 	// Map and filter networks
 	state := CMNetNetworksDataSourceModel{
-		ID:       types.StringValue("placeholder"),
+		ID:       types.StringValue("cmnet-networks"),
 		Filter:   config.Filter,
 		Networks: []NetworkModel{},
 	}

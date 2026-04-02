@@ -28,7 +28,7 @@ func TestAccCMNetNetworksDataSource_Basic(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmnet_networks.test",
 						tfjsonpath.New("id"),
-						knownvalue.NotNull(),
+						knownvalue.StringExact("cmnet-networks"),
 					),
 					// Verify first network has required attributes
 					statecheck.ExpectKnownValue(
@@ -75,7 +75,7 @@ func TestAccCMNetNetworksDataSource_NameFilter(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmnet_networks.filtered",
 						tfjsonpath.New("id"),
-						knownvalue.NotNull(),
+						knownvalue.StringExact("cmnet-networks"),
 					),
 					// Verify filtered networks match the name pattern
 					statecheck.ExpectKnownValue(
@@ -102,7 +102,7 @@ func TestAccCMNetNetworksDataSource_DHCPFilter(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmnet_networks.dhcp",
 						tfjsonpath.New("id"),
-						knownvalue.NotNull(),
+						knownvalue.StringExact("cmnet-networks"),
 					),
 					// Verify filtered networks have DHCP enabled matching filter value
 					statecheck.ExpectKnownValue(
@@ -129,7 +129,7 @@ func TestAccCMNetNetworksDataSource_NoMatch(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmnet_networks.filtered",
 						tfjsonpath.New("id"),
-						knownvalue.NotNull(),
+						knownvalue.StringExact("cmnet-networks"),
 					),
 					// Verify empty result list
 					statecheck.ExpectKnownValue(

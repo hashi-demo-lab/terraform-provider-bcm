@@ -27,7 +27,7 @@ func TestAccCMPartPartitionsDataSource_Basic(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmpart_partitions.test",
 						tfjsonpath.New("id"),
-						knownvalue.NotNull(),
+						knownvalue.StringExact("cmpart-partitions"),
 					),
 					// Environment-portable: Cannot verify specific partition count
 					// or names without hardcoding cluster state
@@ -50,7 +50,7 @@ func TestAccCMPartPartitionsDataSource_FilterByNamePattern(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmpart_partitions.test",
 						tfjsonpath.New("id"),
-						knownvalue.NotNull(),
+						knownvalue.StringExact("cmpart-partitions"),
 					),
 					// Cannot verify filtered results without knowing cluster state
 					// Real validation happens by inspecting state manually or logs
@@ -73,7 +73,7 @@ func TestAccCMPartPartitionsDataSource_NoMatches(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmpart_partitions.test",
 						tfjsonpath.New("id"),
-						knownvalue.StringExact("placeholder"),
+						knownvalue.StringExact("cmpart-partitions"),
 					),
 				},
 			},
@@ -95,7 +95,7 @@ func TestAccCMPartPartitionsDataSource_ComputedFields(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmpart_partitions.test",
 						tfjsonpath.New("id"),
-						knownvalue.NotNull(),
+						knownvalue.StringExact("cmpart-partitions"),
 					),
 					// Verify partitions list is not null
 					statecheck.ExpectKnownValue(
@@ -246,7 +246,7 @@ func TestAccCMPartPartitionsDataSource_FilterCaseInsensitive(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmpart_partitions.test",
 						tfjsonpath.New("id"),
-						knownvalue.NotNull(),
+						knownvalue.StringExact("cmpart-partitions"),
 					),
 					// Verify partitions list exists (may be empty if no matches)
 					statecheck.ExpectKnownValue(
@@ -264,7 +264,7 @@ func TestAccCMPartPartitionsDataSource_FilterCaseInsensitive(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmpart_partitions.test",
 						tfjsonpath.New("id"),
-						knownvalue.NotNull(),
+						knownvalue.StringExact("cmpart-partitions"),
 					),
 					// Verify partitions list exists
 					statecheck.ExpectKnownValue(

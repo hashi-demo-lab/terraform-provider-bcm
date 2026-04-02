@@ -26,7 +26,7 @@ func TestAccCMDeviceNodesDataSource_Basic(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmdevice_nodes.test",
 						tfjsonpath.New("id"),
-						knownvalue.NotNull(),
+						knownvalue.StringExact("cmdevice-nodes"),
 					),
 					// Verify first node attributes
 					statecheck.ExpectKnownValue(
@@ -73,7 +73,7 @@ func TestAccCMDeviceNodesDataSource_FilterByType(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmdevice_nodes.test",
 						tfjsonpath.New("id"),
-						knownvalue.NotNull(),
+						knownvalue.StringExact("cmdevice-nodes"),
 					),
 					// Verify filtered nodes match child_type filter
 					statecheck.ExpectKnownValue(
@@ -119,7 +119,7 @@ func TestAccCMDeviceNodesDataSource_FilterByHostname(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmdevice_nodes.test",
 						tfjsonpath.New("id"),
-						knownvalue.NotNull(),
+						knownvalue.StringExact("cmdevice-nodes"),
 					),
 					// Verify filtered nodes match hostname_pattern filter
 					statecheck.ExpectKnownValue(
@@ -165,7 +165,7 @@ func TestAccCMDeviceNodesDataSource_FilterMultiple(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmdevice_nodes.test",
 						tfjsonpath.New("id"),
-						knownvalue.NotNull(),
+						knownvalue.StringExact("cmdevice-nodes"),
 					),
 					// Verify filtered nodes match both child_type and hostname_pattern filters
 					statecheck.ExpectKnownValue(

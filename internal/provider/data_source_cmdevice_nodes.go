@@ -321,7 +321,7 @@ func (d *CMDeviceNodesDataSource) Read(ctx context.Context, req datasource.ReadR
 
 	// Build state model
 	state := CMDeviceNodesDataSourceModel{
-		ID:     types.StringValue("placeholder"),
+		ID:     types.StringValue("cmdevice-nodes"),
 		Filter: config.Filter,
 		Nodes:  make([]NodeModel, 0, len(apiResponse)),
 	}
