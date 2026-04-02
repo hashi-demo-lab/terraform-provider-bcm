@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
@@ -389,6 +390,16 @@ func (d *CMDeviceCategoriesDataSource) Read(ctx context.Context, req datasource.
 
 		data.Categories = append(data.Categories, category)
 	}
+
+	sort.Slice(data.Categories, func(i, j int) bool {
+		if data.Categories[i].Name.ValueString() != data.Categories[j].Name.ValueString() {
+			return data.Categories[i].Name.ValueString() < data.Categories[j].Name.ValueString()
+		}
+		if data.Categories[i].ChildType.ValueString() != data.Categories[j].ChildType.ValueString() {
+			return data.Categories[i].ChildType.ValueString() < data.Categories[j].ChildType.ValueString()
+		}
+		return data.Categories[i].UUID.ValueString() < data.Categories[j].UUID.ValueString()
+	})
 
 	tflog.Trace(ctx, "Mapped categories to Terraform state", map[string]interface{}{
 		"count": len(data.Categories),
