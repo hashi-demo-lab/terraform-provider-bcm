@@ -39,3 +39,7 @@ description: |-
 Import is supported using the following syntax:
 
 {{ codefile "shell" (printf "examples/resources/%s/import.sh" .Name)}}
+
+### Import with Data Source Lookup
+
+{{ tffile (printf "examples/resources/%s/import.tf" .Name)}}
