@@ -310,7 +310,7 @@ func TestAccCMPartPartitionsDataSource_FilterEmptyString(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmpart_partitions.test",
 						tfjsonpath.New("id"),
-						knownvalue.StringExact("placeholder"),
+						knownvalue.StringExact("cmpart-partitions"),
 					),
 					// Verify partitions list is not null
 					statecheck.ExpectKnownValue(

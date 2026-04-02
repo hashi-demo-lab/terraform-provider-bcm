@@ -548,6 +548,83 @@ resource "bcm_cmpart_softwareimage" "test" {
 	})
 }
 
+func TestAccCMPartSoftwareImageResource_ValidationInvalidSOLPort(t *testing.T) {
+	imageName := generateUniqueTestName("tftest-invalid-solport")
+	imagePath := fmt.Sprintf("/cm/images/%s", imageName)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMPartSoftwareImageDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+resource "bcm_cmpart_softwareimage" "test" {
+  name     = %[4]q
+  path     = %[5]q
+  sol_port = "invalid"
+}
+`,
+					os.Getenv("BCM_ENDPOINT"),
+					os.Getenv("BCM_USERNAME"),
+					os.Getenv("BCM_PASSWORD"),
+					imageName,
+					imagePath,
+				),
+				ExpectError: regexp.MustCompile(`Attribute sol_port value must be one of`),
+			},
+		},
+	})
+}
+
+func TestAccCMPartSoftwareImageResource_ValidationEmptyModuleName(t *testing.T) {
+	imageName := generateUniqueTestName("tftest-empty-modname")
+	imagePath := fmt.Sprintf("/cm/images/%s", imageName)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMPartSoftwareImageDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+resource "bcm_cmpart_softwareimage" "test" {
+  name = %[4]q
+  path = %[5]q
+
+  modules = [
+    {
+      name = ""
+    }
+  ]
+}
+`,
+					os.Getenv("BCM_ENDPOINT"),
+					os.Getenv("BCM_USERNAME"),
+					os.Getenv("BCM_PASSWORD"),
+					imageName,
+					imagePath,
+				),
+				ExpectError: regexp.MustCompile(`Attribute modules\[0\]\.name string length must be at least 1`),
+			},
+		},
+	})
+}
+
 func TestAccCMPartSoftwareImageResource_UnknownValue(t *testing.T) {
 	imageName1 := generateUniqueTestName("tftest-base-image")
 	imagePath1 := fmt.Sprintf("/cm/images/%s", imageName1)

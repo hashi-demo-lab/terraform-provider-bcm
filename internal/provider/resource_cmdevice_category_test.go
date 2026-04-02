@@ -1776,6 +1776,125 @@ func TestAccCMDeviceCategory_ValidationInvalidFIPS(t *testing.T) {
 	})
 }
 
+// TestAccCMDeviceCategory_ValidationInvalidBootLoaderProtocol tests boot_loader_protocol enum validation.
+func TestAccCMDeviceCategory_ValidationInvalidBootLoaderProtocol(t *testing.T) {
+	categoryName := generateUniqueTestName("tftest-cat-val-blp")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceCategoryDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config:      testAccCMDeviceCategoryResourceConfig_InvalidBootLoaderProtocol(categoryName, "FTP"),
+				ExpectError: regexp.MustCompile(`Attribute boot_loader_protocol value must be one of`),
+			},
+		},
+	})
+}
+
+// TestAccCMDeviceCategory_ValidationInvalidInstallMode tests install_mode enum validation.
+func TestAccCMDeviceCategory_ValidationInvalidInstallMode(t *testing.T) {
+	categoryName := generateUniqueTestName("tftest-cat-val-im")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceCategoryDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config:      testAccCMDeviceCategoryResourceConfig_InvalidInstallMode(categoryName, "INVALID"),
+				ExpectError: regexp.MustCompile(`Attribute install_mode value must be one of`),
+			},
+		},
+	})
+}
+
+// TestAccCMDeviceCategory_ValidationInvalidNewNodeInstallMode tests new_node_install_mode enum validation.
+func TestAccCMDeviceCategory_ValidationInvalidNewNodeInstallMode(t *testing.T) {
+	categoryName := generateUniqueTestName("tftest-cat-val-nnim")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceCategoryDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config:      testAccCMDeviceCategoryResourceConfig_InvalidNewNodeInstallMode(categoryName, "INVALID"),
+				ExpectError: regexp.MustCompile(`Attribute new_node_install_mode value must be one of`),
+			},
+		},
+	})
+}
+
+// TestAccCMDeviceCategory_ValidationInvalidGPUChildType tests gpu_settings.child_type enum validation.
+func TestAccCMDeviceCategory_ValidationInvalidGPUChildType(t *testing.T) {
+	categoryName := generateUniqueTestName("tftest-cat-val-gct")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceCategoryDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config:      testAccCMDeviceCategoryResourceConfig_InvalidGPUChildType(categoryName, "intel"),
+				ExpectError: regexp.MustCompile(`Attribute gpu_settings\[0\]\.child_type value must be one of`),
+			},
+		},
+	})
+}
+
+// TestAccCMDeviceCategory_ValidationInvalidGPUEccMode tests gpu_settings.ecc_mode enum validation.
+func TestAccCMDeviceCategory_ValidationInvalidGPUEccMode(t *testing.T) {
+	categoryName := generateUniqueTestName("tftest-cat-val-gem")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceCategoryDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config:      testAccCMDeviceCategoryResourceConfig_InvalidGPUEccMode(categoryName, "MAYBE"),
+				ExpectError: regexp.MustCompile(`Attribute gpu_settings\[0\]\.ecc_mode value must be one of`),
+			},
+		},
+	})
+}
+
+// TestAccCMDeviceCategory_ValidationInvalidSicknessCheckScriptTimeout tests services.sickness_check_script_timeout AtLeast(1) validation.
+func TestAccCMDeviceCategory_ValidationInvalidSicknessCheckScriptTimeout(t *testing.T) {
+	categoryName := generateUniqueTestName("tftest-cat-val-scst")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceCategoryDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config:      testAccCMDeviceCategoryResourceConfig_InvalidSicknessCheckScriptTimeout(categoryName, 0),
+				ExpectError: regexp.MustCompile(`Attribute services\[0\]\.sickness_check_script_timeout value must be at least 1`),
+			},
+		},
+	})
+}
+
+// TestAccCMDeviceCategory_ValidationInvalidSicknessCheckInterval tests services.sickness_check_interval AtLeast(1) validation.
+func TestAccCMDeviceCategory_ValidationInvalidSicknessCheckInterval(t *testing.T) {
+	categoryName := generateUniqueTestName("tftest-cat-val-sci")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCMDeviceCategoryDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config:      testAccCMDeviceCategoryResourceConfig_InvalidSicknessCheckInterval(categoryName, 0),
+				ExpectError: regexp.MustCompile(`Attribute services\[0\]\.sickness_check_interval value must be at least 1`),
+			},
+		},
+	})
+}
+
 // ========================================
 // Validation Test Config Helpers
 // ========================================
@@ -1916,6 +2035,283 @@ resource "bcm_cmdevice_category" "test" {
 		os.Getenv("BCM_PASSWORD"),
 		name,
 		fips,
+	)
+}
+
+// testAccCMDeviceCategoryResourceConfig_InvalidBootLoaderProtocol creates config with invalid boot_loader_protocol.
+func testAccCMDeviceCategoryResourceConfig_InvalidBootLoaderProtocol(name, protocol string) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmdevice_categories" "all" {}
+data "bcm_cmpart_softwareimages" "all" {}
+
+locals {
+  management_network_uuid = length(data.bcm_cmdevice_categories.all.categories) > 0 ? data.bcm_cmdevice_categories.all.categories[0].management_network_id : "00000000-0000-0000-0000-000000000000"
+  software_image_uuid = length(data.bcm_cmpart_softwareimages.all.images) > 0 ? data.bcm_cmpart_softwareimages.all.images[0].uuid : "00000000-0000-0000-0000-000000000000"
+}
+
+resource "bcm_cmdevice_category" "test" {
+  name                 = %[4]q
+  management_network   = local.management_network_uuid
+  boot_loader_protocol = %[5]q
+
+  software_image_proxy = {
+    parent_software_image = local.software_image_uuid
+  }
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		name,
+		protocol,
+	)
+}
+
+// testAccCMDeviceCategoryResourceConfig_InvalidInstallMode creates config with invalid install_mode.
+func testAccCMDeviceCategoryResourceConfig_InvalidInstallMode(name, installMode string) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmdevice_categories" "all" {}
+data "bcm_cmpart_softwareimages" "all" {}
+
+locals {
+  management_network_uuid = length(data.bcm_cmdevice_categories.all.categories) > 0 ? data.bcm_cmdevice_categories.all.categories[0].management_network_id : "00000000-0000-0000-0000-000000000000"
+  software_image_uuid = length(data.bcm_cmpart_softwareimages.all.images) > 0 ? data.bcm_cmpart_softwareimages.all.images[0].uuid : "00000000-0000-0000-0000-000000000000"
+}
+
+resource "bcm_cmdevice_category" "test" {
+  name               = %[4]q
+  management_network = local.management_network_uuid
+  install_mode       = %[5]q
+
+  software_image_proxy = {
+    parent_software_image = local.software_image_uuid
+  }
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		name,
+		installMode,
+	)
+}
+
+// testAccCMDeviceCategoryResourceConfig_InvalidNewNodeInstallMode creates config with invalid new_node_install_mode.
+func testAccCMDeviceCategoryResourceConfig_InvalidNewNodeInstallMode(name, mode string) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmdevice_categories" "all" {}
+data "bcm_cmpart_softwareimages" "all" {}
+
+locals {
+  management_network_uuid = length(data.bcm_cmdevice_categories.all.categories) > 0 ? data.bcm_cmdevice_categories.all.categories[0].management_network_id : "00000000-0000-0000-0000-000000000000"
+  software_image_uuid = length(data.bcm_cmpart_softwareimages.all.images) > 0 ? data.bcm_cmpart_softwareimages.all.images[0].uuid : "00000000-0000-0000-0000-000000000000"
+}
+
+resource "bcm_cmdevice_category" "test" {
+  name                   = %[4]q
+  management_network     = local.management_network_uuid
+  new_node_install_mode  = %[5]q
+
+  software_image_proxy = {
+    parent_software_image = local.software_image_uuid
+  }
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		name,
+		mode,
+	)
+}
+
+// testAccCMDeviceCategoryResourceConfig_InvalidGPUChildType creates config with invalid gpu_settings child_type.
+func testAccCMDeviceCategoryResourceConfig_InvalidGPUChildType(name, childType string) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmdevice_categories" "all" {}
+data "bcm_cmpart_softwareimages" "all" {}
+
+locals {
+  management_network_uuid = length(data.bcm_cmdevice_categories.all.categories) > 0 ? data.bcm_cmdevice_categories.all.categories[0].management_network_id : "00000000-0000-0000-0000-000000000000"
+  software_image_uuid = length(data.bcm_cmpart_softwareimages.all.images) > 0 ? data.bcm_cmpart_softwareimages.all.images[0].uuid : "00000000-0000-0000-0000-000000000000"
+}
+
+resource "bcm_cmdevice_category" "test" {
+  name               = %[4]q
+  management_network = local.management_network_uuid
+
+  software_image_proxy = {
+    parent_software_image = local.software_image_uuid
+  }
+
+  gpu_settings = [
+    {
+      name       = "0"
+      child_type = %[5]q
+    }
+  ]
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		name,
+		childType,
+	)
+}
+
+// testAccCMDeviceCategoryResourceConfig_InvalidGPUEccMode creates config with invalid gpu_settings ecc_mode.
+func testAccCMDeviceCategoryResourceConfig_InvalidGPUEccMode(name, eccMode string) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmdevice_categories" "all" {}
+data "bcm_cmpart_softwareimages" "all" {}
+
+locals {
+  management_network_uuid = length(data.bcm_cmdevice_categories.all.categories) > 0 ? data.bcm_cmdevice_categories.all.categories[0].management_network_id : "00000000-0000-0000-0000-000000000000"
+  software_image_uuid = length(data.bcm_cmpart_softwareimages.all.images) > 0 ? data.bcm_cmpart_softwareimages.all.images[0].uuid : "00000000-0000-0000-0000-000000000000"
+}
+
+resource "bcm_cmdevice_category" "test" {
+  name               = %[4]q
+  management_network = local.management_network_uuid
+
+  software_image_proxy = {
+    parent_software_image = local.software_image_uuid
+  }
+
+  gpu_settings = [
+    {
+      name       = "0"
+      child_type = "nvidia"
+      ecc_mode   = %[5]q
+    }
+  ]
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		name,
+		eccMode,
+	)
+}
+
+// testAccCMDeviceCategoryResourceConfig_InvalidSicknessCheckScriptTimeout creates config with invalid sickness_check_script_timeout.
+func testAccCMDeviceCategoryResourceConfig_InvalidSicknessCheckScriptTimeout(name string, timeout int) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmdevice_categories" "all" {}
+data "bcm_cmpart_softwareimages" "all" {}
+
+locals {
+  management_network_uuid = length(data.bcm_cmdevice_categories.all.categories) > 0 ? data.bcm_cmdevice_categories.all.categories[0].management_network_id : "00000000-0000-0000-0000-000000000000"
+  software_image_uuid = length(data.bcm_cmpart_softwareimages.all.images) > 0 ? data.bcm_cmpart_softwareimages.all.images[0].uuid : "00000000-0000-0000-0000-000000000000"
+}
+
+resource "bcm_cmdevice_category" "test" {
+  name               = %[4]q
+  management_network = local.management_network_uuid
+
+  software_image_proxy = {
+    parent_software_image = local.software_image_uuid
+  }
+
+  services = [
+    {
+      name                           = "test-service"
+      sickness_check_script_timeout  = %[5]d
+    }
+  ]
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		name,
+		timeout,
+	)
+}
+
+// testAccCMDeviceCategoryResourceConfig_InvalidSicknessCheckInterval creates config with invalid sickness_check_interval.
+func testAccCMDeviceCategoryResourceConfig_InvalidSicknessCheckInterval(name string, interval int) string {
+	return fmt.Sprintf(`
+provider "bcm" {
+  endpoint             = %[1]q
+  username             = %[2]q
+  password             = %[3]q
+  insecure_skip_verify = true
+}
+
+data "bcm_cmdevice_categories" "all" {}
+data "bcm_cmpart_softwareimages" "all" {}
+
+locals {
+  management_network_uuid = length(data.bcm_cmdevice_categories.all.categories) > 0 ? data.bcm_cmdevice_categories.all.categories[0].management_network_id : "00000000-0000-0000-0000-000000000000"
+  software_image_uuid = length(data.bcm_cmpart_softwareimages.all.images) > 0 ? data.bcm_cmpart_softwareimages.all.images[0].uuid : "00000000-0000-0000-0000-000000000000"
+}
+
+resource "bcm_cmdevice_category" "test" {
+  name               = %[4]q
+  management_network = local.management_network_uuid
+
+  software_image_proxy = {
+    parent_software_image = local.software_image_uuid
+  }
+
+  services = [
+    {
+      name                      = "test-service"
+      sickness_check_interval   = %[5]d
+    }
+  ]
+}
+`,
+		os.Getenv("BCM_ENDPOINT"),
+		os.Getenv("BCM_USERNAME"),
+		os.Getenv("BCM_PASSWORD"),
+		name,
+		interval,
 	)
 }
 

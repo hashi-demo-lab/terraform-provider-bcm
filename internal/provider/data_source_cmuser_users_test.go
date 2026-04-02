@@ -23,13 +23,11 @@ func TestAccCMUserUsersDataSource_Basic(t *testing.T) {
 			{
 				Config: testAccCMUserUsersDataSourceConfigBasic(),
 				ConfigStateChecks: []statecheck.StateCheck{
-					// Verify computed id field
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmuser_users.test",
 						tfjsonpath.New("id"),
-						knownvalue.NotNull(),
+						knownvalue.StringExact("cmuser-users"),
 					),
-					// Verify users list exists (cannot verify exact count - environment portable)
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmuser_users.test",
 						tfjsonpath.New("users"),
@@ -50,13 +48,11 @@ func TestAccCMUserUsersDataSource_FilterUsername(t *testing.T) {
 			{
 				Config: testAccCMUserUsersDataSourceConfigFilterUsername("cms*"),
 				ConfigStateChecks: []statecheck.StateCheck{
-					// Verify computed id field
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmuser_users.test",
 						tfjsonpath.New("id"),
-						knownvalue.NotNull(),
+						knownvalue.StringExact("cmuser-users"),
 					),
-					// Verify users list exists (filtered results may be empty or populated)
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmuser_users.test",
 						tfjsonpath.New("users"),
@@ -77,13 +73,11 @@ func TestAccCMUserUsersDataSource_FilterGroupID(t *testing.T) {
 			{
 				Config: testAccCMUserUsersDataSourceConfigFilterGroupID("1000"),
 				ConfigStateChecks: []statecheck.StateCheck{
-					// Verify computed id field
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmuser_users.test",
 						tfjsonpath.New("id"),
-						knownvalue.NotNull(),
+						knownvalue.StringExact("cmuser-users"),
 					),
-					// Verify users list exists
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmuser_users.test",
 						tfjsonpath.New("users"),
@@ -104,13 +98,11 @@ func TestAccCMUserUsersDataSource_FilterUserID(t *testing.T) {
 			{
 				Config: testAccCMUserUsersDataSourceConfigFilterUserID("1000"),
 				ConfigStateChecks: []statecheck.StateCheck{
-					// Verify computed id field
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmuser_users.test",
 						tfjsonpath.New("id"),
-						knownvalue.NotNull(),
+						knownvalue.StringExact("cmuser-users"),
 					),
-					// Verify users list exists
 					statecheck.ExpectKnownValue(
 						"data.bcm_cmuser_users.test",
 						tfjsonpath.New("users"),
