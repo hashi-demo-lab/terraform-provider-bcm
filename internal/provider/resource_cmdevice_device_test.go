@@ -514,6 +514,9 @@ func TestAccCMDeviceDevice_DriftNotes(t *testing.T) {
 	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 	mac := generateUniqueMAC()
 
+	// ID consistency tracking.
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccPreCheck(t)
@@ -530,6 +533,10 @@ func TestAccCMDeviceDevice_DriftNotes(t *testing.T) {
 						"bcm_cmdevice_device.test",
 						tfjsonpath.New("notes"),
 						knownvalue.StringExact("initial-notes"),
+					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
 					),
 				},
 			},
@@ -600,6 +607,10 @@ func TestAccCMDeviceDevice_DriftNotes(t *testing.T) {
 						"bcm_cmdevice_device.test",
 						tfjsonpath.New("notes"),
 						knownvalue.StringExact("initial-notes"),
+					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
 					),
 				},
 			},
@@ -1007,6 +1018,9 @@ func TestAccCMDeviceDevice_Drift(t *testing.T) {
 
 	mac := generateUniqueMAC()
 
+	// ID consistency tracking.
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccPreCheck(t)
@@ -1033,6 +1047,10 @@ func TestAccCMDeviceDevice_Drift(t *testing.T) {
 						"bcm_cmdevice_device.test",
 						tfjsonpath.New("uuid"),
 						knownvalue.NotNull(),
+					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
 					),
 				},
 			},
@@ -1114,6 +1132,10 @@ func TestAccCMDeviceDevice_Drift(t *testing.T) {
 						"bcm_cmdevice_device.test",
 						tfjsonpath.New("notes"),
 						knownvalue.StringExact("initial-notes"),
+					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
 					),
 				},
 			},
@@ -1615,6 +1637,9 @@ func TestAccCMDeviceDevice_RolesCreate(t *testing.T) {
 
 	roles := testAccCMDeviceDeviceSingleRoleSet(t)
 
+	// ID consistency tracking.
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccPreCheck(t)
@@ -1643,6 +1668,10 @@ func TestAccCMDeviceDevice_RolesCreate(t *testing.T) {
 						tfjsonpath.New("roles"),
 						knownvalue.SetSizeExact(1),
 					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Idempotency check.
@@ -1652,6 +1681,12 @@ func TestAccCMDeviceDevice_RolesCreate(t *testing.T) {
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
 					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 		},
@@ -1667,6 +1702,9 @@ func TestAccCMDeviceDevice_RolesMultiple(t *testing.T) {
 	mac := generateUniqueMAC()
 
 	roles := testAccCMDeviceDeviceMultiRoleSet(t)
+
+	// ID consistency tracking.
+	compareID := statecheck.CompareValue(compare.ValuesSame())
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -1690,6 +1728,10 @@ func TestAccCMDeviceDevice_RolesMultiple(t *testing.T) {
 						tfjsonpath.New("roles"),
 						knownvalue.SetSizeExact(2),
 					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Idempotency check.
@@ -1699,6 +1741,12 @@ func TestAccCMDeviceDevice_RolesMultiple(t *testing.T) {
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
 					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 		},
@@ -1851,6 +1899,9 @@ func TestAccCMDeviceDevice_RolesRemove(t *testing.T) {
 	initialRoles := testAccCMDeviceDeviceSingleRoleSet(t)
 	emptyRoles := []string{}
 
+	// ID consistency tracking.
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccPreCheck(t)
@@ -1868,6 +1919,10 @@ func TestAccCMDeviceDevice_RolesRemove(t *testing.T) {
 						tfjsonpath.New("roles"),
 						knownvalue.SetSizeExact(1),
 					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Remove all roles (explicit empty list).
@@ -1879,6 +1934,10 @@ func TestAccCMDeviceDevice_RolesRemove(t *testing.T) {
 						"bcm_cmdevice_device.test",
 						tfjsonpath.New("hostname"),
 						knownvalue.StringExact(deviceName),
+					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
 					),
 				},
 			},
@@ -1964,6 +2023,9 @@ func TestAccCMDeviceDevice_RolesDrift(t *testing.T) {
 
 	roles := testAccCMDeviceDeviceSingleRoleSet(t)
 
+	// ID consistency tracking.
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccPreCheck(t)
@@ -1980,6 +2042,10 @@ func TestAccCMDeviceDevice_RolesDrift(t *testing.T) {
 						"bcm_cmdevice_device.test",
 						tfjsonpath.New("roles"),
 						knownvalue.SetSizeExact(1),
+					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
 					),
 				},
 			},
@@ -2041,6 +2107,10 @@ func TestAccCMDeviceDevice_RolesDrift(t *testing.T) {
 						"bcm_cmdevice_device.test",
 						tfjsonpath.New("roles"),
 						knownvalue.SetSizeExact(1),
+					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
 					),
 				},
 			},
@@ -2134,6 +2204,9 @@ func TestAccCMDeviceDevice_RolesByName(t *testing.T) {
 
 	roleNames := testAccCMDeviceDeviceSingleRoleSet(t)
 
+	// ID consistency tracking.
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccPreCheck(t)
@@ -2162,6 +2235,10 @@ func TestAccCMDeviceDevice_RolesByName(t *testing.T) {
 						tfjsonpath.New("roles"),
 						knownvalue.SetSizeExact(1),
 					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Idempotency check - should produce empty plan.
@@ -2171,6 +2248,12 @@ func TestAccCMDeviceDevice_RolesByName(t *testing.T) {
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
 					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 		},
@@ -2327,6 +2410,9 @@ func TestAccCMDeviceDevice_RolesDriftByName(t *testing.T) {
 
 	roleNames := testAccCMDeviceDeviceSingleRoleSet(t)
 
+	// ID consistency tracking.
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccPreCheck(t)
@@ -2343,6 +2429,10 @@ func TestAccCMDeviceDevice_RolesDriftByName(t *testing.T) {
 						"bcm_cmdevice_device.test",
 						tfjsonpath.New("roles"),
 						knownvalue.SetSizeExact(1),
+					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
 					),
 				},
 			},
@@ -2401,6 +2491,10 @@ func TestAccCMDeviceDevice_RolesDriftByName(t *testing.T) {
 						"bcm_cmdevice_device.test",
 						tfjsonpath.New("roles"),
 						knownvalue.SetSizeExact(1),
+					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
 					),
 				},
 			},
@@ -2591,6 +2685,9 @@ func TestAccCMDeviceDevice_RolesAddMultiple(t *testing.T) {
 	singleRole := testAccCMDeviceDeviceSingleRoleSet(t)
 	multipleRoles := testAccCMDeviceDeviceMultiRoleSet(t)
 
+	// ID consistency tracking.
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccPreCheck(t)
@@ -2608,6 +2705,10 @@ func TestAccCMDeviceDevice_RolesAddMultiple(t *testing.T) {
 						tfjsonpath.New("roles"),
 						knownvalue.SetSizeExact(1),
 					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Update to add more roles.
@@ -2619,6 +2720,10 @@ func TestAccCMDeviceDevice_RolesAddMultiple(t *testing.T) {
 						tfjsonpath.New("roles"),
 						knownvalue.SetSizeExact(2),
 					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Idempotency check.
@@ -2628,6 +2733,12 @@ func TestAccCMDeviceDevice_RolesAddMultiple(t *testing.T) {
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
 					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 		},
@@ -2648,6 +2759,9 @@ func TestAccCMDeviceDevice_kubeletRole(t *testing.T) {
 	mac := generateUniqueMAC()
 	etcdClusterName := generateShortTestName("e-kub")
 	kubeClusterName := generateShortTestName("k-kub")
+
+	// ID consistency tracking.
+	compareID := statecheck.CompareValue(compare.ValuesSame())
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -2674,6 +2788,10 @@ func TestAccCMDeviceDevice_kubeletRole(t *testing.T) {
 						tfjsonpath.New("kubelet_role").AtSliceIndex(0).AtMapKey("worker"),
 						knownvalue.Bool(true),
 					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Idempotency check
@@ -2686,6 +2804,12 @@ func TestAccCMDeviceDevice_kubeletRole(t *testing.T) {
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
 					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 		},
@@ -2701,6 +2825,9 @@ func TestAccCMDeviceDevice_etcdHostRole(t *testing.T) {
 	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 	mac := generateUniqueMAC()
 	etcdClusterName := generateShortTestName("e-etc")
+
+	// ID consistency tracking.
+	compareID := statecheck.CompareValue(compare.ValuesSame())
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -2722,6 +2849,10 @@ func TestAccCMDeviceDevice_etcdHostRole(t *testing.T) {
 						tfjsonpath.New("etcd_host_role").AtSliceIndex(0).AtMapKey("member_name"),
 						knownvalue.StringExact("$hostname"),
 					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Idempotency check
@@ -2734,6 +2865,12 @@ func TestAccCMDeviceDevice_etcdHostRole(t *testing.T) {
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
 					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 		},
@@ -2750,6 +2887,9 @@ func TestAccCMDeviceDevice_bothRoles(t *testing.T) {
 	mac := generateUniqueMAC()
 	etcdClusterName := generateShortTestName("e-bth")
 	kubeClusterName := generateShortTestName("k-bth")
+
+	// ID consistency tracking.
+	compareID := statecheck.CompareValue(compare.ValuesSame())
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -2776,6 +2916,10 @@ func TestAccCMDeviceDevice_bothRoles(t *testing.T) {
 						tfjsonpath.New("etcd_host_role"),
 						knownvalue.ListSizeExact(1),
 					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Idempotency check
@@ -2788,6 +2932,12 @@ func TestAccCMDeviceDevice_bothRoles(t *testing.T) {
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
 					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 		},
@@ -2804,6 +2954,9 @@ func TestAccCMDeviceDevice_roleUpdate(t *testing.T) {
 	mac := generateUniqueMAC()
 	etcdClusterName := generateShortTestName("e-upd")
 	kubeClusterName := generateShortTestName("k-upd")
+
+	// ID consistency tracking.
+	compareID := statecheck.CompareValue(compare.ValuesSame())
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -2830,6 +2983,10 @@ func TestAccCMDeviceDevice_roleUpdate(t *testing.T) {
 						tfjsonpath.New("kubelet_role").AtSliceIndex(0).AtMapKey("worker"),
 						knownvalue.Bool(true),
 					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Update to worker-only (control_plane=false, worker=true)
@@ -2849,6 +3006,10 @@ func TestAccCMDeviceDevice_roleUpdate(t *testing.T) {
 						tfjsonpath.New("kubelet_role").AtSliceIndex(0).AtMapKey("worker"),
 						knownvalue.Bool(true),
 					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Idempotency check
@@ -2861,6 +3022,12 @@ func TestAccCMDeviceDevice_roleUpdate(t *testing.T) {
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
 					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 		},
@@ -2877,6 +3044,9 @@ func TestAccCMDeviceDevice_addRolesToExisting(t *testing.T) {
 	mac := generateUniqueMAC()
 	etcdClusterName := generateShortTestName("e-add")
 	kubeClusterName := generateShortTestName("k-add")
+
+	// ID consistency tracking.
+	compareID := statecheck.CompareValue(compare.ValuesSame())
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -2898,6 +3068,10 @@ func TestAccCMDeviceDevice_addRolesToExisting(t *testing.T) {
 						tfjsonpath.New("hostname"),
 						knownvalue.StringExact(deviceName),
 					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Step 2: Update device to ADD kubelet_role (simulates adding K8s to existing device)
@@ -2916,6 +3090,10 @@ func TestAccCMDeviceDevice_addRolesToExisting(t *testing.T) {
 						"bcm_cmdevice_device.test",
 						tfjsonpath.New("kubelet_role").AtSliceIndex(0).AtMapKey("worker"),
 						knownvalue.Bool(true),
+					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
 					),
 				},
 			},
@@ -2936,6 +3114,10 @@ func TestAccCMDeviceDevice_addRolesToExisting(t *testing.T) {
 						tfjsonpath.New("etcd_host_role").AtSliceIndex(0).AtMapKey("etcd_cluster"),
 						knownvalue.NotNull(),
 					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Step 4: Idempotency check
@@ -2948,6 +3130,12 @@ func TestAccCMDeviceDevice_addRolesToExisting(t *testing.T) {
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
 					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 		},
@@ -3300,6 +3488,9 @@ func TestAccCMDeviceDevice_ManagementNetworkPassThrough(t *testing.T) {
 	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 	mac := generateUniqueMAC()
 
+	// ID consistency tracking.
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccPreCheck(t)
@@ -3326,6 +3517,10 @@ func TestAccCMDeviceDevice_ManagementNetworkPassThrough(t *testing.T) {
 						resourceAddress: "bcm_cmdevice_device.test",
 						deviceName:      deviceName,
 					},
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Step 2: Idempotency — re-apply should produce empty plan.
@@ -3335,6 +3530,12 @@ func TestAccCMDeviceDevice_ManagementNetworkPassThrough(t *testing.T) {
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
 					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 		},
@@ -3349,6 +3550,9 @@ func TestAccCMDeviceDevice_ManagementNetworkOmitted(t *testing.T) {
 	imageName := generateUniqueTestName("tftest-image-nomgmt")
 	imagePath := fmt.Sprintf("/cm/images/%s.iso", imageName)
 	mac := generateUniqueMAC()
+
+	// ID consistency tracking.
+	compareID := statecheck.CompareValue(compare.ValuesSame())
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -3372,6 +3576,10 @@ func TestAccCMDeviceDevice_ManagementNetworkOmitted(t *testing.T) {
 						tfjsonpath.New("management_network"),
 						knownvalue.Null(),
 					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Idempotency.
@@ -3381,6 +3589,12 @@ func TestAccCMDeviceDevice_ManagementNetworkOmitted(t *testing.T) {
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
 					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 		},

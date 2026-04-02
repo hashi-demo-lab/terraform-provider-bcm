@@ -374,6 +374,9 @@ func TestAccCMDeviceCategoryResource_ForceParameter(t *testing.T) {
 	// Cleanup any leftover test categories
 	testAccCMDeviceCategoryPreCheck(t, categoryName)
 
+	// ID consistency tracking across all CRUD operations
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -398,6 +401,10 @@ func TestAccCMDeviceCategoryResource_ForceParameter(t *testing.T) {
 						tfjsonpath.New("id"),
 						knownvalue.NotNull(),
 					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Idempotency check after Create
@@ -407,6 +414,12 @@ func TestAccCMDeviceCategoryResource_ForceParameter(t *testing.T) {
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
 					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Update with force=true
@@ -423,6 +436,10 @@ func TestAccCMDeviceCategoryResource_ForceParameter(t *testing.T) {
 						tfjsonpath.New("force"),
 						knownvalue.Bool(true),
 					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Idempotency check after Update
@@ -432,6 +449,12 @@ func TestAccCMDeviceCategoryResource_ForceParameter(t *testing.T) {
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
 					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Note: Testing actual "category in use" scenario requires manual node assignment
@@ -492,6 +515,9 @@ resource "bcm_cmdevice_category" "test" {
 func TestAccCMDeviceCategory_DriftNotes(t *testing.T) {
 	categoryName := generateUniqueTestName("tftest-drift-notes")
 
+	// ID consistency tracking across all CRUD operations
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccCMDeviceCategoryPreCheck(t, categoryName)
@@ -517,6 +543,10 @@ func TestAccCMDeviceCategory_DriftNotes(t *testing.T) {
 						"bcm_cmdevice_category.test",
 						tfjsonpath.New("uuid"),
 						knownvalue.NotNull(),
+					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
 					),
 				},
 			},
@@ -595,6 +625,10 @@ func TestAccCMDeviceCategory_DriftNotes(t *testing.T) {
 						tfjsonpath.New("notes"),
 						knownvalue.StringExact("Production"),
 					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 		},
@@ -651,6 +685,9 @@ func TestAccCMDeviceCategory_DestroyWithForce(t *testing.T) {
 func TestAccCMDeviceCategory_DestroyExternalDelete(t *testing.T) {
 	categoryName := generateUniqueTestName("tftest-destroy-external")
 
+	// ID consistency tracking across all CRUD operations
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccCMDeviceCategoryPreCheck(t, categoryName)
@@ -671,6 +708,10 @@ func TestAccCMDeviceCategory_DestroyExternalDelete(t *testing.T) {
 						"bcm_cmdevice_category.test",
 						tfjsonpath.New("uuid"),
 						knownvalue.NotNull(),
+					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
 					),
 				},
 			},
@@ -696,6 +737,12 @@ func TestAccCMDeviceCategory_DestroyExternalDelete(t *testing.T) {
 					t.Logf("[DEBUG] Deleted category externally: %s", categoryName)
 				},
 				Config: testAccCMDeviceCategoryResourceConfig(categoryName),
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
+				},
 				// Destroy will happen automatically after this step
 				// CheckDestroy should pass even though resource was already deleted
 			},
@@ -755,6 +802,9 @@ resource "bcm_cmdevice_category" "test" {
 func TestAccCMDeviceCategory_NetworkConfiguration(t *testing.T) {
 	categoryName := generateUniqueTestName("tftest-network-config")
 
+	// ID consistency tracking across all CRUD operations
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccCMDeviceCategoryPreCheck(t, categoryName)
@@ -791,6 +841,10 @@ func TestAccCMDeviceCategory_NetworkConfiguration(t *testing.T) {
 						tfjsonpath.New("uuid"),
 						knownvalue.NotNull(),
 					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Step 2: Idempotency check
@@ -800,6 +854,12 @@ func TestAccCMDeviceCategory_NetworkConfiguration(t *testing.T) {
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
 					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Step 3: Update network configuration
@@ -826,6 +886,10 @@ func TestAccCMDeviceCategory_NetworkConfiguration(t *testing.T) {
 						tfjsonpath.New("allow_networking_restart"),
 						knownvalue.Bool(false),
 					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Step 4: Idempotency check after update
@@ -835,6 +899,12 @@ func TestAccCMDeviceCategory_NetworkConfiguration(t *testing.T) {
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
 					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 		},
@@ -847,6 +917,9 @@ func TestAccCMDeviceCategory_NetworkConfiguration(t *testing.T) {
 // See: https://github.com/hashi-demo-lab/terraform-provider-bcm/issues/48
 func TestAccCMDeviceCategory_PartitionConfiguration(t *testing.T) {
 	categoryName := generateUniqueTestName("tftest-partition-config")
+
+	// ID consistency tracking across all CRUD operations
+	compareID := statecheck.CompareValue(compare.ValuesSame())
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -874,6 +947,10 @@ func TestAccCMDeviceCategory_PartitionConfiguration(t *testing.T) {
 						tfjsonpath.New("uuid"),
 						knownvalue.NotNull(),
 					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Step 2: Idempotency check
@@ -883,6 +960,12 @@ func TestAccCMDeviceCategory_PartitionConfiguration(t *testing.T) {
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
 					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Step 3: Update partition configuration
@@ -899,6 +982,10 @@ func TestAccCMDeviceCategory_PartitionConfiguration(t *testing.T) {
 						tfjsonpath.New("disksetup"),
 						knownvalue.NotNull(),
 					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Step 4: Idempotency check after update
@@ -908,6 +995,12 @@ func TestAccCMDeviceCategory_PartitionConfiguration(t *testing.T) {
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
 					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 		},
@@ -4532,6 +4625,9 @@ func TestAccCMDeviceCategory_RolesIdempotency(t *testing.T) {
 	// Clean up any leftover test categories
 	testAccCMDeviceCategoryPreCheck(t, categoryName)
 
+	// ID consistency tracking across all CRUD operations
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -4552,6 +4648,10 @@ func TestAccCMDeviceCategory_RolesIdempotency(t *testing.T) {
 						tfjsonpath.New("roles").AtSliceIndex(0).AtMapKey("uuid"),
 						knownvalue.NotNull(),
 					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Verify idempotency - no changes on re-apply
@@ -4561,6 +4661,12 @@ func TestAccCMDeviceCategory_RolesIdempotency(t *testing.T) {
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
 					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 		},
@@ -4762,6 +4868,9 @@ func TestAccCMDeviceCategory_BMCPasswordNoDrift(t *testing.T) {
 	// Clean up any leftover test categories
 	testAccCMDeviceCategoryPreCheck(t, categoryName)
 
+	// ID consistency tracking across all CRUD operations
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -4781,6 +4890,10 @@ func TestAccCMDeviceCategory_BMCPasswordNoDrift(t *testing.T) {
 						tfjsonpath.New("bmc_settings").AtMapKey("user_name"),
 						knownvalue.StringExact("admin"),
 					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Step 2: Idempotency check - THIS IS THE KEY TEST
@@ -4793,6 +4906,12 @@ func TestAccCMDeviceCategory_BMCPasswordNoDrift(t *testing.T) {
 						plancheck.ExpectEmptyPlan(),
 					},
 				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
+				},
 			},
 			// Step 3: Import and verify (password cannot be imported from BCM)
 			{
@@ -4803,6 +4922,12 @@ func TestAccCMDeviceCategory_BMCPasswordNoDrift(t *testing.T) {
 				ImportStateVerifyIgnore: []string{
 					"force",
 					"bmc_settings", // Password cannot be imported from BCM API
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 		},
@@ -4817,6 +4942,9 @@ func TestAccCMDeviceCategory_BMCPasswordUpdate(t *testing.T) {
 
 	// Clean up any leftover test categories
 	testAccCMDeviceCategoryPreCheck(t, categoryName)
+
+	// ID consistency tracking across all CRUD operations
+	compareID := statecheck.CompareValue(compare.ValuesSame())
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -4837,6 +4965,10 @@ func TestAccCMDeviceCategory_BMCPasswordUpdate(t *testing.T) {
 						tfjsonpath.New("bmc_settings").AtMapKey("user_name"),
 						knownvalue.StringExact("admin"),
 					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Step 2: Update password - should detect change and apply
@@ -4848,6 +4980,10 @@ func TestAccCMDeviceCategory_BMCPasswordUpdate(t *testing.T) {
 						tfjsonpath.New("name"),
 						knownvalue.StringExact(categoryName),
 					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Step 3: Idempotency check after update
@@ -4857,6 +4993,12 @@ func TestAccCMDeviceCategory_BMCPasswordUpdate(t *testing.T) {
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
 					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 		},
@@ -4991,6 +5133,9 @@ func TestAccCMDeviceCategoryResource_ServicesWithAllFields(t *testing.T) {
 	// Cleanup any leftover test categories
 	testAccCMDeviceCategoryPreCheck(t, categoryName)
 
+	// ID consistency tracking across all CRUD operations
+	compareID := statecheck.CompareValue(compare.ValuesSame())
+
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -5005,6 +5150,10 @@ func TestAccCMDeviceCategoryResource_ServicesWithAllFields(t *testing.T) {
 						tfjsonpath.New("name"),
 						knownvalue.StringExact(categoryName),
 					),
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 			// Idempotency check
@@ -5014,6 +5163,12 @@ func TestAccCMDeviceCategoryResource_ServicesWithAllFields(t *testing.T) {
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
 					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					compareID.AddStateValue(
+						"bcm_cmdevice_category.test",
+						tfjsonpath.New("id"),
+					),
 				},
 			},
 		},
