@@ -787,7 +787,7 @@ Optional:
 
 Required:
 
-- `child_type` (String) Role type (e.g., HeadNodeRole, StorageRole, BackupRole)
+- `child_type` (String) Role type (e.g., HeadNode, ComputeNode, PhysicalNode)
 - `name` (String) Role name (e.g., headnode, storage, compute)
 
 Optional:
