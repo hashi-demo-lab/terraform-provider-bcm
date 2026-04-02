@@ -7,10 +7,10 @@ Terraform Provider BCM — test coverage analysis based on
 
 | Metric | Count |
 |--------|-------|
-| **Total tests** | 372 |
-| **Acceptance tests** | 271 |
-| **Unit tests** | 101 |
-| **Test files** | 35 |
+| **Total tests** | 393 |
+| **Acceptance tests** | 291 |
+| **Unit tests** | 102 |
+| **Test files** | 36 |
 | **Resources tested** | 7/7 (100%) |
 | **Data sources tested** | 9/9 (100%) |
 | **Actions tested** | 1/1 (100%) |
@@ -63,13 +63,13 @@ best practices and the `provider-test-patterns` skill reference.
 
 | Pattern | Files Using | Total Uses | Status |
 |---------|:----------:|:----------:|--------|
-| `ConfigStateChecks` (modern assertions) | 11/14 | 260 | Adopted |
-| `ConfigPlanChecks` (plan assertions) | 11/14 | 128 | Adopted |
-| `CompareValue` (cross-step tracking) | 11/14 | 65 | Adopted |
+| `ConfigStateChecks` (modern assertions) | 11/14 | 308 | Adopted |
+| `ConfigPlanChecks` (plan assertions) | 11/14 | 146 | Adopted |
+| `CompareValue` (cross-step tracking) | 11/14 | 107 | Adopted |
 | `PreConfig` (drift simulation via API) | 10/14 | 18 | Adopted |
-| Custom `statecheck.StateCheck` (disappears) | 7/7 | 7 | Complete |
-| `CheckDestroy` | 7/7 resources | 150/186 | 100% for resources that create |
-| `ExpectError` (validation) | 6/7 | 22 | Adopted |
+| Custom `statecheck.StateCheck` (disappears) | 7/7 | 8 | Complete |
+| `CheckDestroy` | 7/7 resources | 195/195 | 100% |
+| `ExpectError` (validation) | 7/7 | 68 | Adopted |
 | Numbered format verbs (`%[1]q`) | 14/14 | — | Complete |
 | `resource.Test` (serial) | 14/14 | — | All serial |
 | `resource.ParallelTest` | 0/14 | 0 | Not used (shared BCM cluster) |
