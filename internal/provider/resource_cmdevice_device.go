@@ -151,6 +151,9 @@ func (r *CMDeviceDeviceResource) Schema(ctx context.Context, req resource.Schema
 				Optional:            true,
 				Computed:            true,
 				MarkdownDescription: "Management network UUID reference (may be reset by BCM, required for device creation)",
+				PlanModifiers: []planmodifier.String{
+					nullIfRemovedFromConfig(),
+				},
 				Validators: []validator.String{
 					stringvalidator.RegexMatches(
 						regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`),
