@@ -391,18 +391,30 @@ func (r *CMDeviceDeviceResource) Schema(ctx context.Context, req resource.Schema
 						"uuid": schema.StringAttribute{
 							Computed:            true,
 							MarkdownDescription: "BCM-assigned interface UUID.",
+							PlanModifiers: []planmodifier.String{
+								useStateForUnknownUnlessNull(),
+							},
 						},
 						"base_type": schema.StringAttribute{
 							Computed:            true,
 							MarkdownDescription: "Entity base type (always 'NetworkInterface').",
+							PlanModifiers: []planmodifier.String{
+								useStateForUnknownUnlessNull(),
+							},
 						},
 						"child_type": schema.StringAttribute{
 							Computed:            true,
 							MarkdownDescription: "Interface type (NetworkPhysicalInterface, NetworkBondInterface, NetworkBMCInterface).",
+							PlanModifiers: []planmodifier.String{
+								useStateForUnknownUnlessNull(),
+							},
 						},
 						"cardtype": schema.StringAttribute{
 							Computed:            true,
 							MarkdownDescription: "Hardware card type (Ethernet, InfiniBand, BMC).",
+							PlanModifiers: []planmodifier.String{
+								useStateForUnknownUnlessNull(),
+							},
 						},
 					},
 				},
