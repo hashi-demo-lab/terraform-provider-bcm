@@ -48,7 +48,7 @@ func buildKubeletRoleEntity(_ context.Context, model KubeletRoleModel) (map[stri
 	}
 
 	// Required: KubeCluster reference
-	entity["kubeCluster"] = model.KubeCluster.ValueString()
+	SetStringField(entity, "kubeCluster", model.KubeCluster)
 
 	// ControlPlane - default true
 	if !model.ControlPlane.IsNull() && !model.ControlPlane.IsUnknown() {
@@ -128,7 +128,7 @@ func buildEtcdHostRoleEntity(ctx context.Context, model EtcdHostRoleModel) (map[
 	}
 
 	// Required: EtcdCluster reference
-	entity["etcdCluster"] = model.EtcdCluster.ValueString()
+	SetStringField(entity, "etcdCluster", model.EtcdCluster)
 
 	// MemberName - default "$hostname"
 	if !model.MemberName.IsNull() && !model.MemberName.IsUnknown() {

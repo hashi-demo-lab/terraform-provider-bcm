@@ -368,7 +368,7 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 				Computed:            true,
 				MarkdownDescription: "Boot loader type (SYSLINUX, GRUB, GRUB2, PXELINUX). If not specified, BCM assigns a default.",
 				Validators: []validator.String{
-					stringvalidator.OneOf("SYSLINUX", "GRUB", "GRUB2", "PXELINUX"),
+					stringvalidator.OneOf("SYSLINUX", "GRUB"),
 				},
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
@@ -390,7 +390,7 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 					stringplanmodifier.UseStateForUnknown(),
 				},
 				Validators: []validator.String{
-					stringvalidator.OneOf("HTTP", "TFTP", "NFS"),
+					stringvalidator.OneOf("HTTP", "TFTP"),
 				},
 			},
 			"kernel_version": schema.StringAttribute{
@@ -437,7 +437,7 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 					stringplanmodifier.UseStateForUnknown(),
 				},
 				Validators: []validator.String{
-					stringvalidator.OneOf("AUTO", "FULL", "MINIMAL", "CUSTOM"),
+					stringvalidator.OneOf("AUTO", "FULL", "SKIP"),
 				},
 			},
 			"new_node_install_mode": schema.StringAttribute{
@@ -448,7 +448,7 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 					stringplanmodifier.UseStateForUnknown(),
 				},
 				Validators: []validator.String{
-					stringvalidator.OneOf("FULL", "MINIMAL", "SKIP"),
+					stringvalidator.OneOf("FULL", "AUTO"),
 				},
 			},
 			"install_boot_record": schema.BoolAttribute{
@@ -484,7 +484,7 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 				Computed:            true,
 				MarkdownDescription: "Authentication service (AUTO, LDAP, SSSD, LOCAL). If not specified, BCM assigns AUTO.",
 				Validators: []validator.String{
-					stringvalidator.OneOf("AUTO", "LDAP", "SSSD", "LOCAL"),
+					stringvalidator.OneOf("AUTO", "SSSD"),
 				},
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
@@ -2141,58 +2141,30 @@ func (r *CMDeviceCategoryResource) buildAPIEntity(ctx context.Context, model *CM
 	}
 
 	// Required fields
-	if !model.Name.IsNull() {
-		entity["name"] = model.Name.ValueString()
-	}
-	if !model.ManagementNetwork.IsNull() {
-		entity["managementNetwork"] = model.ManagementNetwork.ValueString()
-	}
+	SetStringField(entity, "name", model.Name)
+	SetStringField(entity, "managementNetwork", model.ManagementNetwork)
 
 	// Optional core fields
-	if !model.Notes.IsNull() {
-		entity["notes"] = model.Notes.ValueString()
-	}
+	SetStringField(entity, "notes", model.Notes)
 
 	// Boot configuration (only include if explicitly set)
-	if !model.BootLoader.IsNull() && !model.BootLoader.IsUnknown() {
-		entity["bootLoader"] = model.BootLoader.ValueString()
-	}
-	if !model.BootLoaderFile.IsNull() && !model.BootLoaderFile.IsUnknown() {
-		entity["bootLoaderFile"] = model.BootLoaderFile.ValueString()
-	}
-	if !model.BootLoaderProtocol.IsNull() && !model.BootLoaderProtocol.IsUnknown() {
-		entity["bootLoaderProtocol"] = model.BootLoaderProtocol.ValueString()
-	}
+	SetStringField(entity, "bootLoader", model.BootLoader)
+	SetStringField(entity, "bootLoaderFile", model.BootLoaderFile)
+	SetStringField(entity, "bootLoaderProtocol", model.BootLoaderProtocol)
 
 	// Kernel configuration
-	if !model.KernelVersion.IsNull() {
-		entity["kernelVersion"] = model.KernelVersion.ValueString()
-	}
-	if !model.KernelParameters.IsNull() {
-		entity["kernelParameters"] = model.KernelParameters.ValueString()
-	}
-	if !model.KernelOutputConsole.IsNull() {
-		entity["kernelOutputConsole"] = model.KernelOutputConsole.ValueString()
-	}
+	SetStringField(entity, "kernelVersion", model.KernelVersion)
+	SetStringField(entity, "kernelParameters", model.KernelParameters)
+	SetStringField(entity, "kernelOutputConsole", model.KernelOutputConsole)
 
 	// Installation settings (only include if explicitly set)
-	if !model.InstallMode.IsNull() && !model.InstallMode.IsUnknown() {
-		entity["installMode"] = model.InstallMode.ValueString()
-	}
-	if !model.NewNodeInstallMode.IsNull() && !model.NewNodeInstallMode.IsUnknown() {
-		entity["newNodeInstallMode"] = model.NewNodeInstallMode.ValueString()
-	}
-	if !model.InstallBootRecord.IsNull() && !model.InstallBootRecord.IsUnknown() {
-		entity["installBootRecord"] = model.InstallBootRecord.ValueBool()
-	}
+	SetStringField(entity, "installMode", model.InstallMode)
+	SetStringField(entity, "newNodeInstallMode", model.NewNodeInstallMode)
+	SetBoolField(entity, "installBootRecord", model.InstallBootRecord)
 
 	// Network configuration (only include if explicitly set)
-	if !model.DefaultGateway.IsNull() && !model.DefaultGateway.IsUnknown() {
-		entity["defaultGateway"] = model.DefaultGateway.ValueString()
-	}
-	if !model.DefaultGatewayMetric.IsNull() && !model.DefaultGatewayMetric.IsUnknown() {
-		entity["defaultGatewayMetric"] = model.DefaultGatewayMetric.ValueInt64()
-	}
+	SetStringField(entity, "defaultGateway", model.DefaultGateway)
+	SetInt64Field(entity, "defaultGatewayMetric", model.DefaultGatewayMetric)
 
 	// Network list fields
 	if !model.NameServers.IsNull() && !model.NameServers.IsUnknown() {
@@ -2212,52 +2184,30 @@ func (r *CMDeviceCategoryResource) buildAPIEntity(ctx context.Context, model *CM
 	}
 
 	// Disk and storage
-	if !model.Disksetup.IsNull() {
-		entity["disksetup"] = model.Disksetup.ValueString()
-	}
-	if !model.Raidconf.IsNull() {
-		entity["raidconf"] = model.Raidconf.ValueString()
-	}
+	SetStringField(entity, "disksetup", model.Disksetup)
+	SetStringField(entity, "raidconf", model.Raidconf)
 
 	// I/O scheduler
-	if !model.IOScheduler.IsNull() && !model.IOScheduler.IsUnknown() {
-		entity["ioScheduler"] = model.IOScheduler.ValueString()
-	}
+	SetStringField(entity, "ioScheduler", model.IOScheduler)
 
 	// FIPS setting (T019)
-	if !model.FIPS.IsNull() && !model.FIPS.IsUnknown() {
-		entity["fips"] = model.FIPS.ValueString()
-	}
+	SetStringField(entity, "fips", model.FIPS)
 
 	// Behavioral flags (T020-T022)
-	if !model.DataNode.IsNull() && !model.DataNode.IsUnknown() {
-		entity["dataNode"] = model.DataNode.ValueBool()
-	}
-	if !model.InteractiveUser.IsNull() && !model.InteractiveUser.IsUnknown() {
-		entity["interactiveUser"] = model.InteractiveUser.ValueString()
-	}
-	if !model.UseExclusivelyFor.IsNull() && !model.UseExclusivelyFor.IsUnknown() {
-		entity["useExclusivelyFor"] = model.UseExclusivelyFor.ValueString()
-	}
+	SetBoolField(entity, "dataNode", model.DataNode)
+	SetStringField(entity, "interactiveUser", model.InteractiveUser)
+	SetStringField(entity, "useExclusivelyFor", model.UseExclusivelyFor)
 
 	// Installation additional settings (T023-T025)
-	if !model.NodeInstallerDisk.IsNull() && !model.NodeInstallerDisk.IsUnknown() {
-		entity["nodeInstallerDisk"] = model.NodeInstallerDisk.ValueBool()
-	}
-	if !model.VersionConfigFiles.IsNull() && !model.VersionConfigFiles.IsUnknown() {
-		entity["versionConfigFiles"] = model.VersionConfigFiles.ValueBool()
-	}
-	if !model.AuthenticationService.IsNull() && !model.AuthenticationService.IsUnknown() {
-		entity["authenticationService"] = model.AuthenticationService.ValueString()
-	}
+	SetBoolField(entity, "nodeInstallerDisk", model.NodeInstallerDisk)
+	SetBoolField(entity, "versionConfigFiles", model.VersionConfigFiles)
+	SetStringField(entity, "authenticationService", model.AuthenticationService)
 
 	// Allow networking restart
-	if !model.AllowNetworkingRestart.IsNull() && !model.AllowNetworkingRestart.IsUnknown() {
-		entity["allowNetworkingRestart"] = model.AllowNetworkingRestart.ValueBool()
-	}
+	SetBoolField(entity, "allowNetworkingRestart", model.AllowNetworkingRestart)
 
 	// Nested object: software_image_proxy (minimal support for Phase 4)
-	if !model.SoftwareImageProxy.IsNull() {
+	if !model.SoftwareImageProxy.IsNull() && !model.SoftwareImageProxy.IsUnknown() {
 		var proxyModel SoftwareImageProxyModel
 		model.SoftwareImageProxy.As(ctx, &proxyModel, basetypes.ObjectAsOptions{})
 
@@ -2276,7 +2226,7 @@ func (r *CMDeviceCategoryResource) buildAPIEntity(ctx context.Context, model *CM
 			proxyEntity["uuid"] = generateUUID()
 		}
 
-		if !proxyModel.ParentSoftwareImage.IsNull() {
+		if !proxyModel.ParentSoftwareImage.IsNull() && !proxyModel.ParentSoftwareImage.IsUnknown() {
 			proxyEntity["parentSoftwareImage"] = proxyModel.ParentSoftwareImage.ValueString()
 		}
 
@@ -2310,15 +2260,15 @@ func (r *CMDeviceCategoryResource) buildAPIEntity(ctx context.Context, model *CM
 					"networkDeviceName": "",
 					"notes":             "",
 				}
-				if !route.Metric.IsNull() {
+				if !route.Metric.IsNull() && !route.Metric.IsUnknown() {
 					routeMap["metric"] = route.Metric.ValueInt64()
 				} else {
 					routeMap["metric"] = int64(0)
 				}
-				if !route.NetworkDeviceName.IsNull() && route.NetworkDeviceName.ValueString() != "" {
+				if !route.NetworkDeviceName.IsNull() && !route.NetworkDeviceName.IsUnknown() && route.NetworkDeviceName.ValueString() != "" {
 					routeMap["networkDeviceName"] = route.NetworkDeviceName.ValueString()
 				}
-				if !route.Notes.IsNull() && route.Notes.ValueString() != "" {
+				if !route.Notes.IsNull() && !route.Notes.IsUnknown() && route.Notes.ValueString() != "" {
 					routeMap["notes"] = route.Notes.ValueString()
 				}
 				routesList = append(routesList, routeMap)
@@ -2346,44 +2296,24 @@ func (r *CMDeviceCategoryResource) buildAPIEntity(ctx context.Context, model *CM
 					"network":  export.Network.ValueString(),
 				}
 				// Optional string fields
-				if !export.Hosts.IsNull() && export.Hosts.ValueString() != "" {
+				if !export.Hosts.IsNull() && !export.Hosts.IsUnknown() && export.Hosts.ValueString() != "" {
 					exportMap["hosts"] = export.Hosts.ValueString()
 				}
-				if !export.ExtraOptions.IsNull() && export.ExtraOptions.ValueString() != "" {
+				if !export.ExtraOptions.IsNull() && !export.ExtraOptions.IsUnknown() && export.ExtraOptions.ValueString() != "" {
 					exportMap["extraOptions"] = export.ExtraOptions.ValueString()
 				}
 				// Optional boolean fields
-				if !export.AllowWrite.IsNull() {
-					exportMap["allowWrite"] = export.AllowWrite.ValueBool()
-				}
-				if !export.Async.IsNull() {
-					exportMap["async"] = export.Async.ValueBool()
-				}
-				if !export.RootSquash.IsNull() {
-					exportMap["rootSquash"] = export.RootSquash.ValueBool()
-				}
-				if !export.AllSquash.IsNull() {
-					exportMap["allSquash"] = export.AllSquash.ValueBool()
-				}
-				if !export.RDMA.IsNull() {
-					exportMap["rdma"] = export.RDMA.ValueBool()
-				}
-				if !export.Disabled.IsNull() {
-					exportMap["disabled"] = export.Disabled.ValueBool()
-				}
-				if !export.CheckTree.IsNull() {
-					exportMap["checkTree"] = export.CheckTree.ValueBool()
-				}
+				SetBoolField(exportMap, "allowWrite", export.AllowWrite)
+				SetBoolField(exportMap, "async", export.Async)
+				SetBoolField(exportMap, "rootSquash", export.RootSquash)
+				SetBoolField(exportMap, "allSquash", export.AllSquash)
+				SetBoolField(exportMap, "rdma", export.RDMA)
+				SetBoolField(exportMap, "disabled", export.Disabled)
+				SetBoolField(exportMap, "checkTree", export.CheckTree)
 				// Optional numeric fields
-				if !export.AnonUID.IsNull() {
-					exportMap["anonUid"] = export.AnonUID.ValueInt64()
-				}
-				if !export.AnonGID.IsNull() {
-					exportMap["anonGid"] = export.AnonGID.ValueInt64()
-				}
-				if !export.FSID.IsNull() {
-					exportMap["fsid"] = export.FSID.ValueInt64()
-				}
+				SetInt64Field(exportMap, "anonUid", export.AnonUID)
+				SetInt64Field(exportMap, "anonGid", export.AnonGID)
+				SetInt64Field(exportMap, "fsid", export.FSID)
 				exportsList = append(exportsList, exportMap)
 			}
 			entity["fsexports"] = exportsList
@@ -2406,9 +2336,7 @@ func (r *CMDeviceCategoryResource) buildAPIEntity(ctx context.Context, model *CM
 				if !role.UUID.IsNull() && role.UUID.ValueString() != "" {
 					roleMap["uuid"] = role.UUID.ValueString()
 				}
-				if !role.AddServices.IsNull() {
-					roleMap["addServices"] = role.AddServices.ValueBool()
-				}
+				SetBoolField(roleMap, "addServices", role.AddServices)
 				rolesList = append(rolesList, roleMap)
 			}
 			entity["roles"] = rolesList
@@ -2446,72 +2374,34 @@ func (r *CMDeviceCategoryResource) buildAPIEntity(ctx context.Context, model *CM
 
 				// Add Nvidia-specific fields
 				if childType == "NvidiaGPUSettings" {
-					if !gpu.PowerLimit.IsNull() && !gpu.PowerLimit.IsUnknown() {
-						gpuMap["powerLimit"] = gpu.PowerLimit.ValueInt64()
-					}
-					if !gpu.EccMode.IsNull() && !gpu.EccMode.IsUnknown() {
-						gpuMap["eccMode"] = gpu.EccMode.ValueString()
-					}
-					if !gpu.ComputeMode.IsNull() && !gpu.ComputeMode.IsUnknown() {
-						gpuMap["computeMode"] = gpu.ComputeMode.ValueString()
-					}
-					if !gpu.ClockSyncBoostMode.IsNull() && !gpu.ClockSyncBoostMode.IsUnknown() {
-						gpuMap["clockSyncBoostMode"] = gpu.ClockSyncBoostMode.ValueString()
-					}
-					if !gpu.MultiProcessorClockSpeed.IsNull() && !gpu.MultiProcessorClockSpeed.IsUnknown() {
-						gpuMap["multiProcessorClockSpeed"] = gpu.MultiProcessorClockSpeed.ValueInt64()
-					}
-					if !gpu.MemoryClockSpeed.IsNull() && !gpu.MemoryClockSpeed.IsUnknown() {
-						gpuMap["memoryClockSpeed"] = gpu.MemoryClockSpeed.ValueInt64()
-					}
+					SetInt64Field(gpuMap, "powerLimit", gpu.PowerLimit)
+					SetStringField(gpuMap, "eccMode", gpu.EccMode)
+					SetStringField(gpuMap, "computeMode", gpu.ComputeMode)
+					SetStringField(gpuMap, "clockSyncBoostMode", gpu.ClockSyncBoostMode)
+					SetInt64Field(gpuMap, "multiProcessorClockSpeed", gpu.MultiProcessorClockSpeed)
+					SetInt64Field(gpuMap, "memoryClockSpeed", gpu.MemoryClockSpeed)
 					if !gpu.MigProfiles.IsNull() && !gpu.MigProfiles.IsUnknown() {
 						var profiles []string
 						gpu.MigProfiles.ElementsAs(ctx, &profiles, false)
 						gpuMap["migProfiles"] = profiles
 					}
-					if !gpu.WorkloadPowerProfile.IsNull() && !gpu.WorkloadPowerProfile.IsUnknown() {
-						gpuMap["workloadPowerProfile"] = gpu.WorkloadPowerProfile.ValueString()
-					}
-					if !gpu.SecondaryWorkloadPowerProfile.IsNull() && !gpu.SecondaryWorkloadPowerProfile.IsUnknown() {
-						gpuMap["secondaryWorkloadPowerProfile"] = gpu.SecondaryWorkloadPowerProfile.ValueString()
-					}
+					SetStringField(gpuMap, "workloadPowerProfile", gpu.WorkloadPowerProfile)
+					SetStringField(gpuMap, "secondaryWorkloadPowerProfile", gpu.SecondaryWorkloadPowerProfile)
 				}
 
 				// Add AMD-specific fields
 				if childType == "AMDGPUSettings" {
-					if !gpu.GpuClockLevel.IsNull() && !gpu.GpuClockLevel.IsUnknown() {
-						gpuMap["gpuClockLevel"] = gpu.GpuClockLevel.ValueInt64()
-					}
-					if !gpu.MemoryClockLevel.IsNull() && !gpu.MemoryClockLevel.IsUnknown() {
-						gpuMap["memoryClockLevel"] = gpu.MemoryClockLevel.ValueInt64()
-					}
-					if !gpu.PowerPlay.IsNull() && !gpu.PowerPlay.IsUnknown() {
-						gpuMap["powerPlay"] = gpu.PowerPlay.ValueString()
-					}
-					if !gpu.GpuOverDrive.IsNull() && !gpu.GpuOverDrive.IsUnknown() {
-						gpuMap["gpuOverDrive"] = gpu.GpuOverDrive.ValueFloat64()
-					}
-					if !gpu.MemoryOverDrive.IsNull() && !gpu.MemoryOverDrive.IsUnknown() {
-						gpuMap["memoryOverDrive"] = gpu.MemoryOverDrive.ValueFloat64()
-					}
-					if !gpu.FanSpeed.IsNull() && !gpu.FanSpeed.IsUnknown() {
-						gpuMap["fanSpeed"] = gpu.FanSpeed.ValueInt64()
-					}
-					if !gpu.MinimalGpuClock.IsNull() && !gpu.MinimalGpuClock.IsUnknown() {
-						gpuMap["minimalGPUClock"] = gpu.MinimalGpuClock.ValueInt64()
-					}
-					if !gpu.MinimalMemoryClock.IsNull() && !gpu.MinimalMemoryClock.IsUnknown() {
-						gpuMap["minimalMemoryClock"] = gpu.MinimalMemoryClock.ValueInt64()
-					}
-					if !gpu.ActivityThreshold.IsNull() && !gpu.ActivityThreshold.IsUnknown() {
-						gpuMap["activityThreshold"] = gpu.ActivityThreshold.ValueFloat64()
-					}
-					if !gpu.HysteresisUp.IsNull() && !gpu.HysteresisUp.IsUnknown() {
-						gpuMap["hysteresisUp"] = gpu.HysteresisUp.ValueFloat64()
-					}
-					if !gpu.HysteresisDown.IsNull() && !gpu.HysteresisDown.IsUnknown() {
-						gpuMap["hysteresisDown"] = gpu.HysteresisDown.ValueFloat64()
-					}
+					SetInt64Field(gpuMap, "gpuClockLevel", gpu.GpuClockLevel)
+					SetInt64Field(gpuMap, "memoryClockLevel", gpu.MemoryClockLevel)
+					SetStringField(gpuMap, "powerPlay", gpu.PowerPlay)
+					SetFloat64Field(gpuMap, "gpuOverDrive", gpu.GpuOverDrive)
+					SetFloat64Field(gpuMap, "memoryOverDrive", gpu.MemoryOverDrive)
+					SetInt64Field(gpuMap, "fanSpeed", gpu.FanSpeed)
+					SetInt64Field(gpuMap, "minimalGPUClock", gpu.MinimalGpuClock)
+					SetInt64Field(gpuMap, "minimalMemoryClock", gpu.MinimalMemoryClock)
+					SetFloat64Field(gpuMap, "activityThreshold", gpu.ActivityThreshold)
+					SetFloat64Field(gpuMap, "hysteresisUp", gpu.HysteresisUp)
+					SetFloat64Field(gpuMap, "hysteresisDown", gpu.HysteresisDown)
 				}
 
 				gpuList = append(gpuList, gpuMap)
@@ -2530,35 +2420,23 @@ func (r *CMDeviceCategoryResource) buildAPIEntity(ctx context.Context, model *CM
 			for _, service := range services {
 				serviceMap := map[string]interface{}{
 					"baseType": "OSServiceConfig",
-					"name":     service.Name.ValueString(),
 				}
+				SetStringField(serviceMap, "name", service.Name)
 				// Optional boolean fields
-				if !service.Monitored.IsNull() {
-					serviceMap["monitored"] = service.Monitored.ValueBool()
-				}
-				if !service.Autostart.IsNull() {
-					serviceMap["autostart"] = service.Autostart.ValueBool()
-				}
-				if !service.Managed.IsNull() {
-					serviceMap["managed"] = service.Managed.ValueBool()
-				}
+				SetBoolField(serviceMap, "monitored", service.Monitored)
+				SetBoolField(serviceMap, "autostart", service.Autostart)
+				SetBoolField(serviceMap, "managed", service.Managed)
 				// Optional string fields
-				if !service.RunIf.IsNull() && service.RunIf.ValueString() != "" {
+				if !service.RunIf.IsNull() && !service.RunIf.IsUnknown() && service.RunIf.ValueString() != "" {
 					serviceMap["runIf"] = service.RunIf.ValueString()
 				}
-				if !service.SicknessCheckScript.IsNull() && service.SicknessCheckScript.ValueString() != "" {
+				if !service.SicknessCheckScript.IsNull() && !service.SicknessCheckScript.IsUnknown() && service.SicknessCheckScript.ValueString() != "" {
 					serviceMap["sicknessCheckScript"] = service.SicknessCheckScript.ValueString()
 				}
 				// Optional numeric fields
-				if !service.SicknessCheckScriptTimeout.IsNull() {
-					serviceMap["sicknessCheckScriptTimeout"] = service.SicknessCheckScriptTimeout.ValueInt64()
-				}
-				if !service.SicknessCheckInterval.IsNull() {
-					serviceMap["sicknessCheckInterval"] = service.SicknessCheckInterval.ValueInt64()
-				}
-				if !service.ScriptTimeout.IsNull() {
-					serviceMap["scriptTimeout"] = service.ScriptTimeout.ValueInt64()
-				}
+				SetInt64Field(serviceMap, "sicknessCheckScriptTimeout", service.SicknessCheckScriptTimeout)
+				SetInt64Field(serviceMap, "sicknessCheckInterval", service.SicknessCheckInterval)
+				SetInt64Field(serviceMap, "scriptTimeout", service.ScriptTimeout)
 				servicesList = append(servicesList, serviceMap)
 			}
 			entity["services"] = servicesList
@@ -2566,32 +2444,16 @@ func (r *CMDeviceCategoryResource) buildAPIEntity(ctx context.Context, model *CM
 	}
 
 	// Provisioning scripts
-	if !model.Initialize.IsNull() && !model.Initialize.IsUnknown() {
-		entity["initialize"] = model.Initialize.ValueString()
-	}
-	if !model.Finalize.IsNull() && !model.Finalize.IsUnknown() {
-		entity["finalize"] = model.Finalize.ValueString()
-	}
+	SetStringField(entity, "initialize", model.Initialize)
+	SetStringField(entity, "finalize", model.Finalize)
 
 	// Exclude lists (large text fields)
-	if !model.ExcludeListFull.IsNull() && !model.ExcludeListFull.IsUnknown() {
-		entity["excludeListFull"] = model.ExcludeListFull.ValueString()
-	}
-	if !model.ExcludeListGrab.IsNull() && !model.ExcludeListGrab.IsUnknown() {
-		entity["excludeListGrab"] = model.ExcludeListGrab.ValueString()
-	}
-	if !model.ExcludeListGrabnew.IsNull() && !model.ExcludeListGrabnew.IsUnknown() {
-		entity["excludeListGrabnew"] = model.ExcludeListGrabnew.ValueString()
-	}
-	if !model.ExcludeListSync.IsNull() && !model.ExcludeListSync.IsUnknown() {
-		entity["excludeListSync"] = model.ExcludeListSync.ValueString()
-	}
-	if !model.ExcludeListUpdate.IsNull() && !model.ExcludeListUpdate.IsUnknown() {
-		entity["excludeListUpdate"] = model.ExcludeListUpdate.ValueString()
-	}
-	if !model.ExcludeListManipulateScript.IsNull() && !model.ExcludeListManipulateScript.IsUnknown() {
-		entity["excludeListManipulateScript"] = model.ExcludeListManipulateScript.ValueString()
-	}
+	SetStringField(entity, "excludeListFull", model.ExcludeListFull)
+	SetStringField(entity, "excludeListGrab", model.ExcludeListGrab)
+	SetStringField(entity, "excludeListGrabnew", model.ExcludeListGrabnew)
+	SetStringField(entity, "excludeListSync", model.ExcludeListSync)
+	SetStringField(entity, "excludeListUpdate", model.ExcludeListUpdate)
+	SetStringField(entity, "excludeListManipulateScript", model.ExcludeListManipulateScript)
 
 	// BMC Settings nested object
 	if !model.BMCSettings.IsNull() && !model.BMCSettings.IsUnknown() {
@@ -2610,30 +2472,14 @@ func (r *CMDeviceCategoryResource) buildAPIEntity(ctx context.Context, model *CM
 		} else {
 			bmcEntity["uuid"] = generateUUID()
 		}
-		if !bmcModel.UserName.IsNull() {
-			bmcEntity["userName"] = bmcModel.UserName.ValueString()
-		}
-		if !bmcModel.Password.IsNull() {
-			bmcEntity["password"] = bmcModel.Password.ValueString()
-		}
-		if !bmcModel.Privilege.IsNull() {
-			bmcEntity["privilege"] = bmcModel.Privilege.ValueString()
-		}
-		if !bmcModel.UserID.IsNull() {
-			bmcEntity["userID"] = bmcModel.UserID.ValueInt64()
-		}
-		if !bmcModel.FirmwareManageMode.IsNull() {
-			bmcEntity["firmwareManageMode"] = bmcModel.FirmwareManageMode.ValueString()
-		}
-		if !bmcModel.LeakPolicy.IsNull() {
-			bmcEntity["leakPolicy"] = bmcModel.LeakPolicy.ValueString()
-		}
-		if !bmcModel.LeakReactionDelay.IsNull() {
-			bmcEntity["leakReactionDelay"] = bmcModel.LeakReactionDelay.ValueFloat64()
-		}
-		if !bmcModel.PowerResetDelay.IsNull() {
-			bmcEntity["powerResetDelay"] = bmcModel.PowerResetDelay.ValueInt64()
-		}
+		SetStringField(bmcEntity, "userName", bmcModel.UserName)
+		SetStringField(bmcEntity, "password", bmcModel.Password)
+		SetStringField(bmcEntity, "privilege", bmcModel.Privilege)
+		SetInt64Field(bmcEntity, "userID", bmcModel.UserID)
+		SetStringField(bmcEntity, "firmwareManageMode", bmcModel.FirmwareManageMode)
+		SetStringField(bmcEntity, "leakPolicy", bmcModel.LeakPolicy)
+		SetFloat64Field(bmcEntity, "leakReactionDelay", bmcModel.LeakReactionDelay)
+		SetInt64Field(bmcEntity, "powerResetDelay", bmcModel.PowerResetDelay)
 
 		entity["bmcSettings"] = bmcEntity
 	}
@@ -2651,12 +2497,8 @@ func (r *CMDeviceCategoryResource) buildAPIEntity(ctx context.Context, model *CM
 				"modified":      true,
 				"to_be_removed": false,
 			}
-			if !mod.Name.IsNull() {
-				moduleEntity["name"] = mod.Name.ValueString()
-			}
-			if !mod.Parameters.IsNull() {
-				moduleEntity["parameters"] = mod.Parameters.ValueString()
-			}
+			SetStringField(moduleEntity, "name", mod.Name)
+			SetStringField(moduleEntity, "parameters", mod.Parameters)
 			moduleEntities = append(moduleEntities, moduleEntity)
 		}
 		entity["modules"] = moduleEntities
@@ -2681,18 +2523,10 @@ func (r *CMDeviceCategoryResource) buildAPIEntity(ctx context.Context, model *CM
 					mountMap["uuid"] = mount.UUID.ValueString()
 				}
 				// Handle optional fields
-				if !mount.MountOptions.IsNull() {
-					mountMap["options"] = mount.MountOptions.ValueString() // mountoptions -> options
-				}
-				if !mount.Fsck.IsNull() {
-					mountMap["fsck"] = mount.Fsck.ValueString()
-				}
-				if !mount.Dump.IsNull() {
-					mountMap["dump"] = mount.Dump.ValueBool()
-				}
-				if !mount.RDMA.IsNull() {
-					mountMap["rdma"] = mount.RDMA.ValueBool()
-				}
+				SetStringField(mountMap, "options", mount.MountOptions) // mountoptions -> options
+				SetStringField(mountMap, "fsck", mount.Fsck)
+				SetBoolField(mountMap, "dump", mount.Dump)
+				SetBoolField(mountMap, "rdma", mount.RDMA)
 				mountsList = append(mountsList, mountMap)
 			}
 			entity["fsmounts"] = mountsList

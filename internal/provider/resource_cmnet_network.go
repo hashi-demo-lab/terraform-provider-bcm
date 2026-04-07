@@ -566,14 +566,14 @@ func buildNetworkAPIEntity(ctx context.Context, data *CMNetNetworkResourceModel,
 	}
 
 	// Required fields
-	entity["name"] = data.Name.ValueString()
+	SetStringField(entity, "name", data.Name)
 
 	// Domain name (required by BCM, use default if not provided)
-	domainName := data.DomainName.ValueString()
-	if domainName == "" {
-		domainName = "cluster.local"
+	if !data.DomainName.IsNull() && !data.DomainName.IsUnknown() && data.DomainName.ValueString() != "" {
+		entity["domainName"] = data.DomainName.ValueString()
+	} else {
+		entity["domainName"] = "cluster.local"
 	}
-	entity["domainName"] = domainName
 
 	// Parse subnet if provided
 	if !data.Subnet.IsNull() && !data.Subnet.IsUnknown() {
@@ -586,21 +586,11 @@ func buildNetworkAPIEntity(ctx context.Context, data *CMNetNetworkResourceModel,
 	}
 
 	// Optional fields
-	if !data.Gateway.IsNull() && !data.Gateway.IsUnknown() {
-		entity["gateway"] = data.Gateway.ValueString()
-	}
-	if !data.MTU.IsNull() && !data.MTU.IsUnknown() {
-		entity["mtu"] = data.MTU.ValueInt64()
-	}
-	if !data.DHCPRangeStart.IsNull() && !data.DHCPRangeStart.IsUnknown() {
-		entity["dynamicRangeStart"] = data.DHCPRangeStart.ValueString()
-	}
-	if !data.DHCPRangeEnd.IsNull() && !data.DHCPRangeEnd.IsUnknown() {
-		entity["dynamicRangeEnd"] = data.DHCPRangeEnd.ValueString()
-	}
-	if !data.Notes.IsNull() && !data.Notes.IsUnknown() {
-		entity["notes"] = data.Notes.ValueString()
-	}
+	SetStringField(entity, "gateway", data.Gateway)
+	SetInt64Field(entity, "mtu", data.MTU)
+	SetStringField(entity, "dynamicRangeStart", data.DHCPRangeStart)
+	SetStringField(entity, "dynamicRangeEnd", data.DHCPRangeEnd)
+	SetStringField(entity, "notes", data.Notes)
 
 	return entity, nil
 }

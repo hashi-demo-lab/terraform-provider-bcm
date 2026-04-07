@@ -150,9 +150,9 @@ func (r *CMDeviceDeviceResource) Schema(ctx context.Context, req resource.Schema
 			"management_network": schema.StringAttribute{
 				Optional:            true,
 				Computed:            true,
-				MarkdownDescription: "Management network UUID reference. BCM stores exactly what is sent; omitting defaults to unset (zero UUID).",
+				MarkdownDescription: "Management network UUID reference. Optional — if not specified, the device has no management network set.",
 				PlanModifiers: []planmodifier.String{
-					nullIfRemovedFromConfig(),
+					stringplanmodifier.UseStateForUnknown(),
 				},
 				Validators: []validator.String{
 					stringvalidator.RegexMatches(
@@ -185,7 +185,7 @@ func (r *CMDeviceDeviceResource) Schema(ctx context.Context, req resource.Schema
 				Computed:            true,
 				MarkdownDescription: "Boot loader type (e.g., SYSLINUX, GRUB) - defaults to category value",
 				Validators: []validator.String{
-					stringvalidator.OneOf("SYSLINUX", "GRUB", "GRUB2", "PXELINUX"),
+					stringvalidator.OneOf("SYSLINUX", "GRUB"),
 				},
 			},
 			"boot_loader_protocol": schema.StringAttribute{
@@ -193,7 +193,7 @@ func (r *CMDeviceDeviceResource) Schema(ctx context.Context, req resource.Schema
 				Computed:            true,
 				MarkdownDescription: "Boot loader protocol (e.g., HTTP, TFTP) - defaults to category value",
 				Validators: []validator.String{
-					stringvalidator.OneOf("HTTP", "TFTP", "NFS"),
+					stringvalidator.OneOf("HTTP", "TFTP"),
 				},
 			},
 			"force": schema.BoolAttribute{
@@ -202,9 +202,9 @@ func (r *CMDeviceDeviceResource) Schema(ctx context.Context, req resource.Schema
 			},
 			"power_control": schema.StringAttribute{
 				Optional:            true,
-				MarkdownDescription: "Power control method (e.g., 'none', 'ipmi', 'ipdu', 'redfish')",
+				MarkdownDescription: "Power control method (e.g., 'none', 'ipmi', 'pdu', 'redfish', 'custom')",
 				Validators: []validator.String{
-					stringvalidator.OneOf("none", "ipmi", "ipdu", "redfish"),
+					stringvalidator.OneOf("none", "ipmi", "pdu", "redfish", "custom"),
 				},
 			},
 			"default_gateway": schema.StringAttribute{
@@ -1423,6 +1423,16 @@ func (r *CMDeviceDeviceResource) Delete(ctx context.Context, req resource.Delete
 	// Call BCM API to delete device
 	_, err := r.Client.CallJSONRPC(ctx, "cmdevice", "removeDevice", state.UUID.ValueString(), forceValue)
 	if err != nil {
+		// Check if device was already deleted externally (idempotent delete)
+		errStr := err.Error()
+		if containsAny(errStr, []string{"No such device", "not found", "does not exist"}) {
+			tflog.Info(ctx, "Device already deleted (idempotent)", map[string]interface{}{
+				"hostname": state.Hostname.ValueString(),
+				"uuid":     state.UUID.ValueString(),
+			})
+			return
+		}
+
 		resp.Diagnostics.AddError(
 			"Error Deleting Device",
 			fmt.Sprintf("Could not delete device '%s' (UUID: %s): %s",
@@ -1484,9 +1494,7 @@ func (r *CMDeviceDeviceResource) buildDeviceAPIEntityWithExisting(plan CMDeviceD
 	entity := map[string]interface{}{
 		"baseType":              "Device",
 		"childType":             "PhysicalNode",
-		"hostname":              plan.Hostname.ValueString(),
 		"mac":                   deviceMAC,
-		"category":              plan.Category.ValueString(),
 		"modified":              true,
 		"to_be_removed":         false,
 		"revision":              "",
@@ -1495,11 +1503,13 @@ func (r *CMDeviceDeviceResource) buildDeviceAPIEntityWithExisting(plan CMDeviceD
 		"interfaces":            interfaces,
 	}
 
+	// Required fields - set via helpers for defensive null/unknown guards
+	SetStringField(entity, "hostname", plan.Hostname)
+	SetStringField(entity, "category", plan.Category)
+
 	// Only include managementNetwork when explicitly set by the user.
 	// BCM treats omitted and zero UUID identically (both default to zero UUID on read).
-	if !plan.ManagementNetwork.IsNull() && !plan.ManagementNetwork.IsUnknown() {
-		entity["managementNetwork"] = plan.ManagementNetwork.ValueString()
-	}
+	SetStringField(entity, "managementNetwork", plan.ManagementNetwork)
 
 	// Always include partition field as BCM requires it
 	// When usesProxy is true, partitionUUID contains the software image UUID from parentSoftwareImage
@@ -1507,44 +1517,21 @@ func (r *CMDeviceDeviceResource) buildDeviceAPIEntityWithExisting(plan CMDeviceD
 	entity["partition"] = partitionUUID
 
 	// Add optional fields if present
-	if !plan.Notes.IsNull() && !plan.Notes.IsUnknown() {
-		entity["notes"] = plan.Notes.ValueString()
-	}
-
-	if !plan.KernelParameters.IsNull() && !plan.KernelParameters.IsUnknown() {
-		entity["kernelParameters"] = plan.KernelParameters.ValueString()
-	}
-
-	if !plan.BootLoader.IsNull() && !plan.BootLoader.IsUnknown() {
-		entity["bootLoader"] = plan.BootLoader.ValueString()
-	}
-
-	if !plan.BootLoaderProtocol.IsNull() && !plan.BootLoaderProtocol.IsUnknown() {
-		entity["bootLoaderProtocol"] = plan.BootLoaderProtocol.ValueString()
-	}
+	SetStringField(entity, "notes", plan.Notes)
+	SetStringField(entity, "kernelParameters", plan.KernelParameters)
+	SetStringField(entity, "bootLoader", plan.BootLoader)
+	SetStringField(entity, "bootLoaderProtocol", plan.BootLoaderProtocol)
 
 	// Power control configuration
-	if !plan.PowerControl.IsNull() && !plan.PowerControl.IsUnknown() {
-		entity["powerControl"] = plan.PowerControl.ValueString()
-	}
+	SetStringField(entity, "powerControl", plan.PowerControl)
 
 	// Network gateway configuration
-	if !plan.DefaultGateway.IsNull() && !plan.DefaultGateway.IsUnknown() {
-		entity["defaultGateway"] = plan.DefaultGateway.ValueString()
-	}
-
-	if !plan.DefaultGatewayMetric.IsNull() && !plan.DefaultGatewayMetric.IsUnknown() {
-		entity["defaultGatewayMetric"] = plan.DefaultGatewayMetric.ValueInt64()
-	}
+	SetStringField(entity, "defaultGateway", plan.DefaultGateway)
+	SetInt64Field(entity, "defaultGatewayMetric", plan.DefaultGatewayMetric)
 
 	// Hardware identifiers
-	if !plan.SerialNumber.IsNull() && !plan.SerialNumber.IsUnknown() {
-		entity["serialNumber"] = plan.SerialNumber.ValueString()
-	}
-
-	if !plan.PartNumber.IsNull() && !plan.PartNumber.IsUnknown() {
-		entity["partNumber"] = plan.PartNumber.ValueString()
-	}
+	SetStringField(entity, "serialNumber", plan.SerialNumber)
+	SetStringField(entity, "partNumber", plan.PartNumber)
 
 	// Legacy roles handling is done separately via lookupAndBuildRolesForEntity
 	// because it requires BCM API access to get full role objects
@@ -1795,13 +1782,16 @@ func (r *CMDeviceDeviceResource) parseDeviceFromAPI(data map[string]interface{})
 		model.KernelParameters = types.StringNull()
 	}
 
-	if bootLoader, ok := data["bootLoader"].(string); ok && bootLoader != "" {
+	// BCM returns "CATEGORY" for devices inheriting boot_loader from their category.
+	// Map to null — the user never sets this value; omitting it preserves inheritance.
+	if bootLoader, ok := data["bootLoader"].(string); ok && bootLoader != "" && bootLoader != "CATEGORY" {
 		model.BootLoader = types.StringValue(bootLoader)
 	} else {
 		model.BootLoader = types.StringNull()
 	}
 
-	if bootLoaderProtocol, ok := data["bootLoaderProtocol"].(string); ok && bootLoaderProtocol != "" {
+	// Same CATEGORY handling for boot_loader_protocol.
+	if bootLoaderProtocol, ok := data["bootLoaderProtocol"].(string); ok && bootLoaderProtocol != "" && bootLoaderProtocol != "CATEGORY" {
 		model.BootLoaderProtocol = types.StringValue(bootLoaderProtocol)
 	} else {
 		model.BootLoaderProtocol = types.StringNull()

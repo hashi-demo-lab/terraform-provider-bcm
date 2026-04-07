@@ -832,11 +832,11 @@ resource "bcm_cmdevice_device" "server" {
 - `kernel_parameters` (String) Kernel boot parameters
 - `kubelet_role` (Block List) Kubernetes kubelet role configuration. Defines this device as a member of a KubeCluster. Each kubelet_role block associates the device with one KubeCluster as a control plane node, worker node, or both. (see [below for nested schema](#nestedblock--kubelet_role))
 - `mac` (String) Device MAC address, computed from the first interface. Can be set explicitly to override.
-- `management_network` (String) Management network UUID reference. BCM stores exactly what is sent; omitting defaults to unset (zero UUID).
+- `management_network` (String) Management network UUID reference. Optional — if not specified, the device has no management network set.
 - `notes` (String) Device notes/description
 - `part_number` (String) Hardware part number
 - `partition` (String) Partition UUID reference (uses category default if not specified)
-- `power_control` (String) Power control method (e.g., 'none', 'ipmi', 'ipdu', 'redfish')
+- `power_control` (String) Power control method (e.g., 'none', 'ipmi', 'pdu', 'redfish', 'custom')
 - `roles` (Set of String) Set of role names assigned to this device. Roles define the device's function in the cluster (e.g., "backup", "provisioning", "boot"). Use the `bcm_cmdevice_roles` data source to discover available roles. **Only role names are accepted** (not UUIDs). Role names are case-sensitive.
 
 Example usage:
@@ -998,5 +998,32 @@ resource "bcm_cmdevice_device" "discovered" {
     bootable = true
     dhcp     = true
   }
+}
+```
+
+### Generate Configuration (Terraform 1.5+)
+
+```terraform
+# Copyright (c) HashiCorp, Inc.
+# SPDX-License-Identifier: MPL-2.0
+
+# =============================================================================
+# Example: Generate Terraform configuration from existing BCM device
+# =============================================================================
+# Terraform 1.5+ supports generating HCL configuration from existing resources.
+# This is useful for adopting existing infrastructure into Terraform management.
+#
+# Step 1: Add the import block below to your configuration
+# Step 2: Run: terraform plan -generate-config-out=generated_device.tf
+# Step 3: Review and adjust the generated configuration
+# Step 4: Run: terraform plan (verify no unexpected changes)
+# Step 5: Remove the import block and move the resource to your main config
+#
+# Equivalent CLI command:
+#   terraform import bcm_cmdevice_device.example "1b4e8f2a-6c3d-4e7f-9a1b-2c3d4e5f6a7b"
+
+import {
+  to = bcm_cmdevice_device.example
+  id = "1b4e8f2a-6c3d-4e7f-9a1b-2c3d4e5f6a7b"
 }
 ```

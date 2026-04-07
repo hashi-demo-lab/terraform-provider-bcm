@@ -607,7 +607,7 @@ func (r *CMEtcdClusterResource) buildEntity(_ context.Context, data *EtcdCluster
 	}
 
 	// Set name
-	entity["name"] = data.Name.ValueString()
+	SetStringField(entity, "name", data.Name)
 
 	// Set or generate UUID
 	if !data.UUID.IsNull() && !data.UUID.IsUnknown() && data.UUID.ValueString() != "" {

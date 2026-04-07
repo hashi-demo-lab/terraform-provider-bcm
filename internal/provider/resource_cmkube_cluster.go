@@ -885,23 +885,19 @@ func (r *CMKubeClusterResource) buildEntity(ctx context.Context, data *KubeClust
 	}
 
 	// Required fields
-	entity["name"] = data.Name.ValueString()
+	SetStringField(entity, "name", data.Name)
 
 	// Network references (FR-001, FR-002, FR-003)
-	entity["internalNetwork"] = data.InternalNetwork.ValueString()
-	entity["serviceNetwork"] = data.ServiceNetwork.ValueString()
-	entity["podNetwork"] = data.PodNetwork.ValueString()
+	SetStringField(entity, "internalNetwork", data.InternalNetwork)
+	SetStringField(entity, "serviceNetwork", data.ServiceNetwork)
+	SetStringField(entity, "podNetwork", data.PodNetwork)
 
 	// EtcdCluster reference (FR-004)
-	entity["etcdCluster"] = data.EtcdCluster.ValueString()
+	SetStringField(entity, "etcdCluster", data.EtcdCluster)
 
 	// Kubernetes configuration (FR-005, FR-006, FR-009)
-	if !data.Version.IsNull() && !data.Version.IsUnknown() {
-		entity["version"] = data.Version.ValueString()
-	}
-	if !data.PodNetworkNodeMask.IsNull() && !data.PodNetworkNodeMask.IsUnknown() {
-		entity["podNetworkNodeMask"] = data.PodNetworkNodeMask.ValueString()
-	}
+	SetStringField(entity, "version", data.Version)
+	SetStringField(entity, "podNetworkNodeMask", data.PodNetworkNodeMask)
 	if !data.KubeDnsIP.IsNull() && !data.KubeDnsIP.IsUnknown() && data.KubeDnsIP.ValueString() != "" {
 		entity["kubeDnsIp"] = data.KubeDnsIP.ValueString()
 	}
@@ -910,9 +906,7 @@ func (r *CMKubeClusterResource) buildEntity(ctx context.Context, data *KubeClust
 	if !data.KubernetesAPIServer.IsNull() && !data.KubernetesAPIServer.IsUnknown() && data.KubernetesAPIServer.ValueString() != "" {
 		entity["kubernetesApiServer"] = data.KubernetesAPIServer.ValueString()
 	}
-	if !data.KubernetesAPIServerProxyPort.IsNull() && !data.KubernetesAPIServerProxyPort.IsUnknown() {
-		entity["kubernetesApiServerProxyPort"] = data.KubernetesAPIServerProxyPort.ValueInt64()
-	}
+	SetInt64Field(entity, "kubernetesApiServerProxyPort", data.KubernetesAPIServerProxyPort)
 
 	// Trusted domains (FR-010)
 	if !data.TrustedDomains.IsNull() && !data.TrustedDomains.IsUnknown() {
@@ -924,9 +918,7 @@ func (r *CMKubeClusterResource) buildEntity(ctx context.Context, data *KubeClust
 	}
 
 	// Ingress proxy configuration (FR-014)
-	if !data.IngressProxyEnable.IsNull() && !data.IngressProxyEnable.IsUnknown() {
-		entity["ingressProxyEnable"] = data.IngressProxyEnable.ValueBool()
-	}
+	SetBoolField(entity, "ingressProxyEnable", data.IngressProxyEnable)
 	if !data.IngressProxyListenPort.IsNull() && !data.IngressProxyListenPort.IsUnknown() && data.IngressProxyListenPort.ValueInt64() > 0 {
 		entity["ingressProxyListenPort"] = data.IngressProxyListenPort.ValueInt64()
 	}
@@ -953,12 +945,13 @@ func (r *CMKubeClusterResource) buildEntity(ctx context.Context, data *KubeClust
 		if len(appGroups) > 0 {
 			appGroupsData := make([]map[string]interface{}, len(appGroups))
 			for i, ag := range appGroups {
-				appGroupsData[i] = map[string]interface{}{
+				agData := map[string]interface{}{
 					"baseType":  "KubeAppGroup",
 					"childType": "",
-					"name":      ag.Name.ValueString(),
-					"enabled":   ag.Enabled.ValueBool(),
 				}
+				SetStringField(agData, "name", ag.Name)
+				SetBoolField(agData, "enabled", ag.Enabled)
+				appGroupsData[i] = agData
 
 				// Applications within the group
 				if !ag.Applications.IsNull() && !ag.Applications.IsUnknown() {
@@ -967,13 +960,14 @@ func (r *CMKubeClusterResource) buildEntity(ctx context.Context, data *KubeClust
 					if len(apps) > 0 {
 						appsData := make([]map[string]interface{}, len(apps))
 						for j, app := range apps {
-							appsData[j] = map[string]interface{}{
+							appData := map[string]interface{}{
 								"baseType":  "KubeApp",
 								"childType": "",
-								"name":      app.Name.ValueString(),
-								"enabled":   app.Enabled.ValueBool(),
-								"manifest":  app.Manifest.ValueString(),
 							}
+							SetStringField(appData, "name", app.Name)
+							SetBoolField(appData, "enabled", app.Enabled)
+							SetStringField(appData, "manifest", app.Manifest)
+							appsData[j] = appData
 						}
 						appGroupsData[i]["applications"] = appsData
 					} else {
@@ -994,11 +988,12 @@ func (r *CMKubeClusterResource) buildEntity(ctx context.Context, data *KubeClust
 		if len(labelSets) > 0 {
 			labelSetsData := make([]map[string]interface{}, len(labelSets))
 			for i, ls := range labelSets {
-				labelSetsData[i] = map[string]interface{}{
+				lsData := map[string]interface{}{
 					"baseType":  "KubeLabelSet",
 					"childType": "",
-					"name":      ls.Name.ValueString(),
 				}
+				SetStringField(lsData, "name", ls.Name)
+				labelSetsData[i] = lsData
 				if !ls.Labels.IsNull() && !ls.Labels.IsUnknown() {
 					var labels map[string]string
 					diags.Append(ls.Labels.ElementsAs(ctx, &labels, false)...)
@@ -1018,11 +1013,12 @@ func (r *CMKubeClusterResource) buildEntity(ctx context.Context, data *KubeClust
 		if len(users) > 0 {
 			usersData := make([]map[string]interface{}, len(users))
 			for i, u := range users {
-				usersData[i] = map[string]interface{}{
+				uData := map[string]interface{}{
 					"baseType":  "KubeUser",
 					"childType": "",
-					"name":      u.Name.ValueString(),
 				}
+				SetStringField(uData, "name", u.Name)
+				usersData[i] = uData
 				if !u.Groups.IsNull() && !u.Groups.IsUnknown() {
 					var groups []string
 					diags.Append(u.Groups.ElementsAs(ctx, &groups, false)...)

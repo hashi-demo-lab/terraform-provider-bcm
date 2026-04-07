@@ -821,12 +821,10 @@ func (r *CMUserUserResource) buildAPIEntity(_ context.Context, model *CMUserUser
 	}
 
 	// Username (required)
-	if !model.Username.IsNull() {
-		entity["name"] = model.Username.ValueString()
-	}
+	SetStringField(entity, "name", model.Username)
 
 	// Password - only include for create (update handles separately)
-	if uuid == "" && !model.Password.IsNull() {
+	if uuid == "" && !model.Password.IsNull() && !model.Password.IsUnknown() {
 		entity["password"] = model.Password.ValueString()
 	}
 
@@ -841,54 +839,38 @@ func (r *CMUserUserResource) buildAPIEntity(_ context.Context, model *CMUserUser
 	}
 
 	// Home directory
-	if !model.HomeDirectory.IsNull() && model.HomeDirectory.ValueString() != "" {
+	if !model.HomeDirectory.IsNull() && !model.HomeDirectory.IsUnknown() && model.HomeDirectory.ValueString() != "" {
 		entity["homeDirectory"] = model.HomeDirectory.ValueString()
-	} else if !model.Username.IsNull() {
+	} else if !model.Username.IsNull() && !model.Username.IsUnknown() {
 		// Default to /home/{username}
 		entity["homeDirectory"] = fmt.Sprintf("/home/%s", model.Username.ValueString())
 	}
 
 	// Shell
-	if !model.Shell.IsNull() {
-		entity["loginShell"] = model.Shell.ValueString()
-	}
+	SetStringField(entity, "loginShell", model.Shell)
 
 	// Profile information - BCM requires commonName and surname
-	if !model.FullName.IsNull() && model.FullName.ValueString() != "" {
+	if !model.FullName.IsNull() && !model.FullName.IsUnknown() && model.FullName.ValueString() != "" {
 		entity["commonName"] = model.FullName.ValueString()
-	} else if !model.Username.IsNull() {
+	} else if !model.Username.IsNull() && !model.Username.IsUnknown() {
 		// Default to username if not specified
 		entity["commonName"] = model.Username.ValueString()
 	}
-	if !model.Surname.IsNull() && model.Surname.ValueString() != "" {
+	if !model.Surname.IsNull() && !model.Surname.IsUnknown() && model.Surname.ValueString() != "" {
 		entity["surname"] = model.Surname.ValueString()
-	} else if !model.Username.IsNull() {
+	} else if !model.Username.IsNull() && !model.Username.IsUnknown() {
 		// Default to username if not specified
 		entity["surname"] = model.Username.ValueString()
 	}
-	if !model.Email.IsNull() {
-		entity["email"] = model.Email.ValueString()
-	}
-	if !model.Notes.IsNull() {
-		entity["notes"] = model.Notes.ValueString()
-	}
-	if !model.AuthorizedSSHKeys.IsNull() {
-		entity["authorizedSshKeys"] = model.AuthorizedSSHKeys.ValueString()
-	}
+	SetStringField(entity, "email", model.Email)
+	SetStringField(entity, "notes", model.Notes)
+	SetStringField(entity, "authorizedSshKeys", model.AuthorizedSSHKeys)
 
 	// Shadow password attributes
-	if !model.ShadowMax.IsNull() {
-		entity["shadowMax"] = model.ShadowMax.ValueInt64()
-	}
-	if !model.ShadowMin.IsNull() {
-		entity["shadowMin"] = model.ShadowMin.ValueInt64()
-	}
-	if !model.ShadowWarning.IsNull() {
-		entity["shadowWarning"] = model.ShadowWarning.ValueInt64()
-	}
-	if !model.ShadowInactive.IsNull() {
-		entity["shadowInactive"] = model.ShadowInactive.ValueInt64()
-	}
+	SetInt64Field(entity, "shadowMax", model.ShadowMax)
+	SetInt64Field(entity, "shadowMin", model.ShadowMin)
+	SetInt64Field(entity, "shadowWarning", model.ShadowWarning)
+	SetInt64Field(entity, "shadowInactive", model.ShadowInactive)
 
 	// BCM operational flags
 	entity["homeDirOperation"] = true

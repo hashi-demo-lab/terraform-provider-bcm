@@ -528,14 +528,14 @@ func handleDeviceValidationFailure(w http.ResponseWriter, req struct {
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode([]map[string]interface{}{
 			{
-				"Field":    "hostname",
-				"Message":  "Hostname already exists in cluster",
-				"Severity": "ERROR",
+				"field":    "hostname",
+				"message":  "Hostname already exists in cluster",
+				"severity": "ERROR",
 			},
 			{
-				"Field":    "mac",
-				"Message":  "MAC address is already in use",
-				"Severity": "ERROR",
+				"field":    "mac",
+				"message":  "MAC address is already in use",
+				"severity": "ERROR",
 			},
 		})
 		return
@@ -741,7 +741,7 @@ func TestAccCMDeviceDeviceResource_MockErrorCategoryNotFound(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config:      testAccDeviceResourceConfigWithMockServer(mockServer.URL, deviceName),
-				ExpectError: regexp.MustCompile(`Error Querying Category`),
+				ExpectError: regexp.MustCompile(`(?s)Error Resolving Partition.*could not query category.*Category not found`),
 			},
 		},
 	})
@@ -773,7 +773,7 @@ func TestAccCMDeviceDeviceResource_MockErrorCategoryInvalidJSON(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config:      testAccDeviceResourceConfigWithMockServer(mockServer.URL, deviceName),
-				ExpectError: regexp.MustCompile(`(?s)Error Querying Category.*failed to parse JSON response`),
+				ExpectError: regexp.MustCompile(`(?s)Error Resolving Partition.*could not.*query category.*failed to parse JSON`),
 			},
 		},
 	})
@@ -804,7 +804,7 @@ func TestAccCMDeviceDeviceResource_MockErrorCategoryNoPartition(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config:      testAccDeviceResourceConfigWithMockServer(mockServer.URL, deviceName),
-				ExpectError: regexp.MustCompile(`Missing Partition`),
+				ExpectError: regexp.MustCompile(`(?s)Error Resolving Partition.*does not have a default partition`),
 			},
 		},
 	})
@@ -835,7 +835,7 @@ func TestAccCMDeviceDeviceResource_MockErrorCategoryProxyMissingParent(t *testin
 		Steps: []resource.TestStep{
 			{
 				Config:      testAccDeviceResourceConfigWithMockServer(mockServer.URL, deviceName),
-				ExpectError: regexp.MustCompile(`(?s)Missing Partition.*softwareImageProxy.*parentSoftwareImage`),
+				ExpectError: regexp.MustCompile(`(?s)Error Resolving Partition.*softwareImageProxy.*parentSoftwareImage`),
 			},
 		},
 	})
@@ -870,7 +870,7 @@ func TestAccCMDeviceDeviceResource_MockErrorPartitionsQueryFailed(t *testing.T) 
 		Steps: []resource.TestStep{
 			{
 				Config:      testAccDeviceResourceConfigWithMockServer(mockServer.URL, deviceName),
-				ExpectError: regexp.MustCompile(`Error Querying Partitions`),
+				ExpectError: regexp.MustCompile(`(?s)Error Resolving Partition.*could not query partitions`),
 			},
 		},
 	})
@@ -901,7 +901,7 @@ func TestAccCMDeviceDeviceResource_MockErrorPartitionsInvalidJSON(t *testing.T) 
 		Steps: []resource.TestStep{
 			{
 				Config:      testAccDeviceResourceConfigWithMockServer(mockServer.URL, deviceName),
-				ExpectError: regexp.MustCompile(`(?s)Error Querying Partitions.*failed to parse JSON response`),
+				ExpectError: regexp.MustCompile(`(?s)Error Resolving Partition.*could not query partitions.*failed to parse JSON response`),
 			},
 		},
 	})
@@ -932,7 +932,7 @@ func TestAccCMDeviceDeviceResource_MockErrorPartitionsNoBase(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config:      testAccDeviceResourceConfigWithMockServer(mockServer.URL, deviceName),
-				ExpectError: regexp.MustCompile(`Missing Base Partition`),
+				ExpectError: regexp.MustCompile(`(?s)Error Resolving Partition.*no 'base' partition found`),
 			},
 		},
 	})

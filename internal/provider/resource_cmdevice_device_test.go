@@ -3162,7 +3162,11 @@ provider "bcm" {
   insecure_skip_verify = true
 }
 
-data "bcm_cmnet_networks" "all" {}
+data "bcm_cmnet_networks" "management" {
+  filter {
+    name_pattern = "managementnet"
+  }
+}
 
 resource "bcm_cmpart_softwareimage" "test" {
   name = %[4]q
@@ -3171,7 +3175,7 @@ resource "bcm_cmpart_softwareimage" "test" {
 
 resource "bcm_cmdevice_category" "test" {
   name               = %[6]q
-  management_network = data.bcm_cmnet_networks.all.networks[0].id
+  management_network = data.bcm_cmnet_networks.management.networks[0].id
 
   software_image_proxy = {
     parent_software_image = bcm_cmpart_softwareimage.test.id
@@ -3189,9 +3193,9 @@ resource "bcm_cmetcd_cluster" "test" {
 resource "bcm_cmkube_cluster" "test" {
   name             = %[8]q
   etcd_cluster     = bcm_cmetcd_cluster.test.uuid
-  internal_network = data.bcm_cmnet_networks.all.networks[0].uuid
-  service_network  = data.bcm_cmnet_networks.all.networks[0].uuid
-  pod_network      = data.bcm_cmnet_networks.all.networks[0].uuid
+  internal_network = data.bcm_cmnet_networks.management.networks[0].uuid
+  service_network  = data.bcm_cmnet_networks.management.networks[0].uuid
+  pod_network      = data.bcm_cmnet_networks.management.networks[0].uuid
 }
 
 resource "bcm_cmdevice_device" "test" {
@@ -3204,7 +3208,7 @@ resource "bcm_cmdevice_device" "test" {
     name     = "eth0"
     type     = "physical"
     mac      = %[10]q
-    network  = data.bcm_cmnet_networks.all.networks[0].id
+    network  = data.bcm_cmnet_networks.management.networks[0].id
     bootable = true
     dhcp     = true
   }
@@ -3244,7 +3248,11 @@ provider "bcm" {
   insecure_skip_verify = true
 }
 
-data "bcm_cmnet_networks" "all" {}
+data "bcm_cmnet_networks" "management" {
+  filter {
+    name_pattern = "managementnet"
+  }
+}
 
 resource "bcm_cmpart_softwareimage" "test" {
   name = %[4]q
@@ -3253,7 +3261,7 @@ resource "bcm_cmpart_softwareimage" "test" {
 
 resource "bcm_cmdevice_category" "test" {
   name               = %[6]q
-  management_network = data.bcm_cmnet_networks.all.networks[0].id
+  management_network = data.bcm_cmnet_networks.management.networks[0].id
 
   software_image_proxy = {
     parent_software_image = bcm_cmpart_softwareimage.test.id
@@ -3271,9 +3279,9 @@ resource "bcm_cmetcd_cluster" "test" {
 resource "bcm_cmkube_cluster" "test" {
   name             = %[8]q
   etcd_cluster     = bcm_cmetcd_cluster.test.uuid
-  internal_network = data.bcm_cmnet_networks.all.networks[0].uuid
-  service_network  = data.bcm_cmnet_networks.all.networks[0].uuid
-  pod_network      = data.bcm_cmnet_networks.all.networks[0].uuid
+  internal_network = data.bcm_cmnet_networks.management.networks[0].uuid
+  service_network  = data.bcm_cmnet_networks.management.networks[0].uuid
+  pod_network      = data.bcm_cmnet_networks.management.networks[0].uuid
 }
 
 resource "bcm_cmdevice_device" "test" {
@@ -3284,7 +3292,7 @@ resource "bcm_cmdevice_device" "test" {
     name     = "eth0"
     type     = "physical"
     mac      = %[10]q
-    network  = data.bcm_cmnet_networks.all.networks[0].id
+    network  = data.bcm_cmnet_networks.management.networks[0].id
     bootable = true
     dhcp     = true
   }
@@ -3329,7 +3337,11 @@ provider "bcm" {
   insecure_skip_verify = true
 }
 
-data "bcm_cmnet_networks" "all" {}
+data "bcm_cmnet_networks" "management" {
+  filter {
+    name_pattern = "managementnet"
+  }
+}
 
 resource "bcm_cmpart_softwareimage" "test" {
   name = %[4]q
@@ -3338,7 +3350,7 @@ resource "bcm_cmpart_softwareimage" "test" {
 
 resource "bcm_cmdevice_category" "test" {
   name               = %[6]q
-  management_network = data.bcm_cmnet_networks.all.networks[0].id
+  management_network = data.bcm_cmnet_networks.management.networks[0].id
 
   software_image_proxy = {
     parent_software_image = bcm_cmpart_softwareimage.test.id
@@ -3361,7 +3373,7 @@ resource "bcm_cmdevice_device" "test" {
     name     = "eth0"
     type     = "physical"
     mac      = %[9]q
-    network  = data.bcm_cmnet_networks.all.networks[0].id
+    network  = data.bcm_cmnet_networks.management.networks[0].id
     bootable = true
     dhcp     = true
   }
@@ -3401,7 +3413,11 @@ provider "bcm" {
   insecure_skip_verify = true
 }
 
-data "bcm_cmnet_networks" "all" {}
+data "bcm_cmnet_networks" "management" {
+  filter {
+    name_pattern = "managementnet"
+  }
+}
 
 resource "bcm_cmpart_softwareimage" "test" {
   name = %[4]q
@@ -3410,7 +3426,7 @@ resource "bcm_cmpart_softwareimage" "test" {
 
 resource "bcm_cmdevice_category" "test" {
   name               = %[6]q
-  management_network = data.bcm_cmnet_networks.all.networks[0].id
+  management_network = data.bcm_cmnet_networks.management.networks[0].id
 
   software_image_proxy = {
     parent_software_image = bcm_cmpart_softwareimage.test.id
@@ -3428,9 +3444,9 @@ resource "bcm_cmetcd_cluster" "test" {
 resource "bcm_cmkube_cluster" "test" {
   name             = %[8]q
   etcd_cluster     = bcm_cmetcd_cluster.test.uuid
-  internal_network = data.bcm_cmnet_networks.all.networks[0].uuid
-  service_network  = data.bcm_cmnet_networks.all.networks[0].uuid
-  pod_network      = data.bcm_cmnet_networks.all.networks[0].uuid
+  internal_network = data.bcm_cmnet_networks.management.networks[0].uuid
+  service_network  = data.bcm_cmnet_networks.management.networks[0].uuid
+  pod_network      = data.bcm_cmnet_networks.management.networks[0].uuid
 }
 
 resource "bcm_cmdevice_device" "test" {
@@ -3441,7 +3457,7 @@ resource "bcm_cmdevice_device" "test" {
     name     = "eth0"
     type     = "physical"
     mac      = %[10]q
-    network  = data.bcm_cmnet_networks.all.networks[0].id
+    network  = data.bcm_cmnet_networks.management.networks[0].id
     bootable = true
     dhcp     = true
   }
@@ -4106,7 +4122,8 @@ func TestAccCMDeviceDevice_ManagementNetworkImport(t *testing.T) {
 }
 
 // TestAccCMDeviceDevice_ManagementNetworkRemove tests that removing management_network
-// from config results in the zero UUID being sent and null in state.
+// from config preserves the existing value in BCM (patch semantics).
+// Optional+Computed fields use prior state when config is null, so no update is triggered.
 func TestAccCMDeviceDevice_ManagementNetworkRemove(t *testing.T) {
 	deviceName := generateUniqueTestName("tftest-device-mgmtrm")
 	categoryName := generateUniqueTestName("tftest-category-mgmtrm")
@@ -4116,6 +4133,8 @@ func TestAccCMDeviceDevice_ManagementNetworkRemove(t *testing.T) {
 
 	// ID consistency tracking.
 	compareID := statecheck.CompareValue(compare.ValuesSame())
+	// management_network should be preserved across config removal (patch semantics).
+	compareMgmtNet := statecheck.CompareValue(compare.ValuesSame())
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -4142,21 +4161,30 @@ func TestAccCMDeviceDevice_ManagementNetworkRemove(t *testing.T) {
 						"bcm_cmdevice_device.test",
 						tfjsonpath.New("id"),
 					),
+					compareMgmtNet.AddStateValue(
+						"bcm_cmdevice_device.test",
+						tfjsonpath.New("management_network"),
+					),
 				},
 			},
-			// Step 2: Remove management_network from config (use basic config without it).
+			// Step 2: Remove management_network from config — patch semantics preserve existing value.
+			// Terraform uses prior state for Optional+Computed when config is null, so no update is triggered.
 			{
 				Config: testAccCMDeviceDeviceResourceConfig_Basic(deviceName, categoryName, imageName, imagePath, mac),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"bcm_cmdevice_device.test",
-						tfjsonpath.New("hostname"),
-						knownvalue.StringExact(deviceName),
+						tfjsonpath.New("management_network"),
+						knownvalue.NotNull(),
 					),
-					statecheck.ExpectKnownValue(
+					compareMgmtNet.AddStateValue(
 						"bcm_cmdevice_device.test",
 						tfjsonpath.New("management_network"),
-						knownvalue.Null(),
 					),
 					compareID.AddStateValue(
 						"bcm_cmdevice_device.test",
@@ -4164,7 +4192,7 @@ func TestAccCMDeviceDevice_ManagementNetworkRemove(t *testing.T) {
 					),
 				},
 			},
-			// Step 3: Idempotency after removal.
+			// Step 3: Idempotency — value stays preserved.
 			{
 				Config: testAccCMDeviceDeviceResourceConfig_Basic(deviceName, categoryName, imageName, imagePath, mac),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
@@ -4565,7 +4593,7 @@ resource "bcm_cmdevice_device" "test" {
 					os.Getenv("BCM_USERNAME"),
 					os.Getenv("BCM_PASSWORD"),
 				),
-				ExpectError: regexp.MustCompile(`(?i)at least 1`),
+				ExpectError: regexp.MustCompile(`(?i)at least one interface is required`),
 			},
 		},
 	})
