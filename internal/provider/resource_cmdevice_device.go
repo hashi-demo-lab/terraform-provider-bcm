@@ -109,10 +109,16 @@ func (r *CMDeviceDeviceResource) Schema(ctx context.Context, req resource.Schema
 			"id": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "Device identifier (same as UUID)",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"uuid": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "Device UUID assigned by BCM",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"hostname": schema.StringAttribute{
 				Required:            true,
