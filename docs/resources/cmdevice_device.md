@@ -832,7 +832,7 @@ resource "bcm_cmdevice_device" "server" {
 - `kernel_parameters` (String) Kernel boot parameters
 - `kubelet_role` (Block List) Kubernetes kubelet role configuration. Defines this device as a member of a KubeCluster. Each kubelet_role block associates the device with one KubeCluster as a control plane node, worker node, or both. (see [below for nested schema](#nestedblock--kubelet_role))
 - `mac` (String) Device MAC address, computed from the first interface. Can be set explicitly to override.
-- `management_network` (String) Management network UUID reference. BCM stores exactly what is sent; omitting defaults to unset (zero UUID).
+- `management_network` (String) Management network UUID reference. Optional — if not specified, the device has no management network set.
 - `notes` (String) Device notes/description
 - `part_number` (String) Hardware part number
 - `partition` (String) Partition UUID reference (uses category default if not specified)
