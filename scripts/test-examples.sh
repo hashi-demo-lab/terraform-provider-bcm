@@ -1066,6 +1066,72 @@ cleanup_resources() {
     local cleanup_success=0
     local cleanup_failed=0
 
+    # Cleanup test devices first (before categories, since categories may have dependent devices)
+    # Clear roles before deletion to prevent orphaned NodeRoles entries that crash BCM daemon
+    # See: https://github.com/hashi-demo-lab/terraform-provider-bcm/issues/125
+    log_info "Cleaning up test devices..."
+    local devices_response
+    devices_response=$(query_test_resources "$cookie_file" "cmdevice" "getNodes")
+
+    # Extract test devices (hostnames with citest- or tftest- prefix)
+    local test_device_uuids=()
+    # Parse JSON array - each device has uuid and hostname
+    while IFS= read -r uuid; do
+        test_device_uuids+=("$uuid")
+    done < <(echo "$devices_response" | python3 -c "
+import sys, json
+try:
+    nodes = json.load(sys.stdin)
+    for n in nodes:
+        h = n.get('hostname','')
+        if h.startswith('citest-') or h.startswith('tftest-'):
+            print(n.get('uuid',''))
+except: pass
+" 2>/dev/null)
+
+    if [ ${#test_device_uuids[@]} -gt 0 ]; then
+        log_info "Found ${#test_device_uuids[@]} test device(s) to cleanup"
+
+        for dev_uuid in "${test_device_uuids[@]}"; do
+            # Read device to check for roles
+            local dev_data
+            dev_data=$(curl -k -s -b "$cookie_file" -X POST "${BCM_ENDPOINT}/json" \
+                -H "Content-Type: application/json" \
+                -d "{\"service\":\"cmdevice\",\"call\":\"getDevice\",\"args\":[\"$dev_uuid\"]}")
+
+            # Clear roles if present (prevents orphaned NodeRoles on deletion)
+            local cleared_entity
+            cleared_entity=$(echo "$dev_data" | python3 -c "
+import sys, json
+try:
+    d = json.load(sys.stdin)
+    if d.get('roles') and len(d['roles']) > 0:
+        d['roles'] = []
+        d['modified'] = True
+        print(json.dumps(d))
+except: pass
+" 2>/dev/null)
+            if [ -n "$cleared_entity" ]; then
+                log_debug "  Clearing roles on device $dev_uuid before deletion"
+                curl -k -s -b "$cookie_file" -X POST "${BCM_ENDPOINT}/json" \
+                    -H "Content-Type: application/json" \
+                    -d "{\"service\":\"cmdevice\",\"call\":\"updateDevice\",\"args\":[$cleared_entity, true]}" > /dev/null 2>&1
+            fi
+
+            # Delete the device
+            log_debug "  Deleting device $dev_uuid"
+            curl -k -s -b "$cookie_file" -X POST "${BCM_ENDPOINT}/json" \
+                -H "Content-Type: application/json" \
+                -d "{\"service\":\"cmdevice\",\"call\":\"removeDevice\",\"args\":[\"$dev_uuid\", true]}" > /dev/null 2>&1
+        done
+
+        sleep 2  # Wait for eventual consistency
+        log_pass "  ✓ Deleted ${#test_device_uuids[@]} device(s)"
+        cleanup_success=$((cleanup_success + ${#test_device_uuids[@]}))
+    else
+        log_info "No test devices found"
+    fi
+
     # Cleanup software images (from resource examples)
     log_info "Cleaning up test software images..."
     local images_response

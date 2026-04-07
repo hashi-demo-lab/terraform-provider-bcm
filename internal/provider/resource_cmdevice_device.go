@@ -1389,6 +1389,31 @@ func (r *CMDeviceDeviceResource) Delete(ctx context.Context, req resource.Delete
 		"hostname": state.Hostname.ValueString(),
 	})
 
+	// Clear roles before deletion to prevent orphaned NodeRoles entries.
+	// BCM does not cascade-delete role assignments when a device is removed,
+	// leaving references to non-existent devices that crash the daemon on startup.
+	// See: https://github.com/hashi-demo-lab/terraform-provider-bcm/issues/125
+	deviceBody, readErr := r.Client.CallJSONRPC(ctx, "cmdevice", "getDevice", state.UUID.ValueString())
+	if readErr == nil && len(deviceBody) > 0 {
+		var deviceData map[string]interface{}
+		if json.Unmarshal(deviceBody, &deviceData) == nil {
+			if rolesData, ok := deviceData["roles"].([]interface{}); ok && len(rolesData) > 0 {
+				tflog.Debug(ctx, "Clearing roles before device deletion", map[string]interface{}{
+					"uuid":       state.UUID.ValueString(),
+					"role_count": len(rolesData),
+				})
+				deviceData["roles"] = []interface{}{}
+				deviceData["modified"] = true
+				if _, updateErr := r.Client.CallJSONRPC(ctx, "cmdevice", "updateDevice", deviceData, true); updateErr != nil {
+					tflog.Warn(ctx, "Failed to clear roles before deletion, proceeding anyway", map[string]interface{}{
+						"uuid":  state.UUID.ValueString(),
+						"error": updateErr.Error(),
+					})
+				}
+			}
+		}
+	}
+
 	// Get force parameter value
 	forceValue := false
 	if !state.Force.IsNull() {
