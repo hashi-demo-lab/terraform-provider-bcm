@@ -3162,7 +3162,11 @@ provider "bcm" {
   insecure_skip_verify = true
 }
 
-data "bcm_cmnet_networks" "all" {}
+data "bcm_cmnet_networks" "management" {
+  filter {
+    name_pattern = "managementnet"
+  }
+}
 
 resource "bcm_cmpart_softwareimage" "test" {
   name = %[4]q
@@ -3171,7 +3175,7 @@ resource "bcm_cmpart_softwareimage" "test" {
 
 resource "bcm_cmdevice_category" "test" {
   name               = %[6]q
-  management_network = data.bcm_cmnet_networks.all.networks[0].id
+  management_network = data.bcm_cmnet_networks.management.networks[0].id
 
   software_image_proxy = {
     parent_software_image = bcm_cmpart_softwareimage.test.id
@@ -3189,9 +3193,9 @@ resource "bcm_cmetcd_cluster" "test" {
 resource "bcm_cmkube_cluster" "test" {
   name             = %[8]q
   etcd_cluster     = bcm_cmetcd_cluster.test.uuid
-  internal_network = data.bcm_cmnet_networks.all.networks[0].uuid
-  service_network  = data.bcm_cmnet_networks.all.networks[0].uuid
-  pod_network      = data.bcm_cmnet_networks.all.networks[0].uuid
+  internal_network = data.bcm_cmnet_networks.management.networks[0].uuid
+  service_network  = data.bcm_cmnet_networks.management.networks[0].uuid
+  pod_network      = data.bcm_cmnet_networks.management.networks[0].uuid
 }
 
 resource "bcm_cmdevice_device" "test" {
@@ -3204,7 +3208,7 @@ resource "bcm_cmdevice_device" "test" {
     name     = "eth0"
     type     = "physical"
     mac      = %[10]q
-    network  = data.bcm_cmnet_networks.all.networks[0].id
+    network  = data.bcm_cmnet_networks.management.networks[0].id
     bootable = true
     dhcp     = true
   }
@@ -3244,7 +3248,11 @@ provider "bcm" {
   insecure_skip_verify = true
 }
 
-data "bcm_cmnet_networks" "all" {}
+data "bcm_cmnet_networks" "management" {
+  filter {
+    name_pattern = "managementnet"
+  }
+}
 
 resource "bcm_cmpart_softwareimage" "test" {
   name = %[4]q
@@ -3253,7 +3261,7 @@ resource "bcm_cmpart_softwareimage" "test" {
 
 resource "bcm_cmdevice_category" "test" {
   name               = %[6]q
-  management_network = data.bcm_cmnet_networks.all.networks[0].id
+  management_network = data.bcm_cmnet_networks.management.networks[0].id
 
   software_image_proxy = {
     parent_software_image = bcm_cmpart_softwareimage.test.id
@@ -3271,9 +3279,9 @@ resource "bcm_cmetcd_cluster" "test" {
 resource "bcm_cmkube_cluster" "test" {
   name             = %[8]q
   etcd_cluster     = bcm_cmetcd_cluster.test.uuid
-  internal_network = data.bcm_cmnet_networks.all.networks[0].uuid
-  service_network  = data.bcm_cmnet_networks.all.networks[0].uuid
-  pod_network      = data.bcm_cmnet_networks.all.networks[0].uuid
+  internal_network = data.bcm_cmnet_networks.management.networks[0].uuid
+  service_network  = data.bcm_cmnet_networks.management.networks[0].uuid
+  pod_network      = data.bcm_cmnet_networks.management.networks[0].uuid
 }
 
 resource "bcm_cmdevice_device" "test" {
@@ -3284,7 +3292,7 @@ resource "bcm_cmdevice_device" "test" {
     name     = "eth0"
     type     = "physical"
     mac      = %[10]q
-    network  = data.bcm_cmnet_networks.all.networks[0].id
+    network  = data.bcm_cmnet_networks.management.networks[0].id
     bootable = true
     dhcp     = true
   }
@@ -3329,7 +3337,11 @@ provider "bcm" {
   insecure_skip_verify = true
 }
 
-data "bcm_cmnet_networks" "all" {}
+data "bcm_cmnet_networks" "management" {
+  filter {
+    name_pattern = "managementnet"
+  }
+}
 
 resource "bcm_cmpart_softwareimage" "test" {
   name = %[4]q
@@ -3338,7 +3350,7 @@ resource "bcm_cmpart_softwareimage" "test" {
 
 resource "bcm_cmdevice_category" "test" {
   name               = %[6]q
-  management_network = data.bcm_cmnet_networks.all.networks[0].id
+  management_network = data.bcm_cmnet_networks.management.networks[0].id
 
   software_image_proxy = {
     parent_software_image = bcm_cmpart_softwareimage.test.id
@@ -3361,7 +3373,7 @@ resource "bcm_cmdevice_device" "test" {
     name     = "eth0"
     type     = "physical"
     mac      = %[9]q
-    network  = data.bcm_cmnet_networks.all.networks[0].id
+    network  = data.bcm_cmnet_networks.management.networks[0].id
     bootable = true
     dhcp     = true
   }
@@ -3401,7 +3413,11 @@ provider "bcm" {
   insecure_skip_verify = true
 }
 
-data "bcm_cmnet_networks" "all" {}
+data "bcm_cmnet_networks" "management" {
+  filter {
+    name_pattern = "managementnet"
+  }
+}
 
 resource "bcm_cmpart_softwareimage" "test" {
   name = %[4]q
@@ -3410,7 +3426,7 @@ resource "bcm_cmpart_softwareimage" "test" {
 
 resource "bcm_cmdevice_category" "test" {
   name               = %[6]q
-  management_network = data.bcm_cmnet_networks.all.networks[0].id
+  management_network = data.bcm_cmnet_networks.management.networks[0].id
 
   software_image_proxy = {
     parent_software_image = bcm_cmpart_softwareimage.test.id
@@ -3428,9 +3444,9 @@ resource "bcm_cmetcd_cluster" "test" {
 resource "bcm_cmkube_cluster" "test" {
   name             = %[8]q
   etcd_cluster     = bcm_cmetcd_cluster.test.uuid
-  internal_network = data.bcm_cmnet_networks.all.networks[0].uuid
-  service_network  = data.bcm_cmnet_networks.all.networks[0].uuid
-  pod_network      = data.bcm_cmnet_networks.all.networks[0].uuid
+  internal_network = data.bcm_cmnet_networks.management.networks[0].uuid
+  service_network  = data.bcm_cmnet_networks.management.networks[0].uuid
+  pod_network      = data.bcm_cmnet_networks.management.networks[0].uuid
 }
 
 resource "bcm_cmdevice_device" "test" {
@@ -3441,7 +3457,7 @@ resource "bcm_cmdevice_device" "test" {
     name     = "eth0"
     type     = "physical"
     mac      = %[10]q
-    network  = data.bcm_cmnet_networks.all.networks[0].id
+    network  = data.bcm_cmnet_networks.management.networks[0].id
     bootable = true
     dhcp     = true
   }
@@ -4577,7 +4593,7 @@ resource "bcm_cmdevice_device" "test" {
 					os.Getenv("BCM_USERNAME"),
 					os.Getenv("BCM_PASSWORD"),
 				),
-				ExpectError: regexp.MustCompile(`(?i)at least 1`),
+				ExpectError: regexp.MustCompile(`(?i)at least one interface is required`),
 			},
 		},
 	})

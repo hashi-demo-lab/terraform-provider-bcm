@@ -1420,6 +1420,16 @@ func (r *CMDeviceDeviceResource) Delete(ctx context.Context, req resource.Delete
 	// Call BCM API to delete device
 	_, err := r.Client.CallJSONRPC(ctx, "cmdevice", "removeDevice", state.UUID.ValueString(), forceValue)
 	if err != nil {
+		// Check if device was already deleted externally (idempotent delete)
+		errStr := err.Error()
+		if containsAny(errStr, []string{"No such device", "not found", "does not exist"}) {
+			tflog.Info(ctx, "Device already deleted (idempotent)", map[string]interface{}{
+				"hostname": state.Hostname.ValueString(),
+				"uuid":     state.UUID.ValueString(),
+			})
+			return
+		}
+
 		resp.Diagnostics.AddError(
 			"Error Deleting Device",
 			fmt.Sprintf("Could not delete device '%s' (UUID: %s): %s",
