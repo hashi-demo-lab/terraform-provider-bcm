@@ -836,7 +836,7 @@ resource "bcm_cmdevice_device" "server" {
 - `notes` (String) Device notes/description
 - `part_number` (String) Hardware part number
 - `partition` (String) Partition UUID reference (uses category default if not specified)
-- `power_control` (String) Power control method (e.g., 'none', 'ipmi', 'ipdu', 'redfish')
+- `power_control` (String) Power control method (e.g., 'none', 'ipmi', 'pdu', 'redfish', 'custom')
 - `roles` (Set of String) Set of role names assigned to this device. Roles define the device's function in the cluster (e.g., "backup", "provisioning", "boot"). Use the `bcm_cmdevice_roles` data source to discover available roles. **Only role names are accepted** (not UUIDs). Role names are case-sensitive.
 
 Example usage:

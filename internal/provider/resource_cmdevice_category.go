@@ -368,7 +368,7 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 				Computed:            true,
 				MarkdownDescription: "Boot loader type (SYSLINUX, GRUB, GRUB2, PXELINUX). If not specified, BCM assigns a default.",
 				Validators: []validator.String{
-					stringvalidator.OneOf("SYSLINUX", "GRUB", "GRUB2", "PXELINUX"),
+					stringvalidator.OneOf("SYSLINUX", "GRUB"),
 				},
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
@@ -390,7 +390,7 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 					stringplanmodifier.UseStateForUnknown(),
 				},
 				Validators: []validator.String{
-					stringvalidator.OneOf("HTTP", "TFTP", "NFS"),
+					stringvalidator.OneOf("HTTP", "TFTP"),
 				},
 			},
 			"kernel_version": schema.StringAttribute{
@@ -437,7 +437,7 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 					stringplanmodifier.UseStateForUnknown(),
 				},
 				Validators: []validator.String{
-					stringvalidator.OneOf("AUTO", "FULL", "MINIMAL", "CUSTOM"),
+					stringvalidator.OneOf("AUTO", "FULL", "SKIP"),
 				},
 			},
 			"new_node_install_mode": schema.StringAttribute{
@@ -448,7 +448,7 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 					stringplanmodifier.UseStateForUnknown(),
 				},
 				Validators: []validator.String{
-					stringvalidator.OneOf("FULL", "MINIMAL", "SKIP"),
+					stringvalidator.OneOf("FULL", "AUTO"),
 				},
 			},
 			"install_boot_record": schema.BoolAttribute{
@@ -484,7 +484,7 @@ func (r *CMDeviceCategoryResource) Schema(ctx context.Context, req resource.Sche
 				Computed:            true,
 				MarkdownDescription: "Authentication service (AUTO, LDAP, SSSD, LOCAL). If not specified, BCM assigns AUTO.",
 				Validators: []validator.String{
-					stringvalidator.OneOf("AUTO", "LDAP", "SSSD", "LOCAL"),
+					stringvalidator.OneOf("AUTO", "SSSD"),
 				},
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),

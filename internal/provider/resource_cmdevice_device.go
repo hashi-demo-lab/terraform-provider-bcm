@@ -151,6 +151,9 @@ func (r *CMDeviceDeviceResource) Schema(ctx context.Context, req resource.Schema
 				Optional:            true,
 				Computed:            true,
 				MarkdownDescription: "Management network UUID reference. Optional — if not specified, the device has no management network set.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 				Validators: []validator.String{
 					stringvalidator.RegexMatches(
 						regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`),
@@ -182,7 +185,7 @@ func (r *CMDeviceDeviceResource) Schema(ctx context.Context, req resource.Schema
 				Computed:            true,
 				MarkdownDescription: "Boot loader type (e.g., SYSLINUX, GRUB) - defaults to category value",
 				Validators: []validator.String{
-					stringvalidator.OneOf("SYSLINUX", "GRUB", "GRUB2", "PXELINUX"),
+					stringvalidator.OneOf("SYSLINUX", "GRUB"),
 				},
 			},
 			"boot_loader_protocol": schema.StringAttribute{
@@ -190,7 +193,7 @@ func (r *CMDeviceDeviceResource) Schema(ctx context.Context, req resource.Schema
 				Computed:            true,
 				MarkdownDescription: "Boot loader protocol (e.g., HTTP, TFTP) - defaults to category value",
 				Validators: []validator.String{
-					stringvalidator.OneOf("HTTP", "TFTP", "NFS"),
+					stringvalidator.OneOf("HTTP", "TFTP"),
 				},
 			},
 			"force": schema.BoolAttribute{
@@ -199,9 +202,9 @@ func (r *CMDeviceDeviceResource) Schema(ctx context.Context, req resource.Schema
 			},
 			"power_control": schema.StringAttribute{
 				Optional:            true,
-				MarkdownDescription: "Power control method (e.g., 'none', 'ipmi', 'ipdu', 'redfish')",
+				MarkdownDescription: "Power control method (e.g., 'none', 'ipmi', 'pdu', 'redfish', 'custom')",
 				Validators: []validator.String{
-					stringvalidator.OneOf("none", "ipmi", "ipdu", "redfish"),
+					stringvalidator.OneOf("none", "ipmi", "pdu", "redfish", "custom"),
 				},
 			},
 			"default_gateway": schema.StringAttribute{
