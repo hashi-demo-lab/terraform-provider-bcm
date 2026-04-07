@@ -19,6 +19,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
@@ -184,6 +185,9 @@ func (r *CMDeviceDeviceResource) Schema(ctx context.Context, req resource.Schema
 				Optional:            true,
 				Computed:            true,
 				MarkdownDescription: "Boot loader type (e.g., SYSLINUX, GRUB) - defaults to category value",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 				Validators: []validator.String{
 					stringvalidator.OneOf("SYSLINUX", "GRUB"),
 				},
@@ -192,6 +196,9 @@ func (r *CMDeviceDeviceResource) Schema(ctx context.Context, req resource.Schema
 				Optional:            true,
 				Computed:            true,
 				MarkdownDescription: "Boot loader protocol (e.g., HTTP, TFTP) - defaults to category value",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 				Validators: []validator.String{
 					stringvalidator.OneOf("HTTP", "TFTP"),
 				},
@@ -221,28 +228,46 @@ func (r *CMDeviceDeviceResource) Schema(ctx context.Context, req resource.Schema
 				Optional:            true,
 				Computed:            true,
 				MarkdownDescription: "Default gateway metric/priority (lower is preferred)",
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.UseStateForUnknown(),
+				},
 			},
 			"serial_number": schema.StringAttribute{
 				Optional:            true,
 				Computed:            true,
 				MarkdownDescription: "Hardware serial number",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"part_number": schema.StringAttribute{
 				Optional:            true,
 				Computed:            true,
 				MarkdownDescription: "Hardware part number",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"creation_time": schema.Int64Attribute{
 				Computed:            true,
 				MarkdownDescription: "Device creation timestamp (Unix epoch)",
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.UseStateForUnknown(),
+				},
 			},
 			"base_type": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "Entity base type (always 'Device')",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"child_type": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "Device type (HeadNode, ComputeNode, PhysicalNode, etc.)",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"roles": schema.SetAttribute{
 				Optional:    true,
