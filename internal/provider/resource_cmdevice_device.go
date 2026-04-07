@@ -1404,7 +1404,12 @@ func (r *CMDeviceDeviceResource) Delete(ctx context.Context, req resource.Delete
 				})
 				deviceData["roles"] = []interface{}{}
 				deviceData["modified"] = true
-				r.Client.CallJSONRPC(ctx, "cmdevice", "updateDevice", deviceData, true)
+				if _, updateErr := r.Client.CallJSONRPC(ctx, "cmdevice", "updateDevice", deviceData, true); updateErr != nil {
+					tflog.Warn(ctx, "Failed to clear roles before deletion, proceeding anyway", map[string]interface{}{
+						"uuid":  state.UUID.ValueString(),
+						"error": updateErr.Error(),
+					})
+				}
 			}
 		}
 	}
