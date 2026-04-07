@@ -1075,7 +1075,6 @@ cleanup_resources() {
 
     # Extract test devices (hostnames with citest- or tftest- prefix)
     local test_device_uuids=()
-    local test_device_names=()
     # Parse JSON array - each device has uuid and hostname
     while IFS= read -r uuid; do
         test_device_uuids+=("$uuid")
@@ -1101,7 +1100,8 @@ except: pass
                 -d "{\"service\":\"cmdevice\",\"call\":\"getDevice\",\"args\":[\"$dev_uuid\"]}")
 
             # Clear roles if present (prevents orphaned NodeRoles on deletion)
-            if echo "$dev_data" | python3 -c "
+            local cleared_entity
+            cleared_entity=$(echo "$dev_data" | python3 -c "
 import sys, json
 try:
     d = json.load(sys.stdin)
@@ -1110,21 +1110,12 @@ try:
         d['modified'] = True
         print(json.dumps(d))
 except: pass
-" 2>/dev/null | grep -q '{'; then
-                local cleared_entity
-                cleared_entity=$(echo "$dev_data" | python3 -c "
-import sys, json
-d = json.load(sys.stdin)
-d['roles'] = []
-d['modified'] = True
-print(json.dumps(d))
 " 2>/dev/null)
-                if [ -n "$cleared_entity" ]; then
-                    log_debug "  Clearing roles on device $dev_uuid before deletion"
-                    curl -k -s -b "$cookie_file" -X POST "${BCM_ENDPOINT}/json" \
-                        -H "Content-Type: application/json" \
-                        -d "{\"service\":\"cmdevice\",\"call\":\"updateDevice\",\"args\":[$cleared_entity, true]}" > /dev/null 2>&1
-                fi
+            if [ -n "$cleared_entity" ]; then
+                log_debug "  Clearing roles on device $dev_uuid before deletion"
+                curl -k -s -b "$cookie_file" -X POST "${BCM_ENDPOINT}/json" \
+                    -H "Content-Type: application/json" \
+                    -d "{\"service\":\"cmdevice\",\"call\":\"updateDevice\",\"args\":[$cleared_entity, true]}" > /dev/null 2>&1
             fi
 
             # Delete the device
