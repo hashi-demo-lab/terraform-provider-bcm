@@ -1782,13 +1782,16 @@ func (r *CMDeviceDeviceResource) parseDeviceFromAPI(data map[string]interface{})
 		model.KernelParameters = types.StringNull()
 	}
 
-	if bootLoader, ok := data["bootLoader"].(string); ok && bootLoader != "" {
+	// BCM returns "CATEGORY" for devices inheriting boot_loader from their category.
+	// Map to null — the user never sets this value; omitting it preserves inheritance.
+	if bootLoader, ok := data["bootLoader"].(string); ok && bootLoader != "" && bootLoader != "CATEGORY" {
 		model.BootLoader = types.StringValue(bootLoader)
 	} else {
 		model.BootLoader = types.StringNull()
 	}
 
-	if bootLoaderProtocol, ok := data["bootLoaderProtocol"].(string); ok && bootLoaderProtocol != "" {
+	// Same CATEGORY handling for boot_loader_protocol.
+	if bootLoaderProtocol, ok := data["bootLoaderProtocol"].(string); ok && bootLoaderProtocol != "" && bootLoaderProtocol != "CATEGORY" {
 		model.BootLoaderProtocol = types.StringValue(bootLoaderProtocol)
 	} else {
 		model.BootLoaderProtocol = types.StringNull()
