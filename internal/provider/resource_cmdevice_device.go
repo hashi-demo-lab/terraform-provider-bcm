@@ -19,6 +19,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
@@ -108,10 +109,16 @@ func (r *CMDeviceDeviceResource) Schema(ctx context.Context, req resource.Schema
 			"id": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "Device identifier (same as UUID)",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"uuid": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "Device UUID assigned by BCM",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"hostname": schema.StringAttribute{
 				Required:            true,
@@ -184,6 +191,9 @@ func (r *CMDeviceDeviceResource) Schema(ctx context.Context, req resource.Schema
 				Optional:            true,
 				Computed:            true,
 				MarkdownDescription: "Boot loader type (e.g., SYSLINUX, GRUB) - defaults to category value",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 				Validators: []validator.String{
 					stringvalidator.OneOf("SYSLINUX", "GRUB"),
 				},
@@ -192,6 +202,9 @@ func (r *CMDeviceDeviceResource) Schema(ctx context.Context, req resource.Schema
 				Optional:            true,
 				Computed:            true,
 				MarkdownDescription: "Boot loader protocol (e.g., HTTP, TFTP) - defaults to category value",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 				Validators: []validator.String{
 					stringvalidator.OneOf("HTTP", "TFTP"),
 				},
@@ -221,28 +234,46 @@ func (r *CMDeviceDeviceResource) Schema(ctx context.Context, req resource.Schema
 				Optional:            true,
 				Computed:            true,
 				MarkdownDescription: "Default gateway metric/priority (lower is preferred)",
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.UseStateForUnknown(),
+				},
 			},
 			"serial_number": schema.StringAttribute{
 				Optional:            true,
 				Computed:            true,
 				MarkdownDescription: "Hardware serial number",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"part_number": schema.StringAttribute{
 				Optional:            true,
 				Computed:            true,
 				MarkdownDescription: "Hardware part number",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"creation_time": schema.Int64Attribute{
 				Computed:            true,
 				MarkdownDescription: "Device creation timestamp (Unix epoch)",
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.UseStateForUnknown(),
+				},
 			},
 			"base_type": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "Entity base type (always 'Device')",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"child_type": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "Device type (HeadNode, ComputeNode, PhysicalNode, etc.)",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"roles": schema.SetAttribute{
 				Optional:    true,
@@ -366,18 +397,30 @@ func (r *CMDeviceDeviceResource) Schema(ctx context.Context, req resource.Schema
 						"uuid": schema.StringAttribute{
 							Computed:            true,
 							MarkdownDescription: "BCM-assigned interface UUID.",
+							PlanModifiers: []planmodifier.String{
+								useStateForUnknownUnlessNull(),
+							},
 						},
 						"base_type": schema.StringAttribute{
 							Computed:            true,
 							MarkdownDescription: "Entity base type (always 'NetworkInterface').",
+							PlanModifiers: []planmodifier.String{
+								useStateForUnknownUnlessNull(),
+							},
 						},
 						"child_type": schema.StringAttribute{
 							Computed:            true,
 							MarkdownDescription: "Interface type (NetworkPhysicalInterface, NetworkBondInterface, NetworkBMCInterface).",
+							PlanModifiers: []planmodifier.String{
+								useStateForUnknownUnlessNull(),
+							},
 						},
 						"cardtype": schema.StringAttribute{
 							Computed:            true,
 							MarkdownDescription: "Hardware card type (Ethernet, InfiniBand, BMC).",
+							PlanModifiers: []planmodifier.String{
+								useStateForUnknownUnlessNull(),
+							},
 						},
 					},
 				},
@@ -1746,8 +1789,11 @@ func (r *CMDeviceDeviceResource) parseDeviceFromAPI(data map[string]interface{})
 		model.Hostname = types.StringValue(hostname)
 	}
 
-	if mac, ok := data["mac"].(string); ok {
+	// BCM returns "00:00:00:00:00:00" as default MAC — treat as "not set".
+	if mac, ok := data["mac"].(string); ok && mac != "" && mac != "00:00:00:00:00:00" {
 		model.MAC = types.StringValue(mac)
+	} else {
+		model.MAC = types.StringNull()
 	}
 
 	if category, ok := data["category"].(string); ok {
@@ -1820,15 +1866,17 @@ func (r *CMDeviceDeviceResource) parseDeviceFromAPI(data map[string]interface{})
 	}
 
 	// Network gateway configuration
-	if defaultGateway, ok := data["defaultGateway"].(string); ok && defaultGateway != "" {
+	// BCM returns "0.0.0.0" as the default — treat as "not set" to avoid noise in state.
+	if defaultGateway, ok := data["defaultGateway"].(string); ok && defaultGateway != "" && defaultGateway != "0.0.0.0" {
 		model.DefaultGateway = types.StringValue(defaultGateway)
 	} else {
 		model.DefaultGateway = types.StringNull()
 	}
 
-	if defaultGatewayMetric, ok := data["defaultGatewayMetric"].(float64); ok {
+	// BCM returns 0 as the default metric — treat as "not set".
+	if defaultGatewayMetric, ok := data["defaultGatewayMetric"].(float64); ok && defaultGatewayMetric != 0 {
 		model.DefaultGatewayMetric = types.Int64Value(int64(defaultGatewayMetric))
-	} else if defaultGatewayMetricInt, ok := data["defaultGatewayMetric"].(int64); ok {
+	} else if defaultGatewayMetricInt, ok := data["defaultGatewayMetric"].(int64); ok && defaultGatewayMetricInt != 0 {
 		model.DefaultGatewayMetric = types.Int64Value(defaultGatewayMetricInt)
 	} else {
 		model.DefaultGatewayMetric = types.Int64Null()
