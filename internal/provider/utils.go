@@ -227,10 +227,20 @@ func SetEntityUUID(entity map[string]interface{}, uuid string) string {
 
 // =============================================================================
 // Entity Field Setters - Type-safe setters for BCM entity fields
+//
+// BCM uses patch semantics: omitted fields keep their existing value on update.
+// These helpers intentionally skip null/unknown values so the key is never added
+// to the entity map, achieving omit-on-null behavior. This means:
+//   - CREATE: omitted optional fields → BCM uses server defaults
+//   - UPDATE: omitted optional fields → BCM keeps existing values
+//
+// To CLEAR a field on update, callers must explicitly set the key to an empty/zero
+// value (e.g., entity["notes"] = "") rather than relying on these helpers.
+// For fields that need explicit clearing, use an if/else pattern instead.
 // =============================================================================
 
 // SetStringField sets a string field on an entity if the value is not null/unknown.
-// This is the primary helper for converting Terraform types.String to entity fields.
+// Null/unknown values are omitted from the entity (patch-safe: BCM keeps existing value).
 func SetStringField(entity map[string]interface{}, key string, value types.String) {
 	if !value.IsNull() && !value.IsUnknown() {
 		entity[key] = value.ValueString()
@@ -238,6 +248,7 @@ func SetStringField(entity map[string]interface{}, key string, value types.Strin
 }
 
 // SetBoolField sets a bool field on an entity if the value is not null/unknown.
+// Null/unknown values are omitted from the entity (patch-safe: BCM keeps existing value).
 func SetBoolField(entity map[string]interface{}, key string, value types.Bool) {
 	if !value.IsNull() && !value.IsUnknown() {
 		entity[key] = value.ValueBool()
@@ -245,6 +256,7 @@ func SetBoolField(entity map[string]interface{}, key string, value types.Bool) {
 }
 
 // SetInt64Field sets an int64 field on an entity if the value is not null/unknown.
+// Null/unknown values are omitted from the entity (patch-safe: BCM keeps existing value).
 func SetInt64Field(entity map[string]interface{}, key string, value types.Int64) {
 	if !value.IsNull() && !value.IsUnknown() {
 		entity[key] = value.ValueInt64()
@@ -252,6 +264,7 @@ func SetInt64Field(entity map[string]interface{}, key string, value types.Int64)
 }
 
 // SetFloat64Field sets a float64 field on an entity if the value is not null/unknown.
+// Null/unknown values are omitted from the entity (patch-safe: BCM keeps existing value).
 func SetFloat64Field(entity map[string]interface{}, key string, value types.Float64) {
 	if !value.IsNull() && !value.IsUnknown() {
 		entity[key] = value.ValueFloat64()
@@ -259,6 +272,7 @@ func SetFloat64Field(entity map[string]interface{}, key string, value types.Floa
 }
 
 // SetStringListField sets a string list field on an entity if the value is not null/unknown.
+// Null/unknown values are omitted from the entity (patch-safe: BCM keeps existing value).
 // Returns any diagnostics from the conversion.
 func SetStringListField(ctx context.Context, entity map[string]interface{}, key string, value types.List, diags *diag.Diagnostics) {
 	if !value.IsNull() && !value.IsUnknown() {

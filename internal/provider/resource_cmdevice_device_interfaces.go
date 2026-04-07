@@ -122,26 +122,22 @@ func buildInterfaceAPIEntity(iface DeviceInterfaceModel, existingUUID string) ma
 
 	entity := map[string]interface{}{
 		"baseType":      "NetworkInterface",
-		"childType":     interfaceTypeToBCMChildType(iface.Type.ValueString()),
 		"uuid":          ifaceUUID,
-		"name":          iface.Name.ValueString(),
 		"modified":      true,
 		"to_be_removed": false,
 		"revision":      "",
 	}
 
+	// Required fields - set via helpers for defensive null/unknown guards
+	if !iface.Type.IsNull() && !iface.Type.IsUnknown() {
+		entity["childType"] = interfaceTypeToBCMChildType(iface.Type.ValueString())
+	}
+	SetStringField(entity, "name", iface.Name)
+
 	// Network assignment
-	if !iface.Network.IsNull() && !iface.Network.IsUnknown() {
-		entity["network"] = iface.Network.ValueString()
-	}
-
-	if !iface.MAC.IsNull() && !iface.MAC.IsUnknown() {
-		entity["mac"] = iface.MAC.ValueString()
-	}
-
-	if !iface.IP.IsNull() && !iface.IP.IsUnknown() {
-		entity["ip"] = iface.IP.ValueString()
-	}
+	SetStringField(entity, "network", iface.Network)
+	SetStringField(entity, "mac", iface.MAC)
+	SetStringField(entity, "ip", iface.IP)
 
 	if !iface.IPv6IP.IsNull() && !iface.IPv6IP.IsUnknown() {
 		entity["ipv6Ip"] = iface.IPv6IP.ValueString()

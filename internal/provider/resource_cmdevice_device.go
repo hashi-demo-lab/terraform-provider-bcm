@@ -150,10 +150,7 @@ func (r *CMDeviceDeviceResource) Schema(ctx context.Context, req resource.Schema
 			"management_network": schema.StringAttribute{
 				Optional:            true,
 				Computed:            true,
-				MarkdownDescription: "Management network UUID reference. BCM stores exactly what is sent; omitting defaults to unset (zero UUID).",
-				PlanModifiers: []planmodifier.String{
-					nullIfRemovedFromConfig(),
-				},
+				MarkdownDescription: "Management network UUID reference. Optional — if not specified, the device has no management network set.",
 				Validators: []validator.String{
 					stringvalidator.RegexMatches(
 						regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`),
@@ -1484,9 +1481,7 @@ func (r *CMDeviceDeviceResource) buildDeviceAPIEntityWithExisting(plan CMDeviceD
 	entity := map[string]interface{}{
 		"baseType":              "Device",
 		"childType":             "PhysicalNode",
-		"hostname":              plan.Hostname.ValueString(),
 		"mac":                   deviceMAC,
-		"category":              plan.Category.ValueString(),
 		"modified":              true,
 		"to_be_removed":         false,
 		"revision":              "",
@@ -1495,11 +1490,13 @@ func (r *CMDeviceDeviceResource) buildDeviceAPIEntityWithExisting(plan CMDeviceD
 		"interfaces":            interfaces,
 	}
 
+	// Required fields - set via helpers for defensive null/unknown guards
+	SetStringField(entity, "hostname", plan.Hostname)
+	SetStringField(entity, "category", plan.Category)
+
 	// Only include managementNetwork when explicitly set by the user.
 	// BCM treats omitted and zero UUID identically (both default to zero UUID on read).
-	if !plan.ManagementNetwork.IsNull() && !plan.ManagementNetwork.IsUnknown() {
-		entity["managementNetwork"] = plan.ManagementNetwork.ValueString()
-	}
+	SetStringField(entity, "managementNetwork", plan.ManagementNetwork)
 
 	// Always include partition field as BCM requires it
 	// When usesProxy is true, partitionUUID contains the software image UUID from parentSoftwareImage
@@ -1507,44 +1504,21 @@ func (r *CMDeviceDeviceResource) buildDeviceAPIEntityWithExisting(plan CMDeviceD
 	entity["partition"] = partitionUUID
 
 	// Add optional fields if present
-	if !plan.Notes.IsNull() && !plan.Notes.IsUnknown() {
-		entity["notes"] = plan.Notes.ValueString()
-	}
-
-	if !plan.KernelParameters.IsNull() && !plan.KernelParameters.IsUnknown() {
-		entity["kernelParameters"] = plan.KernelParameters.ValueString()
-	}
-
-	if !plan.BootLoader.IsNull() && !plan.BootLoader.IsUnknown() {
-		entity["bootLoader"] = plan.BootLoader.ValueString()
-	}
-
-	if !plan.BootLoaderProtocol.IsNull() && !plan.BootLoaderProtocol.IsUnknown() {
-		entity["bootLoaderProtocol"] = plan.BootLoaderProtocol.ValueString()
-	}
+	SetStringField(entity, "notes", plan.Notes)
+	SetStringField(entity, "kernelParameters", plan.KernelParameters)
+	SetStringField(entity, "bootLoader", plan.BootLoader)
+	SetStringField(entity, "bootLoaderProtocol", plan.BootLoaderProtocol)
 
 	// Power control configuration
-	if !plan.PowerControl.IsNull() && !plan.PowerControl.IsUnknown() {
-		entity["powerControl"] = plan.PowerControl.ValueString()
-	}
+	SetStringField(entity, "powerControl", plan.PowerControl)
 
 	// Network gateway configuration
-	if !plan.DefaultGateway.IsNull() && !plan.DefaultGateway.IsUnknown() {
-		entity["defaultGateway"] = plan.DefaultGateway.ValueString()
-	}
-
-	if !plan.DefaultGatewayMetric.IsNull() && !plan.DefaultGatewayMetric.IsUnknown() {
-		entity["defaultGatewayMetric"] = plan.DefaultGatewayMetric.ValueInt64()
-	}
+	SetStringField(entity, "defaultGateway", plan.DefaultGateway)
+	SetInt64Field(entity, "defaultGatewayMetric", plan.DefaultGatewayMetric)
 
 	// Hardware identifiers
-	if !plan.SerialNumber.IsNull() && !plan.SerialNumber.IsUnknown() {
-		entity["serialNumber"] = plan.SerialNumber.ValueString()
-	}
-
-	if !plan.PartNumber.IsNull() && !plan.PartNumber.IsUnknown() {
-		entity["partNumber"] = plan.PartNumber.ValueString()
-	}
+	SetStringField(entity, "serialNumber", plan.SerialNumber)
+	SetStringField(entity, "partNumber", plan.PartNumber)
 
 	// Legacy roles handling is done separately via lookupAndBuildRolesForEntity
 	// because it requires BCM API access to get full role objects

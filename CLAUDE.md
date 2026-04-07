@@ -66,11 +66,29 @@ getSoftwareImage(name) → single result
 
 **Authentication:** Cookie-based (`cm-login-token`), auto-managed.
 
+### Patch-Based API Semantics
+
+BCM uses **patch semantics for scalar fields** and **full replacement for arrays**.
+
+| Payload pattern | BCM behavior |
+|-----------------|-------------|
+| Key absent from JSON | **Keep existing value** (no change) |
+| Key present with value | Set to that value |
+| Key present with `""` / `0` / zero UUID | Set to empty/zero (clears the field) |
+| Array field (interfaces, roles) | **Full replacement** — send complete array |
+
+**Design decision:** The `Set*Field` helpers in `utils.go` omit null/unknown fields from the entity map. This is correct for both CREATE (BCM uses defaults) and UPDATE (BCM keeps existing values). As a consequence:
+
+- **Removing an optional field from Terraform config does NOT clear it in BCM.** For `Optional+Computed` fields, Terraform uses the prior state value when config is null, so no update is triggered. BCM retains the existing value. This applies to all optional fields including `management_network`.
+- **To clear a field**, users must set it to an explicit empty value (e.g., `notes = ""`) if the schema allows it, rather than removing the attribute from config.
+
+**Reference:** `resource_cmetcd_cluster.go` is the model resource — it sends explicit defaults for all nullable fields in the `else` branch, making updates fully deterministic regardless of patch semantics.
+
 ### Resource Pattern
 
 1. **Create** - `addResource()`, handle async ops with polling
 2. **Read** - Direct lookup with args parameter
-3. **Update** - `updateResource()` with full entity + UUID
+3. **Update** - `updateResource()` with entity + UUID (patch: omitted keys preserve existing values)
 4. **Delete** - `removeResource()`
 5. **Import** - `resource.ImportStatePassthroughID`
 
@@ -124,7 +142,7 @@ BCM stores `managementNetwork` on devices exactly as sent — it does NOT auto-i
 - Zero UUID and omitted are equivalent — both mean "not set"
 - Updates are fully round-trippable (set, clear, change all persist)
 - Categories always have a real `managementNetwork` UUID; devices default to zero
-- On devices, `management_network` is Optional+Computed with a `nullIfRemovedFromConfig` plan modifier
+- On devices, `management_network` is Optional+Computed — removing from config preserves the existing value (patch semantics)
 - On categories, `management_network` is Required
 - Provider maps zero UUID to `types.StringNull()` on read to avoid false drift
 
