@@ -36,3 +36,7 @@ description: |-
 Import is supported using the following syntax:
 
 {{ tffile (printf "examples/resources/%s/import.tf" .Name)}}
+
+### Generate Configuration (Terraform 1.5+)
+
+{{ tffile (printf "examples/resources/%s/generate-config.tf" .Name)}}
