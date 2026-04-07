@@ -588,7 +588,7 @@ resource "bcm_cmkube_cluster" "existing" {
 }
 ```
 
-### Generate Configuration (Terraform 1.5+)
+## Generate Configuration (Terraform 1.5+)
 
 ```terraform
 # Copyright (c) HashiCorp, Inc.

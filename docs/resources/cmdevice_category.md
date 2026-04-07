@@ -926,7 +926,7 @@ resource "bcm_cmdevice_category" "existing" {
 }
 ```
 
-### Generate Configuration (Terraform 1.5+)
+## Generate Configuration (Terraform 1.5+)
 
 ```terraform
 # Copyright (c) HashiCorp, Inc.
