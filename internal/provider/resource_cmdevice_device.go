@@ -1771,8 +1771,11 @@ func (r *CMDeviceDeviceResource) parseDeviceFromAPI(data map[string]interface{})
 		model.Hostname = types.StringValue(hostname)
 	}
 
-	if mac, ok := data["mac"].(string); ok {
+	// BCM returns "00:00:00:00:00:00" as default MAC — treat as "not set".
+	if mac, ok := data["mac"].(string); ok && mac != "" && mac != "00:00:00:00:00:00" {
 		model.MAC = types.StringValue(mac)
+	} else {
+		model.MAC = types.StringNull()
 	}
 
 	if category, ok := data["category"].(string); ok {
@@ -1845,15 +1848,17 @@ func (r *CMDeviceDeviceResource) parseDeviceFromAPI(data map[string]interface{})
 	}
 
 	// Network gateway configuration
-	if defaultGateway, ok := data["defaultGateway"].(string); ok && defaultGateway != "" {
+	// BCM returns "0.0.0.0" as the default — treat as "not set" to avoid noise in state.
+	if defaultGateway, ok := data["defaultGateway"].(string); ok && defaultGateway != "" && defaultGateway != "0.0.0.0" {
 		model.DefaultGateway = types.StringValue(defaultGateway)
 	} else {
 		model.DefaultGateway = types.StringNull()
 	}
 
-	if defaultGatewayMetric, ok := data["defaultGatewayMetric"].(float64); ok {
+	// BCM returns 0 as the default metric — treat as "not set".
+	if defaultGatewayMetric, ok := data["defaultGatewayMetric"].(float64); ok && defaultGatewayMetric != 0 {
 		model.DefaultGatewayMetric = types.Int64Value(int64(defaultGatewayMetric))
-	} else if defaultGatewayMetricInt, ok := data["defaultGatewayMetric"].(int64); ok {
+	} else if defaultGatewayMetricInt, ok := data["defaultGatewayMetric"].(int64); ok && defaultGatewayMetricInt != 0 {
 		model.DefaultGatewayMetric = types.Int64Value(defaultGatewayMetricInt)
 	} else {
 		model.DefaultGatewayMetric = types.Int64Null()
